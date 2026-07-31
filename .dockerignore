@@ -1,0 +1,10 @@
+.git
+.env
+*.db
+**/__pycache__
+frontend/node_modules
+frontend/dist
+frontend/*.tsbuildinfo
+.pnpm-store
+.pytest_cache
+tests

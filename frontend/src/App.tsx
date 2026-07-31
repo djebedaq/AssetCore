@@ -3,8 +3,9 @@ import {
   BarChart3, Boxes, FileText, Gauge, LogOut, Menu, PackageSearch, Plus, QrCode,
   Search, Settings, ShieldCheck, Wrench, X, ClipboardSignature, BookOpen, History
 } from 'lucide-react'
-import { api, getToken, logout, setToken } from './api'
+import { api, downloadApiFile, getToken, logout, setToken } from './api'
 import type { Location, Machine, PartRequest, Repair } from './types'
+import BulkTransfers from './BulkTransfers'
 
 type Page = 'dashboard' | 'machines' | 'transfers' | 'repairs' | 'catalog' | 'parts' | 'documents' | 'reports' | 'audit' | 'qr' | 'settings'
 
@@ -132,7 +133,7 @@ function Repairs(){
   const load=()=>Promise.all([api<Repair[]>('/repairs'),api<Machine[]>('/machines')]).then(([r,m])=>{setItems(r);setMachines(m)})
   useEffect(()=>{load().catch(console.error)},[])
   return <><div className="toolbar"><div><h3>История и активни ремонти</h3><p className="muted">Приемане, диагностика, извършена работа и резултат</p></div><button className="primary" onClick={()=>setShow(true)}><Plus size={18}/>Нов ремонт</button></div>
-  <div className="cards-list">{items.map(r=><div className="repair-card" key={r.id}><div><span className="badge">{r.status}</span><h3>{r.machine.name}</h3><p><b>Проблем:</b> {r.reported_problem}</p>{r.diagnosis&&<p><b>Диагностика:</b> {r.diagnosis}</p>}{r.work_performed&&<p><b>Извършено:</b> {r.work_performed}</p>}</div><div className="repair-side"><small>{new Date(r.opened_at).toLocaleString('bg-BG')}</small>{!r.closed_at&&<button onClick={async()=>{await api(`/repairs/${r.id}`,{method:'PATCH',body:JSON.stringify({close:true,result:'Тествана и подготвена за работа'})});load()}}>Приключи ремонта</button>}</div></div>)}</div>
+  <div className="cards-list">{items.map(r=><div className="repair-card" key={r.id}><div><span className="badge">{r.status}</span><h3>{r.machine.name}</h3><p><b>Проблем:</b> {r.reported_problem}</p>{r.diagnosis&&<p><b>Диагностика:</b> {r.diagnosis}</p>}{r.work_performed&&<p><b>Извършено:</b> {r.work_performed}</p>}</div><div className="repair-side"><small>{new Date(r.opened_at).toLocaleString('bg-BG')}</small>{!r.closed_at&&<button onClick={async()=>{await api(`/repairs/${r.id}`,{method:'PATCH',body:JSON.stringify({close:true,status:'Тестване',result:'Тествана и подготвена за работа'})});load()}}>Приключи след тест</button>}</div></div>)}</div>
   {show&&<RepairModal machines={machines} onClose={()=>setShow(false)} onSaved={()=>{setShow(false);load()}}/>}</>
 }
 
@@ -169,30 +170,21 @@ function PartModal({machines,onClose,onSaved}:{machines:Machine[];onClose:()=>vo
   </form></div></div>
 }
 
-function Reports(){return <div className="panel"><div className="panel-title"><div><h3>Документи и отчети</h3><p className="muted">Генериране на справки от текущите данни</p></div><FileText/></div><div className="report-options"><a className="primary button-link" href="/api/reports/daily.pdf" target="_blank">Изтегли дневен отчет PDF</a><div className="coming">Протоколите се генерират в Word и PDF от модул „Приемане / предаване“. Техническите ръководства и parts list файловете са в библиотеката.</div></div></div>}
+function Reports(){const [error,setError]=useState('');const download=()=>downloadApiFile('/reports/daily.pdf','assetcore-daily-report.pdf').catch(()=>setError('Дневният отчет не може да бъде изтеглен.'));return <div className="panel"><div className="panel-title"><div><h3>Документи и отчети</h3><p className="muted">Генериране на справки от текущите данни</p></div><FileText/></div>{error&&<div className="error" role="alert">{error}</div>}<div className="report-options"><button className="primary" onClick={download}>Изтегли дневен отчет PDF</button><div className="coming">Протоколите се генерират в Word и PDF от модул „Приемане / предаване“. Техническите ръководства и parts list файловете са в библиотеката.</div></div></div>}
 function QrCodes(){const [machines,setMachines]=useState<Machine[]>([]);useEffect(()=>{api<Machine[]>('/machines').then(setMachines)},[]);return <div className="qr-grid">{machines.map(m=><div className="qr-card" key={m.id}><img src={`/api/machines/${m.id}/qr`}/><strong>{m.name}</strong><span>{m.brand} · {m.pressure_bar} bar</span></div>)}</div>}
 function SettingsPage(){return <div className="panel"><div className="panel-title"><h3>Настройки</h3><Settings/></div><div className="settings-list"><div><b>Език</b><span>Български</span></div><div><b>Организация</b><span>КРЗ Одесос</span></div><div><b>Версия</b><span>AssetCore 2.5 Director Preview</span></div><div><b>База данни</b><span>SQLite локално / PostgreSQL в Render</span></div></div></div>}
 
 
 function Transfers(){
-  const [items,setItems]=useState<any[]>([]),[machines,setMachines]=useState<Machine[]>([]),[show,setShow]=useState(false)
-  const load=()=>Promise.all([api<any[]>('/transfers'),api<Machine[]>('/machines')]).then(([t,m])=>{setItems(t);setMachines(m)})
+  const [items,setItems]=useState<any[]>([]),[error,setError]=useState('')
+  const load=()=>api<any[]>('/transfers').then(setItems).catch(()=>setError('Историята на протоколите не може да бъде заредена.'))
   useEffect(()=>{load().catch(console.error)},[])
-  return <><div className="toolbar"><div><h3>Приемо-предавателни протоколи</h3><p className="muted">Издаване, връщане и приемане на HPWJ машини с автоматичен Word/PDF документ</p></div><button className="primary" onClick={()=>setShow(true)}><Plus size={18}/>Нов протокол</button></div>
-  <div className="table-card"><table><thead><tr><th>№</th><th>Операция</th><th>Машина</th><th>Фирма / звено</th><th>Кораб / място</th><th>Дата</th><th>Документи</th></tr></thead><tbody>{items.map(t=><tr key={t.id}><td><strong>{t.protocol_number}</strong></td><td><span className="badge">{t.protocol_type}</span></td><td>{t.machine.name}</td><td>{t.company_unit||'—'}</td><td>{[t.vessel,t.location_text].filter(Boolean).join(' · ')||'—'}</td><td>{new Date(t.created_at).toLocaleString('bg-BG')}</td><td><a className="link" href={`/api/transfers/${t.id}/docx`} target="_blank">Word</a> · <a className="link" href={`/api/transfers/${t.id}/pdf`} target="_blank">PDF</a></td></tr>)}</tbody></table></div>
-  {show&&<TransferModal machines={machines} onClose={()=>setShow(false)} onSaved={()=>{setShow(false);load()}}/>}</>
-}
-function TransferModal({machines,onClose,onSaved}:{machines:Machine[];onClose:()=>void;onSaved:()=>void}){
- const [form,setForm]=useState<any>({machine_id:machines[0]?.id,protocol_type:'Предаване',company_unit:'',vessel:'',location_text:'',handed_over_by:'',accepted_by:'',equipment:'Пистолет, шланг и необходимата комплектовка',condition_text:'Изправна и готова за работа',remarks:''})
- async function save(e:FormEvent){e.preventDefault();await api('/transfers',{method:'POST',body:JSON.stringify(form)});onSaved()}
- return <div className="modal-bg"><div className="modal"><div className="modal-head"><h3>Нов приемо-предавателен протокол</h3><button onClick={onClose}><X/></button></div><form onSubmit={save} className="form-grid">
- <label>Операция<select value={form.protocol_type} onChange={e=>setForm({...form,protocol_type:e.target.value})}><option>Предаване</option><option>Приемане</option><option>Връщане</option></select></label>
- <label>Машина<select value={form.machine_id} onChange={e=>setForm({...form,machine_id:+e.target.value})}>{machines.map(m=><option value={m.id} key={m.id}>{m.name} · {m.brand}</option>)}</select></label>
- <label>Фирма / звено<input value={form.company_unit} onChange={e=>setForm({...form,company_unit:e.target.value})}/></label><label>Кораб<input value={form.vessel} onChange={e=>setForm({...form,vessel:e.target.value})}/></label>
- <label>Док / кей / място<input value={form.location_text} onChange={e=>setForm({...form,location_text:e.target.value})}/></label><label>Предал<input value={form.handed_over_by} onChange={e=>setForm({...form,handed_over_by:e.target.value})}/></label>
- <label>Приел<input value={form.accepted_by} onChange={e=>setForm({...form,accepted_by:e.target.value})}/></label><label className="wide">Комплектовка<textarea value={form.equipment} onChange={e=>setForm({...form,equipment:e.target.value})}/></label>
- <label className="wide">Състояние<textarea value={form.condition_text} onChange={e=>setForm({...form,condition_text:e.target.value})}/></label><label className="wide">Забележки<textarea value={form.remarks} onChange={e=>setForm({...form,remarks:e.target.value})}/></label>
- <div className="actions wide"><button type="button" className="secondary" onClick={onClose}>Отказ</button><button className="primary">Създай протокол</button></div></form></div></div>
+  const download=(path:string,name:string)=>downloadApiFile(path,name).catch(()=>setError('Протоколът не може да бъде изтеглен.'))
+  return <><div className="toolbar"><div><h3>Приемо-предавателни протоколи</h3><p className="muted">Защитено групово издаване, пълно и частично връщане с индивидуален Word/PDF протокол</p></div></div>
+  {error&&<div className="error" role="alert">{error}</div>}
+  <BulkTransfers onChanged={()=>void load()}/>
+  <div className="toolbar protocol-history-title"><div><h3>Индивидуална история</h3><p className="muted">Всеки ред остава свързан с конкретна машина и партида</p></div></div>
+  <div className="table-card"><table><thead><tr><th>№</th><th>Партида</th><th>Машина</th><th>Статус</th><th>Фирма / място</th><th>Издаване / връщане</th><th>Документи</th></tr></thead><tbody>{items.map(t=><tr key={t.id}><td><strong>{t.protocol_number}</strong></td><td>{t.batch_reference||'—'}</td><td>{t.machine.name}</td><td><span className="badge">{t.is_active?'Все още издадена':'Върната'}</span></td><td>{[t.company_unit,t.vessel,t.location_text].filter(Boolean).join(' · ')||'—'}</td><td>{new Date(t.issued_at||t.created_at).toLocaleString('bg-BG')}{t.returned_at&&<small>Върната: {new Date(t.returned_at).toLocaleString('bg-BG')}</small>}</td><td><button className="link" onClick={()=>download(`/transfers/${t.id}/docx`,`${t.protocol_number}.docx`)}>Word</button> · <button className="link" onClick={()=>download(`/transfers/${t.id}/pdf`,`${t.protocol_number}.pdf`)}>PDF</button></td></tr>)}</tbody></table></div></>
 }
 function PartCatalog(){
  const [items,setItems]=useState<any[]>([]),[q,setQ]=useState(''),[brand,setBrand]=useState('')
@@ -202,9 +194,10 @@ function PartCatalog(){
  <div className="table-card"><table><thead><tr><th>Марка / модел</th><th>Възел</th><th>Поз.</th><th>Part No.</th><th>Описание</th><th>Кол.</th><th>Източник</th></tr></thead><tbody>{items.map(x=><tr key={x.id}><td><strong>{x.brand}</strong><small>{x.model}</small></td><td>{x.assembly||'—'}</td><td>{x.position||'—'}</td><td><strong>{x.part_number}</strong></td><td>{x.description}</td><td>{x.quantity||'—'}</td><td>{x.source_document?`${x.source_document.split('/').pop()} · стр. ${x.source_page||'—'}`:'—'}</td></tr>)}</tbody></table></div></>
 }
 function Documents(){
- const [items,setItems]=useState<any[]>([]); useEffect(()=>{api<any[]>('/documents').then(setItems)},[])
+ const [items,setItems]=useState<any[]>([]),[error,setError]=useState(''); useEffect(()=>{api<any[]>('/documents').then(setItems).catch(()=>setError('Документите не могат да бъдат заредени.'))},[])
  const groups=useMemo(()=>Object.entries(items.reduce((a:any,x:any)=>{(a[x.brand]??=[]).push(x);return a},{})),[items])
- return <><div className="toolbar"><div><h3>Техническа библиотека</h3><p className="muted">Оригинални parts list, ръководства, спецификации, Excel и Word документи от работната база</p></div></div><div className="cards-list">{groups.map(([brand,docs]:any)=><div className="panel" key={brand}><div className="panel-title"><h3>{brand}</h3><BookOpen/></div><div className="activity-list">{docs.map((d:any)=><div key={d.id}><strong>{d.title}</strong><span>{d.category}</span><a className="link" href={`/api/documents/${d.id}/download`} target="_blank">Отвори / изтегли</a></div>)}</div></div>)}</div></>
+ const download=(id:number,name:string)=>downloadApiFile(`/documents/${id}/download`,name).catch(()=>setError('Документът не може да бъде изтеглен.'))
+ return <><div className="toolbar"><div><h3>Техническа библиотека</h3><p className="muted">Оригинални parts list, ръководства, спецификации, Excel и Word документи от работната база</p></div></div>{error&&<div className="error" role="alert">{error}</div>}<div className="cards-list">{groups.map(([brand,docs]:any)=><div className="panel" key={brand}><div className="panel-title"><h3>{brand}</h3><BookOpen/></div><div className="activity-list">{docs.map((d:any)=><div key={d.id}><strong>{d.title}</strong><span>{d.category}</span><button className="link" onClick={()=>download(d.id,d.title)}>Отвори / изтегли</button></div>)}</div></div>)}</div></>
 }
 function Audit(){const [items,setItems]=useState<any[]>([]);useEffect(()=>{api<any[]>('/audit').then(setItems)},[]);return <><div className="toolbar"><div><h3>Журнал на действията</h3><p className="muted">Проследимост на промени, ремонти, протоколи и заявки</p></div></div><div className="table-card"><table><thead><tr><th>Дата</th><th>Потребител</th><th>Обект</th><th>Действие</th><th>Детайли</th></tr></thead><tbody>{items.map(x=><tr key={x.id}><td>{new Date(x.created_at).toLocaleString('bg-BG')}</td><td>{x.user_name||'Система'}</td><td>{x.entity_type} #{x.entity_id||'—'}</td><td>{x.action}</td><td><small>{x.details||'—'}</small></td></tr>)}</tbody></table></div></>}
 

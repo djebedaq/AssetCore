@@ -1,5 +1,5 @@
-# AssetCore v2 BG — HPWJ
+# AssetCore — HPWJ asset management
 
-Професионална основа за управление само на HPWJ машини. Интерфейсът е на български. Backend: FastAPI/Python. Frontend: React/TypeScript. База: PostgreSQL.
+Bulgarian FastAPI + React/TypeScript PWA for the verified industrial HPWJ inventory, guarded bulk transfers, return workflows, protocols, repairs, QR codes, technical documents and audit history.
 
-Виж `README_BG.md` за пълните инструкции.
+See [README_BG.md](README_BG.md) for setup, operation and deployment instructions.
