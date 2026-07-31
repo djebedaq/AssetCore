@@ -2,10 +2,14 @@
   "name": "assetcore-frontend",
   "private": true,
   "version": "1.0.0-rc1",
+  "packageManager": "pnpm@11.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "lint": "eslint src --max-warnings 0",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -17,8 +21,16 @@
   "devDependencies": {
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
+    "@eslint/js": "^9.17.0",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.17.0",
+    "jsdom": "^26.0.0",
+    "typescript-eslint": "^8.18.2",
     "vite": "^6.0.7",
+    "vitest": "^3.2.4",
     "typescript": "^5.7.3"
   }
 }

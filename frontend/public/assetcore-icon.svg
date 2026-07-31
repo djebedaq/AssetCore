@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="AssetCore">
+  <rect width="512" height="512" rx="112" fill="#10283f"/>
+  <path d="M256 72 400 130v112c0 92-59 159-144 198-85-39-144-106-144-198V130l144-58Z" fill="#f0a334"/>
+  <path d="M256 135 337 168v72c0 53-30 94-81 124-51-30-81-71-81-124v-72l81-33Z" fill="#10283f"/>
+  <circle cx="256" cy="239" r="43" fill="#f0a334"/>
+  <path d="M256 188v102M205 239h102" stroke="#10283f" stroke-width="22" stroke-linecap="round"/>
+</svg>
