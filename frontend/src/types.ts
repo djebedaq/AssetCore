@@ -1,4 +1,7 @@
 export type Location = { id: number; name: string; description?: string | null }
+export type UserSession = {
+  id: number; email: string; full_name: string; role: string; preferred_language: 'bg' | 'en' | 'ru'
+}
 export type Machine = {
   id: number; inventory_number: string; name: string; category: string; brand: string;
   model?: string | null; pressure_bar: number; serial_number?: string | null; status: string;
@@ -20,6 +23,7 @@ export type ProtocolDocument = {
 
 export type TransferAvailability = {
   machine_id: number; machine_number: string; brand: string; pressure_bar: number; status: string;
+  status_label?: string;
   location?: string | null; available: boolean; unavailable_reason?: string | null;
   active_transfer_id?: number | null; protocol_number?: string | null; batch_reference?: string | null;
   issued_at?: string | null; current_recipient_or_location?: string | null

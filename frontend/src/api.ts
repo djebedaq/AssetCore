@@ -1,3 +1,5 @@
+import { getStoredLocale } from './locale'
+
 const BASE = '/api'
 
 export type StructuredApiError = {
@@ -13,7 +15,7 @@ export class ApiError extends Error {
   data: StructuredApiError
 
   constructor(status: number, data: StructuredApiError) {
-    super(data.message || 'Възникна грешка при обработката на заявката.')
+    super(data.message || data.code || 'request_failed')
     this.name = 'ApiError'
     this.status = status
     this.code = data.code
@@ -47,11 +49,11 @@ async function errorFromResponse(response: Response): Promise<ApiError> {
     const firstMessage = detail.find(item => typeof item?.msg === 'string')?.msg
     return new ApiError(response.status, {
       code: 'validation_error',
-      message: firstMessage || 'Проверете попълнените полета.',
+      message: firstMessage || 'validation_error',
       validation: detail,
     })
   }
-  return new ApiError(response.status, { message: 'Възникна грешка при обработката на заявката.' })
+  return new ApiError(response.status, { code: 'request_failed' })
 }
 
 function authenticatedHeaders(options: RequestInit): Headers {
@@ -59,6 +61,7 @@ function authenticatedHeaders(options: RequestInit): Headers {
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json')
   const token = getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
+  headers.set('Accept-Language', getStoredLocale())
   return headers
 }
 

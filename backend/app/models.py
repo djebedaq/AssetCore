@@ -26,22 +26,64 @@ def utcnow() -> datetime:
 
 
 class MachineStatus(str, Enum):
-    READY = "Готова"
-    ISSUED = "Издадена"
-    IN_USE = "В употреба"
-    RETURNED = "Върната"
-    INSPECTION = "За преглед"
-    CLEANING = "Почистване"
-    REPAIR = "В ремонт"
-    WAITING_APPROVAL = "Чака одобрение"
-    WAITING_PARTS = "Чака части"
-    TESTING = "Тестване"
+    READY = "READY"
+    ISSUED = "ISSUED"
+    IN_USE = "IN_USE"
+    RETURNED = "RETURNED"
+    INSPECTION = "INSPECTION"
+    CLEANING = "CLEANING"
+    REPAIR = "REPAIR"
+    WAITING_APPROVAL = "WAITING_APPROVAL"
+    WAITING_PARTS = "WAITING_PARTS"
+    TESTING = "TESTING"
 
 
 class TransferBatchStatus(str, Enum):
-    ACTIVE = "Издадена партида"
-    PARTIALLY_RETURNED = "Частично върната партида"
-    RETURNED = "Върната партида"
+    ACTIVE = "ACTIVE"
+    PARTIALLY_RETURNED = "PARTIALLY_RETURNED"
+    RETURNED = "RETURNED"
+
+
+class RepairStatus(str, Enum):
+    ACCEPTED = "ACCEPTED"
+    DIAGNOSIS = "DIAGNOSIS"
+    WAITING_APPROVAL = "WAITING_APPROVAL"
+    WAITING_PARTS = "WAITING_PARTS"
+    REPAIRING = "REPAIRING"
+    TESTING = "TESTING"
+    COMPLETED = "COMPLETED"
+
+
+class PartRequestStatus(str, Enum):
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"
+    WAITING_APPROVAL = "WAITING_APPROVAL"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    ORDERED = "ORDERED"
+    PARTIALLY_DELIVERED = "PARTIALLY_DELIVERED"
+    DELIVERED = "DELIVERED"
+    CANCELLED = "CANCELLED"
+
+
+class PartRequestPriority(str, Enum):
+    LOW = "LOW"
+    NORMAL = "NORMAL"
+    URGENT = "URGENT"
+
+
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    MECHANIC = "mechanic"
+    MANAGER = "manager"
+    APPROVER = "approver"
+    VIEWER = "viewer"
+
+
+class LanguageCode(str, Enum):
+    BG = "bg"
+    EN = "en"
+    RU = "ru"
 
 
 class User(Base):
@@ -51,7 +93,10 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), default="Администратор")
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(50), default="admin")
+    role: Mapped[str] = mapped_column(String(50), default=UserRole.ADMIN.value)
+    preferred_language: Mapped[str] = mapped_column(
+        String(2), default=LanguageCode.BG.value, server_default=text("'bg'")
+    )
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -101,7 +146,9 @@ class Repair(Base):
     diagnosis: Mapped[str | None] = mapped_column(Text, nullable=True)
     work_performed: Mapped[str | None] = mapped_column(Text, nullable=True)
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(80), default="Приета")
+    status: Mapped[str] = mapped_column(
+        String(80), default=RepairStatus.ACCEPTED.value
+    )
     opened_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -236,8 +283,12 @@ class PartRequest(Base):
     part_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    priority: Mapped[str] = mapped_column(String(50), default="Нормален")
-    status: Mapped[str] = mapped_column(String(80), default="Чернова")
+    priority: Mapped[str] = mapped_column(
+        String(50), default=PartRequestPriority.NORMAL.value
+    )
+    status: Mapped[str] = mapped_column(
+        String(80), default=PartRequestStatus.DRAFT.value
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     machine: Mapped[Machine | None] = relationship()

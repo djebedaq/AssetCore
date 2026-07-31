@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import qrcode
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -22,6 +22,7 @@ from .document_generation import (
     build_protocol_pdf,
     safe_filename,
 )
+from .localization import normalize_language, translate
 from .migrations import run_migrations
 from .models import (
     AuditLog,
@@ -30,11 +31,14 @@ from .models import (
     MachineStatus,
     PartCatalog,
     PartRequest,
+    PartRequestStatus,
     Repair,
+    RepairStatus,
     TechnicalDocument,
     TransferBatch,
     TransferProtocol,
     User,
+    UserRole,
     utcnow,
 )
 from .schemas import (
@@ -48,6 +52,7 @@ from .schemas import (
     BulkReturnItem,
     BulkReturnRequest,
     BulkReturnResponse,
+    LanguagePreferenceUpdate,
     LocationOut,
     LoginRequest,
     MachineCreate,
@@ -63,6 +68,7 @@ from .schemas import (
     TokenResponse,
     TransferCreate,
     TransferOut,
+    UserOut,
 )
 from .security import create_access_token, get_current_user, verify_password
 from .seed import seed_database
@@ -92,10 +98,10 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="AssetCore API",
-    version="1.1.0-bulk-transfers",
+    version="1.2.0-industrial-foundation",
     description=(
-        "API за управление на проверения HPWJ инвентар, защитено групово "
-        "издаване, пълно/частично връщане и проследими протоколи."
+        "API за професионално индустриално управление на активи, защитени "
+        "предавания, ремонти, документи и проследима история."
     ),
     lifespan=lifespan,
 )
@@ -109,15 +115,22 @@ app.add_middleware(
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error_handler(_, exc: RequestValidationError) -> JSONResponse:
+async def validation_error_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    language = normalize_language(request.headers.get("Accept-Language"))
     errors = []
     for error in exc.errors():
-        message = str(error.get("msg", "Невалидни данни."))
+        message = str(error.get("msg", translate("validation.invalid", language)))
         if message.startswith("Value error, "):
             message = message.removeprefix("Value error, ")
         location = ".".join(str(part) for part in error.get("loc", ()) if part != "body")
         errors.append({"field": location or "request", "message": message})
-    message = errors[0]["message"] if errors else "Невалидни данни в заявката."
+    message = (
+        errors[0]["message"]
+        if errors
+        else translate("validation.invalid", language)
+    )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
@@ -134,12 +147,52 @@ def _raise_service_error(exc: TransferServiceError) -> None:
 
 
 def require_transfer_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != "admin":
+    if user.role not in {UserRole.ADMIN.value, UserRole.MANAGER.value}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "transfer_permission_denied",
-                "message": "Нямате право да извършвате издаване или връщане.",
+                "message": translate("permission.transfer", user.preferred_language),
+            },
+        )
+    return user
+
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if user.role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "permission_denied",
+                "message": translate("permission.denied", user.preferred_language),
+            },
+        )
+    return user
+
+
+def require_repair_operator(user: User = Depends(get_current_user)) -> User:
+    if user.role not in {UserRole.ADMIN.value, UserRole.MECHANIC.value}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "permission_denied",
+                "message": translate("permission.denied", user.preferred_language),
+            },
+        )
+    return user
+
+
+def require_audit_reader(user: User = Depends(get_current_user)) -> User:
+    if user.role not in {
+        UserRole.ADMIN.value,
+        UserRole.APPROVER.value,
+        UserRole.VIEWER.value,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "permission_denied",
+                "message": translate("permission.denied", user.preferred_language),
             },
         )
     return user
@@ -170,15 +223,18 @@ def health() -> dict[str, str]:
     return {
         "status": "ok",
         "service": "AssetCore",
-        "version": "1.1.0-bulk-transfers",
+        "version": "1.2.0-industrial-foundation",
     }
 
 
 @app.post("/api/auth/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(
+    data: LoginRequest, request: Request, db: Session = Depends(get_db)
+) -> TokenResponse:
     user = db.scalar(select(User).where(User.email == data.email))
     if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(401, "Грешен имейл или парола")
+        language = normalize_language(request.headers.get("Accept-Language"))
+        raise HTTPException(401, translate("auth.invalid_credentials", language))
     return TokenResponse(
         access_token=create_access_token(user),
         user={
@@ -186,8 +242,38 @@ def login(data: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             "email": user.email,
             "full_name": user.full_name,
             "role": user.role,
+            "preferred_language": user.preferred_language,
         },
     )
+
+
+@app.get("/api/auth/me", response_model=UserOut)
+def current_user(user: User = Depends(get_current_user)) -> User:
+    return user
+
+
+@app.patch("/api/users/me/preferences", response_model=UserOut)
+def update_user_preferences(
+    data: LanguagePreferenceUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    previous_language = user.preferred_language
+    user.preferred_language = data.preferred_language.value
+    add_audit_log(
+        db,
+        user,
+        "user_preference",
+        user.id,
+        "Променен предпочитан език",
+        {
+            "previous_language": previous_language,
+            "new_language": user.preferred_language,
+        },
+    )
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @app.get("/api/dashboard")
@@ -218,7 +304,12 @@ def dashboard(
         or 0,
         "pending_parts": db.scalar(
             select(func.count(PartRequest.id)).where(
-                PartRequest.status.not_in(["Доставена", "Завършена"])
+                PartRequest.status.not_in(
+                    [
+                        PartRequestStatus.DELIVERED.value,
+                        PartRequestStatus.CANCELLED.value,
+                    ]
+                )
             )
         )
         or 0,
@@ -280,7 +371,7 @@ def machine(
 @app.post("/api/machines", response_model=MachineOut, status_code=201)
 def create_machine(
     data: MachineCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> Machine:
     if db.scalar(select(Machine).where(Machine.inventory_number == data.inventory_number)):
@@ -302,7 +393,7 @@ def create_machine(
 def update_machine(
     machine_id: int,
     data: MachineUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> Machine:
     item = db.get(Machine, machine_id)
@@ -381,7 +472,7 @@ def repairs(
 @app.post("/api/repairs", response_model=RepairOut, status_code=201)
 def create_repair(
     data: RepairCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> Repair:
     item = db.get(Machine, data.machine_id)
@@ -399,7 +490,7 @@ def create_repair(
                 ),
             },
         )
-    repair = Repair(**data.model_dump())
+    repair = Repair(**data.model_dump(mode="json"))
     item.status = MachineStatus.REPAIR.value
     db.add(repair)
     db.flush()
@@ -423,17 +514,20 @@ def create_repair(
 def update_repair(
     repair_id: int,
     data: RepairUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> Repair:
     repair = db.get(Repair, repair_id)
     if not repair:
         raise HTTPException(404, "Ремонтът не е намерен")
-    changes = data.model_dump(exclude={"close"}, exclude_unset=True)
+    changes = data.model_dump(exclude={"close"}, exclude_unset=True, mode="json")
     for key, value in changes.items():
         setattr(repair, key, value)
     if data.close:
-        if (data.status or repair.status) != "Тестване" or not (data.result or repair.result):
+        requested_status = data.status.value if data.status else repair.status
+        if requested_status != RepairStatus.TESTING.value or not (
+            data.result or repair.result
+        ):
             raise HTTPException(
                 409,
                 detail={
@@ -445,7 +539,7 @@ def update_repair(
                 },
             )
         repair.closed_at = utcnow()
-        repair.status = "Завършена"
+        repair.status = RepairStatus.COMPLETED.value
         repair.machine.status = MachineStatus.READY.value
     add_audit_log(
         db, user, "repair", repair.id, "Актуализиран ремонт", data.model_dump()
@@ -472,10 +566,10 @@ def parts(
 @app.post("/api/parts", response_model=PartRequestOut, status_code=201)
 def create_part(
     data: PartRequestCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> PartRequest:
-    request = PartRequest(**data.model_dump())
+    request = PartRequest(**data.model_dump(mode="json"))
     db.add(request)
     db.flush()
     add_audit_log(
@@ -535,9 +629,9 @@ def transfers(
 
 @app.get("/api/transfers/availability", response_model=list[AvailabilityOut])
 def transfer_availability(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ) -> list[dict]:
-    return availability(db)
+    return availability(db, user.preferred_language)
 
 
 @app.post(
@@ -657,11 +751,11 @@ def transfer_batches(
 @app.get("/api/transfer-batches/{batch_id}", response_model=BatchDetailsOut)
 def transfer_batch_details(
     batch_id: int,
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     try:
-        return batch_details(db, batch_id)
+        return batch_details(db, batch_id, user.preferred_language)
     except TransferServiceError as exc:
         _raise_service_error(exc)
 
@@ -671,11 +765,11 @@ def transfer_batch_details(
 )
 def transfer_batch_progress(
     batch_id: int,
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     try:
-        return batch_progress(db, batch_id)
+        return batch_progress(db, batch_id, user.preferred_language)
     except TransferServiceError as exc:
         _raise_service_error(exc)
 
@@ -683,11 +777,11 @@ def transfer_batch_progress(
 @app.get("/api/protocol-documents/{document_id}/download")
 def protocol_document_download(
     document_id: int,
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
     try:
-        document = get_protocol_document(db, document_id)
+        document = get_protocol_document(db, document_id, user.preferred_language)
     except TransferServiceError as exc:
         _raise_service_error(exc)
     return Response(
@@ -819,7 +913,7 @@ def download_doc(
 
 @app.get("/api/audit", response_model=list[AuditLogOut])
 def audit(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_audit_reader), db: Session = Depends(get_db)
 ) -> list[AuditLog]:
     return db.scalars(
         select(AuditLog).order_by(AuditLog.created_at.desc()).limit(500)

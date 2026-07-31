@@ -1,7 +1,15 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Location, Machine, User
+from .models import (
+    Location,
+    Machine,
+    MachineStatus,
+    PartCatalog,
+    TechnicalDocument,
+    User,
+    UserRole,
+)
 from .security import hash_password
 from .settings import settings
 
@@ -45,12 +53,13 @@ MACHINES = [
 ]
 
 
-def seed_database(db: Session) -> None:
+def _seed_verified_registry(db: Session) -> None:
     if not db.scalar(select(User).limit(1)):
         db.add(User(
             email=settings.admin_email,
             full_name="Администратор",
             password_hash=hash_password(settings.admin_password),
+            role=UserRole.ADMIN.value,
         ))
 
     existing_locations = {x.name: x for x in db.scalars(select(Location)).all()}
@@ -60,16 +69,6 @@ def seed_database(db: Session) -> None:
     db.commit()
 
     locations = {x.name: x for x in db.scalars(select(Location)).all()}
-    allowed_numbers = {item["inventory_number"] for item in MACHINES}
-
-    # Премахва грешни демонстрационни записи (вкл. бояджийски машини),
-    # без да засяга реалните HPWJ записи.
-    for machine in db.scalars(select(Machine)).all():
-        if machine.category != "HPWJ" or machine.inventory_number not in allowed_numbers:
-            if not machine.repairs:
-                db.delete(machine)
-    db.commit()
-
     existing = {m.inventory_number: m for m in db.scalars(select(Machine)).all()}
     for item in MACHINES:
         machine = existing.get(item["inventory_number"])
@@ -78,7 +77,7 @@ def seed_database(db: Session) -> None:
                 inventory_number=item["inventory_number"],
                 name=f"HPWJ №{item['inventory_number']}",
                 category="HPWJ",
-                status="Готова",
+                status=MachineStatus.READY.value,
                 location_id=locations["Цех"].id,
             )
             db.add(machine)
@@ -95,7 +94,6 @@ def seed_database(db: Session) -> None:
 # --- Director Preview: technical library and verified catalog records ---
 def _seed_documents_and_catalog(db: Session) -> None:
     from pathlib import Path
-    from .models import PartCatalog, TechnicalDocument
     root = Path(__file__).resolve().parents[1] / 'resources' / 'technical_docs'
     if root.exists():
         for path in sorted(p for p in root.rglob('*') if p.is_file()):
@@ -132,7 +130,6 @@ def _seed_documents_and_catalog(db: Session) -> None:
             db.add(PartCatalog(brand=brand,model=model,assembly=assembly,position=pos,part_number=pn,description=desc,quantity=qty,source_document=src,source_page=page))
     db.commit()
 
-_old_seed_database = seed_database
 def seed_database(db: Session) -> None:
-    _old_seed_database(db)
+    _seed_verified_registry(db)
     _seed_documents_and_catalog(db)

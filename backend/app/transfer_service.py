@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .audit import add_audit_log
 from .document_generation import make_protocol_documents
+from .localization import status_label, translate
 from .models import (
     Location,
     Machine,
@@ -71,11 +72,14 @@ def _recipient_or_location(transfer: TransferProtocol) -> str | None:
     )
 
 
-def _conflict_item(machine: Machine, transfer: TransferProtocol | None) -> dict[str, Any]:
+def _conflict_item(
+    machine: Machine, transfer: TransferProtocol | None, language: str = "bg"
+) -> dict[str, Any]:
     return {
         "machine_id": machine.id,
         "machine_number": machine.inventory_number,
         "status": machine.status,
+        "status_label": status_label(machine.status, language),
         "active_transfer_id": transfer.id if transfer else None,
         "protocol_number": transfer.protocol_number if transfer else None,
         "batch_reference": transfer.batch_reference if transfer else None,
@@ -88,24 +92,40 @@ def _conflict_item(machine: Machine, transfer: TransferProtocol | None) -> dict[
     }
 
 
-def _availability_message(machine: Machine, transfer: TransferProtocol | None) -> str:
+def _availability_message(
+    machine: Machine, transfer: TransferProtocol | None, language: str = "bg"
+) -> str:
     if transfer:
         details = [
-            f"Машина №{machine.inventory_number} не може да бъде издадена, "
-            "защото има активно предаване и все още не е върната.",
-            f"Текущ статус: {machine.status}.",
-            f"Протокол: {transfer.protocol_number}.",
+            translate("issue.active", language, number=machine.inventory_number),
+            translate(
+                "issue.current_status",
+                language,
+                status=status_label(machine.status, language),
+            ),
+            translate(
+                "issue.protocol", language, protocol=transfer.protocol_number
+            ),
         ]
         issued_at = transfer.issued_at or transfer.created_at
         if issued_at:
-            details.append(f"Дата на издаване: {issued_at:%d.%m.%Y %H:%M}.")
+            details.append(
+                translate(
+                    "issue.date", language, date=f"{issued_at:%d.%m.%Y %H:%M}"
+                )
+            )
         recipient = _recipient_or_location(transfer)
         if recipient:
-            details.append(f"Получател или място: {recipient}.")
+            details.append(
+                translate("issue.recipient", language, recipient=recipient)
+            )
         return " ".join(details)
-    return (
-        f"Машина №{machine.inventory_number} не може да бъде издадена при статус "
-        f"„{machine.status}“. Необходимо е първо да бъде отбелязана като „Готова“."
+    return translate(
+        "issue.not_ready",
+        language,
+        number=machine.inventory_number,
+        status=status_label(machine.status, language),
+        ready=status_label(MachineStatus.READY.value, language),
     )
 
 
@@ -150,7 +170,7 @@ def _active_transfers_for_machines(
     }
 
 
-def availability(db: Session) -> list[dict[str, Any]]:
+def availability(db: Session, language: str = "bg") -> list[dict[str, Any]]:
     machines = db.scalars(
         select(Machine)
         .options(joinedload(Machine.location))
@@ -168,11 +188,12 @@ def availability(db: Session) -> list[dict[str, Any]]:
                 "brand": machine.brand,
                 "pressure_bar": machine.pressure_bar,
                 "status": machine.status,
+                "status_label": status_label(machine.status, language),
                 "location": machine.location.name if machine.location else None,
                 "available": is_available,
                 "unavailable_reason": None
                 if is_available
-                else _availability_message(machine, transfer),
+                else _availability_message(machine, transfer, language),
                 "active_transfer_id": transfer.id if transfer else None,
                 "protocol_number": transfer.protocol_number if transfer else None,
                 "batch_reference": transfer.batch_reference if transfer else None,
@@ -188,7 +209,7 @@ def availability(db: Session) -> list[dict[str, Any]]:
 
 
 def _load_issue_machines(
-    db: Session, machine_ids: list[int]
+    db: Session, machine_ids: list[int], language: str
 ) -> tuple[list[Machine], dict[int, TransferProtocol]]:
     statement = (
         select(Machine)
@@ -202,13 +223,15 @@ def _load_issue_machines(
         raise TransferServiceError(
             404,
             "machines_not_found",
-            "Една или повече избрани машини не са намерени.",
+            translate("issue.machines_not_found", language),
             {"missing_machine_ids": missing_ids},
         )
     return machines, _active_transfers_for_machines(db, machine_ids)
 
 
-def _validate_location_ids(db: Session, location_ids: set[int]) -> None:
+def _validate_location_ids(
+    db: Session, location_ids: set[int], language: str = "bg"
+) -> None:
     if not location_ids:
         return
     found = set(
@@ -219,25 +242,25 @@ def _validate_location_ids(db: Session, location_ids: set[int]) -> None:
         raise TransferServiceError(
             404,
             "locations_not_found",
-            "Едно или повече избрани местоположения не са намерени.",
+            translate("locations.not_found", language),
             {"missing_location_ids": missing},
         )
 
 
 def _issue_conflicts(
-    machines: list[Machine], active: dict[int, TransferProtocol]
+    machines: list[Machine], active: dict[int, TransferProtocol], language: str
 ) -> list[dict[str, Any]]:
     conflicts = []
     for machine in machines:
         transfer = active.get(machine.id)
         if transfer is not None or machine.status != MachineStatus.READY.value:
-            item = _conflict_item(machine, transfer)
-            item["message"] = _availability_message(machine, transfer)
+            item = _conflict_item(machine, transfer, language)
+            item["message"] = _availability_message(machine, transfer, language)
             conflicts.append(item)
     return conflicts
 
 
-def _issue_result(batch: TransferBatch) -> dict[str, Any]:
+def _issue_result(batch: TransferBatch, language: str) -> dict[str, Any]:
     transfers = []
     for transfer in sorted(batch.transfers, key=lambda item: item.id):
         transfers.append(
@@ -260,7 +283,7 @@ def _issue_result(batch: TransferBatch) -> dict[str, Any]:
             }
         )
     return {
-        "message": "Груповото издаване е завършено успешно.",
+        "message": translate("issue.success", language),
         "batch_id": batch.id,
         "batch_reference": batch.batch_reference,
         "transfers": transfers,
@@ -272,12 +295,15 @@ def _bulk_issue_impl(
     db: Session, user: User, data: BulkIssueRequest
 ) -> dict[str, Any]:
     machine_ids = list(data.machine_ids)
+    language = user.preferred_language
     try:
-        machines, active = _load_issue_machines(db, machine_ids)
+        machines, active = _load_issue_machines(db, machine_ids, language)
         _validate_location_ids(
-            db, {data.location_id} if data.location_id is not None else set()
+            db,
+            {data.location_id} if data.location_id is not None else set(),
+            language,
         )
-        conflicts = _issue_conflicts(machines, active)
+        conflicts = _issue_conflicts(machines, active, language)
         if conflicts:
             raise TransferServiceError(
                 409,
@@ -389,7 +415,7 @@ def _bulk_issue_impl(
             .where(TransferBatch.id == batch.id)
         )
         assert loaded is not None
-        return _issue_result(loaded)
+        return _issue_result(loaded, language)
     except TransferServiceError as exc:
         db.rollback()
         _record_rejection(
@@ -411,8 +437,10 @@ def _bulk_issue_impl(
         ).unique().all()
         conflicts = [
             {
-                **_conflict_item(machine, active.get(machine.id)),
-                "message": _availability_message(machine, active.get(machine.id)),
+                **_conflict_item(machine, active.get(machine.id), language),
+                "message": _availability_message(
+                    machine, active.get(machine.id), language
+                ),
             }
             for machine in machines
             if machine.id in active
@@ -420,7 +448,7 @@ def _bulk_issue_impl(
         message = (
             conflicts[0]["message"]
             if conflicts
-            else "Издаването е отказано поради едновременна конфликтна операция."
+            else translate("issue.concurrent", language)
         )
         _record_rejection(
             db,
@@ -502,6 +530,7 @@ def _bulk_return_impl(
 ) -> dict[str, Any]:
     machine_ids = [item.machine_id for item in data.items]
     transfer_ids = [item.transfer_id for item in data.items]
+    language = user.preferred_language
     try:
         machine_statement = (
             select(Machine)
@@ -515,7 +544,7 @@ def _bulk_return_impl(
             raise TransferServiceError(
                 404,
                 "machines_not_found",
-                "Една или повече машини за връщане не са намерени.",
+                translate("return.machines_not_found", language),
                 {"missing_machine_ids": missing_machine_ids},
             )
 
@@ -532,12 +561,14 @@ def _bulk_return_impl(
             raise TransferServiceError(
                 404,
                 "transfers_not_found",
-                "Едно или повече предавания не са намерени.",
+                translate("return.transfers_not_found", language),
                 {"missing_transfer_ids": missing_transfer_ids},
             )
 
         _validate_location_ids(
-            db, {item.location_id for item in data.items if item.location_id is not None}
+            db,
+            {item.location_id for item in data.items if item.location_id is not None},
+            language,
         )
 
         conflicts: list[dict[str, Any]] = []
@@ -551,7 +582,7 @@ def _bulk_return_impl(
                         "machine_number": machine.inventory_number,
                         "transfer_id": transfer.id,
                         "protocol_number": transfer.protocol_number,
-                        "message": "Избраното предаване не принадлежи на тази машина.",
+                        "message": translate("return.wrong_transfer", language),
                     }
                 )
             elif not transfer.is_active:
@@ -561,9 +592,11 @@ def _bulk_return_impl(
                         "machine_number": machine.inventory_number,
                         "transfer_id": transfer.id,
                         "protocol_number": transfer.protocol_number,
-                        "message": (
-                            f"Машина №{machine.inventory_number} вече е върната по "
-                            f"протокол {transfer.protocol_number}."
+                        "message": translate(
+                            "return.already_returned",
+                            language,
+                            number=machine.inventory_number,
+                            protocol=transfer.protocol_number,
                         ),
                     }
                 )
@@ -661,7 +694,7 @@ def _bulk_return_impl(
             )
         db.commit()
         return {
-            "message": "Връщането е записано успешно.",
+            "message": translate("return.success", language),
             "returned": returned_results,
             "batches": sorted(progresses, key=lambda item: item["batch_id"]),
         }
@@ -698,19 +731,23 @@ def bulk_return(
         return _bulk_return_impl(db, user, data)
 
 
-def batch_progress(db: Session, batch_id: int) -> dict[str, Any]:
+def batch_progress(
+    db: Session, batch_id: int, language: str = "bg"
+) -> dict[str, Any]:
     batch = db.get(TransferBatch, batch_id)
     if batch is None:
         raise TransferServiceError(
             404,
             "batch_not_found",
-            "Партидата не е намерена.",
+            translate("batch.not_found", language),
             {"batch_id": batch_id},
         )
     return _batch_progress(db, batch)
 
 
-def batch_details(db: Session, batch_id: int) -> dict[str, Any]:
+def batch_details(
+    db: Session, batch_id: int, language: str = "bg"
+) -> dict[str, Any]:
     batch = db.scalar(
         select(TransferBatch)
         .options(
@@ -726,7 +763,7 @@ def batch_details(db: Session, batch_id: int) -> dict[str, Any]:
         raise TransferServiceError(
             404,
             "batch_not_found",
-            "Партидата не е намерена.",
+            translate("batch.not_found", language),
             {"batch_id": batch_id},
         )
     progress = _batch_progress(db, batch)
@@ -774,13 +811,15 @@ def list_batches(db: Session) -> list[dict[str, Any]]:
     return [_batch_progress(db, batch) | {"created_at": batch.created_at} for batch in batches]
 
 
-def get_protocol_document(db: Session, document_id: int) -> ProtocolDocument:
+def get_protocol_document(
+    db: Session, document_id: int, language: str = "bg"
+) -> ProtocolDocument:
     document = db.get(ProtocolDocument, document_id)
     if document is None:
         raise TransferServiceError(
             404,
             "protocol_document_not_found",
-            "Генерираният протокол не е намерен.",
+            translate("document.protocol_not_found", language),
             {"document_id": document_id},
         )
     return document

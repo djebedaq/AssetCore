@@ -4,7 +4,20 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .models import MachineStatus
+from .localization import (
+    LEGACY_MACHINE_STATUS_CODES,
+    LEGACY_PART_REQUEST_PRIORITY_CODES,
+    LEGACY_PART_REQUEST_STATUS_CODES,
+    LEGACY_REPAIR_STATUS_CODES,
+)
+from .models import (
+    LanguageCode,
+    MachineStatus,
+    PartRequestPriority,
+    PartRequestStatus,
+    RepairStatus,
+    TransferBatchStatus,
+)
 
 
 class LoginRequest(BaseModel):
@@ -16,6 +29,20 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: dict
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    full_name: str
+    role: str
+    preferred_language: LanguageCode
+
+
+class LanguagePreferenceUpdate(BaseModel):
+    preferred_language: LanguageCode
 
 
 class LocationOut(BaseModel):
@@ -37,6 +64,11 @@ class MachineBase(BaseModel):
     location_id: int | None = None
     notes: str | None = None
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def accept_legacy_status(cls, value):
+        return LEGACY_MACHINE_STATUS_CODES.get(value, value)
+
 
 class MachineCreate(MachineBase):
     pass
@@ -52,11 +84,17 @@ class MachineUpdate(BaseModel):
     location_id: int | None = None
     notes: str | None = None
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def accept_legacy_status(cls, value):
+        return LEGACY_MACHINE_STATUS_CODES.get(value, value)
+
 
 class MachineOut(MachineBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    status: MachineStatus | str
     location: LocationOut | None = None
     created_at: datetime
     updated_at: datetime
@@ -68,15 +106,25 @@ class RepairCreate(BaseModel):
     diagnosis: str | None = None
     work_performed: str | None = None
     result: str | None = None
-    status: str = "Приета"
+    status: RepairStatus = RepairStatus.ACCEPTED
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def accept_legacy_status(cls, value):
+        return LEGACY_REPAIR_STATUS_CODES.get(value, value)
 
 
 class RepairUpdate(BaseModel):
     diagnosis: str | None = None
     work_performed: str | None = None
     result: str | None = None
-    status: str | None = None
+    status: RepairStatus | None = None
     close: bool = False
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def accept_legacy_status(cls, value):
+        return LEGACY_REPAIR_STATUS_CODES.get(value, value)
 
 
 class RepairOut(BaseModel):
@@ -99,14 +147,26 @@ class PartRequestCreate(BaseModel):
     part_number: str | None = None
     quantity: int = Field(default=1, ge=1)
     reason: str | None = None
-    priority: str = "Нормален"
-    status: str = "Чернова"
+    priority: PartRequestPriority = PartRequestPriority.NORMAL
+    status: PartRequestStatus = PartRequestStatus.DRAFT
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def accept_legacy_priority(cls, value):
+        return LEGACY_PART_REQUEST_PRIORITY_CODES.get(value, value)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def accept_legacy_status(cls, value):
+        return LEGACY_PART_REQUEST_STATUS_CODES.get(value, value)
 
 
 class PartRequestOut(PartRequestCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    priority: PartRequestPriority | str
+    status: PartRequestStatus | str
     machine: MachineOut | None = None
     created_at: datetime
 
@@ -218,6 +278,11 @@ class BulkReturnItem(BaseModel):
     location_id: int | None = None
     next_status: MachineStatus = MachineStatus.INSPECTION
 
+    @field_validator("next_status", mode="before")
+    @classmethod
+    def accept_legacy_next_status(cls, value):
+        return LEGACY_MACHINE_STATUS_CODES.get(value, value)
+
     @field_validator("next_status")
     @classmethod
     def validate_next_status(cls, value: MachineStatus) -> MachineStatus:
@@ -248,7 +313,7 @@ class BulkReturnRequest(BaseModel):
 class BatchProgressOut(BaseModel):
     batch_id: int
     batch_reference: str
-    status: str
+    status: TransferBatchStatus
     total_machines: int
     returned_machines: int
     still_issued_machines: int
@@ -262,7 +327,7 @@ class BulkReturnItemOut(BaseModel):
     transfer_id: int
     machine_id: int
     machine_number: str
-    new_status: str
+    new_status: MachineStatus
     returned_at: datetime
 
 
@@ -277,7 +342,8 @@ class AvailabilityOut(BaseModel):
     machine_number: str
     brand: str
     pressure_bar: int
-    status: str
+    status: MachineStatus | str
+    status_label: str
     location: str | None = None
     available: bool
     unavailable_reason: str | None = None
@@ -299,7 +365,7 @@ class BatchTransferOut(BaseModel):
     is_active: bool
     issued_at: datetime | None = None
     returned_at: datetime | None = None
-    current_status: str
+    current_status: MachineStatus | str
     location: str | None = None
     documents: list[ProtocolDocumentOut]
 
