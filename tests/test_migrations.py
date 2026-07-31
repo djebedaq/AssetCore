@@ -64,9 +64,29 @@ def test_legacy_sqlite_database_upgrades_without_changing_inventory(tmp_path: Pa
     assert {"batch_id", "is_active", "returned_at"}.issubset(
         {column["name"] for column in inspector.get_columns("transfer_protocols")}
     )
+    assert "preferred_language" in {
+        column["name"] for column in inspector.get_columns("users")
+    }
     with engine.connect() as upgraded:
         row = upgraded.exec_driver_sql(
-            "SELECT inventory_number, serial_number FROM machines WHERE id=1"
+            "SELECT inventory_number, serial_number, status FROM machines WHERE id=1"
         ).one()
-        assert row == ("7", "G41200143")
+        assert row == ("7", "G41200143", "READY")
     engine.dispose()
+
+    previous_url = settings.database_url
+    settings.database_url = f"sqlite:///{database_path.as_posix()}"
+    try:
+        command.downgrade(config, "20260731_0001")
+    finally:
+        settings.database_url = previous_url
+    downgraded_engine = create_engine(f"sqlite:///{database_path}")
+    downgraded_inspector = inspect(downgraded_engine)
+    assert "preferred_language" not in {
+        column["name"] for column in downgraded_inspector.get_columns("users")
+    }
+    with downgraded_engine.connect() as downgraded:
+        assert downgraded.exec_driver_sql(
+            "SELECT status FROM machines WHERE id=1"
+        ).scalar_one() == "Готова"
+    downgraded_engine.dispose()

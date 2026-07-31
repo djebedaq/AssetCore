@@ -8,6 +8,8 @@ Generic Render URLs с `postgresql://` или legacy `postgres://` се норм
 
 ## Миграция
 
+Текущият `head` включва `20260731_0002_i18n_status_roles`. Той добавя `users.preferred_language`, преобразува само познатите legacy български статуси към стабилни кодове и оставя непознатите исторически стойности непроменени. Миграцията е съвместима с PostgreSQL и SQLite и има downgrade към предходната ревизия.
+
 ```bash
 python -m alembic -c backend/alembic.ini upgrade head
 ```

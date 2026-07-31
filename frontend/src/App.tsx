@@ -1,204 +1,970 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
-  BarChart3, Boxes, FileText, Gauge, LogOut, Menu, PackageSearch, Plus, QrCode,
-  Search, Settings, ShieldCheck, Wrench, X, ClipboardSignature, BookOpen, History
+  BarChart3,
+  BookOpen,
+  Boxes,
+  ClipboardSignature,
+  FileText,
+  Gauge,
+  History,
+  Languages,
+  LogOut,
+  Menu,
+  PackageSearch,
+  Plus,
+  QrCode,
+  Search,
+  Settings,
+  ShieldCheck,
+  Wrench,
+  X,
 } from 'lucide-react'
 import { api, downloadApiFile, getToken, logout, setToken } from './api'
-import type { Location, Machine, PartRequest, Repair } from './types'
 import BulkTransfers from './BulkTransfers'
+import { statusText, useI18n } from './i18n'
+import { SUPPORTED_LOCALES, type Locale } from './locale'
+import type { Location, Machine, PartRequest, Repair, UserSession } from './types'
 
-type Page = 'dashboard' | 'machines' | 'transfers' | 'repairs' | 'catalog' | 'parts' | 'documents' | 'reports' | 'audit' | 'qr' | 'settings'
+type Page =
+  | 'dashboard'
+  | 'machines'
+  | 'transfers'
+  | 'repairs'
+  | 'catalog'
+  | 'parts'
+  | 'documents'
+  | 'reports'
+  | 'audit'
+  | 'qr'
+  | 'settings'
 
-const STATUS_OPTIONS = ['Готова','Издадена','В употреба','Върната','За преглед','Почистване','В ремонт','Чака одобрение','Чака части','Тестване']
+type DashboardData = {
+  total_machines: number
+  ready: number
+  in_use: number
+  open_repairs: number
+  pending_parts: number
+  status_breakdown: Record<string, number>
+  recent_repairs: Array<{
+    id: number
+    machine: string
+    problem: string
+    status: string
+  }>
+}
+
+type TransferRecord = {
+  id: number
+  protocol_number: string
+  batch_reference?: string | null
+  is_active: boolean
+  company_unit?: string | null
+  vessel?: string | null
+  location_text?: string | null
+  issued_at?: string | null
+  returned_at?: string | null
+  created_at: string
+  machine: Machine
+}
+
+type CatalogPart = {
+  id: number
+  brand: string
+  model?: string | null
+  assembly?: string | null
+  position?: string | null
+  part_number: string
+  description: string
+  quantity?: number | null
+  source_document?: string | null
+  source_page?: number | null
+}
+
+type TechnicalDocument = {
+  id: number
+  brand: string
+  category: string
+  title: string
+}
+
+type AuditEntry = {
+  id: number
+  created_at: string
+  user_name?: string | null
+  entity_type: string
+  entity_id?: number | null
+  action: string
+  details?: string | null
+}
+
+const MACHINE_STATUS_CODES = [
+  'READY',
+  'ISSUED',
+  'IN_USE',
+  'RETURNED',
+  'INSPECTION',
+  'CLEANING',
+  'REPAIR',
+  'WAITING_APPROVAL',
+  'WAITING_PARTS',
+  'TESTING',
+]
+
+const REPAIR_STATUS_CODES = [
+  'ACCEPTED',
+  'DIAGNOSIS',
+  'WAITING_APPROVAL',
+  'WAITING_PARTS',
+  'REPAIRING',
+  'TESTING',
+]
+
+const PART_STATUS_CODES = [
+  'DRAFT',
+  'SUBMITTED',
+  'WAITING_APPROVAL',
+  'APPROVED',
+  'REJECTED',
+  'ORDERED',
+  'PARTIALLY_DELIVERED',
+  'DELIVERED',
+  'CANCELLED',
+]
+
+const PART_PRIORITY_CODES = ['LOW', 'NORMAL', 'URGENT']
+
+function storedUser(): UserSession | null {
+  try {
+    return JSON.parse(localStorage.getItem('assetcore_user') || 'null') as UserSession | null
+  } catch {
+    return null
+  }
+}
+
+function hasRole(...roles: string[]): boolean {
+  return roles.includes(storedUser()?.role || '')
+}
+
+export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
+  const { locale, setLocale, t } = useI18n()
+  return (
+    <label className={compact ? 'language-switch compact-language' : 'language-switch'}>
+      <Languages size={17} aria-hidden="true" />
+      <span className="sr-only">{t('language.label')}</span>
+      <select
+        aria-label={t('language.label')}
+        value={locale}
+        onChange={(event) => setLocale(event.target.value as Locale)}
+      >
+        {SUPPORTED_LOCALES.map((language) => (
+          <option key={language} value={language}>{t(`language.${language}`)}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
 
 function Login({ onLogin }: { onLogin: () => void }) {
-  const [email, setEmail] = useState('admin@assetcore.local')
-  const [password, setPassword] = useState('AssetCore123!')
+  const { setLocale, t } = useI18n()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  async function submit(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setError('')
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
     try {
-      const data = await api<{access_token:string; user:unknown}>('/auth/login', { method:'POST', body:JSON.stringify({email,password}) })
-      setToken(data.access_token); localStorage.setItem('assetcore_user', JSON.stringify(data.user)); onLogin()
-    } catch (err) { setError(err instanceof Error ? err.message : 'Грешка при вход') }
-    finally { setBusy(false) }
+      const data = await api<{ access_token: string; user: UserSession }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      })
+      setToken(data.access_token)
+      localStorage.setItem('assetcore_user', JSON.stringify(data.user))
+      setLocale(data.user.preferred_language, false)
+      onLogin()
+    } catch {
+      setError(t('login.error'))
+    } finally {
+      setBusy(false)
+    }
   }
 
-  return <div className="login-shell">
-    <div className="login-panel">
-      <div className="brand-mark"><ShieldCheck size={30}/></div>
-      <h1>AssetCore</h1><p>Индустриално управление на активи</p>
-      <form onSubmit={submit}>
-        <label>Имейл<input value={email} onChange={e=>setEmail(e.target.value)} type="email"/></label>
-        <label>Парола<input value={password} onChange={e=>setPassword(e.target.value)} type="password"/></label>
-        {error && <div className="error">{error}</div>}
-        <button disabled={busy}>{busy ? 'Влизане…' : 'Вход'}</button>
-      </form>
-      <small>Начален администратор: admin@assetcore.local</small>
+  return (
+    <div className="login-shell">
+      <div className="login-panel">
+        <div className="login-language"><LanguageSwitcher compact /></div>
+        <div className="brand-mark"><ShieldCheck size={30} /></div>
+        <h1>AssetCore</h1>
+        <p>{t('login.subtitle')}</p>
+        <form onSubmit={submit}>
+          <label>
+            {t('login.email')}
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              type="email"
+              autoComplete="username"
+              placeholder={t('login.emailPlaceholder')}
+              required
+            />
+          </label>
+          <label>
+            {t('login.password')}
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              autoComplete="current-password"
+              placeholder={t('login.passwordPlaceholder')}
+              required
+            />
+          </label>
+          {error && <div className="error" role="alert">{error}</div>}
+          <button disabled={busy}>{busy ? t('login.signingIn') : t('login.signIn')}</button>
+        </form>
+      </div>
     </div>
-  </div>
+  )
 }
 
 function App() {
-  const [authenticated, setAuthenticated] = useState(!!getToken())
+  const { t } = useI18n()
+  const [authenticated, setAuthenticated] = useState(Boolean(getToken()))
   const [page, setPage] = useState<Page>('dashboard')
   const [mobileMenu, setMobileMenu] = useState(false)
-  if (!authenticated) return <Login onLogin={()=>setAuthenticated(true)}/>
+
+  if (!authenticated) return <Login onLogin={() => setAuthenticated(true)} />
 
   const nav = [
-    ['dashboard','Табло',Gauge], ['machines','Машини',Boxes], ['transfers','Приемане / предаване',ClipboardSignature], ['repairs','Ремонти',Wrench],
-    ['catalog','Parts list',BookOpen], ['parts','Заявки за части',PackageSearch], ['documents','Технически документи',FileText], ['reports','Отчети',BarChart3], ['audit','Журнал',History], ['qr','QR кодове',QrCode], ['settings','Настройки',Settings]
+    ['dashboard', 'nav.dashboard', Gauge],
+    ['machines', 'nav.machines', Boxes],
+    ['transfers', 'nav.transfers', ClipboardSignature],
+    ['repairs', 'nav.repairs', Wrench],
+    ['catalog', 'nav.catalog', BookOpen],
+    ['parts', 'nav.parts', PackageSearch],
+    ['documents', 'nav.documents', FileText],
+    ['reports', 'nav.reports', BarChart3],
+    ['audit', 'nav.audit', History],
+    ['qr', 'nav.qr', QrCode],
+    ['settings', 'nav.settings', Settings],
   ] as const
 
-  return <div className="app-shell">
-    <aside className={mobileMenu ? 'sidebar open' : 'sidebar'}>
-      <div className="brand"><div className="brand-mark small"><ShieldCheck size={22}/></div><div><strong>AssetCore</strong><span>HPWJ управление</span></div></div>
-      <nav>{nav.map(([id,label,Icon])=><button key={id} className={page===id?'active':''} onClick={()=>{setPage(id);setMobileMenu(false)}}><Icon size={19}/>{label}</button>)}</nav>
-      <button className="logout" onClick={()=>{logout();setAuthenticated(false)}}><LogOut size={18}/>Изход</button>
-    </aside>
-    <main>
-      <header><button className="mobile-toggle" onClick={()=>setMobileMenu(v=>!v)}>{mobileMenu?<X/>:<Menu/>}</button><div><h2>{nav.find(x=>x[0]===page)?.[1]}</h2><p>Одесос — управление на техника и ремонти</p></div></header>
-      <section className="content">
-        {page==='dashboard' && <Dashboard/>}
-        {page==='machines' && <Machines/>}
-        {page==='transfers' && <Transfers/>}
-        {page==='repairs' && <Repairs/>}
-        {page==='catalog' && <PartCatalog/>}
-        {page==='parts' && <Parts/>}
-        {page==='documents' && <Documents/>}
-        {page==='reports' && <Reports/>}
-        {page==='audit' && <Audit/>}
-        {page==='qr' && <QrCodes/>}
-        {page==='settings' && <SettingsPage/>}
-      </section>
-    </main>
-  </div>
+  return (
+    <div className="app-shell">
+      <aside className={mobileMenu ? 'sidebar open' : 'sidebar'}>
+        <div className="brand">
+          <div className="brand-mark small"><ShieldCheck size={22} /></div>
+          <div><strong>AssetCore</strong><span>{t('app.brandSubtitle')}</span></div>
+        </div>
+        <nav>
+          {nav.map(([id, label, Icon]) => (
+            <button
+              key={id}
+              className={page === id ? 'active' : ''}
+              onClick={() => {
+                setPage(id)
+                setMobileMenu(false)
+              }}
+            >
+              <Icon size={19} />{t(label)}
+            </button>
+          ))}
+        </nav>
+        <button
+          className="logout"
+          onClick={() => {
+            logout()
+            setAuthenticated(false)
+          }}
+        >
+          <LogOut size={18} />{t('app.logout')}
+        </button>
+      </aside>
+      <main>
+        <header>
+          <button
+            className="mobile-toggle"
+            onClick={() => setMobileMenu((value) => !value)}
+            aria-label={mobileMenu ? t('common.close') : t('common.open')}
+          >
+            {mobileMenu ? <X /> : <Menu />}
+          </button>
+          <div className="header-copy">
+            <h2>{t(nav.find((item) => item[0] === page)?.[1] || 'nav.dashboard')}</h2>
+            <p>{t('app.headerSubtitle')}</p>
+          </div>
+          <LanguageSwitcher compact />
+        </header>
+        <section className="content">
+          {page === 'dashboard' && <Dashboard />}
+          {page === 'machines' && <Machines />}
+          {page === 'transfers' && <Transfers />}
+          {page === 'repairs' && <Repairs />}
+          {page === 'catalog' && <PartCatalog />}
+          {page === 'parts' && <Parts />}
+          {page === 'documents' && <Documents />}
+          {page === 'reports' && <Reports />}
+          {page === 'audit' && <Audit />}
+          {page === 'qr' && <QrCodes />}
+          {page === 'settings' && <SettingsPage />}
+        </section>
+      </main>
+    </div>
+  )
 }
 
 function Dashboard() {
-  const [data,setData] = useState<any>(null)
-  useEffect(()=>{api('/dashboard').then(setData).catch(console.error)},[])
-  if(!data) return <div className="loading">Зареждане…</div>
+  const { t, number } = useI18n()
+  const [data, setData] = useState<DashboardData | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    void api<DashboardData>('/dashboard').then(setData).catch(() => setError(true))
+  }, [])
+
+  if (error) return <div className="error" role="alert">{t('errors.generic')}</div>
+  if (!data) return <div className="loading">{t('common.loading')}</div>
+
   const cards = [
-    ['Общо машини',data.total_machines,Boxes],['Готови',data.ready,ShieldCheck],['В употреба',data.in_use,Gauge],['Отворени ремонти',data.open_repairs,Wrench],['Чакащи заявки',data.pending_parts,PackageSearch]
+    ['dashboard.totalMachines', data.total_machines, Boxes],
+    ['dashboard.ready', data.ready, ShieldCheck],
+    ['dashboard.inUse', data.in_use, Gauge],
+    ['dashboard.openRepairs', data.open_repairs, Wrench],
+    ['dashboard.pendingRequests', data.pending_parts, PackageSearch],
   ] as const
-  return <>
-    <div className="stats-grid">{cards.map(([label,value,Icon])=><div className="stat-card" key={label}><div className="stat-icon"><Icon size={23}/></div><div><span>{label}</span><strong>{value}</strong></div></div>)}</div>
-    <div className="panel-grid">
-      <div className="panel"><div className="panel-title"><h3>Състояние на машините</h3><BarChart3/></div>
-        <div className="status-list">{Object.entries(data.status_breakdown).map(([status,count]:any)=><div key={status}><span>{status}</span><div className="bar"><i style={{width:`${Math.max(8,(count/data.total_machines)*100)}%`}}/></div><b>{count}</b></div>)}</div>
+
+  return (
+    <>
+      <div className="stats-grid">
+        {cards.map(([label, value, Icon]) => (
+          <div className="stat-card" key={label}>
+            <div className="stat-icon"><Icon size={23} /></div>
+            <div><span>{t(label)}</span><strong>{number(value)}</strong></div>
+          </div>
+        ))}
       </div>
-      <div className="panel"><div className="panel-title"><h3>Последни ремонти</h3><Wrench/></div>
-        <div className="activity-list">{data.recent_repairs.length ? data.recent_repairs.map((r:any)=><div key={r.id}><strong>{r.machine}</strong><span>{r.problem}</span><em>{r.status}</em></div>) : <p className="muted">Все още няма регистрирани ремонти.</p>}</div>
+      <div className="panel-grid">
+        <div className="panel">
+          <div className="panel-title"><h3>{t('dashboard.machineStatus')}</h3><BarChart3 /></div>
+          <div className="status-list">
+            {Object.entries(data.status_breakdown).map(([status, count]) => (
+              <div key={status}>
+                <span>{statusText(t, status)}</span>
+                <div className="bar">
+                  <i style={{ width: `${Math.max(8, (count / Math.max(data.total_machines, 1)) * 100)}%` }} />
+                </div>
+                <b>{number(count)}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-title"><h3>{t('dashboard.recentRepairs')}</h3><Wrench /></div>
+          <div className="activity-list">
+            {data.recent_repairs.length ? data.recent_repairs.map((repair) => (
+              <div key={repair.id}>
+                <strong>{repair.machine}</strong>
+                <span>{repair.problem}</span>
+                <em>{statusText(t, repair.status, 'repair')}</em>
+              </div>
+            )) : <p className="muted">{t('dashboard.noRepairs')}</p>}
+          </div>
+        </div>
       </div>
-    </div>
-  </>
+    </>
+  )
 }
 
 function Machines() {
-  const [items,setItems]=useState<Machine[]>([]), [locations,setLocations]=useState<Location[]>([])
-  const [query,setQuery]=useState(''), [selected,setSelected]=useState<Machine|null>(null), [showNew,setShowNew]=useState(false)
-  const load=()=>Promise.all([api<Machine[]>('/machines'),api<Location[]>('/locations')]).then(([m,l])=>{setItems(m);setLocations(l)})
-  useEffect(()=>{load().catch(console.error)},[])
-  const filtered=useMemo(()=>items.filter(x=>`${x.name} ${x.brand} ${x.status} ${x.location?.name}`.toLowerCase().includes(query.toLowerCase())),[items,query])
-  return <>
-    <div className="toolbar"><div className="search"><Search size={18}/><input placeholder="Търси по номер, марка, статус или място…" value={query} onChange={e=>setQuery(e.target.value)}/></div><button className="primary" onClick={()=>setShowNew(true)}><Plus size={18}/>Нова машина</button></div>
-    <div className="table-card"><table><thead><tr><th>Машина</th><th>Марка</th><th>Налягане</th><th>Статус</th><th>Местоположение</th><th></th></tr></thead><tbody>{filtered.map(m=><tr key={m.id}><td><strong>{m.name}</strong><small>Инв. № {m.inventory_number}</small></td><td>{m.brand}</td><td>{m.pressure_bar} bar</td><td><span className="badge">{m.status}</span></td><td>{m.location?.name||'Не е определено'}</td><td><button className="link" onClick={()=>setSelected(m)}>Отвори</button></td></tr>)}</tbody></table></div>
-    {selected&&<MachineModal machine={selected} locations={locations} onClose={()=>setSelected(null)} onSaved={()=>{setSelected(null);load()}}/>}
-    {showNew&&<MachineModal locations={locations} onClose={()=>setShowNew(false)} onSaved={()=>{setShowNew(false);load()}}/>}
-  </>
+  const { t } = useI18n()
+  const [items, setItems] = useState<Machine[]>([])
+  const [locations, setLocations] = useState<Location[]>([])
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState<Machine | null>(null)
+  const [showNew, setShowNew] = useState(false)
+  const [error, setError] = useState(false)
+
+  const load = () => Promise.all([api<Machine[]>('/machines'), api<Location[]>('/locations')])
+    .then(([machines, locationItems]) => {
+      setItems(machines)
+      setLocations(locationItems)
+      setError(false)
+    })
+    .catch(() => setError(true))
+
+  useEffect(() => { void load() }, [])
+
+  const filtered = useMemo(() => items.filter((machine) => (
+    `${machine.inventory_number} ${machine.name} ${machine.brand} ${machine.model || ''} ${statusText(t, machine.status)} ${machine.location?.name || ''}`
+      .toLowerCase()
+      .includes(query.toLowerCase())
+  )), [items, query, t])
+
+  return (
+    <>
+      <div className="toolbar">
+        <div className="search">
+          <Search size={18} />
+          <input
+            aria-label={t('common.search')}
+            placeholder={t('machines.searchPlaceholder')}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        {hasRole('admin') && (
+          <button className="primary" onClick={() => setShowNew(true)}><Plus size={18} />{t('machines.new')}</button>
+        )}
+      </div>
+      {error && <div className="error" role="alert">{t('errors.generic')}</div>}
+      <div className="table-card">
+        <table>
+          <thead><tr>
+            <th>{t('machines.columnMachine')}</th><th>{t('machines.columnBrand')}</th>
+            <th>{t('machines.columnPressure')}</th><th>{t('machines.columnStatus')}</th>
+            <th>{t('machines.columnLocation')}</th><th />
+          </tr></thead>
+          <tbody>
+            {filtered.map((machine) => (
+              <tr key={machine.id}>
+                <td><strong>{machine.name}</strong><small>{t('machines.inventoryPrefix', { number: machine.inventory_number })}</small></td>
+                <td>{machine.brand}<small>{machine.model}</small></td>
+                <td>{machine.pressure_bar} bar</td>
+                <td><span className="badge">{statusText(t, machine.status)}</span></td>
+                <td>{machine.location?.name || t('common.notSpecified')}</td>
+                <td><button className="link" onClick={() => setSelected(machine)}>{t('common.open')}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!filtered.length && <div className="empty-state">{t('machines.empty')}</div>}
+      </div>
+      {selected && (
+        <MachineModal
+          machine={selected}
+          locations={locations}
+          onClose={() => setSelected(null)}
+          onSaved={() => {
+            setSelected(null)
+            void load()
+          }}
+        />
+      )}
+      {showNew && (
+        <MachineModal
+          locations={locations}
+          onClose={() => setShowNew(false)}
+          onSaved={() => {
+            setShowNew(false)
+            void load()
+          }}
+        />
+      )}
+    </>
+  )
 }
 
-function MachineModal({machine,locations,onClose,onSaved}:{machine?:Machine;locations:Location[];onClose:()=>void;onSaved:()=>void}) {
-  const [form,setForm]=useState<any>(machine||{inventory_number:'',name:'',brand:'HYDWIN',category:'HPWJ машина',pressure_bar:500,status:'Готова',location_id:locations[0]?.id})
-  async function save(e:FormEvent){e.preventDefault(); await api(machine?`/machines/${machine.id}`:'/machines',{method:machine?'PATCH':'POST',body:JSON.stringify(form)});onSaved()}
-  return <div className="modal-bg"><div className="modal"><div className="modal-head"><h3>{machine?'Данни за машината':'Нова машина'}</h3><button onClick={onClose}><X/></button></div><form onSubmit={save} className="form-grid">
-    {!machine&&<label>Инвентарен номер<input required value={form.inventory_number} onChange={e=>setForm({...form,inventory_number:e.target.value})}/></label>}
-    <label>Наименование<input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label>
-    <label>Марка<input value={form.brand||''} onChange={e=>setForm({...form,brand:e.target.value})}/></label>
-    <label>Модел<input value={form.model||''} onChange={e=>setForm({...form,model:e.target.value})}/></label>
-    <label>Налягане (bar)<input type="number" value={form.pressure_bar} onChange={e=>setForm({...form,pressure_bar:+e.target.value})}/></label>
-    <label>Статус<select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>{STATUS_OPTIONS.map(x=><option key={x}>{x}</option>)}</select></label>
-    <label>Местоположение<select value={form.location_id||''} onChange={e=>setForm({...form,location_id:+e.target.value})}>{locations.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-    <label className="wide">Бележки<textarea value={form.notes||''} onChange={e=>setForm({...form,notes:e.target.value})}/></label>
-    {machine&&<div className="qr-box"><img src={`/api/machines/${machine.id}/qr`} alt="QR код"/><span>QR код на машината</span></div>}
-    <div className="actions wide"><button type="button" className="secondary" onClick={onClose}>Отказ</button><button className="primary">Запази</button></div>
-  </form></div></div>
+type MachineForm = {
+  inventory_number: string
+  name: string
+  category: string
+  brand: string
+  model: string
+  serial_number: string
+  pressure_bar: number
+  status: string
+  location_id: number | ''
+  notes: string
 }
 
-function Repairs(){
-  const [items,setItems]=useState<Repair[]>([]),[machines,setMachines]=useState<Machine[]>([]),[show,setShow]=useState(false)
-  const load=()=>Promise.all([api<Repair[]>('/repairs'),api<Machine[]>('/machines')]).then(([r,m])=>{setItems(r);setMachines(m)})
-  useEffect(()=>{load().catch(console.error)},[])
-  return <><div className="toolbar"><div><h3>История и активни ремонти</h3><p className="muted">Приемане, диагностика, извършена работа и резултат</p></div><button className="primary" onClick={()=>setShow(true)}><Plus size={18}/>Нов ремонт</button></div>
-  <div className="cards-list">{items.map(r=><div className="repair-card" key={r.id}><div><span className="badge">{r.status}</span><h3>{r.machine.name}</h3><p><b>Проблем:</b> {r.reported_problem}</p>{r.diagnosis&&<p><b>Диагностика:</b> {r.diagnosis}</p>}{r.work_performed&&<p><b>Извършено:</b> {r.work_performed}</p>}</div><div className="repair-side"><small>{new Date(r.opened_at).toLocaleString('bg-BG')}</small>{!r.closed_at&&<button onClick={async()=>{await api(`/repairs/${r.id}`,{method:'PATCH',body:JSON.stringify({close:true,status:'Тестване',result:'Тествана и подготвена за работа'})});load()}}>Приключи след тест</button>}</div></div>)}</div>
-  {show&&<RepairModal machines={machines} onClose={()=>setShow(false)} onSaved={()=>{setShow(false);load()}}/>}</>
+function MachineModal({ machine, locations, onClose, onSaved }: {
+  machine?: Machine
+  locations: Location[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { t } = useI18n()
+  const [form, setForm] = useState<MachineForm>({
+    inventory_number: machine?.inventory_number || '',
+    name: machine?.name || '',
+    category: machine?.category || 'HPWJ',
+    brand: machine?.brand || '',
+    model: machine?.model || '',
+    serial_number: machine?.serial_number || '',
+    pressure_bar: machine?.pressure_bar || 500,
+    status: machine?.status || 'READY',
+    location_id: machine?.location_id || locations[0]?.id || '',
+    notes: machine?.notes || '',
+  })
+  const [error, setError] = useState('')
+  const canEdit = !machine || hasRole('admin')
+
+  async function save(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    try {
+      await api(machine ? `/machines/${machine.id}` : '/machines', {
+        method: machine ? 'PATCH' : 'POST',
+        body: JSON.stringify(form),
+      })
+      onSaved()
+    } catch {
+      setError(t('machines.saveError'))
+    }
+  }
+
+  const field = <K extends keyof MachineForm>(name: K, value: MachineForm[K]) => {
+    setForm((current) => ({ ...current, [name]: value }))
+  }
+
+  return (
+    <div className="modal-bg">
+      <div className="modal" role="dialog" aria-modal="true" aria-label={machine ? t('machines.editTitle') : t('machines.newTitle')}>
+        <div className="modal-head">
+          <h3>{machine ? t('machines.editTitle') : t('machines.newTitle')}</h3>
+          <button onClick={onClose} aria-label={t('common.close')}><X /></button>
+        </div>
+        <form onSubmit={save} className="form-grid">
+          <label>{t('machines.inventoryNumber')}<input required disabled={Boolean(machine)} value={form.inventory_number} onChange={(event) => field('inventory_number', event.target.value)} /></label>
+          <label>{t('machines.name')}<input required disabled={!canEdit} value={form.name} onChange={(event) => field('name', event.target.value)} /></label>
+          <label>{t('machines.category')}<input required disabled={!canEdit} value={form.category} onChange={(event) => field('category', event.target.value)} /></label>
+          <label>{t('machines.brand')}<input required disabled={!canEdit} value={form.brand} onChange={(event) => field('brand', event.target.value)} /></label>
+          <label>{t('machines.model')}<input disabled={!canEdit} value={form.model} onChange={(event) => field('model', event.target.value)} /></label>
+          <label>{t('machines.serialNumber')}<input disabled={!canEdit} value={form.serial_number} onChange={(event) => field('serial_number', event.target.value)} /></label>
+          <label>{t('machines.pressure')}<input disabled={!canEdit} type="number" min="0" value={form.pressure_bar} onChange={(event) => field('pressure_bar', Number(event.target.value))} /></label>
+          <label>{t('common.status')}<select disabled={!canEdit} value={form.status} onChange={(event) => field('status', event.target.value)}>{MACHINE_STATUS_CODES.map((status) => <option key={status} value={status}>{statusText(t, status)}</option>)}</select></label>
+          <label>{t('common.location')}<select disabled={!canEdit} value={form.location_id} onChange={(event) => field('location_id', event.target.value ? Number(event.target.value) : '')}><option value="">{t('common.notSpecified')}</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
+          <label className="wide">{t('machines.notes')}<textarea disabled={!canEdit} value={form.notes} onChange={(event) => field('notes', event.target.value)} /></label>
+          {machine && <div className="qr-box"><img src={`/api/machines/${machine.id}/qr`} alt={t('machines.qrAlt', { number: machine.inventory_number })} /><span>{t('machines.qrLabel')}</span></div>}
+          {error && <div className="error wide" role="alert">{error}</div>}
+          <div className="actions wide">
+            <button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button>
+            {canEdit && <button className="primary">{t('common.save')}</button>}
+          </div>
+        </form>
+      </div>
+    </div>
+  )
 }
 
-function RepairModal({machines,onClose,onSaved}:{machines:Machine[];onClose:()=>void;onSaved:()=>void}){
-  const [form,setForm]=useState<any>({machine_id:machines[0]?.id,reported_problem:'',diagnosis:'',work_performed:'',status:'Приета'})
-  async function save(e:FormEvent){e.preventDefault();await api('/repairs',{method:'POST',body:JSON.stringify(form)});onSaved()}
-  return <div className="modal-bg"><div className="modal"><div className="modal-head"><h3>Приемане за ремонт</h3><button onClick={onClose}><X/></button></div><form onSubmit={save} className="form-grid">
-    <label>Машина<select value={form.machine_id} onChange={e=>setForm({...form,machine_id:+e.target.value})}>{machines.map(m=><option value={m.id} key={m.id}>{m.name}</option>)}</select></label>
-    <label>Статус<select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option>Приета</option><option>Диагностика</option><option>В ремонт</option><option>Чака части</option><option>Тестване</option></select></label>
-    <label className="wide">Установен проблем<textarea required value={form.reported_problem} onChange={e=>setForm({...form,reported_problem:e.target.value})}/></label>
-    <label className="wide">Диагностика<textarea value={form.diagnosis} onChange={e=>setForm({...form,diagnosis:e.target.value})}/></label>
-    <label className="wide">Извършена работа<textarea value={form.work_performed} onChange={e=>setForm({...form,work_performed:e.target.value})}/></label>
-    <div className="actions wide"><button type="button" className="secondary" onClick={onClose}>Отказ</button><button className="primary">Запази</button></div>
-  </form></div></div>
+function Repairs() {
+  const { date, t } = useI18n()
+  const [items, setItems] = useState<Repair[]>([])
+  const [machines, setMachines] = useState<Machine[]>([])
+  const [show, setShow] = useState(false)
+  const [closing, setClosing] = useState<Repair | null>(null)
+  const [error, setError] = useState(false)
+
+  const load = () => Promise.all([api<Repair[]>('/repairs'), api<Machine[]>('/machines')])
+    .then(([repairs, machineItems]) => {
+      setItems(repairs)
+      setMachines(machineItems)
+      setError(false)
+    })
+    .catch(() => setError(true))
+
+  useEffect(() => { void load() }, [])
+
+  return (
+    <>
+      <div className="toolbar">
+        <div><h3>{t('repairs.title')}</h3><p className="muted">{t('repairs.subtitle')}</p></div>
+        {hasRole('admin', 'mechanic') && <button className="primary" onClick={() => setShow(true)}><Plus size={18} />{t('repairs.new')}</button>}
+      </div>
+      {error && <div className="error" role="alert">{t('errors.generic')}</div>}
+      <div className="cards-list">
+        {items.map((repair) => (
+          <div className="repair-card" key={repair.id}>
+            <div>
+              <span className="badge">{statusText(t, repair.status, 'repair')}</span>
+              <h3>{repair.machine.name}</h3>
+              <p><b>{t('repairs.problem')}</b> {repair.reported_problem}</p>
+              {repair.diagnosis && <p><b>{t('repairs.diagnosis')}</b> {repair.diagnosis}</p>}
+              {repair.work_performed && <p><b>{t('repairs.workPerformed')}</b> {repair.work_performed}</p>}
+            </div>
+            <div className="repair-side">
+              <small>{date(repair.opened_at)}</small>
+              {!repair.closed_at && hasRole('admin', 'mechanic') && (
+                <button onClick={() => setClosing(repair)}>{t('repairs.finishAfterTest')}</button>
+              )}
+            </div>
+          </div>
+        ))}
+        {!items.length && <div className="empty-state">{t('repairs.empty')}</div>}
+      </div>
+      {show && <RepairModal machines={machines} onClose={() => setShow(false)} onSaved={() => { setShow(false); void load() }} />}
+      {closing && <RepairCloseModal repair={closing} onClose={() => setClosing(null)} onSaved={() => { setClosing(null); void load() }} />}
+    </>
+  )
 }
 
-function Parts(){
-  const [items,setItems]=useState<PartRequest[]>([]),[machines,setMachines]=useState<Machine[]>([]),[show,setShow]=useState(false)
-  const load=()=>Promise.all([api<PartRequest[]>('/parts'),api<Machine[]>('/machines')]).then(([p,m])=>{setItems(p);setMachines(m)})
-  useEffect(()=>{load().catch(console.error)},[])
-  return <><div className="toolbar"><div><h3>Заявки за резервни части</h3><p className="muted">Проследяване от заявяване до доставка</p></div><button className="primary" onClick={()=>setShow(true)}><Plus size={18}/>Нова заявка</button></div>
-  <div className="table-card"><table><thead><tr><th>Част</th><th>Part №</th><th>Машина</th><th>Количество</th><th>Приоритет</th><th>Статус</th></tr></thead><tbody>{items.map(p=><tr key={p.id}><td><strong>{p.part_name}</strong><small>{p.reason}</small></td><td>{p.part_number||'—'}</td><td>{p.machine?.name||'Обща'}</td><td>{p.quantity}</td><td>{p.priority}</td><td><span className="badge">{p.status}</span></td></tr>)}</tbody></table></div>
-  {show&&<PartModal machines={machines} onClose={()=>setShow(false)} onSaved={()=>{setShow(false);load()}}/>}</>
+function RepairModal({ machines, onClose, onSaved }: { machines: Machine[]; onClose: () => void; onSaved: () => void }) {
+  const { t } = useI18n()
+  const [form, setForm] = useState({
+    machine_id: machines[0]?.id,
+    reported_problem: '',
+    diagnosis: '',
+    work_performed: '',
+    status: 'ACCEPTED',
+  })
+  const [error, setError] = useState('')
+
+  async function save(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    try {
+      await api('/repairs', { method: 'POST', body: JSON.stringify(form) })
+      onSaved()
+    } catch {
+      setError(t('repairs.saveError'))
+    }
+  }
+
+  return (
+    <div className="modal-bg">
+      <div className="modal" role="dialog" aria-modal="true" aria-label={t('repairs.acceptTitle')}>
+        <div className="modal-head"><h3>{t('repairs.acceptTitle')}</h3><button onClick={onClose} aria-label={t('common.close')}><X /></button></div>
+        <form onSubmit={save} className="form-grid">
+          <label>{t('repairs.machine')}<select value={form.machine_id} onChange={(event) => setForm({ ...form, machine_id: Number(event.target.value) })}>{machines.map((machine) => <option value={machine.id} key={machine.id}>{machine.name}</option>)}</select></label>
+          <label>{t('common.status')}<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{REPAIR_STATUS_CODES.map((status) => <option value={status} key={status}>{statusText(t, status, 'repair')}</option>)}</select></label>
+          <label className="wide">{t('repairs.reportedProblem')}<textarea required value={form.reported_problem} onChange={(event) => setForm({ ...form, reported_problem: event.target.value })} /></label>
+          <label className="wide">{t('repairs.diagnosisField')}<textarea value={form.diagnosis} onChange={(event) => setForm({ ...form, diagnosis: event.target.value })} /></label>
+          <label className="wide">{t('repairs.workField')}<textarea value={form.work_performed} onChange={(event) => setForm({ ...form, work_performed: event.target.value })} /></label>
+          {error && <div className="error wide" role="alert">{error}</div>}
+          <div className="actions wide"><button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary">{t('common.save')}</button></div>
+        </form>
+      </div>
+    </div>
+  )
 }
 
-function PartModal({machines,onClose,onSaved}:{machines:Machine[];onClose:()=>void;onSaved:()=>void}){
-  const [form,setForm]=useState<any>({machine_id:machines[0]?.id,part_name:'',part_number:'',quantity:1,reason:'',priority:'Нормален',status:'Чернова'})
-  async function save(e:FormEvent){e.preventDefault();await api('/parts',{method:'POST',body:JSON.stringify(form)});onSaved()}
-  return <div className="modal-bg"><div className="modal"><div className="modal-head"><h3>Нова заявка</h3><button onClick={onClose}><X/></button></div><form onSubmit={save} className="form-grid">
-    <label>Част<input required value={form.part_name} onChange={e=>setForm({...form,part_name:e.target.value})}/></label><label>Part №<input value={form.part_number} onChange={e=>setForm({...form,part_number:e.target.value})}/></label>
-    <label>Машина<select value={form.machine_id} onChange={e=>setForm({...form,machine_id:+e.target.value})}>{machines.map(m=><option value={m.id} key={m.id}>{m.name}</option>)}</select></label><label>Количество<input type="number" min="1" value={form.quantity} onChange={e=>setForm({...form,quantity:+e.target.value})}/></label>
-    <label>Приоритет<select value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}><option>Нисък</option><option>Нормален</option><option>Спешен</option></select></label><label>Статус<select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option>Чернова</option><option>Изпратена</option><option>Одобрена</option><option>Поръчана</option><option>Доставена</option></select></label>
-    <label className="wide">Основание<textarea value={form.reason} onChange={e=>setForm({...form,reason:e.target.value})}/></label><div className="actions wide"><button type="button" className="secondary" onClick={onClose}>Отказ</button><button className="primary">Запази</button></div>
-  </form></div></div>
+function RepairCloseModal({ repair, onClose, onSaved }: { repair: Repair; onClose: () => void; onSaved: () => void }) {
+  const { t } = useI18n()
+  const [result, setResult] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function close(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await api(`/repairs/${repair.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ close: true, status: 'TESTING', result }),
+      })
+      onSaved()
+    } catch {
+      setError(t('repairs.closeError'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="modal-bg">
+      <div className="modal" role="dialog" aria-modal="true" aria-label={t('repairs.closeTitle')}>
+        <div className="modal-head"><h3>{t('repairs.closeTitle')}</h3><button onClick={onClose} aria-label={t('common.close')}><X /></button></div>
+        <form onSubmit={close} className="form-grid">
+          <p className="confirmation-warning wide">{t('repairs.closeWarning')}</p>
+          <label className="wide">{t('repairs.testResult')}<textarea required value={result} onChange={(event) => setResult(event.target.value)} /></label>
+          {error && <div className="error wide" role="alert">{error}</div>}
+          <div className="actions wide"><button type="button" className="secondary" onClick={onClose} disabled={busy}>{t('common.cancel')}</button><button className="primary" disabled={busy || !result.trim()}>{t('repairs.closeConfirm')}</button></div>
+        </form>
+      </div>
+    </div>
+  )
 }
 
-function Reports(){const [error,setError]=useState('');const download=()=>downloadApiFile('/reports/daily.pdf','assetcore-daily-report.pdf').catch(()=>setError('Дневният отчет не може да бъде изтеглен.'));return <div className="panel"><div className="panel-title"><div><h3>Документи и отчети</h3><p className="muted">Генериране на справки от текущите данни</p></div><FileText/></div>{error&&<div className="error" role="alert">{error}</div>}<div className="report-options"><button className="primary" onClick={download}>Изтегли дневен отчет PDF</button><div className="coming">Протоколите се генерират в Word и PDF от модул „Приемане / предаване“. Техническите ръководства и parts list файловете са в библиотеката.</div></div></div>}
-function QrCodes(){const [machines,setMachines]=useState<Machine[]>([]);useEffect(()=>{api<Machine[]>('/machines').then(setMachines)},[]);return <div className="qr-grid">{machines.map(m=><div className="qr-card" key={m.id}><img src={`/api/machines/${m.id}/qr`}/><strong>{m.name}</strong><span>{m.brand} · {m.pressure_bar} bar</span></div>)}</div>}
-function SettingsPage(){return <div className="panel"><div className="panel-title"><h3>Настройки</h3><Settings/></div><div className="settings-list"><div><b>Език</b><span>Български</span></div><div><b>Организация</b><span>КРЗ Одесос</span></div><div><b>Версия</b><span>AssetCore 2.5 Director Preview</span></div><div><b>База данни</b><span>SQLite локално / PostgreSQL в Render</span></div></div></div>}
+function Parts() {
+  const { t } = useI18n()
+  const [items, setItems] = useState<PartRequest[]>([])
+  const [machines, setMachines] = useState<Machine[]>([])
+  const [show, setShow] = useState(false)
+  const [error, setError] = useState(false)
 
+  const load = () => Promise.all([api<PartRequest[]>('/parts'), api<Machine[]>('/machines')])
+    .then(([requests, machineItems]) => {
+      setItems(requests)
+      setMachines(machineItems)
+      setError(false)
+    })
+    .catch(() => setError(true))
 
-function Transfers(){
-  const [items,setItems]=useState<any[]>([]),[error,setError]=useState('')
-  const load=()=>api<any[]>('/transfers').then(setItems).catch(()=>setError('Историята на протоколите не може да бъде заредена.'))
-  useEffect(()=>{load().catch(console.error)},[])
-  const download=(path:string,name:string)=>downloadApiFile(path,name).catch(()=>setError('Протоколът не може да бъде изтеглен.'))
-  return <><div className="toolbar"><div><h3>Приемо-предавателни протоколи</h3><p className="muted">Защитено групово издаване, пълно и частично връщане с индивидуален Word/PDF протокол</p></div></div>
-  {error&&<div className="error" role="alert">{error}</div>}
-  <BulkTransfers onChanged={()=>void load()}/>
-  <div className="toolbar protocol-history-title"><div><h3>Индивидуална история</h3><p className="muted">Всеки ред остава свързан с конкретна машина и партида</p></div></div>
-  <div className="table-card"><table><thead><tr><th>№</th><th>Партида</th><th>Машина</th><th>Статус</th><th>Фирма / място</th><th>Издаване / връщане</th><th>Документи</th></tr></thead><tbody>{items.map(t=><tr key={t.id}><td><strong>{t.protocol_number}</strong></td><td>{t.batch_reference||'—'}</td><td>{t.machine.name}</td><td><span className="badge">{t.is_active?'Все още издадена':'Върната'}</span></td><td>{[t.company_unit,t.vessel,t.location_text].filter(Boolean).join(' · ')||'—'}</td><td>{new Date(t.issued_at||t.created_at).toLocaleString('bg-BG')}{t.returned_at&&<small>Върната: {new Date(t.returned_at).toLocaleString('bg-BG')}</small>}</td><td><button className="link" onClick={()=>download(`/transfers/${t.id}/docx`,`${t.protocol_number}.docx`)}>Word</button> · <button className="link" onClick={()=>download(`/transfers/${t.id}/pdf`,`${t.protocol_number}.pdf`)}>PDF</button></td></tr>)}</tbody></table></div></>
+  useEffect(() => { void load() }, [])
+
+  return (
+    <>
+      <div className="toolbar">
+        <div><h3>{t('parts.title')}</h3><p className="muted">{t('parts.subtitle')}</p></div>
+        {hasRole('admin', 'mechanic') && <button className="primary" onClick={() => setShow(true)}><Plus size={18} />{t('parts.new')}</button>}
+      </div>
+      {error && <div className="error" role="alert">{t('errors.generic')}</div>}
+      <div className="table-card">
+        <table>
+          <thead><tr><th>{t('parts.part')}</th><th>{t('common.partNumber')}</th><th>{t('parts.machine')}</th><th>{t('common.quantity')}</th><th>{t('parts.priority')}</th><th>{t('common.status')}</th></tr></thead>
+          <tbody>{items.map((request) => (
+            <tr key={request.id}>
+              <td><strong>{request.part_name}</strong><small>{request.reason}</small></td>
+              <td>{request.part_number || t('common.noValue')}</td>
+              <td>{request.machine?.name || t('parts.general')}</td>
+              <td>{request.quantity}</td>
+              <td>{statusText(t, request.priority, 'part')}</td>
+              <td><span className="badge">{statusText(t, request.status, 'part')}</span></td>
+            </tr>
+          ))}</tbody>
+        </table>
+        {!items.length && <div className="empty-state">{t('parts.empty')}</div>}
+      </div>
+      {show && <PartModal machines={machines} onClose={() => setShow(false)} onSaved={() => { setShow(false); void load() }} />}
+    </>
+  )
 }
-function PartCatalog(){
- const [items,setItems]=useState<any[]>([]),[q,setQ]=useState(''),[brand,setBrand]=useState('')
- const load=()=>api<any[]>(`/catalog/parts?q=${encodeURIComponent(q)}&brand=${encodeURIComponent(brand)}`).then(setItems)
- useEffect(()=>{load()},[q,brand])
- return <><div className="toolbar"><div><h3>Каталог резервни части</h3><p className="muted">Проверими Part No. записи с източник, страница и оригинален parts list</p></div></div><div className="filters"><div className="searchbox"><Search size={18}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Търси по Part No., описание или възел…"/></div><select value={brand} onChange={e=>setBrand(e.target.value)}><option value="">Всички марки</option><option>CombiJet</option><option>Falch</option><option>HYDWIN (Fussen)</option></select></div>
- <div className="table-card"><table><thead><tr><th>Марка / модел</th><th>Възел</th><th>Поз.</th><th>Part No.</th><th>Описание</th><th>Кол.</th><th>Източник</th></tr></thead><tbody>{items.map(x=><tr key={x.id}><td><strong>{x.brand}</strong><small>{x.model}</small></td><td>{x.assembly||'—'}</td><td>{x.position||'—'}</td><td><strong>{x.part_number}</strong></td><td>{x.description}</td><td>{x.quantity||'—'}</td><td>{x.source_document?`${x.source_document.split('/').pop()} · стр. ${x.source_page||'—'}`:'—'}</td></tr>)}</tbody></table></div></>
+
+function PartModal({ machines, onClose, onSaved }: { machines: Machine[]; onClose: () => void; onSaved: () => void }) {
+  const { t } = useI18n()
+  const [form, setForm] = useState({
+    machine_id: machines[0]?.id,
+    part_name: '',
+    part_number: '',
+    quantity: 1,
+    reason: '',
+    priority: 'NORMAL',
+    status: 'DRAFT',
+  })
+  const [error, setError] = useState('')
+
+  async function save(event: FormEvent) {
+    event.preventDefault()
+    setError('')
+    try {
+      await api('/parts', { method: 'POST', body: JSON.stringify(form) })
+      onSaved()
+    } catch {
+      setError(t('parts.saveError'))
+    }
+  }
+
+  return (
+    <div className="modal-bg">
+      <div className="modal" role="dialog" aria-modal="true" aria-label={t('parts.newTitle')}>
+        <div className="modal-head"><h3>{t('parts.newTitle')}</h3><button onClick={onClose} aria-label={t('common.close')}><X /></button></div>
+        <form onSubmit={save} className="form-grid">
+          <label>{t('parts.part')}<input required value={form.part_name} onChange={(event) => setForm({ ...form, part_name: event.target.value })} /></label>
+          <label>{t('common.partNumber')}<input value={form.part_number} onChange={(event) => setForm({ ...form, part_number: event.target.value })} /></label>
+          <label>{t('parts.machine')}<select value={form.machine_id} onChange={(event) => setForm({ ...form, machine_id: Number(event.target.value) })}>{machines.map((machine) => <option value={machine.id} key={machine.id}>{machine.name}</option>)}</select></label>
+          <label>{t('common.quantity')}<input type="number" min="1" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: Number(event.target.value) })} /></label>
+          <label>{t('parts.priority')}<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{PART_PRIORITY_CODES.map((priority) => <option key={priority} value={priority}>{statusText(t, priority, 'part')}</option>)}</select></label>
+          <label>{t('common.status')}<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{PART_STATUS_CODES.map((status) => <option key={status} value={status}>{statusText(t, status, 'part')}</option>)}</select></label>
+          <label className="wide">{t('parts.reason')}<textarea value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} /></label>
+          {error && <div className="error wide" role="alert">{error}</div>}
+          <div className="actions wide"><button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary">{t('common.save')}</button></div>
+        </form>
+      </div>
+    </div>
+  )
 }
-function Documents(){
- const [items,setItems]=useState<any[]>([]),[error,setError]=useState(''); useEffect(()=>{api<any[]>('/documents').then(setItems).catch(()=>setError('Документите не могат да бъдат заредени.'))},[])
- const groups=useMemo(()=>Object.entries(items.reduce((a:any,x:any)=>{(a[x.brand]??=[]).push(x);return a},{})),[items])
- const download=(id:number,name:string)=>downloadApiFile(`/documents/${id}/download`,name).catch(()=>setError('Документът не може да бъде изтеглен.'))
- return <><div className="toolbar"><div><h3>Техническа библиотека</h3><p className="muted">Оригинални parts list, ръководства, спецификации, Excel и Word документи от работната база</p></div></div>{error&&<div className="error" role="alert">{error}</div>}<div className="cards-list">{groups.map(([brand,docs]:any)=><div className="panel" key={brand}><div className="panel-title"><h3>{brand}</h3><BookOpen/></div><div className="activity-list">{docs.map((d:any)=><div key={d.id}><strong>{d.title}</strong><span>{d.category}</span><button className="link" onClick={()=>download(d.id,d.title)}>Отвори / изтегли</button></div>)}</div></div>)}</div></>
+
+function Reports() {
+  const { t } = useI18n()
+  const [error, setError] = useState('')
+  const download = () => downloadApiFile('/reports/daily.pdf', 'assetcore-daily-report.pdf')
+    .catch(() => setError(t('reports.downloadError')))
+  return (
+    <div className="panel">
+      <div className="panel-title"><div><h3>{t('reports.title')}</h3><p className="muted">{t('reports.subtitle')}</p></div><FileText /></div>
+      {error && <div className="error" role="alert">{error}</div>}
+      <div className="report-options"><button className="primary" onClick={download}>{t('reports.downloadDaily')}</button><div className="coming">{t('reports.description')}</div></div>
+    </div>
+  )
 }
-function Audit(){const [items,setItems]=useState<any[]>([]);useEffect(()=>{api<any[]>('/audit').then(setItems)},[]);return <><div className="toolbar"><div><h3>Журнал на действията</h3><p className="muted">Проследимост на промени, ремонти, протоколи и заявки</p></div></div><div className="table-card"><table><thead><tr><th>Дата</th><th>Потребител</th><th>Обект</th><th>Действие</th><th>Детайли</th></tr></thead><tbody>{items.map(x=><tr key={x.id}><td>{new Date(x.created_at).toLocaleString('bg-BG')}</td><td>{x.user_name||'Система'}</td><td>{x.entity_type} #{x.entity_id||'—'}</td><td>{x.action}</td><td><small>{x.details||'—'}</small></td></tr>)}</tbody></table></div></>}
+
+function QrCodes() {
+  const { t } = useI18n()
+  const [machines, setMachines] = useState<Machine[]>([])
+  useEffect(() => { void api<Machine[]>('/machines').then(setMachines).catch(() => undefined) }, [])
+  return (
+    <div className="qr-grid">
+      {machines.map((machine) => (
+        <div className="qr-card" key={machine.id}>
+          <img src={`/api/machines/${machine.id}/qr`} alt={t('qr.alt', { number: machine.inventory_number })} />
+          <strong>{machine.name}</strong><span>{machine.brand} · {machine.pressure_bar} bar</span>
+        </div>
+      ))}
+      {!machines.length && <div className="empty-state">{t('qr.empty')}</div>}
+    </div>
+  )
+}
+
+function SettingsPage() {
+  const { t } = useI18n()
+  return (
+    <div className="panel">
+      <div className="panel-title"><h3>{t('settings.title')}</h3><Settings /></div>
+      <div className="settings-list">
+        <div><b>{t('language.label')}</b><LanguageSwitcher compact /></div>
+        <div><b>{t('settings.organization')}</b><span>{t('settings.organizationValue')}</span></div>
+        <div><b>{t('settings.version')}</b><span>{t('settings.versionValue')}</span></div>
+        <div><b>{t('settings.database')}</b><span>{t('settings.databaseValue')}</span></div>
+      </div>
+    </div>
+  )
+}
+
+function Transfers() {
+  const { date, t } = useI18n()
+  const [items, setItems] = useState<TransferRecord[]>([])
+  const [error, setError] = useState('')
+  const load = () => api<TransferRecord[]>('/transfers')
+    .then((records) => {
+      setItems(records)
+      setError('')
+    })
+    .catch(() => setError(t('transfers.loadError')))
+
+  useEffect(() => { void load() }, [t])
+
+  const download = (path: string, name: string) => downloadApiFile(path, name)
+    .catch(() => setError(t('transfers.downloadError')))
+
+  return (
+    <>
+      <div className="toolbar"><div><h3>{t('transfers.title')}</h3><p className="muted">{t('transfers.subtitle')}</p></div></div>
+      {error && <div className="error" role="alert">{error}</div>}
+      <BulkTransfers onChanged={() => { void load() }} />
+      <div className="toolbar protocol-history-title"><div><h3>{t('transfers.historyTitle')}</h3><p className="muted">{t('transfers.historySubtitle')}</p></div></div>
+      <div className="table-card">
+        <table>
+          <thead><tr><th>{t('transfers.number')}</th><th>{t('transfers.batch')}</th><th>{t('common.machine')}</th><th>{t('common.status')}</th><th>{t('transfers.companyLocation')}</th><th>{t('transfers.issueReturn')}</th><th>{t('transfers.documents')}</th></tr></thead>
+          <tbody>{items.map((transfer) => (
+            <tr key={transfer.id}>
+              <td><strong>{transfer.protocol_number}</strong></td>
+              <td>{transfer.batch_reference || t('common.noValue')}</td>
+              <td>{transfer.machine.name}</td>
+              <td><span className="badge">{transfer.is_active ? t('transfers.stillIssued') : t('transfers.returned')}</span></td>
+              <td>{[transfer.company_unit, transfer.vessel, transfer.location_text].filter(Boolean).join(' · ') || t('common.noValue')}</td>
+              <td>{date(transfer.issued_at || transfer.created_at)}{transfer.returned_at && <small>{t('transfers.returnedAt', { date: date(transfer.returned_at) })}</small>}</td>
+              <td><button className="link" onClick={() => download(`/transfers/${transfer.id}/docx`, `${transfer.protocol_number}.docx`)}>{t('common.word')}</button> · <button className="link" onClick={() => download(`/transfers/${transfer.id}/pdf`, `${transfer.protocol_number}.pdf`)}>{t('common.pdf')}</button></td>
+            </tr>
+          ))}</tbody>
+        </table>
+        {!items.length && <div className="empty-state">{t('transfers.emptyHistory')}</div>}
+      </div>
+    </>
+  )
+}
+
+function PartCatalog() {
+  const { t } = useI18n()
+  const [items, setItems] = useState<CatalogPart[]>([])
+  const [query, setQuery] = useState('')
+  const [brand, setBrand] = useState('')
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    void api<CatalogPart[]>(`/catalog/parts?q=${encodeURIComponent(query)}&brand=${encodeURIComponent(brand)}`)
+      .then((records) => {
+        setItems(records)
+        setError(false)
+      })
+      .catch(() => setError(true))
+  }, [brand, query])
+
+  const brands = useMemo(() => [...new Set(items.map((item) => item.brand))].sort(), [items])
+
+  return (
+    <>
+      <div className="toolbar"><div><h3>{t('catalog.title')}</h3><p className="muted">{t('catalog.subtitle')}</p></div></div>
+      <div className="filters">
+        <div className="searchbox"><Search size={18} /><input aria-label={t('common.search')} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('catalog.searchPlaceholder')} /></div>
+        <select aria-label={t('machines.columnBrand')} value={brand} onChange={(event) => setBrand(event.target.value)}><option value="">{t('common.allBrands')}</option>{brands.map((item) => <option key={item}>{item}</option>)}</select>
+      </div>
+      {error && <div className="error" role="alert">{t('errors.generic')}</div>}
+      <div className="table-card">
+        <table><thead><tr><th>{t('catalog.brandModel')}</th><th>{t('catalog.assembly')}</th><th>{t('catalog.position')}</th><th>{t('common.partNumber')}</th><th>{t('catalog.description')}</th><th>{t('common.quantity')}</th><th>{t('catalog.source')}</th></tr></thead>
+          <tbody>{items.map((item) => <tr key={item.id}><td><strong>{item.brand}</strong><small>{item.model}</small></td><td>{item.assembly || t('common.noValue')}</td><td>{item.position || t('common.noValue')}</td><td><strong>{item.part_number}</strong></td><td>{item.description}</td><td>{item.quantity || t('common.noValue')}</td><td>{item.source_document ? `${item.source_document.split('/').pop()} · ${t('common.page')} ${item.source_page || t('common.noValue')}` : t('common.noValue')}</td></tr>)}</tbody>
+        </table>
+        {!items.length && <div className="empty-state">{t('catalog.empty')}</div>}
+      </div>
+    </>
+  )
+}
+
+function Documents() {
+  const { t } = useI18n()
+  const [items, setItems] = useState<TechnicalDocument[]>([])
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    void api<TechnicalDocument[]>('/documents').then(setItems).catch(() => setError(t('documents.loadError')))
+  }, [t])
+
+  const groups = useMemo(() => Object.entries(items.reduce<Record<string, TechnicalDocument[]>>((grouped, item) => {
+    ;(grouped[item.brand] ??= []).push(item)
+    return grouped
+  }, {})), [items])
+
+  const download = (id: number, name: string) => downloadApiFile(`/documents/${id}/download`, name)
+    .catch(() => setError(t('documents.downloadError')))
+
+  return (
+    <>
+      <div className="toolbar"><div><h3>{t('documents.title')}</h3><p className="muted">{t('documents.subtitle')}</p></div></div>
+      {error && <div className="error" role="alert">{error}</div>}
+      <div className="cards-list">
+        {groups.map(([brand, documents]) => <div className="panel" key={brand}><div className="panel-title"><h3>{brand}</h3><BookOpen /></div><div className="activity-list">{documents.map((document) => <div key={document.id}><strong>{document.title}</strong><span>{document.category}</span><button className="link" onClick={() => download(document.id, document.title)}>{t('documents.openDownload')}</button></div>)}</div></div>)}
+        {!groups.length && <div className="empty-state">{t('documents.empty')}</div>}
+      </div>
+    </>
+  )
+}
+
+function AuditDetails({ details }: { details?: string | null }) {
+  const { t } = useI18n()
+
+  const renderValue = (value: unknown): ReactNode => {
+    if (value === null || value === undefined || value === '') return t('common.noValue')
+    if (Array.isArray(value)) {
+      return <ul>{value.map((item, index) => <li key={index}>{renderValue(item)}</li>)}</ul>
+    }
+    if (typeof value === 'object') {
+      return (
+        <dl className="audit-detail-list">
+          {Object.entries(value).map(([key, nested]) => (
+            <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{renderValue(nested)}</dd></div>
+          ))}
+        </dl>
+      )
+    }
+    if (typeof value === 'boolean') return value ? t('common.yes') : t('common.no')
+    return String(value)
+  }
+
+  if (!details) return <small>{t('common.noValue')}</small>
+  try {
+    const parsed = JSON.parse(details) as Record<string, unknown>
+    return <dl className="audit-detail-list">{Object.entries(parsed).map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{renderValue(value)}</dd></div>)}</dl>
+  } catch {
+    return <small>{details}</small>
+  }
+}
+
+function Audit() {
+  const { date, t } = useI18n()
+  const [items, setItems] = useState<AuditEntry[]>([])
+  const [error, setError] = useState('')
+  useEffect(() => {
+    void api<AuditEntry[]>('/audit').then(setItems).catch(() => setError(t('audit.restricted')))
+  }, [t])
+  return (
+    <>
+      <div className="toolbar"><div><h3>{t('audit.title')}</h3><p className="muted">{t('audit.subtitle')}</p></div></div>
+      {error && <div className="error" role="alert">{error}</div>}
+      <div className="table-card"><table><thead><tr><th>{t('audit.date')}</th><th>{t('audit.user')}</th><th>{t('audit.entity')}</th><th>{t('audit.action')}</th><th>{t('audit.details')}</th></tr></thead><tbody>{items.map((entry) => <tr key={entry.id}><td>{date(entry.created_at)}</td><td>{entry.user_name || t('common.system')}</td><td>{entry.entity_type} #{entry.entity_id || t('common.noValue')}</td><td>{entry.action}</td><td><AuditDetails details={entry.details} /></td></tr>)}</tbody></table>{!items.length && !error && <div className="empty-state">{t('audit.empty')}</div>}</div>
+    </>
+  )
+}
 
 export default App

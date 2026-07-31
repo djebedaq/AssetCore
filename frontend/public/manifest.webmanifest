@@ -1,12 +1,12 @@
 {
-  "name": "AssetCore - HPWJ управление",
+  "name": "AssetCore - индустриални активи",
   "short_name": "AssetCore",
   "lang": "bg",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#eef2f6",
   "theme_color": "#0f2742",
-  "description": "Индустриално управление на HPWJ активи, предавания, ремонти и документи.",
+  "description": "Индустриално управление на активи, предавания, ремонти и документи.",
   "icons": [
     {
       "src": "/assetcore-icon.svg",

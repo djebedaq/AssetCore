@@ -14,11 +14,11 @@ import type { BulkIssueResult, TransferAvailability } from './types'
 
 const available: TransferAvailability = {
   machine_id: 1, machine_number: '4', brand: 'CombiJet', pressure_bar: 500,
-  status: 'Готова', location: 'Цех', available: true,
+  status: 'READY', location: 'Цех', available: true,
 }
 const unavailable: TransferAvailability = {
   machine_id: 2, machine_number: '7', brand: 'Falch', pressure_bar: 1000,
-  status: 'Издадена', location: 'Док 2', available: false,
+  status: 'ISSUED', location: 'Док 2', available: false,
   unavailable_reason: 'Машината има активно предаване.', protocol_number: 'HPWJ-1',
 }
 
@@ -48,14 +48,14 @@ describe('групови предавания', () => {
       conflicts: [{ machine_number: '7', status: 'Издадена', protocol_number: 'HPWJ-7' }],
     })
     render(<ConflictNotice error={error} />)
-    expect(screen.getByRole('alert')).toHaveTextContent('Машината не може да бъде издадена.')
+    expect(screen.getByRole('alert')).toHaveTextContent('Една или повече машини не могат да бъдат издадени.')
     expect(screen.getByRole('alert')).toHaveTextContent('протокол HPWJ-7')
     expect(screen.queryByText(/issue_conflict/)).not.toBeInTheDocument()
   })
 
   it('показва частично върната партида и оставащи машини', () => {
     render(<BatchProgressCard batch={{
-      batch_id: 1, batch_reference: 'HPWJ-B-1', status: 'Частично върната партида',
+      batch_id: 1, batch_reference: 'HPWJ-B-1', status: 'PARTIALLY_RETURNED',
       total_machines: 3, returned_machines: 1, still_issued_machines: 2,
     }} />)
     expect(screen.getByText('Частично върната партида')).toBeVisible()

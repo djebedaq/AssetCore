@@ -1,6 +1,6 @@
 # AssetCore Director Edition
 
-AssetCore е българска responsive PWA система за проследимо управление на проверения HPWJ машинен парк. Backend-ът е FastAPI/SQLAlchemy, frontend-ът е React/TypeScript, локалната среда използва SQLite, а продукционната — PostgreSQL.
+AssetCore е responsive PWA система за проследимо управление на индустриални активи. Интерфейсът е пълен на български, английски и руски, като българският остава език по подразбиране. Backend-ът е FastAPI/SQLAlchemy, frontend-ът е React/TypeScript, локалната среда използва SQLite, а продукционната — PostgreSQL.
 
 Източник на истина за активите е [SOURCE_REGISTER_BG.md](docs/SOURCE_REGISTER_BG.md). Seed данните съдържат точно 19 проверени HPWJ машини: CombiJet №4–5, Falch 1000 bar №7, 17–18, Falch 500 bar №9–16, собствено производство №19 и HYDWIN/Fussen №20–24. Не добавяйте демонстрационни машини или непотвърдена бизнес история.
 
@@ -14,6 +14,16 @@ AssetCore е българска responsive PWA система за просле�
 - съществуваща техническа библиотека и референтни ремонтни документи;
 - неизменяем през нормалния API журнал на действията;
 - миграции с Alembic, Docker, Render и GitHub Actions.
+- устойчиви технически кодове за статусите, които се превеждат само в API/UI слоя;
+- ролеви права за администратор, ръководител, механик, одобряващ и наблюдател.
+
+## Езици, роли и статуси
+
+Езикът се сменя от входния екран, заглавната лента или „Настройки“. Изборът се пази локално, а след вход — и в профила чрез `PATCH /api/users/me/preferences`. Клиентът изпраща `Accept-Language`; при липсващ или непознат език fallback-ът е български.
+
+Статусите в базата и API са стабилни кодове (`READY`, `ISSUED`, `INSPECTION`, `REPAIR`, `TESTING` и други). Човешките имена се визуализират според избрания език. Старите български стойности се приемат за обратна съвместимост и миграция.
+
+Ролевата матрица и архитектурните граници са описани в [I18N_AND_ROLES_BG.md](docs/I18N_AND_ROLES_BG.md) и [ARCHITECTURE_BG.md](docs/ARCHITECTURE_BG.md).
 
 ## Локален старт със SQLite
 
@@ -83,6 +93,9 @@ pnpm build
 - [проверен HPWJ инвентар](docs/HPWJ_INVENTORY_BG.md)
 - [директорска демонстрация](docs/DIRECTOR_DEMO_BG.md)
 - [приемателен checklist](docs/ACCEPTANCE_CHECKLIST_BG.md)
+- [архитектура](docs/ARCHITECTURE_BG.md)
+- [езици, статуси и роли](docs/I18N_AND_ROLES_BG.md)
+- [пътна карта](docs/ROADMAP_BG.md)
 - [история на промените](CHANGELOG_BG.md)
 
 AssetCore остава release candidate. Преди продукционна употреба организацията трябва да потвърди ролите, политиката за архивиране и окончателния фирмен вид на генерираните протоколи.

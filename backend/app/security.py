@@ -7,12 +7,13 @@ import json
 import os
 import time
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import get_db
+from .localization import normalize_language, translate
 from .models import User
 from .settings import settings
 
@@ -57,7 +58,7 @@ def create_access_token(user: User) -> str:
     return f"{body}.{signature}"
 
 
-def _decode(token: str) -> dict:
+def _decode(token: str, language: str = "bg") -> dict:
     try:
         body, signature = token.split(".", 1)
         expected = _b64(
@@ -74,26 +75,28 @@ def _decode(token: str) -> dict:
     except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Невалидна или изтекла сесия",
+            detail=translate("auth.invalid_or_expired", language),
         ) from exc
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
 ) -> User:
+    language = normalize_language(request.headers.get("Accept-Language"))
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Необходим е вход в системата",
+            detail=translate("auth.required", language),
         )
-    payload = _decode(credentials.credentials)
+    payload = _decode(credentials.credentials, language)
     try:
         user_id = int(payload["sub"])
     except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Невалидна сесия",
+            detail=translate("auth.invalid_session", language),
         ) from exc
     user = db.scalar(
         select(User).where(User.id == user_id, User.is_active.is_(True))
@@ -101,6 +104,6 @@ def get_current_user(
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Потребителят не е намерен",
+            detail=translate("auth.user_not_found", language),
         )
     return user

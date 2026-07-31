@@ -35,7 +35,7 @@ def return_payload(*transfers: dict) -> dict:
                 "notes": "",
                 "returned_by": "",
                 "accepted_by": "",
-                "next_status": "За преглед",
+                "next_status": "INSPECTION",
             }
             for transfer in transfers
         ]
@@ -64,7 +64,8 @@ def test_reject_already_issued_machine_with_structured_bulgarian_conflict(
     assert detail["code"] == "issue_conflict"
     assert "Машина №7" in detail["message"]
     assert detail["conflicts"][0]["protocol_number"].startswith("HPWJ-")
-    assert detail["conflicts"][0]["status"] == "Издадена"
+    assert detail["conflicts"][0]["status"] == "ISSUED"
+    assert detail["conflicts"][0]["status_label"] == "Издадена"
 
 
 def test_bulk_issue_is_atomic_when_all_machines_are_available(
@@ -83,7 +84,7 @@ def test_bulk_issue_is_atomic_when_all_machines_are_available(
                 Machine.id.in_([machine_ids["4"], machine_ids["5"], machine_ids["7"]])
             )
         ).all()
-        assert statuses == ["Издадена", "Издадена", "Издадена"]
+        assert statuses == ["ISSUED", "ISSUED", "ISSUED"]
 
 
 def test_bulk_issue_rejects_everything_if_one_machine_is_unavailable(
@@ -99,7 +100,7 @@ def test_bulk_issue_rejects_everything_if_one_machine_is_unavailable(
     assert rejected.status_code == 409
     with session_factory() as session:
         assert session.scalar(select(func.count(TransferProtocol.id))) == 1
-        assert session.get(Machine, machine_ids["4"]).status == "Готова"
+        assert session.get(Machine, machine_ids["4"]).status == "READY"
 
 
 def test_duplicate_machine_identifiers_are_rejected_before_writes(
@@ -152,7 +153,7 @@ def test_full_batch_return_closes_every_individual_transfer(
     progress = response.json()["batches"][0]
     assert progress["returned_machines"] == 2
     assert progress["still_issued_machines"] == 0
-    assert progress["status"] == "Върната партида"
+    assert progress["status"] == "RETURNED"
 
 
 def test_partial_batch_return_keeps_remaining_machine_issued(
@@ -170,12 +171,12 @@ def test_partial_batch_return_keeps_remaining_machine_issued(
     )
     assert response.status_code == 200
     progress = response.json()["batches"][0]
-    assert progress["status"] == "Частично върната партида"
+    assert progress["status"] == "PARTIALLY_RETURNED"
     assert progress["returned_machines"] == 1
     assert progress["still_issued_machines"] == 2
     with session_factory() as session:
-        assert session.get(Machine, created["transfers"][0]["machine_id"]).status == "За преглед"
-        assert session.get(Machine, created["transfers"][1]["machine_id"]).status == "Издадена"
+        assert session.get(Machine, created["transfers"][0]["machine_id"]).status == "INSPECTION"
+        assert session.get(Machine, created["transfers"][1]["machine_id"]).status == "ISSUED"
 
 
 def test_mixed_batch_return_updates_each_batch_and_scopes_its_audit(
@@ -343,8 +344,8 @@ def test_document_generation_failure_rolls_back_entire_issue(
         assert session.scalar(select(func.count(TransferProtocol.id))) == 0
         assert session.scalar(select(func.count(TransferBatch.id))) == 0
         assert session.scalar(select(func.count(ProtocolDocument.id))) == 0
-        assert session.get(Machine, machine_ids["4"]).status == "Готова"
-        assert session.get(Machine, machine_ids["5"]).status == "Готова"
+        assert session.get(Machine, machine_ids["4"]).status == "READY"
+        assert session.get(Machine, machine_ids["5"]).status == "READY"
 
 
 def test_sqlite_partial_unique_index_is_present(session_factory):
