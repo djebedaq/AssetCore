@@ -11,7 +11,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .audit import add_audit_log
-from .document_generation import make_protocol_documents
+from .document_generation import (
+    ConfirmedTemplateUnavailableError,
+    make_protocol_documents,
+    make_return_documents,
+)
 from .localization import status_label, translate
 from .models import (
     Location,
@@ -25,6 +29,7 @@ from .models import (
     utcnow,
 )
 from .schemas import BulkIssueRequest, BulkReturnRequest
+from .workflow import add_machine_event
 
 _sqlite_transfer_lock = RLock()
 
@@ -272,6 +277,8 @@ def _issue_result(batch: TransferBatch, language: str) -> dict[str, Any]:
                 "documents": [
                     {
                         "id": document.id,
+                        "document_number": document.document_number,
+                        "language": document.language,
                         "format": document.format,
                         "filename": document.filename,
                         "download_endpoint": f"/api/protocol-documents/{document.id}/download",
@@ -338,11 +345,19 @@ def _bulk_issue_impl(
                 protocol_number=f"TEMP-{uuid4().hex}",
                 is_active=True,
                 company_unit=data.company_unit,
+                department=data.department,
                 vessel=data.vessel,
+                dock=data.dock,
+                pier=data.pier,
+                work_area=data.work_area,
                 location_text=data.location_text,
                 handed_over_by=data.handed_over_by,
                 accepted_by=data.accepted_by,
                 equipment=data.equipment,
+                hoses=data.hoses,
+                nozzles=data.nozzles,
+                guns=data.guns,
+                accessories=data.accessories,
                 condition_text=data.condition_text,
                 remarks=data.remarks,
                 previous_status=previous_status,
@@ -360,11 +375,35 @@ def _bulk_issue_impl(
                 machine.location_id = data.location_id
             machine.updated_at = now
             transfer.machine = machine
-            documents = make_protocol_documents(transfer, batch, user.id)
+            documents = make_protocol_documents(
+                db, transfer, batch, user.id, data.document_language.value
+            )
             db.add_all(documents)
             db.flush()
             document_ids.extend(document.id for document in documents)
             transfers.append(transfer)
+            add_machine_event(
+                db,
+                machine,
+                user,
+                "TRANSFER_ISSUED",
+                reference=transfer.protocol_number,
+                previous_status=previous_status,
+                new_status=machine.status,
+                previous_location_id=previous_location_id,
+                new_location_id=machine.location_id,
+                details={
+                    "batch_reference": batch.batch_reference,
+                    "transfer_id": transfer.id,
+                    "company_unit": data.company_unit,
+                    "department": data.department,
+                    "vessel": data.vessel,
+                    "dock": data.dock,
+                    "pier": data.pier,
+                    "work_area": data.work_area,
+                    "protocol_document_ids": [document.id for document in documents],
+                },
+            )
             add_audit_log(
                 db,
                 user,
@@ -380,6 +419,17 @@ def _bulk_issue_impl(
                     "batch_reference": batch.batch_reference,
                     "transfer_id": transfer.id,
                     "protocol_number": transfer.protocol_number,
+                    "company_unit": data.company_unit,
+                    "department": data.department,
+                    "vessel": data.vessel,
+                    "dock": data.dock,
+                    "pier": data.pier,
+                    "work_area": data.work_area,
+                    "equipment": data.equipment,
+                    "hoses": data.hoses,
+                    "nozzles": data.nozzles,
+                    "guns": data.guns,
+                    "accessories": data.accessories,
                     "protocol_document_ids": [document.id for document in documents],
                 },
                 batch.batch_reference,
@@ -427,6 +477,25 @@ def _bulk_issue_impl(
             exc.data.get("conflicts"),
         )
         raise
+    except ConfirmedTemplateUnavailableError as exc:
+        db.rollback()
+        _record_rejection(
+            db,
+            user,
+            "Отказано групово издаване",
+            machine_ids,
+            exc.message,
+        )
+        raise TransferServiceError(
+            409,
+            "document_template_unavailable",
+            exc.message,
+            {
+                "document_type": exc.document_type,
+                "requested_language": exc.language,
+                "fallback_language": "bg",
+            },
+        ) from exc
     except IntegrityError as exc:
         db.rollback()
         active = _active_transfers_for_machines(db, machine_ids)
@@ -622,6 +691,12 @@ def _bulk_return_impl(
             transfer.return_condition_text = item.condition_text
             transfer.return_result_text = item.result_text
             transfer.return_notes = item.notes
+            transfer.return_missing_equipment = item.missing_equipment
+            transfer.return_damage = item.damage
+            transfer.return_contamination = item.contamination
+            transfer.return_cleaning_required = item.cleaning_required
+            transfer.return_inspection_required = item.inspection_required
+            transfer.return_repair_required = item.repair_required
             transfer.returned_by_name = item.returned_by
             transfer.return_accepted_by = item.accepted_by
             transfer.return_location_id = item.location_id
@@ -631,6 +706,42 @@ def _bulk_return_impl(
             machine.updated_at = now
             if transfer.batch is not None:
                 affected_batches[transfer.batch.id] = transfer.batch
+            transfer.machine = machine
+            return_documents = make_return_documents(
+                db,
+                transfer,
+                transfer.batch,
+                user.id,
+                data.document_language.value,
+            )
+            db.add_all(return_documents)
+            db.flush()
+            add_machine_event(
+                db,
+                machine,
+                user,
+                "TRANSFER_RETURNED",
+                reference=f"{transfer.protocol_number}-R",
+                previous_status=previous_status,
+                new_status=machine.status,
+                previous_location_id=previous_location_id,
+                new_location_id=machine.location_id,
+                details={
+                    "batch_reference": transfer.batch_reference,
+                    "transfer_id": transfer.id,
+                    "condition": item.condition_text,
+                    "result": item.result_text,
+                    "missing_equipment": item.missing_equipment,
+                    "damage": item.damage,
+                    "contamination": item.contamination,
+                    "cleaning_required": item.cleaning_required,
+                    "inspection_required": item.inspection_required,
+                    "repair_required": item.repair_required,
+                    "generated_document_ids": [
+                        document.id for document in return_documents
+                    ],
+                },
+            )
             add_audit_log(
                 db,
                 user,
@@ -649,8 +760,17 @@ def _bulk_return_impl(
                     "condition": item.condition_text,
                     "result": item.result_text,
                     "notes": item.notes,
+                    "missing_equipment": item.missing_equipment,
+                    "damage": item.damage,
+                    "contamination": item.contamination,
+                    "cleaning_required": item.cleaning_required,
+                    "inspection_required": item.inspection_required,
+                    "repair_required": item.repair_required,
                     "returned_by": item.returned_by,
                     "accepted_by": item.accepted_by,
+                    "generated_document_ids": [
+                        document.id for document in return_documents
+                    ],
                 },
                 transfer.batch_reference,
             )
@@ -661,6 +781,19 @@ def _bulk_return_impl(
                     "machine_number": machine.inventory_number,
                     "new_status": machine.status,
                     "returned_at": now,
+                    "documents": [
+                        {
+                            "id": document.id,
+                            "document_number": document.document_number,
+                            "language": document.language,
+                            "format": document.format,
+                            "filename": document.filename,
+                            "download_endpoint": (
+                                f"/api/generated-documents/{document.id}/download"
+                            ),
+                        }
+                        for document in return_documents
+                    ],
                 }
             )
 
@@ -709,6 +842,25 @@ def _bulk_return_impl(
             exc.data.get("conflicts"),
         )
         raise
+    except ConfirmedTemplateUnavailableError as exc:
+        db.rollback()
+        _record_rejection(
+            db,
+            user,
+            "Отказано групово връщане",
+            machine_ids,
+            exc.message,
+        )
+        raise TransferServiceError(
+            409,
+            "document_template_unavailable",
+            exc.message,
+            {
+                "document_type": exc.document_type,
+                "requested_language": exc.language,
+                "fallback_language": "bg",
+            },
+        ) from exc
     except Exception:
         db.rollback()
         try:
@@ -789,6 +941,8 @@ def batch_details(
                 "documents": [
                     {
                         "id": document.id,
+                        "document_number": document.document_number,
+                        "language": document.language,
                         "format": document.format,
                         "filename": document.filename,
                         "download_endpoint": f"/api/protocol-documents/{document.id}/download",

@@ -73,6 +73,36 @@ try:
         catalog = client.get("/api/catalog/parts", headers=headers)
         assert catalog.status_code == 200, catalog.text
         assert len(catalog.json()) >= 10
+        assert all(item["is_verified"] for item in catalog.json())
+
+        categories = client.get("/api/categories", headers=headers)
+        assert categories.status_code == 200, categories.text
+        assert any(item["code"] == "HPWJ" for item in categories.json())
+
+        templates = client.get("/api/document-templates", headers=headers)
+        assert templates.status_code == 200, templates.text
+        assert len(templates.json()) == 4
+        assert sum(len(item["versions"]) for item in templates.json()) == 12
+        template_versions = [
+            version for item in templates.json() for version in item["versions"]
+        ]
+        published = [version for version in template_versions if version["is_published"]]
+        assert len(published) == 4
+        assert all(version["language"] == "bg" for version in published)
+        assert all("source_path" not in version for version in template_versions)
+
+        library = client.get("/api/technical-library", headers=headers)
+        assert library.status_code == 200, library.text
+        assert len(library.json()) >= 40
+        assert all(item["revisions"] for item in library.json())
+
+        passport = client.get(
+            f"/api/machines/{inventory['4']['id']}/passport", headers=headers
+        )
+        assert passport.status_code == 200, passport.text
+        assert passport.json()["machine"]["inventory_number"] == "4"
+        assert passport.json()["current_state"]["available"] is True
+        assert "technical_documents" in passport.json()
 
         availability = client.get("/api/transfers/availability", headers=headers)
         assert availability.status_code == 200, availability.text
@@ -90,4 +120,6 @@ print("- API health and authentication: OK")
 print("- Verified HPWJ registry: 19 machines and known serial numbers")
 print(f"- Document library: {len(docs.json())} files")
 print(f"- Verified parts catalog: {len(catalog.json())} records")
+print("- Industrial category, passport and template versions: OK")
+print(f"- Versioned technical library: {len(library.json())} files")
 print("- Availability and dashboard: OK")

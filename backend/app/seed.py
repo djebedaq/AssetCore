@@ -1,14 +1,24 @@
+import hashlib
+from pathlib import Path
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import (
+    AssetCategory,
+    DocumentTemplate,
+    DocumentTemplateVersion,
+    DocumentType,
+    LanguageCode,
     Location,
     Machine,
     MachineStatus,
     PartCatalog,
     TechnicalDocument,
+    TechnicalDocumentRevision,
     User,
     UserRole,
+    utcnow,
 )
 from .security import hash_password
 from .settings import settings
@@ -69,6 +79,19 @@ def _seed_verified_registry(db: Session) -> None:
     db.commit()
 
     locations = {x.name: x for x in db.scalars(select(Location)).all()}
+    hpwj_category = db.scalar(
+        select(AssetCategory).where(AssetCategory.code == "HPWJ")
+    )
+    if hpwj_category is None:
+        hpwj_category = AssetCategory(
+            code="HPWJ",
+            name_bg="Водоструйни машини с високо налягане",
+            name_en="High-pressure water jet machines",
+            name_ru="Водоструйные машины высокого давления",
+            description="Проверена категория за наличния HPWJ регистър.",
+        )
+        db.add(hpwj_category)
+        db.flush()
     existing = {m.inventory_number: m for m in db.scalars(select(Machine)).all()}
     for item in MACHINES:
         machine = existing.get(item["inventory_number"])
@@ -83,6 +106,7 @@ def _seed_verified_registry(db: Session) -> None:
             db.add(machine)
         machine.name = f"HPWJ №{item['inventory_number']}"
         machine.category = "HPWJ"
+        machine.category_id = hpwj_category.id
         machine.brand = item["brand"]
         machine.model = item["model"]
         machine.pressure_bar = item["pressure_bar"]
@@ -93,7 +117,6 @@ def _seed_verified_registry(db: Session) -> None:
 
 # --- Director Preview: technical library and verified catalog records ---
 def _seed_documents_and_catalog(db: Session) -> None:
-    from pathlib import Path
     root = Path(__file__).resolve().parents[1] / 'resources' / 'technical_docs'
     if root.exists():
         for path in sorted(p for p in root.rglob('*') if p.is_file()):
@@ -113,6 +136,33 @@ def _seed_documents_and_catalog(db: Session) -> None:
                 db.add(TechnicalDocument(brand=brand, category=category, title=path.name, file_path=rel))
     db.commit()
 
+    for document in db.scalars(select(TechnicalDocument)).all():
+        path = root / document.file_path
+        if not path.is_file():
+            continue
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        document.sha256 = digest
+        document.uploaded_filename = document.title
+        document.created_at = document.created_at or utcnow()
+        if not db.scalar(
+            select(TechnicalDocumentRevision).where(
+                TechnicalDocumentRevision.document_id == document.id,
+                TechnicalDocumentRevision.version == 1,
+            )
+        ):
+            document.revisions.append(
+                TechnicalDocumentRevision(
+                    version=1,
+                    revision_label=document.revision,
+                    filename=path.name,
+                    media_type="application/octet-stream",
+                    file_path=document.file_path,
+                    sha256=digest,
+                    change_note="Първоначално проверено файлово копие от техническата библиотека.",
+                )
+            )
+    db.commit()
+
     verified_parts = [
         ('CombiJet','JE60-500','Chassis','1','CJL30949','Complete stainless-steel frame',1,'combijet/JE60-500_manual.pdf',28),
         ('CombiJet','JE60-500','Chassis','2','CJL30998','15 kW electric motor',1,'combijet/JE60-500_manual.pdf',28),
@@ -130,6 +180,127 @@ def _seed_documents_and_catalog(db: Session) -> None:
             db.add(PartCatalog(brand=brand,model=model,assembly=assembly,position=pos,part_number=pn,description=desc,quantity=qty,source_document=src,source_page=page))
     db.commit()
 
+    admin = db.scalar(select(User).order_by(User.id))
+    if admin:
+        for part in db.scalars(select(PartCatalog)).all():
+            if part.source_document and part.source_page:
+                part.is_verified = True
+                part.provenance_confidence = 1.0
+                part.verified_by_id = admin.id
+                part.verified_at = part.verified_at or utcnow()
+    db.commit()
+
+
+def _seed_document_templates(db: Session) -> None:
+    admin = db.scalar(select(User).order_by(User.id))
+    if admin is None:
+        return
+    resources = Path(__file__).resolve().parents[1] / "resources"
+    references = [
+        {
+            "code": "HPWJ_TRANSFER_ISSUE",
+            "document_type": DocumentType.TRANSFER_ISSUE.value,
+            "name_bg": "Протокол за предаване на миеща техника",
+            "name_en": "High-pressure washing equipment issue protocol",
+            "name_ru": "Протокол выдачи моечной техники высокого давления",
+            "source": "reference_photos/IMG_5812.jpeg",
+            "contract": {
+                "page": "A4 portrait",
+                "header": "KRZ, ODESSOS SHIPREPAIR & CONVERSION, RINA/AQAP",
+                "sections": ["protocol_number", "machine_identity", "ten_point_checklist", "usage", "signatures"],
+                "reference_only": True,
+            },
+        },
+        {
+            "code": "HPWJ_TRANSFER_RETURN",
+            "document_type": DocumentType.TRANSFER_RETURN.value,
+            "name_bg": "Протокол за приемане на миеща техника след използване",
+            "name_en": "High-pressure washing equipment return protocol",
+            "name_ru": "Протокол возврата моечной техники после использования",
+            "source": "reference_photos/IMG_5814.jpeg",
+            "contract": {
+                "page": "A4 portrait",
+                "header": "KRZ, ODESSOS SHIPREPAIR & CONVERSION, RINA/AQAP",
+                "sections": ["protocol_number", "machine_identity", "ten_point_checklist", "usage", "signatures"],
+                "reference_only": True,
+            },
+        },
+        {
+            "code": "HPWJ_REPAIR_PROTOCOL",
+            "document_type": DocumentType.REPAIR_PROTOCOL.value,
+            "name_bg": "Протокол преди/след ремонт",
+            "name_en": "Before/after repair protocol",
+            "name_ru": "Протокол до/после ремонта",
+            "source": "technical_docs/protocols_hpwj/10. REPORT BEFORE-AFTER REPAIR - Combijet - завършен !.docx",
+            "contract": {
+                "page": "Letter portrait",
+                "margins_inches": {"left": 0.5, "right": 0.3, "top": 0.3, "bottom": 0.3},
+                "header_images": 3,
+                "sections": ["machine_identity", "condition_before", "diagnosis", "repair_actions", "parts", "test", "condition_after", "signatures"],
+                "reference_only": True,
+            },
+        },
+        {
+            "code": "HPWJ_PART_REQUEST",
+            "document_type": DocumentType.PART_REQUEST.value,
+            "name_bg": "Техническа спецификация за доставка на резервни части",
+            "name_en": "Technical specification for spare-parts supply",
+            "name_ru": "Техническая спецификация на поставку запасных частей",
+            "source": "technical_docs/parts_requests_hpwj/KK 1001 FALCH 500.docx",
+            "contract": {
+                "page": "Letter portrait",
+                "margins_inches": {"left": 0.5, "right": 0.5, "top": 0.5, "bottom": 0.5},
+                "header_images": 2,
+                "sections": ["technical_specification_title", "machine_identity", "parts_table", "remarks", "request_reference_date_requester"],
+                "reference_only": True,
+            },
+        },
+    ]
+    for definition in references:
+        template = db.scalar(
+            select(DocumentTemplate).where(
+                DocumentTemplate.document_type == definition["document_type"],
+                DocumentTemplate.code == definition["code"],
+            )
+        )
+        if template is None:
+            template = DocumentTemplate(
+                code=definition["code"],
+                document_type=definition["document_type"],
+                name_bg=definition["name_bg"],
+                name_en=definition["name_en"],
+                name_ru=definition["name_ru"],
+            )
+            db.add(template)
+            db.flush()
+        source = resources / definition["source"]
+        digest = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
+        for language in LanguageCode:
+            existing = db.scalar(
+                select(DocumentTemplateVersion).where(
+                    DocumentTemplateVersion.template_id == template.id,
+                    DocumentTemplateVersion.version == 1,
+                    DocumentTemplateVersion.language == language.value,
+                )
+            )
+            if existing is None:
+                db.add(
+                    DocumentTemplateVersion(
+                        template_id=template.id,
+                        version=1,
+                        language=language.value,
+                        source_path=definition["source"],
+                        source_sha256=digest,
+                        layout_contract=definition["contract"],
+                        is_published=language == LanguageCode.BG,
+                        published_by_id=(admin.id if language == LanguageCode.BG else None),
+                        created_by_id=admin.id,
+                        published_at=(utcnow() if language == LanguageCode.BG else None),
+                    )
+                )
+    db.commit()
+
 def seed_database(db: Session) -> None:
     _seed_verified_registry(db)
     _seed_documents_and_catalog(db)
+    _seed_document_templates(db)

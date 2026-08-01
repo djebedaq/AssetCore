@@ -192,6 +192,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The generated protocol was not found.",
         "ru": "Созданный протокол не найден.",
     },
+    "document.template_unavailable": {
+        "bg": "Няма публикуван и потвърден шаблон за избрания език. Използвайте одобрения български шаблон.",
+        "en": "No published and confirmed template is available for the selected language. Use the approved Bulgarian template.",
+        "ru": "Для выбранного языка нет опубликованного и подтверждённого шаблона. Используйте утверждённый болгарский шаблон.",
+    },
 }
 
 

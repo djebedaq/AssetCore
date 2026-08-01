@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-before-production"
     access_token_minutes: int = 720
     frontend_origin: str = "http://localhost:5173"
+    public_base_url: str | None = None
     admin_email: str = "admin@assetcore.local"
     admin_password: str = "change-me-before-use"
 

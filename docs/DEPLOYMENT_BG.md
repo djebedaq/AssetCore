@@ -8,7 +8,9 @@ Generic Render URLs с `postgresql://` или legacy `postgres://` се норм
 
 ## Миграция
 
-Текущият `head` включва `20260731_0002_i18n_status_roles`. Той добавя `users.preferred_language`, преобразува само познатите legacy български статуси към стабилни кодове и оставя непознатите исторически стойности непроменени. Миграцията е съвместима с PostgreSQL и SQLite и има downgrade към предходната ревизия.
+Текущият `head` включва `20260731_0003_industrial_platform`. Той добавя универсални asset категории/полета/файлове/събития, деактивируеми местоположения и триезични отдели, разширения ремонтен lifecycle, versioned templates/documents, multi-line requests и fulfillment, request attachments, provenance catalog/images/hotspots, kits, technical revisions и структурираните transfer/return полета. Миграцията добавя липсващи колони idempotent към legacy RC схема и създава новите таблици чрез общата SQLAlchemy metadata, така че да работи и върху fresh database, и върху историческа SQLite база.
+
+Предходната `20260731_0002_i18n_status_roles` добавя `users.preferred_language`, преобразува само познатите legacy български статуси към стабилни кодове и оставя непознатите исторически стойности непроменени. И двете миграции са съвместими с PostgreSQL и SQLite и имат downgrade.
 
 ```bash
 python -m alembic -c backend/alembic.ini upgrade head
@@ -38,4 +40,5 @@ docker compose up
 4. Извършете контролирано издаване и връщане само с разрешени реални бизнес данни или в отделна тестова база.
 5. Изтеглете DOCX, PDF и ZIP; проверете кирилицата и layout-а.
 6. Проверете audit записа за success и контролирания 409 конфликт.
-7. Активирайте и тествайте backup/restore процедурата на PostgreSQL.
+7. Отворете QR паспорт, ремонтна карта, каталог с provenance и version history на технически документ.
+8. Активирайте и тествайте backup/restore процедурата на PostgreSQL.

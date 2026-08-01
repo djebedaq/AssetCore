@@ -15,25 +15,43 @@ import type {
 type BulkTransfersProps = { onChanged: () => void }
 
 type IssueForm = {
+  document_language: 'bg' | 'en' | 'ru'
   company_unit: string
+  department: string
   vessel: string
+  dock: string
+  pier: string
+  work_area: string
   location_text: string
   location_id: string
   handed_over_by: string
   accepted_by: string
   equipment: string
+  hoses: string
+  nozzles: string
+  guns: string
+  accessories: string
   condition_text: string
   remarks: string
 }
 
 const EMPTY_ISSUE_FORM: IssueForm = {
+  document_language: 'bg',
   company_unit: '',
+  department: '',
   vessel: '',
+  dock: '',
+  pier: '',
+  work_area: '',
   location_text: '',
   location_id: '',
   handed_over_by: '',
   accepted_by: '',
   equipment: '',
+  hoses: '',
+  nozzles: '',
+  guns: '',
+  accessories: '',
   condition_text: '',
   remarks: '',
 }
@@ -44,6 +62,12 @@ type ReturnDraft = {
   condition_text: string
   result_text: string
   notes: string
+  missing_equipment: string
+  damage: string
+  contamination: string
+  cleaning_required: boolean
+  inspection_required: boolean
+  repair_required: boolean
   returned_by: string
   accepted_by: string
   location_id: string
@@ -75,6 +99,7 @@ function localizedErrorKey(error: Error): TranslationKey {
   if (error.status === 404) return 'errors.notFound'
   if (error.code === 'issue_conflict' || error.code === 'concurrent_issue_conflict') return 'errors.issueConflict'
   if (error.code === 'return_conflict' || error.code === 'return_without_active_transfer') return 'errors.returnConflict'
+  if (error.code === 'document_template_unavailable') return 'errors.templateUnavailable'
   if (error.code === 'validation_error') return 'errors.validation'
   return 'errors.generic'
 }
@@ -223,7 +248,7 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
       .includes(query.toLowerCase())
   )), [items, query, t])
   const selectedItems = items.filter((item) => selected.has(item.machine_id))
-  const setField = (field: keyof IssueForm, value: string) => setForm((current) => ({ ...current, [field]: value }))
+  const setField = <K extends keyof IssueForm>(field: K, value: IssueForm[K]) => setForm((current) => ({ ...current, [field]: value }))
   const toggle = (item: TransferAvailability) => {
     if (!item.available) return
     setSelected((current) => {
@@ -279,13 +304,22 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
           </div>
           <IssueSelectionList items={filtered} selected={selected} onToggle={toggle} />
           <div className="form-grid bulk-fields">
+            <label>{t('bulk.documentLanguage')}<select value={form.document_language} onChange={(event) => setField('document_language', event.target.value as IssueForm['document_language'])}><option value="bg">{t('language.bg')}</option><option value="en">{t('language.en')}</option><option value="ru">{t('language.ru')}</option></select></label>
             <label>{t('bulk.companyUnit')}<input value={form.company_unit} onChange={(event) => setField('company_unit', event.target.value)} /></label>
+            <label>{t('bulk.department')}<input value={form.department} onChange={(event) => setField('department', event.target.value)} /></label>
             <label>{t('bulk.vessel')}<input value={form.vessel} onChange={(event) => setField('vessel', event.target.value)} /></label>
+            <label>{t('bulk.dock')}<input value={form.dock} onChange={(event) => setField('dock', event.target.value)} /></label>
+            <label>{t('bulk.pier')}<input value={form.pier} onChange={(event) => setField('pier', event.target.value)} /></label>
+            <label>{t('bulk.workArea')}<input value={form.work_area} onChange={(event) => setField('work_area', event.target.value)} /></label>
             <label>{t('bulk.describedLocation')}<input value={form.location_text} onChange={(event) => setField('location_text', event.target.value)} /></label>
             <label>{t('bulk.systemLocation')}<select value={form.location_id} onChange={(event) => setField('location_id', event.target.value)}><option value="">{t('common.noChange')}</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
             <label>{t('bulk.handedOverBy')}<input value={form.handed_over_by} onChange={(event) => setField('handed_over_by', event.target.value)} /></label>
             <label>{t('bulk.acceptedBy')}<input value={form.accepted_by} onChange={(event) => setField('accepted_by', event.target.value)} /></label>
             <label className="wide">{t('bulk.equipment')}<textarea value={form.equipment} onChange={(event) => setField('equipment', event.target.value)} /></label>
+            <label>{t('bulk.hoses')}<textarea value={form.hoses} onChange={(event) => setField('hoses', event.target.value)} /></label>
+            <label>{t('bulk.nozzles')}<textarea value={form.nozzles} onChange={(event) => setField('nozzles', event.target.value)} /></label>
+            <label>{t('bulk.guns')}<textarea value={form.guns} onChange={(event) => setField('guns', event.target.value)} /></label>
+            <label>{t('bulk.accessories')}<textarea value={form.accessories} onChange={(event) => setField('accessories', event.target.value)} /></label>
             <label className="wide">{t('bulk.issueCondition')}<textarea value={form.condition_text} onChange={(event) => setField('condition_text', event.target.value)} /></label>
             <label className="wide">{t('common.notes')}<textarea value={form.remarks} onChange={(event) => setField('remarks', event.target.value)} /></label>
           </div>
@@ -295,8 +329,11 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
       {step === 'confirm' && (
         <>
           <ConfirmationSummary title={t('bulk.issueConfirmTitle')} machineNumbers={selectedItems.map((item) => item.machine_number)} rows={[
-            [t('bulk.companyUnit'), form.company_unit], [t('bulk.vessel'), form.vessel], [t('common.location'), form.location_text],
+            [t('bulk.documentLanguage'), t(`language.${form.document_language}` as TranslationKey)],
+            [t('bulk.companyUnit'), form.company_unit], [t('bulk.department'), form.department], [t('bulk.vessel'), form.vessel],
+            [t('bulk.dock'), form.dock], [t('bulk.pier'), form.pier], [t('bulk.workArea'), form.work_area], [t('common.location'), form.location_text],
             [t('bulk.handedOverBy'), form.handed_over_by], [t('bulk.acceptedBy'), form.accepted_by], [t('bulk.equipment'), form.equipment],
+            [t('bulk.hoses'), form.hoses], [t('bulk.nozzles'), form.nozzles], [t('bulk.guns'), form.guns], [t('bulk.accessories'), form.accessories],
             [t('bulk.issueCondition'), form.condition_text], [t('common.notes'), form.remarks],
           ]} />
           <p className="confirmation-warning">{t('bulk.atomicWarning')}</p>
@@ -318,6 +355,7 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
   const activeItems = items.filter((item) => item.active_transfer_id)
   const [drafts, setDrafts] = useState<Record<number, ReturnDraft>>({})
   const [query, setQuery] = useState('')
+  const [documentLanguage, setDocumentLanguage] = useState<'bg' | 'en' | 'ru'>('bg')
   const [step, setStep] = useState<'edit' | 'confirm' | 'result'>('edit')
   const [result, setResult] = useState<BulkReturnResult | null>(null)
   const [error, setError] = useState<Error | null>(null)
@@ -337,6 +375,12 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
       condition_text: '',
       result_text: '',
       notes: '',
+      missing_equipment: '',
+      damage: '',
+      contamination: '',
+      cleaning_required: false,
+      inspection_required: true,
+      repair_required: false,
       returned_by: '',
       accepted_by: '',
       location_id: '',
@@ -344,7 +388,7 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
     }
     return next
   })
-  const update = (machineId: number, field: keyof ReturnDraft, value: string) => setDrafts((current) => ({
+  const update = <K extends keyof ReturnDraft>(machineId: number, field: K, value: ReturnDraft[K]) => setDrafts((current) => ({
     ...current,
     [machineId]: { ...current[machineId], [field]: value },
   }))
@@ -369,6 +413,7 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
     setError(null)
     try {
       const payload = {
+        document_language: documentLanguage,
         items: Object.values(drafts).map((draft) => ({
           ...draft,
           location_id: draft.location_id ? Number(draft.location_id) : null,
@@ -403,6 +448,7 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
             <div><b>{t('bulk.selectedCount', { count: selectedItems.length })}</b><small>{t('bulk.mixedReturnHint')}</small></div>
             <div className="search small-search"><Search size={17} /><input aria-label={t('bulk.returnSearch')} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('bulk.returnSearchPlaceholder')} /></div>
           </div>
+          <div className="form-grid bulk-fields"><label>{t('bulk.documentLanguage')}<select value={documentLanguage} onChange={(event) => setDocumentLanguage(event.target.value as 'bg' | 'en' | 'ru')}><option value="bg">{t('language.bg')}</option><option value="en">{t('language.en')}</option><option value="ru">{t('language.ru')}</option></select></label></div>
           {!filtered.length && <div className="empty-state">{t('bulk.noActiveTransfers')}</div>}
           <div className="return-list">
             {filtered.map((item) => (
@@ -420,6 +466,12 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
                     <label>{t('bulk.acceptedBy')}<input value={drafts[item.machine_id].accepted_by} onChange={(event) => update(item.machine_id, 'accepted_by', event.target.value)} /></label>
                     <label className="wide">{t('bulk.returnCondition')}<textarea required value={drafts[item.machine_id].condition_text} onChange={(event) => update(item.machine_id, 'condition_text', event.target.value)} /></label>
                     <label className="wide">{t('bulk.returnResult')}<textarea required value={drafts[item.machine_id].result_text} onChange={(event) => update(item.machine_id, 'result_text', event.target.value)} /></label>
+                    <label className="wide">{t('bulk.missingEquipment')}<textarea value={drafts[item.machine_id].missing_equipment} onChange={(event) => update(item.machine_id, 'missing_equipment', event.target.value)} /></label>
+                    <label>{t('bulk.damage')}<textarea value={drafts[item.machine_id].damage} onChange={(event) => update(item.machine_id, 'damage', event.target.value)} /></label>
+                    <label>{t('bulk.contamination')}<textarea value={drafts[item.machine_id].contamination} onChange={(event) => update(item.machine_id, 'contamination', event.target.value)} /></label>
+                    <label className="checkbox-row"><input type="checkbox" checked={drafts[item.machine_id].cleaning_required} onChange={(event) => update(item.machine_id, 'cleaning_required', event.target.checked)} />{t('bulk.cleaningRequired')}</label>
+                    <label className="checkbox-row"><input type="checkbox" checked={drafts[item.machine_id].inspection_required} onChange={(event) => update(item.machine_id, 'inspection_required', event.target.checked)} />{t('bulk.inspectionRequired')}</label>
+                    <label className="checkbox-row"><input type="checkbox" checked={drafts[item.machine_id].repair_required} onChange={(event) => update(item.machine_id, 'repair_required', event.target.checked)} />{t('bulk.repairRequired')}</label>
                     <label className="wide">{t('common.notes')}<textarea value={drafts[item.machine_id].notes} onChange={(event) => update(item.machine_id, 'notes', event.target.value)} /></label>
                   </div>
                 )}
@@ -431,10 +483,22 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
       )}
       {step === 'confirm' && (
         <>
-          <ConfirmationSummary title={t('bulk.returnConfirmTitle')} machineNumbers={selectedItems.map((item) => item.machine_number)} rows={[]} />
+          <ConfirmationSummary title={t('bulk.returnConfirmTitle')} machineNumbers={selectedItems.map((item) => item.machine_number)} rows={[[t('bulk.documentLanguage'), t(`language.${documentLanguage}` as TranslationKey)]]} />
           <div className="return-confirm-list">{selectedItems.map((item) => {
             const draft = drafts[item.machine_id]
-            return <div key={item.machine_id}><b>{t('bulk.returnLine', { number: item.machine_number, status: statusText(t, draft.next_status) })}</b><span>{draft.condition_text}</span><span>{draft.result_text}</span></div>
+            const requirements = [
+              draft.cleaning_required ? t('bulk.cleaningRequired') : '',
+              draft.inspection_required ? t('bulk.inspectionRequired') : '',
+              draft.repair_required ? t('bulk.repairRequired') : '',
+            ].filter(Boolean).join(' · ')
+            return <div key={item.machine_id}>
+              <b>{t('bulk.returnLine', { number: item.machine_number, status: statusText(t, draft.next_status) })}</b>
+              <span>{draft.condition_text}</span><span>{draft.result_text}</span>
+              {draft.missing_equipment && <span>{t('bulk.missingEquipment')}: {draft.missing_equipment}</span>}
+              {draft.damage && <span>{t('bulk.damage')}: {draft.damage}</span>}
+              {draft.contamination && <span>{t('bulk.contamination')}: {draft.contamination}</span>}
+              {requirements && <span>{requirements}</span>}
+            </div>
           })}</div>
           <p className="confirmation-warning">{t('bulk.noAutoReady')}</p>
           <div className="actions"><button className="secondary" onClick={() => setStep('edit')} disabled={busy}>{t('common.back')}</button><button className="primary" onClick={submit} disabled={busy}>{busy ? t('bulk.returning') : t('bulk.confirmReturn')}</button></div>

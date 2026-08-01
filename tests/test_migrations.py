@@ -58,15 +58,44 @@ def test_legacy_sqlite_database_upgrades_without_changing_inventory(tmp_path: Pa
 
     engine = create_engine(f"sqlite:///{database_path}")
     inspector = inspect(engine)
-    assert {"transfer_batches", "protocol_documents", "alembic_version"}.issubset(
+    assert {"transfer_batches", "protocol_documents", "part_catalog_images", "part_request_attachments", "departments", "alembic_version"}.issubset(
         inspector.get_table_names()
     )
-    assert {"batch_id", "is_active", "returned_at"}.issubset(
+    assert "is_active" in {
+        column["name"] for column in inspector.get_columns("locations")
+    }
+    assert {
+        "batch_id", "is_active", "returned_at", "department", "dock", "pier",
+        "work_area", "hoses", "nozzles", "guns", "accessories",
+        "return_missing_equipment", "return_damage", "return_contamination",
+        "return_cleaning_required", "return_inspection_required", "return_repair_required",
+    }.issubset(
         {column["name"] for column in inspector.get_columns("transfer_protocols")}
     )
     assert "preferred_language" in {
         column["name"] for column in inspector.get_columns("users")
     }
+    assert "repair_id" in {
+        column["name"] for column in inspector.get_columns("part_requests")
+    }
+    assert {"alternative_part_numbers", "replacement_part_ids"}.issubset(
+        {column["name"] for column in inspector.get_columns("part_catalog")}
+    )
+    assert "confidence" in {
+        column["name"] for column in inspector.get_columns("part_hotspots")
+    }
+    assert {"compatible_models", "revision"}.issubset(
+        {column["name"] for column in inspector.get_columns("repair_kits")}
+    )
+    assert {
+        "source_content", "effective_from", "effective_to", "required_fields",
+        "numbering_rule", "department", "change_note",
+    }.issubset(
+        {
+            column["name"]
+            for column in inspector.get_columns("document_template_versions")
+        }
+    )
     with engine.connect() as upgraded:
         row = upgraded.exec_driver_sql(
             "SELECT inventory_number, serial_number, status FROM machines WHERE id=1"
@@ -84,6 +113,10 @@ def test_legacy_sqlite_database_upgrades_without_changing_inventory(tmp_path: Pa
     downgraded_inspector = inspect(downgraded_engine)
     assert "preferred_language" not in {
         column["name"] for column in downgraded_inspector.get_columns("users")
+    }
+    assert "departments" not in downgraded_inspector.get_table_names()
+    assert "is_active" not in {
+        column["name"] for column in downgraded_inspector.get_columns("locations")
     }
     with downgraded_engine.connect() as downgraded:
         assert downgraded.exec_driver_sql(
