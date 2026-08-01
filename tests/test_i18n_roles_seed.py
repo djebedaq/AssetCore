@@ -62,14 +62,14 @@ def test_language_preference_is_returned_persisted_and_audited(
         }
 
 
-def test_manager_can_issue_mechanic_can_repair_and_viewer_cannot_mutate(
+def test_director_can_issue_mechanic_can_repair_and_observer_cannot_mutate(
     client, session_factory, machine_ids, issue_payload, viewer_headers
 ):
-    _create_user(session_factory, email="manager@example.invalid", role="manager")
-    manager_headers = _login(client, "manager@example.invalid")
+    _create_user(session_factory, email="director@example.invalid", role="director")
+    director_headers = _login(client, "director@example.invalid")
     issued = client.post(
         "/api/transfers/bulk-issue",
-        headers=manager_headers,
+        headers=director_headers,
         json=issue_payload(machine_ids["4"]),
     )
     assert issued.status_code == 201, issued.text
@@ -108,11 +108,11 @@ def test_russian_profile_localizes_duplicate_issue_conflict(
 ):
     _create_user(
         session_factory,
-        email="manager-ru@example.invalid",
-        role="manager",
+        email="director-ru@example.invalid",
+        role="director",
         language="ru",
     )
-    headers = _login(client, "manager-ru@example.invalid", "ru")
+    headers = _login(client, "director-ru@example.invalid", "ru")
     first = client.post(
         "/api/transfers/bulk-issue",
         headers=headers,

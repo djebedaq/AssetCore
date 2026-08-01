@@ -15,7 +15,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -52,8 +52,6 @@ from .industrial_schemas import (
     TechnicalDocumentUpload,
     TemplateCreate,
     TemplateVersionCreate,
-    UserAdminCreate,
-    UserAdminUpdate,
 )
 from .models import (
     ApprovalDecision,
@@ -92,10 +90,15 @@ from .models import (
     TransferBatch,
     TransferProtocol,
     User,
-    UserRole,
     utcnow,
 )
-from .security import get_current_user, hash_password
+from .permissions import (
+    Permission,
+    ensure_permission,
+    has_permission,
+    is_observer,
+    require_permission,
+)
 from .settings import settings
 from .workflow import (
     REPAIR_TO_MACHINE_STATUS,
@@ -123,44 +126,20 @@ PROTECTED_HPWJ_NUMBERS = {
 }
 
 
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != UserRole.ADMIN.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "permission_denied", "message": "Нямате права за тази операция."},
-        )
-    return user
-
-
-def require_repair_operator(user: User = Depends(get_current_user)) -> User:
-    if user.role not in {UserRole.ADMIN.value, UserRole.MECHANIC.value}:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "permission_denied", "message": "Нямате права за ремонтни операции."},
-        )
-    return user
-
-
-def require_parts_operator(user: User = Depends(get_current_user)) -> User:
-    if user.role not in {
-        UserRole.ADMIN.value,
-        UserRole.MECHANIC.value,
-        UserRole.MANAGER.value,
-    }:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "permission_denied", "message": "Нямате права за заявки за части."},
-        )
-    return user
-
-
-def require_approver(user: User = Depends(get_current_user)) -> User:
-    if user.role not in {UserRole.ADMIN.value, UserRole.APPROVER.value, UserRole.MANAGER.value}:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "permission_denied", "message": "Нямате права за одобрение."},
-        )
-    return user
+require_admin = require_permission(Permission.SETTINGS_MANAGE)
+require_repair_creator = require_permission(Permission.REPAIRS_CREATE)
+require_repair_operator = require_permission(Permission.REPAIRS_EDIT)
+require_parts_operator = require_permission(Permission.REQUESTS_CREATE)
+require_request_approver = require_permission(Permission.REQUESTS_APPROVE)
+require_asset_viewer = require_permission(Permission.ASSETS_VIEW)
+require_repair_viewer = require_permission(Permission.REPAIRS_VIEW)
+require_request_viewer = require_permission(Permission.REQUESTS_VIEW)
+require_parts_viewer = require_permission(Permission.PARTS_VIEW)
+require_parts_manager = require_permission(Permission.PARTS_MANAGE)
+require_document_viewer = require_permission(Permission.DOCUMENTS_VIEW)
+require_document_generator = require_permission(Permission.DOCUMENTS_GENERATE)
+require_template_manager = require_permission(Permission.TEMPLATES_MANAGE)
+require_audit_full = require_permission(Permission.AUDIT_VIEW_FULL)
 
 
 def _decode_file(payload: AttachmentCreate | TechnicalDocumentUpload | TemplateVersionCreate) -> tuple[str, bytes]:
@@ -501,7 +480,7 @@ def _validated_custom_field_value(
 
 @router.get("/categories")
 def list_categories(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     categories = db.scalars(
         select(AssetCategory)
@@ -533,7 +512,7 @@ def list_categories(
 @router.post("/categories", status_code=201, response_model=None)
 def create_category(
     payload: CategoryCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission(Permission.ASSETS_CREATE)),
     db: Session = Depends(get_db),
 ) -> AssetCategory:
     category = AssetCategory(**payload.model_dump())
@@ -549,7 +528,7 @@ def create_category(
 def create_category_field(
     category_id: int,
     payload: CategoryFieldCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission(Permission.ASSETS_EDIT)),
     db: Session = Depends(get_db),
 ) -> CategoryFieldDefinition:
     if db.get(AssetCategory, category_id) is None:
@@ -566,7 +545,7 @@ def create_category_field(
 @router.get("/machines/{machine_id}/passport")
 def machine_passport(
     machine_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_asset_viewer),
     db: Session = Depends(get_db),
 ) -> dict:
     machine = db.scalar(
@@ -584,6 +563,73 @@ def machine_passport(
     )
     if machine is None:
         raise HTTPException(404, "Машината не е намерена.")
+    if is_observer(user):
+        active_transfer = next(
+            (item for item in machine.transfers if item.is_active), None
+        )
+        active_repair = next(
+            (
+                item
+                for item in sorted(
+                    machine.repairs,
+                    key=lambda value: value.opened_at,
+                    reverse=True,
+                )
+                if item.status != RepairStatus.COMPLETED.value
+            ),
+            None,
+        )
+        return {
+            "limited_view": True,
+            "machine": {
+                "id": machine.id,
+                "inventory_number": machine.inventory_number,
+                "name": machine.name,
+                "brand": machine.brand,
+                "model": machine.model,
+                "status": machine.status,
+                "is_active": machine.is_active,
+                "location": (
+                    {"id": machine.location.id, "name": machine.location.name}
+                    if machine.location
+                    else None
+                ),
+            },
+            "custom_fields": [],
+            "attachments": [],
+            "history": [],
+            "repairs": [],
+            "transfers": [],
+            "part_requests": [],
+            "parts_used": [],
+            "generated_documents": [],
+            "technical_documents": [],
+            "current_state": {
+                "available": machine.is_active
+                and active_transfer is None
+                and active_repair is None,
+                "active_transfer": (
+                    {"is_active": True} if active_transfer is not None else None
+                ),
+                "active_repair": (
+                    {"status": active_repair.status}
+                    if active_repair is not None
+                    else None
+                ),
+                "last_movement": None,
+                "last_inspection": None,
+                "last_test": None,
+                "allowed_actions": {
+                    "issue": False,
+                    "return": False,
+                    "repair": False,
+                    "edit": False,
+                },
+            },
+            "audit_visible": False,
+            "audit": [],
+            "qr_endpoint": None,
+        }
     values = {item.field_id: item for item in machine.custom_values}
     fields = machine.category_definition.fields if machine.category_definition else []
     documents = db.scalars(
@@ -653,13 +699,6 @@ def machine_passport(
         ),
         None,
     )
-    transfer_roles = {UserRole.ADMIN.value, UserRole.MANAGER.value}
-    repair_roles = {UserRole.ADMIN.value, UserRole.MECHANIC.value}
-    audit_roles = {
-        UserRole.ADMIN.value,
-        UserRole.MANAGER.value,
-        UserRole.APPROVER.value,
-    }
     repair_ids = [item.id for item in machine.repairs]
     transfer_ids = [item.id for item in machine.transfers]
     request_ids = [item.id for item in part_requests]
@@ -686,10 +725,11 @@ def machine_passport(
             .where(or_(*audit_conditions))
             .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
         ).all()
-        if user.role in audit_roles
+        if has_permission(user, Permission.AUDIT_VIEW_OPERATIONAL)
         else []
     )
     return {
+        "limited_view": False,
         "machine": {
             column.name: getattr(machine, column.name)
             for column in Machine.__table__.columns
@@ -915,13 +955,16 @@ def machine_passport(
                 else None
             ),
             "allowed_actions": {
-                "issue": user.role in transfer_roles and active_transfer is None,
-                "return": user.role in transfer_roles and active_transfer is not None,
-                "repair": user.role in repair_roles and active_repair is None,
-                "edit": user.role == UserRole.ADMIN.value,
+                "issue": has_permission(user, Permission.TRANSFERS_CREATE)
+                and active_transfer is None,
+                "return": has_permission(user, Permission.TRANSFERS_RETURN)
+                and active_transfer is not None,
+                "repair": has_permission(user, Permission.REPAIRS_CREATE)
+                and active_repair is None,
+                "edit": has_permission(user, Permission.ASSETS_EDIT),
             },
         },
-        "audit_visible": user.role in audit_roles,
+        "audit_visible": has_permission(user, Permission.AUDIT_VIEW_OPERATIONAL),
         "audit": [
             {
                 "id": item.id,
@@ -943,7 +986,7 @@ def machine_passport(
 def update_custom_fields(
     machine_id: int,
     payload: CustomFieldValuesUpdate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission(Permission.ASSETS_EDIT)),
     db: Session = Depends(get_db),
 ) -> dict:
     machine = db.get(Machine, machine_id)
@@ -1058,7 +1101,7 @@ def add_machine_attachment(
 @router.get("/machine-attachments/{attachment_id}/download")
 def download_machine_attachment(
     attachment_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     item = db.get(MachineAttachment, attachment_id)
@@ -1073,7 +1116,7 @@ def download_machine_attachment(
 
 @router.get("/repair-cases")
 def list_repair_cases(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_repair_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     repairs = db.scalars(
         select(Repair)
@@ -1092,7 +1135,7 @@ def list_repair_cases(
 @router.get("/repair-cases/{repair_id}")
 def get_repair_case(
     repair_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_repair_viewer),
     db: Session = Depends(get_db),
 ) -> dict:
     return _repair_dict(_load_repair(db, repair_id))
@@ -1102,7 +1145,7 @@ def get_repair_case(
 def generate_repair_documents(
     repair_id: int,
     language: str = Query(default="bg", pattern=r"^(bg|en|ru)$"),
-    user: User = Depends(require_repair_operator),
+    user: User = Depends(require_document_generator),
     db: Session = Depends(get_db),
 ) -> dict:
     repair = _load_repair(db, repair_id)
@@ -1151,7 +1194,7 @@ def generate_repair_documents(
 @router.post("/repair-cases", status_code=201)
 def create_repair_case(
     payload: RepairCaseCreate,
-    user: User = Depends(require_repair_operator),
+    user: User = Depends(require_repair_creator),
     db: Session = Depends(get_db),
 ) -> dict:
     machine_statement = select(Machine).where(Machine.id == payload.machine_id)
@@ -1220,6 +1263,8 @@ def update_repair_case(
     user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> dict:
+    if payload.status == RepairStatus.COMPLETED:
+        ensure_permission(user, Permission.REPAIRS_COMPLETE)
     repair = _load_repair(db, repair_id, lock=True)
     previous_status = repair.status
     previous_machine_status = repair.machine.status
@@ -1270,6 +1315,8 @@ def add_repair_event(
     user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> dict:
+    if payload.next_status == RepairStatus.COMPLETED:
+        ensure_permission(user, Permission.REPAIRS_COMPLETE)
     repair = _load_repair(db, repair_id, lock=True)
     previous = repair.status
     if payload.next_status is not None:
@@ -1360,7 +1407,7 @@ def add_repair_attachment(
 @router.get("/repair-attachments/{attachment_id}/download")
 def download_repair_attachment(
     attachment_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_repair_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     item = db.get(RepairAttachment, attachment_id)
@@ -1371,7 +1418,7 @@ def download_repair_attachment(
 
 @router.get("/part-requests/multi")
 def list_multi_part_requests(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_request_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     requests = db.scalars(
         select(PartRequest)
@@ -1551,7 +1598,7 @@ def add_part_request_attachment(
 @router.get("/part-request-attachments/{attachment_id}/download")
 def download_part_request_attachment(
     attachment_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_request_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     item = db.get(PartRequestAttachment, attachment_id)
@@ -1591,7 +1638,7 @@ def submit_part_request(
 def decide_part_request(
     request_id: int,
     payload: PartRequestDecision,
-    user: User = Depends(require_approver),
+    user: User = Depends(require_request_approver),
     db: Session = Depends(get_db),
 ) -> dict:
     item = db.scalar(select(PartRequest).options(joinedload(PartRequest.machine), selectinload(PartRequest.lines), selectinload(PartRequest.approvals)).where(PartRequest.id == request_id))
@@ -1732,7 +1779,7 @@ def update_part_request_fulfillment(
 def generate_part_request_documents(
     request_id: int,
     language: str | None = Query(default=None, pattern=r"^(bg|en|ru)$"),
-    user: User = Depends(require_parts_operator),
+    user: User = Depends(require_document_generator),
     db: Session = Depends(get_db),
 ) -> dict:
     item = db.scalar(
@@ -1861,7 +1908,7 @@ def _validate_catalog_part_payload(
 @router.post("/catalog/parts", status_code=201, response_model=None)
 def create_catalog_part(
     payload: CatalogPartCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> PartCatalog:
     _validate_catalog_part_payload(db, payload)
@@ -1884,7 +1931,7 @@ def create_catalog_part(
 def update_catalog_part(
     part_id: int,
     payload: CatalogPartUpdate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> PartCatalog:
     item = db.get(PartCatalog, part_id)
@@ -1911,7 +1958,7 @@ def update_catalog_part(
 @router.post("/catalog/parts/{part_id}/verify", response_model=None)
 def verify_catalog_part(
     part_id: int,
-    user: User = Depends(require_approver),
+    user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> PartCatalog:
     item = db.get(PartCatalog, part_id)
@@ -1931,7 +1978,7 @@ def verify_catalog_part(
 def create_part_hotspot(
     part_id: int,
     payload: HotspotCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> PartHotspot:
     if db.get(PartCatalog, part_id) is None:
@@ -1950,7 +1997,7 @@ def create_part_hotspot(
 @router.get("/catalog/parts/{part_id}/images")
 def list_catalog_part_images(
     part_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_parts_viewer),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     if db.get(PartCatalog, part_id) is None:
@@ -1978,7 +2025,7 @@ def list_catalog_part_images(
 def add_catalog_part_image(
     part_id: int,
     payload: AttachmentCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> dict:
     part = db.get(PartCatalog, part_id)
@@ -2032,7 +2079,7 @@ def add_catalog_part_image(
 @router.get("/catalog/part-images/{image_id}/download")
 def download_catalog_part_image(
     image_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_parts_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     item = db.get(PartCatalogImage, image_id)
@@ -2051,7 +2098,7 @@ def download_catalog_part_image(
 @router.get("/catalog/parts/{part_id}/hotspots", response_model=None)
 def list_part_hotspots(
     part_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_parts_viewer),
     db: Session = Depends(get_db),
 ) -> list[PartHotspot]:
     return db.scalars(select(PartHotspot).where(PartHotspot.part_id == part_id).order_by(PartHotspot.page_number, PartHotspot.id)).all()
@@ -2061,7 +2108,7 @@ def list_part_hotspots(
 def list_document_hotspots(
     technical_document_id: int,
     page_number: int = Query(ge=1),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_parts_viewer),
     db: Session = Depends(get_db),
 ) -> list[PartHotspot]:
     if db.get(TechnicalDocument, technical_document_id) is None:
@@ -2079,7 +2126,7 @@ def list_document_hotspots(
 @router.post("/catalog/hotspots/{hotspot_id}/verify", response_model=None)
 def verify_part_hotspot(
     hotspot_id: int,
-    user: User = Depends(require_approver),
+    user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> PartHotspot:
     item = db.get(PartHotspot, hotspot_id)
@@ -2110,7 +2157,7 @@ def verify_part_hotspot(
 
 @router.get("/repair-kits")
 def list_repair_kits(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_parts_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     kits = db.scalars(select(RepairKit).options(selectinload(RepairKit.components).joinedload(RepairKitComponent.part)).order_by(RepairKit.name)).all()
     return [{"id": kit.id, "code": kit.code, "name": kit.name, "brand": kit.brand, "model": kit.model, "compatible_models": kit.compatible_models, "revision": kit.revision, "assembly": kit.assembly, "source_document": kit.source_document, "source_page": kit.source_page, "provenance": kit.provenance, "confidence": kit.confidence, "is_approved": kit.is_approved, "approved_by_id": kit.approved_by_id, "approved_at": kit.approved_at, "created_at": kit.created_at, "components": [{"id": component.id, "part_id": component.part_id, "part_number": component.part.part_number, "description": component.part.description, "quantity": component.quantity, "is_optional": component.is_optional, "note": component.note, "alternative_part_numbers": component.part.alternative_part_numbers, "replacement_part_ids": component.part.replacement_part_ids} for component in kit.components]} for kit in kits]
@@ -2119,7 +2166,7 @@ def list_repair_kits(
 @router.post("/repair-kits", status_code=201)
 def create_repair_kit(
     payload: RepairKitCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> dict:
     if db.scalar(select(RepairKit.id).where(RepairKit.code == payload.code)) is not None:
@@ -2144,7 +2191,7 @@ def create_repair_kit(
 @router.post("/repair-kits/{kit_id}/approve")
 def approve_repair_kit(
     kit_id: int,
-    user: User = Depends(require_approver),
+    user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> dict:
     kit = db.scalar(select(RepairKit).options(selectinload(RepairKit.components).joinedload(RepairKitComponent.part)).where(RepairKit.id == kit_id))
@@ -2179,7 +2226,7 @@ def technical_library(
     category: str | None = None,
     language: str | None = Query(default=None, pattern=r"^(bg|en|ru)$"),
     revision: str | None = None,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     statement = select(TechnicalDocument).options(selectinload(TechnicalDocument.revisions))
@@ -2320,7 +2367,7 @@ def upload_technical_revision(
 @router.get("/technical-library/{document_id}/download")
 def download_technical_document(
     document_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     item = db.get(TechnicalDocument, document_id)
@@ -2339,7 +2386,7 @@ def download_technical_document(
 @router.get("/technical-library/revisions/{revision_id}/download")
 def download_technical_revision(
     revision_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     item = db.get(TechnicalDocumentRevision, revision_id)
@@ -2363,7 +2410,7 @@ def download_technical_revision(
 
 @router.get("/document-templates")
 def list_document_templates(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     templates = db.scalars(select(DocumentTemplate).options(selectinload(DocumentTemplate.versions)).order_by(DocumentTemplate.document_type, DocumentTemplate.code)).all()
     return [{"id": item.id, "code": item.code, "document_type": item.document_type, "name_bg": item.name_bg, "name_en": item.name_en, "name_ru": item.name_ru, "is_active": item.is_active, "versions": [{"id": version.id, "version": version.version, "language": version.language, "source_filename": version.source_filename or (Path(version.source_path).name if version.source_path else None), "source_media_type": version.source_media_type, "source_sha256": version.source_sha256, "layout_contract": version.layout_contract, "effective_from": version.effective_from, "effective_to": version.effective_to, "required_fields": version.required_fields, "numbering_rule": version.numbering_rule, "department": version.department, "change_note": version.change_note, "is_published": version.is_published, "created_by_id": version.created_by_id, "published_by_id": version.published_by_id, "created_at": version.created_at, "published_at": version.published_at, "download_endpoint": f"/document-template-versions/{version.id}/download"} for version in sorted(item.versions, key=lambda value: (value.language, value.version), reverse=True)]} for item in templates]
@@ -2372,7 +2419,7 @@ def list_document_templates(
 @router.post("/document-templates", status_code=201, response_model=None)
 def create_document_template(
     payload: TemplateCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_template_manager),
     db: Session = Depends(get_db),
 ) -> DocumentTemplate:
     item = DocumentTemplate(**payload.model_dump())
@@ -2390,7 +2437,7 @@ def create_document_template(
 def create_template_version(
     template_id: int,
     payload: TemplateVersionCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_template_manager),
     db: Session = Depends(get_db),
 ) -> dict:
     template = db.get(DocumentTemplate, template_id)
@@ -2426,7 +2473,7 @@ def create_template_version(
 @router.post("/document-template-versions/{version_id}/publish")
 def publish_template_version(
     version_id: int,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_template_manager),
     db: Session = Depends(get_db),
 ) -> dict:
     item = db.get(DocumentTemplateVersion, version_id)
@@ -2451,7 +2498,7 @@ def publish_template_version(
 @router.get("/document-template-versions/{version_id}/download")
 def download_template_version(
     version_id: int,
-    _: User = Depends(require_admin),
+    _: User = Depends(require_template_manager),
     db: Session = Depends(get_db),
 ) -> Response:
     item = db.get(DocumentTemplateVersion, version_id)
@@ -2477,7 +2524,7 @@ def download_template_version(
 @router.get("/generated-documents/{document_id}/download")
 def download_generated_document(
     document_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     item = db.get(GeneratedDocument, document_id)
@@ -2490,11 +2537,47 @@ def download_generated_document(
 def global_search(
     q: str = Query(min_length=2, max_length=120),
     limit: int = Query(default=10, ge=1, le=50),
-    _: User = Depends(get_current_user),
+    user: User = Depends(require_asset_viewer),
     db: Session = Depends(get_db),
 ) -> dict:
     term = f"%{q.strip()}%"
-    machines = db.scalars(select(Machine).where(or_(Machine.inventory_number.ilike(term), Machine.name.ilike(term), Machine.brand.ilike(term), Machine.model.ilike(term), Machine.serial_number.ilike(term), Machine.location.has(Location.name.ilike(term)))).limit(limit)).all()
+    machine_conditions = [
+        Machine.inventory_number.ilike(term),
+        Machine.name.ilike(term),
+        Machine.brand.ilike(term),
+        Machine.model.ilike(term),
+        Machine.location.has(Location.name.ilike(term)),
+    ]
+    if not is_observer(user):
+        machine_conditions.append(Machine.serial_number.ilike(term))
+    machines = db.scalars(
+        select(Machine)
+        .options(joinedload(Machine.location))
+        .where(or_(*machine_conditions))
+        .limit(limit)
+    ).all()
+    if is_observer(user):
+        return {
+            "query": q,
+            "machines": [
+                {
+                    "id": item.id,
+                    "inventory_number": item.inventory_number,
+                    "name": item.name,
+                    "brand": item.brand,
+                    "model": item.model,
+                    "status": item.status,
+                    "location": item.location.name if item.location else None,
+                }
+                for item in machines
+            ],
+            "parts": [],
+            "documents": [],
+            "repairs": [],
+            "part_requests": [],
+            "transfers": [],
+            "generated_documents": [],
+        }
     parts = db.scalars(select(PartCatalog).where(or_(PartCatalog.part_number.ilike(term), PartCatalog.alternative_part_number.ilike(term), PartCatalog.description.ilike(term), PartCatalog.name_bg.ilike(term), PartCatalog.name_en.ilike(term), PartCatalog.name_ru.ilike(term), PartCatalog.original_name.ilike(term), PartCatalog.brand.ilike(term), PartCatalog.model.ilike(term), PartCatalog.assembly.ilike(term), PartCatalog.position.ilike(term))).limit(limit)).all()
     documents = db.scalars(select(TechnicalDocument).where(or_(TechnicalDocument.title.ilike(term), TechnicalDocument.brand.ilike(term), TechnicalDocument.category.ilike(term), TechnicalDocument.model.ilike(term), TechnicalDocument.extracted_text.ilike(term), TechnicalDocument.notes.ilike(term), TechnicalDocument.revision.ilike(term), TechnicalDocument.source_label.ilike(term))).limit(limit)).all()
     repairs = db.scalars(select(Repair).options(joinedload(Repair.machine)).where(or_(Repair.repair_reference.ilike(term), Repair.reported_problem.ilike(term), Repair.symptoms.ilike(term), Repair.diagnosis.ilike(term), Repair.required_work.ilike(term), Repair.work_performed.ilike(term), Repair.result.ilike(term))).limit(limit)).all()
@@ -2545,14 +2628,6 @@ def global_search(
     }
 
 
-@router.get("/admin/users")
-def list_users(
-    _: User = Depends(require_admin), db: Session = Depends(get_db)
-) -> list[dict]:
-    users = db.scalars(select(User).order_by(User.full_name, User.email)).all()
-    return [{"id": item.id, "email": item.email, "full_name": item.full_name, "role": item.role, "preferred_language": item.preferred_language, "is_active": item.is_active, "created_at": item.created_at} for item in users]
-
-
 def _location_dict(item: Location) -> dict:
     return {
         "id": item.id,
@@ -2577,7 +2652,7 @@ def _department_dict(item: Department) -> dict:
 
 @router.get("/departments")
 def list_departments(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     items = db.scalars(select(Department).order_by(Department.code)).all()
     return [_department_dict(item) for item in items]
@@ -2739,44 +2814,6 @@ def update_department(
     return _department_dict(item)
 
 
-@router.post("/admin/users", status_code=201)
-def create_user(
-    payload: UserAdminCreate,
-    user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-) -> dict:
-    item = User(email=payload.email.lower().strip(), full_name=payload.full_name.strip(), password_hash=hash_password(payload.password), role=payload.role, preferred_language=payload.preferred_language.value)
-    db.add(item)
-    db.flush()
-    add_audit_log(db, user, "user", item.id, "Създаден потребител", {"email": item.email, "role": item.role})
-    _commit(db)
-    return {"id": item.id, "email": item.email, "full_name": item.full_name, "role": item.role, "preferred_language": item.preferred_language, "is_active": item.is_active}
-
-
-@router.patch("/admin/users/{user_id}")
-def update_user(
-    user_id: int,
-    payload: UserAdminUpdate,
-    actor: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-) -> dict:
-    item = db.get(User, user_id)
-    if item is None:
-        raise HTTPException(404, "Потребителят не е намерен.")
-    if payload.role is not None and payload.role not in {role.value for role in UserRole}:
-        raise HTTPException(422, "Невалидна потребителска роля.")
-    if item.id == actor.id and payload.is_active is False:
-        raise business_conflict("cannot_deactivate_self", "Не можете да деактивирате собствения си профил.")
-    changes = payload.model_dump(exclude_unset=True, exclude={"password"})
-    for key, value in changes.items():
-        setattr(item, key, value.value if hasattr(value, "value") else value)
-    if payload.password is not None:
-        item.password_hash = hash_password(payload.password)
-    add_audit_log(db, actor, "user", item.id, "Обновен потребител", {"changed_fields": sorted(payload.model_fields_set)})
-    _commit(db)
-    return {"id": item.id, "email": item.email, "full_name": item.full_name, "role": item.role, "preferred_language": item.preferred_language, "is_active": item.is_active}
-
-
 def _sign_preview(records: list[dict]) -> str:
     payload = {"exp": int(time.time()) + 900, "records": records}
     body = base64.urlsafe_b64encode(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()).decode().rstrip("=")
@@ -2871,7 +2908,7 @@ def import_confirm(
 
 @router.get("/audit/export.json")
 def export_audit_log(
-    _: User = Depends(require_approver), db: Session = Depends(get_db)
+    _: User = Depends(require_audit_full), db: Session = Depends(get_db)
 ) -> Response:
     entries = db.scalars(select(AuditLog).order_by(AuditLog.created_at, AuditLog.id)).all()
     content = json.dumps([{"id": item.id, "entity_type": item.entity_type, "entity_id": item.entity_id, "action": item.action, "details": item.details, "user_id": item.user_id, "user_name": item.user_name, "operation_reference": item.operation_reference, "created_at": item.created_at.replace(tzinfo=UTC).isoformat()} for item in entries], ensure_ascii=False, indent=2).encode()

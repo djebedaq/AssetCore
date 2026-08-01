@@ -11,6 +11,8 @@ These rules apply to the complete AssetCore repository.
 - Never expose, print or commit passwords, tokens, API keys, Render secrets, `.env` values or internal filesystem paths.
 - Preserve QR behavior, repair history, audit history, transfer history, generated protocols and the technical-document library.
 - Store workflow statuses as stable technical codes and translate them only at the API/UI presentation boundary.
+- Keep exactly the final roles `administrator`, `director`, `mechanic`, and `observer`. Centralize permission checks; protect the single owner selected by `ASSETCORE_OWNER_EMAIL` from demotion, deactivation, reset, deletion, or ordinary profile editing.
+- Never log, persist in client storage, or return plaintext, temporary, current, confirmation, or new passwords. Account deactivation, role changes, and password resets must invalidate existing sessions.
 - Treat original DOCX/PDF files as controlled reference material. Official generated documents require an approved template for their language; OCR and repair-kit data always require human confirmation and source provenance.
 - Do not rewrite or delete existing audit or document history during normal feature work.
 - Run tests and quality checks that the repository supports. Report exact commands and results honestly; never state that an unexecuted check passed.

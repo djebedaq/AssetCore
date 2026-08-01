@@ -19,6 +19,7 @@ test_password = secrets.token_urlsafe(32)
 os.environ["DATABASE_URL"] = f"sqlite:///{database_path.as_posix()}"
 os.environ["SECRET_KEY"] = secrets.token_urlsafe(48)
 os.environ["ADMIN_EMAIL"] = "release-check@example.invalid"
+os.environ["ASSETCORE_OWNER_EMAIL"] = os.environ["ADMIN_EMAIL"]
 os.environ["ADMIN_PASSWORD"] = test_password
 
 from app.database import engine  # noqa: E402

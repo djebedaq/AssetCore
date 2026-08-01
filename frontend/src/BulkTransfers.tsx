@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 're
 import { Archive, CheckCircle2, Download, RotateCcw, Search, Send, X } from 'lucide-react'
 import { ApiError, api, downloadApiFile } from './api'
 import { statusText, useI18n, type TranslationKey } from './i18n'
+import { hasPermission } from './permissions'
 import type {
   BatchDetails,
   BatchProgress,
@@ -85,12 +86,7 @@ const RETURN_STATUS_CODES = [
 ]
 
 function canOperateTransfers(): boolean {
-  try {
-    const role = (JSON.parse(localStorage.getItem('assetcore_user') || 'null') as { role?: string } | null)?.role
-    return role === 'admin' || role === 'manager'
-  } catch {
-    return false
-  }
+  return hasPermission('transfers.create', 'transfers.return')
 }
 
 function localizedErrorKey(error: Error): TranslationKey {

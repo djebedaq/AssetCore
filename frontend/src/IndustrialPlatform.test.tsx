@@ -14,7 +14,10 @@ function jsonResponse(value: unknown): Response {
 describe('индустриален каталог', () => {
   beforeEach(() => {
     localStorage.clear()
-    localStorage.setItem('assetcore_user', JSON.stringify({ role: 'mechanic' }))
+    localStorage.setItem('assetcore_user', JSON.stringify({
+      role: 'mechanic',
+      permissions: ['assets.view', 'transfers.view', 'transfers.create', 'transfers.return', 'repairs.view', 'repairs.create', 'repairs.edit', 'repairs.complete', 'requests.view', 'requests.create', 'parts.view', 'documents.view', 'documents.generate'],
+    }))
   })
 
   afterEach(() => vi.unstubAllGlobals())

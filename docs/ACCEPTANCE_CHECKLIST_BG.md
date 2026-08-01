@@ -6,8 +6,14 @@
 - [ ] PostgreSQL migration `20260731_0001_bulk_transfers` е приложена и е създаден валидиран backup.
 - [ ] Alembic `head` включва `20260731_0002_i18n_status_roles`; познатите статуси са кодове, а непозната историческа стойност не е загубена.
 - [ ] Alembic `head` включва `20260731_0003_industrial_platform`; upgrade/downgrade/upgrade е проверен върху fresh и legacy SQLite.
+- [ ] Alembic `head` включва `20260801_0004_final_user_roles`; `ASSETCORE_OWNER_EMAIL` сочи точно един съществуващ owner преди production upgrade.
 - [ ] Българският, английският и руският интерфейс имат еднакъв набор от ключове; изборът се пази в профила и fallback-ът е български.
-- [ ] Ролите `admin`, `manager`, `mechanic`, `approver` и `viewer` са проверени едновременно в UI и API.
+- [ ] Новите акаунти приемат точно `administrator`, `director`, `mechanic` и `observer`; legacy ролите остават само в миграционния тест.
+- [ ] Има точно един активен `is_system_owner`; той е administrator и не може да бъде понижен, деактивиран, reset-нат или редактиран през user API.
+- [ ] Director вижда и управлява само mechanic/observer и не може чрез ръчен request да създаде или повиши director/administrator.
+- [ ] Mechanic и observer нямат user-management API; observer вижда само номер, марка/модел, статус, местоположение и наличност.
+- [ ] Временният password reset задава `must_change_password`; старият token е невалиден и работните endpoints са блокирани до успешна смяна.
+- [ ] User audit записите съдържат actor/target/стари и нови роли/активност, но никога парола, password hash или token.
 - [ ] Успешно е издаден единичен и групов набор от разрешени машини.
 - [ ] Двойно и concurrent издаване връщат 409 и не оставят частични записи.
 - [ ] За всяка машина има отделен DOCX/PDF, а ZIP съдържа всички протоколи със safe filenames.

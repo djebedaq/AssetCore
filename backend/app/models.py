@@ -6,6 +6,7 @@ from enum import Enum
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -75,11 +76,10 @@ class PartRequestPriority(str, Enum):
 
 
 class UserRole(str, Enum):
-    ADMIN = "admin"
+    ADMINISTRATOR = "administrator"
+    DIRECTOR = "director"
     MECHANIC = "mechanic"
-    MANAGER = "manager"
-    APPROVER = "approver"
-    VIEWER = "viewer"
+    OBSERVER = "observer"
 
 
 class LanguageCode(str, Enum):
@@ -129,17 +129,55 @@ class ApprovalDecision(str, Enum):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('administrator', 'director', 'mechanic', 'observer')",
+            name="ck_users_final_role",
+        ),
+        CheckConstraint(
+            "NOT is_system_owner OR (role = 'administrator' AND is_active)",
+            name="ck_users_owner_invariants",
+        ),
+        Index(
+            "uq_users_single_system_owner",
+            "is_system_owner",
+            unique=True,
+            sqlite_where=text("is_system_owner = 1"),
+            postgresql_where=text("is_system_owner"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), default="Администратор")
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(50), default=UserRole.ADMIN.value)
+    role: Mapped[str] = mapped_column(
+        String(50), default=UserRole.OBSERVER.value,
+        server_default=text("'observer'"), nullable=False
+    )
     preferred_language: Mapped[str] = mapped_column(
         String(2), default=LanguageCode.BG.value, server_default=text("'bg'")
     )
-    is_active: Mapped[bool] = mapped_column(default=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False
+    )
+    is_system_owner: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+    token_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
 
 
 class Location(Base):
