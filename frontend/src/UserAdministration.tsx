@@ -3,12 +3,13 @@ import { KeyRound, Pencil, Plus, ShieldCheck, UserCheck, UserX, X } from 'lucide
 import { ApiError, api } from './api'
 import { useI18n, type TranslationKey } from './i18n'
 import { storedUser } from './permissions'
-import type { ManagedUser, UserRole } from './types'
+import type { Department, ManagedUser, UserRole } from './types'
 
 type Modal = 'create' | 'edit' | 'reset' | null
 
 const emptyCreate = {
-  email: '', full_name: '', role: 'observer' as UserRole, preferred_language: 'bg',
+  email: '', first_name: '', middle_name: '', last_name: '', job_title: '', department_id: '',
+  role: 'observer' as UserRole, preferred_language: 'bg',
   temporary_password: '', confirm_password: '', is_active: true,
 }
 
@@ -34,6 +35,7 @@ export default function UserAdministration() {
   const { date, t } = useI18n()
   const session = storedUser()
   const [items, setItems] = useState<ManagedUser[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [search, setSearch] = useState('')
   const [role, setRole] = useState('')
   const [active, setActive] = useState('')
@@ -43,7 +45,7 @@ export default function UserAdministration() {
   const [modal, setModal] = useState<Modal>(null)
   const [selected, setSelected] = useState<ManagedUser | null>(null)
   const [createForm, setCreateForm] = useState({ ...emptyCreate, preferred_language: session?.preferred_language || 'bg' })
-  const [editForm, setEditForm] = useState({ full_name: '', role: 'observer' as UserRole, preferred_language: 'bg' })
+  const [editForm, setEditForm] = useState({ first_name: '', middle_name: '', last_name: '', job_title: '', department_id: '', role: 'observer' as UserRole, preferred_language: 'bg' })
   const [resetForm, setResetForm] = useState({ temporary_password: '', confirm_password: '' })
   const availableRoles = useMemo<UserRole[]>(
     () => session?.is_system_owner ? ['director', 'mechanic', 'observer'] : ['mechanic', 'observer'],
@@ -61,7 +63,14 @@ export default function UserAdministration() {
     if (search.trim()) query.set('search', search.trim())
     if (role) query.set('role', role)
     if (active) query.set('is_active', active)
-    try { setItems(await api<ManagedUser[]>(`/users${query.size ? `?${query}` : ''}`)) }
+    try {
+      const [users, departmentItems] = await Promise.all([
+        api<ManagedUser[]>(`/users${query.size ? `?${query}` : ''}`),
+        api<Department[]>('/departments'),
+      ])
+      setItems(users)
+      setDepartments(departmentItems.filter((item) => item.is_active))
+    }
     catch (caught) { setError(userError(caught)) }
     finally { setLoading(false) }
   }
@@ -84,7 +93,7 @@ export default function UserAdministration() {
     event.preventDefault()
     setError('')
     try {
-      await api('/users', { method: 'POST', body: JSON.stringify(createForm) })
+      await api('/users', { method: 'POST', body: JSON.stringify({ ...createForm, department_id: createForm.department_id ? Number(createForm.department_id) : null }) })
       setCreateForm({ ...emptyCreate, preferred_language: session?.preferred_language || 'bg' })
       setSuccess('users.success.created')
       closeModal()
@@ -95,7 +104,7 @@ export default function UserAdministration() {
   function openEdit(user: ManagedUser) {
     setError('')
     setSelected(user)
-    setEditForm({ full_name: user.full_name, role: user.role, preferred_language: user.preferred_language })
+    setEditForm({ first_name: user.first_name || '', middle_name: user.middle_name || '', last_name: user.last_name || '', job_title: user.job_title || '', department_id: user.department_id ? String(user.department_id) : '', role: user.role, preferred_language: user.preferred_language })
     setModal('edit')
   }
 
@@ -104,7 +113,7 @@ export default function UserAdministration() {
     if (!selected) return
     setError('')
     try {
-      await api(`/users/${selected.id}`, { method: 'PATCH', body: JSON.stringify(editForm) })
+      await api(`/users/${selected.id}`, { method: 'PATCH', body: JSON.stringify({ ...editForm, department_id: editForm.department_id ? Number(editForm.department_id) : null }) })
       setSuccess('users.success.updated')
       closeModal()
       await load()
@@ -147,8 +156,8 @@ export default function UserAdministration() {
     {!modal && error && <div className="error" role="alert">{t(error)}</div>}
     {success && <div className="success" role="status">{t(success)}</div>}
     {loading ? <div className="loading">{t('common.loading')}</div> : <div className="table-card users-table"><table><thead><tr><th>{t('users.name')}</th><th>{t('users.role')}</th><th>{t('users.language')}</th><th>{t('users.status')}</th><th>{t('users.createdAt')}</th><th>{t('users.lastLogin')}</th><th>{t('users.actions')}</th></tr></thead><tbody>{items.map((user) => <tr key={user.id}><td><strong>{user.full_name}</strong><small>{user.email}</small>{user.is_system_owner && <span className="owner-badge"><ShieldCheck size={14} />{t('users.systemOwner')}</span>}</td><td><span className="badge">{t(`role.${user.role}` as TranslationKey)}</span></td><td>{t(`language.${user.preferred_language}` as TranslationKey)}</td><td><span className={`badge ${user.is_active ? 'batch-complete' : 'batch-active'}`}>{t(user.is_active ? 'users.active' : 'users.inactive')}</span></td><td>{date(user.created_at)}</td><td>{user.last_login_at ? date(user.last_login_at) : t('users.neverLoggedIn')}</td><td>{!user.is_system_owner && <div className="user-actions"><button className="link" onClick={() => openEdit(user)}><Pencil size={14} />{t('common.edit')}</button><button className="link" onClick={() => void toggleUser(user)}>{user.is_active ? <UserX size={14} /> : <UserCheck size={14} />}{t(user.is_active ? 'users.deactivate' : 'users.activate')}</button><button className="link" onClick={() => openReset(user)}><KeyRound size={14} />{t('users.resetPassword')}</button></div>}</td></tr>)}</tbody></table>{!items.length && <div className="empty-state">{t('users.empty')}</div>}</div>}
-    {modal === 'create' && <UserModal title={t('users.add')} onClose={closeModal}><form className="form-grid" onSubmit={createUser}>{error && <div className="error wide" role="alert">{t(error)}</div>}<label>{t('users.name')}<input required value={createForm.full_name} onChange={(event) => setCreateForm({ ...createForm, full_name: event.target.value })} /></label><label>{t('users.workEmail')}<input type="email" required autoComplete="off" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} /></label><label>{t('users.role')}<select value={createForm.role} onChange={(event) => setCreateForm({ ...createForm, role: event.target.value as UserRole })}>{availableRoles.map((value) => <option value={value} key={value}>{t(`role.${value}` as TranslationKey)}</option>)}</select></label><label>{t('users.language')}<select value={createForm.preferred_language} onChange={(event) => setCreateForm({ ...createForm, preferred_language: event.target.value as ManagedUser['preferred_language'] })}><option value="bg">{t('language.bg')}</option><option value="en">{t('language.en')}</option><option value="ru">{t('language.ru')}</option></select></label><label>{t('users.temporaryPassword')}<input required minLength={10} type="password" autoComplete="new-password" value={createForm.temporary_password} onChange={(event) => setCreateForm({ ...createForm, temporary_password: event.target.value })} /></label><label>{t('users.confirmPassword')}<input required minLength={10} type="password" autoComplete="new-password" value={createForm.confirm_password} onChange={(event) => setCreateForm({ ...createForm, confirm_password: event.target.value })} /></label><label className="check-label wide"><input type="checkbox" checked={createForm.is_active} onChange={(event) => setCreateForm({ ...createForm, is_active: event.target.checked })} />{t('users.activeAccount')}</label><p className="muted wide">{t('users.passwordPolicy')}</p><div className="actions wide"><button type="button" className="secondary" onClick={closeModal}>{t('common.cancel')}</button><button className="primary">{t('common.save')}</button></div></form></UserModal>}
-    {modal === 'edit' && selected && <UserModal title={t('users.edit')} onClose={closeModal}><form className="form-grid" onSubmit={editUser}>{error && <div className="error wide" role="alert">{t(error)}</div>}<label className="wide">{t('users.name')}<input required value={editForm.full_name} onChange={(event) => setEditForm({ ...editForm, full_name: event.target.value })} /></label><label>{t('users.role')}<select value={editForm.role} onChange={(event) => setEditForm({ ...editForm, role: event.target.value as UserRole })}>{availableRoles.map((value) => <option value={value} key={value}>{t(`role.${value}` as TranslationKey)}</option>)}</select></label><label>{t('users.language')}<select value={editForm.preferred_language} onChange={(event) => setEditForm({ ...editForm, preferred_language: event.target.value as ManagedUser['preferred_language'] })}><option value="bg">{t('language.bg')}</option><option value="en">{t('language.en')}</option><option value="ru">{t('language.ru')}</option></select></label><div className="actions wide"><button type="button" className="secondary" onClick={closeModal}>{t('common.cancel')}</button><button className="primary">{t('common.save')}</button></div></form></UserModal>}
+    {modal === 'create' && <UserModal title={t('users.add')} onClose={closeModal}><form className="form-grid" onSubmit={createUser}>{error && <div className="error wide" role="alert">{t(error)}</div>}<label>{t('profile.firstName')}<input required value={createForm.first_name} onChange={(event) => setCreateForm({ ...createForm, first_name: event.target.value })} /></label><label>{t('profile.middleName')}<input required value={createForm.middle_name} onChange={(event) => setCreateForm({ ...createForm, middle_name: event.target.value })} /></label><label>{t('profile.lastName')}<input required value={createForm.last_name} onChange={(event) => setCreateForm({ ...createForm, last_name: event.target.value })} /></label><label>{t('profile.jobTitle')}<input required value={createForm.job_title} onChange={(event) => setCreateForm({ ...createForm, job_title: event.target.value })} /></label><label>{t('profile.department')}<select value={createForm.department_id} onChange={(event) => setCreateForm({ ...createForm, department_id: event.target.value })}><option value="">{t('common.notSpecified')}</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name_bg}</option>)}</select></label><label>{t('users.workEmail')}<input type="email" required autoComplete="off" value={createForm.email} onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })} /></label><label>{t('users.role')}<select value={createForm.role} onChange={(event) => setCreateForm({ ...createForm, role: event.target.value as UserRole })}>{availableRoles.map((value) => <option value={value} key={value}>{t(`role.${value}` as TranslationKey)}</option>)}</select></label><label>{t('users.language')}<select value={createForm.preferred_language} onChange={(event) => setCreateForm({ ...createForm, preferred_language: event.target.value as ManagedUser['preferred_language'] })}><option value="bg">{t('language.bg')}</option><option value="en">{t('language.en')}</option><option value="ru">{t('language.ru')}</option></select></label><label>{t('users.temporaryPassword')}<input required minLength={10} type="password" autoComplete="new-password" value={createForm.temporary_password} onChange={(event) => setCreateForm({ ...createForm, temporary_password: event.target.value })} /></label><label>{t('users.confirmPassword')}<input required minLength={10} type="password" autoComplete="new-password" value={createForm.confirm_password} onChange={(event) => setCreateForm({ ...createForm, confirm_password: event.target.value })} /></label><label className="check-label wide"><input type="checkbox" checked={createForm.is_active} onChange={(event) => setCreateForm({ ...createForm, is_active: event.target.checked })} />{t('users.activeAccount')}</label><p className="muted wide">{t('users.passwordPolicy')}</p><div className="actions wide"><button type="button" className="secondary" onClick={closeModal}>{t('common.cancel')}</button><button className="primary">{t('common.save')}</button></div></form></UserModal>}
+    {modal === 'edit' && selected && <UserModal title={t('users.edit')} onClose={closeModal}><form className="form-grid" onSubmit={editUser}>{error && <div className="error wide" role="alert">{t(error)}</div>}<label>{t('profile.firstName')}<input required value={editForm.first_name} onChange={(event) => setEditForm({ ...editForm, first_name: event.target.value })} /></label><label>{t('profile.middleName')}<input required value={editForm.middle_name} onChange={(event) => setEditForm({ ...editForm, middle_name: event.target.value })} /></label><label>{t('profile.lastName')}<input required value={editForm.last_name} onChange={(event) => setEditForm({ ...editForm, last_name: event.target.value })} /></label><label>{t('profile.jobTitle')}<input required value={editForm.job_title} onChange={(event) => setEditForm({ ...editForm, job_title: event.target.value })} /></label><label>{t('profile.department')}<select value={editForm.department_id} onChange={(event) => setEditForm({ ...editForm, department_id: event.target.value })}><option value="">{t('common.notSpecified')}</option>{departments.map((item) => <option key={item.id} value={item.id}>{item.name_bg}</option>)}</select></label><label>{t('users.role')}<select value={editForm.role} onChange={(event) => setEditForm({ ...editForm, role: event.target.value as UserRole })}>{availableRoles.map((value) => <option value={value} key={value}>{t(`role.${value}` as TranslationKey)}</option>)}</select></label><label>{t('users.language')}<select value={editForm.preferred_language} onChange={(event) => setEditForm({ ...editForm, preferred_language: event.target.value as ManagedUser['preferred_language'] })}><option value="bg">{t('language.bg')}</option><option value="en">{t('language.en')}</option><option value="ru">{t('language.ru')}</option></select></label><div className="actions wide"><button type="button" className="secondary" onClick={closeModal}>{t('common.cancel')}</button><button className="primary">{t('common.save')}</button></div></form></UserModal>}
     {modal === 'reset' && selected && <UserModal title={t('users.resetPassword')} onClose={closeModal}><form className="form-grid" onSubmit={resetPassword}>{error && <div className="error wide" role="alert">{t(error)}</div>}<p className="wide">{t('users.resetFor', { name: selected.full_name })}</p><label>{t('users.temporaryPassword')}<input required minLength={10} type="password" autoComplete="new-password" value={resetForm.temporary_password} onChange={(event) => setResetForm({ ...resetForm, temporary_password: event.target.value })} /></label><label>{t('users.confirmPassword')}<input required minLength={10} type="password" autoComplete="new-password" value={resetForm.confirm_password} onChange={(event) => setResetForm({ ...resetForm, confirm_password: event.target.value })} /></label><p className="muted wide">{t('users.forceChangeHint')}</p><div className="actions wide"><button type="button" className="secondary" onClick={closeModal}>{t('common.cancel')}</button><button className="primary">{t('users.resetPassword')}</button></div></form></UserModal>}
   </>
 }

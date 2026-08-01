@@ -18,6 +18,7 @@ os.environ.setdefault("SECRET_KEY", "test-only-secret")
 os.environ.setdefault("ADMIN_EMAIL", "admin@assetcore.local")
 os.environ.setdefault("ASSETCORE_OWNER_EMAIL", "admin@assetcore.local")
 os.environ.setdefault("ADMIN_PASSWORD", "AssetCore123!")
+os.environ.setdefault("OWNER_JOB_TITLE", "Тестов системен администратор")
 
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402

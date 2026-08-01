@@ -2,13 +2,15 @@
 
 ## Конфигурация
 
-Задължителните продукционни environment variables са `DATABASE_URL`, `SECRET_KEY`, `ASSETCORE_OWNER_EMAIL` и `ADMIN_PASSWORD`. Локалният Docker Compose изисква и `POSTGRES_PASSWORD`; паролата в `DATABASE_URL` трябва да е URL-encoded. Не поставяйте стойностите им в Git, issue, log или screenshot. Render генерира `SECRET_KEY`, взема връзката от managed PostgreSQL и очаква ръчно зададени owner email и bootstrap admin парола. `ADMIN_EMAIL` е само fallback за legacy миграция и не замества новата owner конфигурация.
+Задължителните продукционни environment variables са `DATABASE_URL`, `SECRET_KEY`, `OWNER_FIRST_NAME`, `OWNER_MIDDLE_NAME`, `OWNER_LAST_NAME`, `OWNER_EMAIL`, `OWNER_JOB_TITLE`, стабилен `INSTALLATION_ID`, `LICENSE_PUBLIC_KEY` и отделен `SIGNATURE_ENCRYPTION_KEY`. `OWNER_INITIAL_PASSWORD` е задължителна само при първия bootstrap върху база без потребители; след успешния вход и forced password change я премахнете от environment-а. Задайте `PRODUCTION_MODE=true` и `LICENSE_ENFORCEMENT_ENABLED=true`. Локалният Docker Compose изисква и `POSTGRES_PASSWORD`; паролата в `DATABASE_URL` трябва да е URL-encoded. Не поставяйте стойностите им в Git, issue, log или screenshot. `ASSETCORE_OWNER_EMAIL`/`ADMIN_*` остават само като legacy migration compatibility и не са новият bootstrap договор.
 
 Generic Render URLs с `postgresql://` или legacy `postgres://` се нормализират към SQLAlchemy драйвера `postgresql+psycopg://`. SQLite URL остава непроменен.
 
 ## Миграция
 
-Текущият `head` включва `20260801_0004_final_user_roles`. Преди schema промяна той изисква нормализираният `ASSETCORE_OWNER_EMAIL` да съвпада с точно един съществуващ акаунт при непразна база. След това мигрира legacy ролите, добавя owner/password/session timestamps и database ограниченията. Друг legacy admin се запазва като director с audit warning; никоя връзка към оперативна история не се променя. При невъзможно еднозначно определяне migration-ът прекратява работа преди DDL.
+Текущият `head` е `20260801_0005`: отделни профилни полета, owner designation, лицензи, външни подписващи, участници, подписни позиции/сесии, криптографски metadata, official document versions и template validation. `20260801_0004_final_user_roles` преди него изисква нормализираният legacy owner email да съвпада с точно един съществуващ акаунт при непразна база. Нито една миграция не допълва имена, длъжности или business history чрез догадки.
+
+Production Docker image включва LibreOffice Writer за PDF от exact filled DOCX source, DejaVu fonts и PostgreSQL client за backup/restore. След deploy проверете `/api/health`, Alembic head, owner designation, licence status и restore в отделна база. Вижте `BACKUP_RESTORE_BG.md` и `RELEASE_CHECKLIST_BG.md`.
 
 Предходният `20260731_0003_industrial_platform` добавя универсални asset категории/полета/файлове/събития, деактивируеми местоположения и триезични отдели, разширения ремонтен lifecycle, versioned templates/documents, multi-line requests и fulfillment, request attachments, provenance catalog/images/hotspots, kits, technical revisions и структурираните transfer/return полета. Миграцията добавя липсващи колони idempotent към legacy RC схема и създава новите таблици чрез общата SQLAlchemy metadata, така че да работи и върху fresh database, и върху историческа SQLite база.
 

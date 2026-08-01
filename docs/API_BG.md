@@ -14,6 +14,28 @@
 | `POST` | `/api/users/{user_id}/deactivate` | деактивира акаунт без изтриване на историята |
 | `POST` | `/api/users/{user_id}/reset-password` | задава временна парола и задължителна смяна |
 | `PATCH` | `/api/users/me/preferences` | записва `preferred_language`: `bg`, `en` или `ru` |
+| `PUT` | `/api/users/me/profile` | потвърждава отделни имена, длъжност, отдел и законово изключение |
+| `PUT` | `/api/users/{id}/profile` | scoped административно профилно обновяване; owner е защитен |
+| `GET/POST` | `/api/owner`, `/api/owner/transfer` | owner designation и защитено прехвърляне с reauthentication |
+| `GET` | `/api/owner/audit` | owner-only история на обозначението и прехвърлянията |
+| `GET/POST` | `/api/license/status`, `/api/license/install` | офлайн Ed25519 проверка и owner-only инсталиране |
+| `GET` | `/api/license/validate` | повторна криптографска проверка и enabled modules |
+| `GET/POST` | `/api/external-signers` | отделни външни участници без User акаунт |
+| `GET/POST` | `/api/official-documents` | неизменяеми официални документи и текущи версии |
+| `GET` | `/api/official-documents/{id}/versions` | пълна история на версиите |
+| `GET` | `/api/official-documents/{id}/versions/{v}/download/{docx|pdf}` | exact version download |
+| `POST` | `/api/official-documents/{id}/participants` | заключва участниците и отваря подписването |
+| `POST` | `/api/official-documents/{id}/prepare-for-signatures` | еквивалентен изричен prepare endpoint |
+| `GET` | `/api/official-documents/{id}/preview/{docx\|pdf}` | preview на текущата version |
+| `GET` | `/api/official-documents/{id}/signature-status` | signing progress и participant status |
+| `POST` | `/api/official-documents/{id}/finalize` | идемпотентно потвърждава вече напълно подписана версия; иначе 409 |
+| `GET` | `/api/official-documents/{id}/verify-hash` | проверява snapshot/DOCX/PDF SHA-256 |
+| `POST` | `/api/official-documents/{id}/supersede` | нова коригираща версия с основание и нови подписи |
+| `POST` | `/api/signatures/sessions` | еднократна, изтичаща подписна сесия |
+| `GET/POST` | `/api/signing/{token}` | ограничено обобщение и подаване на ръчен графичен подпис |
+| `POST` | `/api/signing/{token}/confirm` | окончателно потвърждение и status transition |
+| `POST` | `/api/signing/{token}/reject` | отказ и затваряне на еднократната сесия |
+| `GET` | `/api/signatures/{id}/image` | authenticated, private/no-store signature graphic |
 | `GET` | `/api/transfers/availability` | наличност и причина за недостъпност за всяка машина |
 | `POST` | `/api/transfers/bulk-issue` | атомарно групово издаване, HTTP 201 |
 | `POST` | `/api/transfers/bulk-return` | атомарно пълно или частично връщане, HTTP 200 |
@@ -56,9 +78,10 @@
 | `POST` | `/api/document-templates/{id}/versions` | качва защитен DOCX/PDF като непубликувана версия |
 | `GET` | `/api/document-template-versions/{id}/download` | administrator download на проверявания изходен файл |
 | `POST` | `/api/document-template-versions/{id}/publish` | публикува версия само за езика ѝ |
+| `POST` | `/api/document-template-versions/{id}/validate` | structural/hash/language/placeholder проверка |
 | `GET` | `/api/generated-documents/{id}/download` | удостоверено изтегляне без вътрешен path |
 
-Старият `POST /api/transfers` остава съвместим и използва същия защитен service слой за единично издаване/връщане.
+Старият `POST /api/transfers` остава съвместим и използва същия защитен service слой за единично издаване/връщане. При активен режим за лиценз и изтекъл grace всяка пишеща операция, освен login/change-password и license install, връща HTTP `423` с `code=license_read_only`; GET/export/backup достъпът остава.
 
 ## Потребители, роли и пароли
 
@@ -69,7 +92,11 @@
 ```json
 {
   "email": "<служебен-имейл>",
-  "full_name": "<име>",
+  "first_name": "<собствено-име>",
+  "middle_name": "<бащино-име>",
+  "last_name": "<фамилно-име>",
+  "job_title": "<длъжност>",
+  "department_id": "<department-id-или-null>",
   "role": "mechanic",
   "preferred_language": "bg",
   "temporary_password": "<временна-парола>",
@@ -78,9 +105,9 @@
 }
 ```
 
-Стандартният endpoint не приема `administrator`, `is_system_owner`, hash, timestamps или други защитени полета. Owner може да създава `director`, `mechanic` и `observer`; director — само `mechanic` и `observer`. Имейлът се нормализира, дублиран имейл връща 409, а невалидна роля, език или password policy — 422.
+Трите отделни имена и длъжността са задължителни; `full_name` се генерира и не е източник на истина. Стандартният endpoint не приема `administrator`, `is_system_owner`, hash, timestamps или други защитени полета. Owner може да създава `director`, `mechanic` и `observer`; director — само `mechanic` и `observer`. Имейлът се нормализира, дублиран имейл връща 409, а невалидна роля, език или password policy — 422.
 
-`PATCH /api/users/{id}` приема само `full_name`, `role`, `preferred_language` и `is_active`. За activation/deactivation използвайте и изричните action endpoints. Owner не се променя през нито един от тях; потребител не може да смени собствената си роля или да се деактивира.
+`PATCH /api/users/{id}` приема структурните identity полета, `department_id`, `role`, `preferred_language` и `is_active`; legacy `full_name` не заменя потвърдените отделни имена. За законово изключение се използва `PUT /api/users/{id}/profile` от administrator, който записва основание, одобрил и време. Self endpoint отказва самоодобрение с 403 `legal_name_exception_requires_admin`. За activation/deactivation използвайте и изричните action endpoints. Owner не се променя през нито един от тях; потребител не може да смени собствената си роля или да се деактивира.
 
 `POST /api/users/{id}/reset-password` приема `temporary_password` и `confirm_password`. Успехът задава `must_change_password = true`, променя token version и не връща паролата. До `POST /api/auth/change-password` всички работни permission dependencies връщат 403 `password_change_required`. Успешната смяна връща нов Bearer token и безопасен профил.
 
@@ -200,6 +227,19 @@ Password policy: минимум 10 знака, поне една малка и �
 - `observer`: само ограничен регистър, търсене, текущ статус, местоположение и наличност.
 
 Backend-ът е авторитетен за тези права. Скриването или деактивирането на действия във frontend-а е само допълнителна защита на интерфейса.
+
+## Аварийна административна процедура
+
+- `GET /api/emergency-access/status` — видим за всеки активен удостоверен
+  потребител статус без чувствителното основание;
+- `POST /api/emergency-access/start` — owner administrator, текуща парола,
+  основание и `duration_minutes` от 5 до 60; връща 201;
+- `POST /api/emergency-access/{session_id}/end` — защитено предсрочно
+  приключване с повторна парола и основание.
+
+Повторен старт връща 409. Невалидно повторно удостоверяване или чужд owner връща
+403. Процедурата не създава нова роля, не променя permission матрицата и не е
+backdoor. Всички успешни и отхвърлени опити се одитират.
 
 ## Ремонтни преходи и completion gate
 

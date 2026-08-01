@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from .audit import add_audit_log
 from .document_generation import (
     ConfirmedTemplateUnavailableError,
+    TemplateValidationError,
     make_protocol_documents,
     make_return_documents,
 )
@@ -496,6 +497,20 @@ def _bulk_issue_impl(
                 "fallback_language": "bg",
             },
         ) from exc
+    except TemplateValidationError as exc:
+        db.rollback()
+        _record_rejection(
+            db,
+            user,
+            "Отказано групово издаване",
+            machine_ids,
+            str(exc),
+        )
+        raise TransferServiceError(
+            409,
+            "document_generation_validation_failed",
+            str(exc),
+        ) from exc
     except IntegrityError as exc:
         db.rollback()
         active = _active_transfers_for_machines(db, machine_ids)
@@ -860,6 +875,20 @@ def _bulk_return_impl(
                 "requested_language": exc.language,
                 "fallback_language": "bg",
             },
+        ) from exc
+    except TemplateValidationError as exc:
+        db.rollback()
+        _record_rejection(
+            db,
+            user,
+            "Отказано групово връщане",
+            machine_ids,
+            str(exc),
+        )
+        raise TransferServiceError(
+            409,
+            "document_generation_validation_failed",
+            str(exc),
         ) from exc
     except Exception:
         db.rollback()

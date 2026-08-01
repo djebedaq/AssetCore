@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from .audit import add_audit_log
 from .database import get_db
-from .models import User, UserRole, utcnow
+from .licensing import active_license
+from .models import Department, ProfileStatus, User, UserRole, utcnow
 from .permissions import Permission, has_permission, permissions_for, require_permission
 from .schemas import (
     ChangePasswordRequest,
@@ -27,6 +28,7 @@ from .security import (
     validate_password_policy,
     verify_password,
 )
+from .settings import settings
 
 router = APIRouter(prefix="/api", tags=["users"])
 
@@ -36,6 +38,16 @@ def serialize_user(user: User) -> dict:
         "id": user.id,
         "email": user.email,
         "full_name": user.full_name,
+        "first_name": user.first_name,
+        "middle_name": user.middle_name,
+        "last_name": user.last_name,
+        "job_title": user.job_title,
+        "department_id": user.department_id,
+        "profile_status": user.profile_status,
+        "legal_name_exception": user.legal_name_exception,
+        "legal_name_exception_reason": user.legal_name_exception_reason,
+        "legal_name_exception_approved_by_id": user.legal_name_exception_approved_by_id,
+        "legal_name_exception_approved_at": user.legal_name_exception_approved_at,
         "role": user.role,
         "preferred_language": user.preferred_language,
         "is_active": user.is_active,
@@ -46,6 +58,7 @@ def serialize_user(user: User) -> dict:
         "updated_at": user.updated_at or user.created_at,
         "last_login_at": user.last_login_at,
         "password_changed_at": user.password_changed_at,
+        "created_by_id": user.created_by_id,
     }
 
 
@@ -186,6 +199,20 @@ def create_user(
             "role_escalation_denied",
             "Нямате права да зададете избраната роля.",
         )
+    licence = active_license(db) if settings.license_enforcement_enabled else None
+    if licence is not None:
+        max_users = int(licence.payload.get("max_users", 0))
+        current_users = db.scalar(select(func.count(User.id))) or 0
+        if max_users and current_users >= max_users:
+            _reject(
+                db,
+                actor,
+                request,
+                None,
+                "Отказано създаване на потребител поради лицензно ограничение",
+                "license_user_limit_reached",
+                "Достигнат е максималният брой потребители по активния лиценз.",
+            )
     if db.scalar(select(User.id).where(func.lower(User.email) == data.email)):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -194,15 +221,27 @@ def create_user(
                 "message": "Вече съществува потребител с този имейл.",
             },
         )
+    if data.department_id is not None and db.get(Department, data.department_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "department_not_found", "message": "Отделът не е намерен."},
+        )
     user = User(
         email=data.email,
-        full_name=data.full_name,
+        full_name=" ".join([data.first_name, data.middle_name, data.last_name]),
+        first_name=data.first_name,
+        middle_name=data.middle_name,
+        last_name=data.last_name,
+        job_title=data.job_title,
+        department_id=data.department_id,
+        profile_status=ProfileStatus.COMPLETE.value,
         password_hash=hash_password(data.temporary_password),
         role=data.role.value,
         preferred_language=data.preferred_language.value,
         is_active=data.is_active,
         is_system_owner=False,
         must_change_password=True,
+        created_by_id=actor.id,
     )
     db.add(user)
     try:
@@ -288,12 +327,37 @@ def update_user(
         "preferred_language": target.preferred_language,
     }
     changes = data.model_dump(exclude_unset=True, exclude_none=True)
+    # The separated identity fields are authoritative. A legacy full_name-only
+    # update must never overwrite a complete structured identity.
+    changes.pop("full_name", None)
+    if "department_id" in changes and db.get(Department, changes["department_id"]) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "department_not_found", "message": "Отделът не е намерен."},
+        )
     if "role" in changes:
         changes["role"] = data.role.value
     if "preferred_language" in changes:
         changes["preferred_language"] = data.preferred_language.value
     for field, value in changes.items():
         setattr(target, field, value)
+    identity_fields = {"first_name", "middle_name", "last_name", "job_title"}
+    if identity_fields.intersection(changes):
+        if target.first_name and target.last_name:
+            target.full_name = " ".join(
+                filter(None, [target.first_name, target.middle_name, target.last_name])
+            )
+        has_middle = bool(target.middle_name) or (
+            target.legal_name_exception
+            and bool(target.legal_name_exception_reason)
+            and bool(target.legal_name_exception_approved_by_id)
+            and bool(target.legal_name_exception_approved_at)
+        )
+        target.profile_status = (
+            ProfileStatus.COMPLETE.value
+            if target.first_name and has_middle and target.last_name and target.job_title
+            else ProfileStatus.INCOMPLETE.value
+        )
     if target.role != old["role"] or target.is_active != old["active"]:
         target.token_version += 1
     target.updated_at = utcnow()

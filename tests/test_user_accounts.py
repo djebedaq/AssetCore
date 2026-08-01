@@ -25,6 +25,11 @@ def _add_user(
         user = User(
             email=email,
             full_name=f"Test {role}",
+            first_name="Test",
+            middle_name="Automation",
+            last_name=role.title(),
+            job_title=f"Test {role}",
+            profile_status="PROFILE_COMPLETE",
             password_hash=hash_password(password),
             role=role,
             preferred_language="bg",
@@ -46,7 +51,10 @@ def _login(client, email: str, password: str = "StrongPass123!") -> tuple[dict, 
 def _create_payload(email: str, role: str) -> dict:
     return {
         "email": email,
-        "full_name": f"Test {role}",
+        "first_name": "Test",
+        "middle_name": "Automation",
+        "last_name": role.title(),
+        "job_title": f"Test {role}",
         "role": role,
         "preferred_language": "bg",
         "temporary_password": "Temporary123!",
@@ -105,6 +113,13 @@ def test_administrator_can_create_each_standard_role(
         stored = session.get(User, body["id"])
         assert stored.password_hash != "Temporary123!"
         assert verify_password("Temporary123!", stored.password_hash)
+
+
+def test_new_user_requires_structured_identity(client, auth_headers):
+    payload = _create_payload("missing-middle@example.invalid", "observer")
+    payload.pop("middle_name")
+    response = client.post("/api/users", headers=auth_headers, json=payload)
+    assert response.status_code == 422
 
 
 @pytest.mark.parametrize("role", ["mechanic", "observer"])
