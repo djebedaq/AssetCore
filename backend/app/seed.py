@@ -16,6 +16,9 @@ from .models import (
     PartCatalog,
     TechnicalDocument,
     TechnicalDocumentRevision,
+    InstallationOwnership,
+    ProfileStatus,
+    SignatureSlot,
     User,
     UserRole,
     utcnow,
@@ -64,11 +67,12 @@ MACHINES = [
 
 
 def _seed_verified_registry(db: Session) -> None:
-    if not settings.assetcore_owner_email or not settings.assetcore_owner_email.strip():
+    configured_owner_email = settings.owner_email or settings.assetcore_owner_email
+    if not configured_owner_email or not configured_owner_email.strip():
         raise RuntimeError(
-            "ASSETCORE_OWNER_EMAIL е задължителна настройка за стартиране на AssetCore."
+            "OWNER_EMAIL (или съвместимата ASSETCORE_OWNER_EMAIL) е задължителна настройка."
         )
-    owner_email = settings.assetcore_owner_email.strip().casefold()
+    owner_email = configured_owner_email.strip().casefold()
     local_part, separator, domain = owner_email.partition("@")
     if (
         not local_part
@@ -81,17 +85,44 @@ def _seed_verified_registry(db: Session) -> None:
             "ASSETCORE_OWNER_EMAIL трябва да съдържа валиден служебен имейл адрес."
         )
     users = list(db.scalars(select(User).order_by(User.id)))
+    ownership = db.scalar(select(InstallationOwnership).order_by(InstallationOwnership.id))
     if not users:
+        initial_password = settings.owner_initial_password or settings.admin_password
+        if not initial_password:
+            raise RuntimeError(
+                "OWNER_INITIAL_PASSWORD е задължителна при създаване на първия собственик."
+            )
+        owner_names = [settings.owner_first_name, settings.owner_middle_name, settings.owner_last_name]
+        display_name = " ".join(value.strip() for value in owner_names if value and value.strip())
         owner = User(
             email=owner_email,
-            full_name="Администратор",
-            password_hash=hash_password(settings.admin_password),
+            full_name=display_name or "Администратор",
+            first_name=settings.owner_first_name,
+            middle_name=settings.owner_middle_name,
+            last_name=settings.owner_last_name,
+            job_title=settings.owner_job_title,
+            profile_status=(
+                ProfileStatus.COMPLETE.value
+                if all(owner_names) and settings.owner_job_title
+                else ProfileStatus.INCOMPLETE.value
+            ),
+            password_hash=hash_password(initial_password),
             role=UserRole.ADMINISTRATOR.value,
             is_active=True,
             is_system_owner=True,
-            must_change_password=False,
+            must_change_password=bool(settings.owner_initial_password),
         )
         db.add(owner)
+        db.flush()
+    elif ownership is not None:
+        owner = db.get(User, ownership.owner_user_id)
+        if owner is None or not owner.is_active or owner.role != UserRole.ADMINISTRATOR.value:
+            raise RuntimeError(
+                "Защитеното обозначение на собственика сочи към липсващ, неактивен "
+                "или неадминистраторски акаунт."
+            )
+        for user in users:
+            user.is_system_owner = user.id == owner.id
     else:
         matches = [user for user in users if user.email.strip().casefold() == owner_email]
         owners = [user for user in users if user.is_system_owner]
@@ -106,10 +137,35 @@ def _seed_verified_registry(db: Session) -> None:
         owner.is_active = True
         owner.is_system_owner = True
 
+    if ownership is None:
+        db.add(
+            InstallationOwnership(
+                owner_user_id=owner.id,
+                designated_by_id=owner.id,
+                transfer_reason="Първоначално определяне от конфигурацията на инсталацията.",
+            )
+        )
+
     existing_locations = {x.name: x for x in db.scalars(select(Location)).all()}
     for name in LOCATIONS:
         if name not in existing_locations:
             db.add(Location(name=name))
+    db.commit()
+
+    default_signature_slots = (
+        (DocumentType.TRANSFER_ISSUE.value, "HANDOVER", "Предал", "Handed over by", "Передал", 1),
+        (DocumentType.TRANSFER_ISSUE.value, "ACCEPTANCE", "Приел", "Accepted by", "Принял", 2),
+        (DocumentType.TRANSFER_RETURN.value, "RETURNED_BY", "Върнал", "Returned by", "Вернул", 1),
+        (DocumentType.TRANSFER_RETURN.value, "ACCEPTED_RETURN", "Приел връщането", "Return accepted by", "Принял возврат", 2),
+        (DocumentType.REPAIR_PROTOCOL.value, "MECHANIC", "Изпълнил ремонта", "Repair performed by", "Выполнил ремонт", 1),
+        (DocumentType.REPAIR_PROTOCOL.value, "ACCEPTANCE", "Приел ремонта", "Repair accepted by", "Принял ремонт", 2),
+        (DocumentType.PART_REQUEST.value, "REQUESTED_BY", "Заявил", "Requested by", "Заявил", 1),
+        (DocumentType.PART_REQUEST.value, "APPROVED_BY", "Одобрил", "Approved by", "Утвердил", 2),
+    )
+    existing_slots = {(slot.document_type, slot.code) for slot in db.scalars(select(SignatureSlot))}
+    for document_type, code, bg, en, ru, sequence in default_signature_slots:
+        if (document_type, code) not in existing_slots:
+            db.add(SignatureSlot(document_type=document_type, code=code, label_bg=bg, label_en=en, label_ru=ru, sequence=sequence, signing_mode="SEQUENTIAL"))
     db.commit()
 
     locations = {x.name: x for x in db.scalars(select(Location)).all()}
@@ -226,6 +282,8 @@ def _seed_documents_and_catalog(db: Session) -> None:
 
 
 def _seed_document_templates(db: Session) -> None:
+    from .template_engine import validate_template
+
     admin = db.scalar(select(User).where(User.is_system_owner.is_(True)))
     if admin is None:
         return
@@ -237,12 +295,14 @@ def _seed_document_templates(db: Session) -> None:
             "name_bg": "Протокол за предаване на миеща техника",
             "name_en": "High-pressure washing equipment issue protocol",
             "name_ru": "Протокол выдачи моечной техники высокого давления",
-            "source": "reference_photos/IMG_5812.jpeg",
+            "template_stem": "transfer_issue",
+            "required_fields": ["MACHINE_NUMBER", "SERIAL_NUMBER", "CONDITION_TEXT"],
             "contract": {
                 "page": "A4 portrait",
-                "header": "KRZ, ODESSOS SHIPREPAIR & CONVERSION, RINA/AQAP",
+                "header": "KRZ / ODESSOS / AssetCore",
                 "sections": ["protocol_number", "machine_identity", "ten_point_checklist", "usage", "signatures"],
-                "reference_only": True,
+                "reference_only": False,
+                "reference_photos": ["reference_photos/IMG_5811.jpeg", "reference_photos/IMG_5812.jpeg"],
             },
         },
         {
@@ -251,12 +311,14 @@ def _seed_document_templates(db: Session) -> None:
             "name_bg": "Протокол за приемане на миеща техника след използване",
             "name_en": "High-pressure washing equipment return protocol",
             "name_ru": "Протокол возврата моечной техники после использования",
-            "source": "reference_photos/IMG_5814.jpeg",
+            "template_stem": "transfer_return",
+            "required_fields": ["MACHINE_NUMBER", "SERIAL_NUMBER", "CONDITION_TEXT"],
             "contract": {
                 "page": "A4 portrait",
-                "header": "KRZ, ODESSOS SHIPREPAIR & CONVERSION, RINA/AQAP",
+                "header": "KRZ / ODESSOS / AssetCore",
                 "sections": ["protocol_number", "machine_identity", "ten_point_checklist", "usage", "signatures"],
-                "reference_only": True,
+                "reference_only": False,
+                "reference_photos": ["reference_photos/IMG_5813.jpeg", "reference_photos/IMG_5814.jpeg"],
             },
         },
         {
@@ -265,13 +327,13 @@ def _seed_document_templates(db: Session) -> None:
             "name_bg": "Протокол преди/след ремонт",
             "name_en": "Before/after repair protocol",
             "name_ru": "Протокол до/после ремонта",
-            "source": "technical_docs/protocols_hpwj/10. REPORT BEFORE-AFTER REPAIR - Combijet - завършен !.docx",
+            "template_stem": "repair_protocol",
+            "required_fields": ["MACHINE_NUMBER", "REPORTED_PROBLEM", "DIAGNOSIS", "WORK_PERFORMED"],
             "contract": {
-                "page": "Letter portrait",
-                "margins_inches": {"left": 0.5, "right": 0.3, "top": 0.3, "bottom": 0.3},
-                "header_images": 3,
+                "page": "A4 portrait",
                 "sections": ["machine_identity", "condition_before", "diagnosis", "repair_actions", "parts", "test", "condition_after", "signatures"],
-                "reference_only": True,
+                "reference_only": False,
+                "controlled_reference": "technical_docs/protocols_hpwj/10. REPORT BEFORE-AFTER REPAIR - Combijet - завършен !.docx",
             },
         },
         {
@@ -280,13 +342,13 @@ def _seed_document_templates(db: Session) -> None:
             "name_bg": "Техническа спецификация за доставка на резервни части",
             "name_en": "Technical specification for spare-parts supply",
             "name_ru": "Техническая спецификация на поставку запасных частей",
-            "source": "technical_docs/parts_requests_hpwj/KK 1001 FALCH 500.docx",
+            "template_stem": "part_request",
+            "required_fields": ["MACHINE_NUMBER", "REMARKS", "DECISION"],
             "contract": {
-                "page": "Letter portrait",
-                "margins_inches": {"left": 0.5, "right": 0.5, "top": 0.5, "bottom": 0.5},
-                "header_images": 2,
+                "page": "A4 portrait",
                 "sections": ["technical_specification_title", "machine_identity", "parts_table", "remarks", "request_reference_date_requester"],
-                "reference_only": True,
+                "reference_only": False,
+                "controlled_reference": "technical_docs/parts_requests_hpwj/KK 1001 FALCH 500.docx",
             },
         },
     ]
@@ -307,31 +369,53 @@ def _seed_document_templates(db: Session) -> None:
             )
             db.add(template)
             db.flush()
-        source = resources / definition["source"]
-        digest = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
         for language in LanguageCode:
+            source_path = f"templates/{definition['template_stem']}-{language.value}-v2.docx"
+            source = resources / source_path
+            if not source.is_file():
+                raise RuntimeError(f"Липсва контролиран шаблон: {source_path}")
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()
             existing = db.scalar(
                 select(DocumentTemplateVersion).where(
                     DocumentTemplateVersion.template_id == template.id,
-                    DocumentTemplateVersion.version == 1,
+                    DocumentTemplateVersion.version == 2,
                     DocumentTemplateVersion.language == language.value,
                 )
             )
             if existing is None:
-                db.add(
-                    DocumentTemplateVersion(
-                        template_id=template.id,
-                        version=1,
-                        language=language.value,
-                        source_path=definition["source"],
-                        source_sha256=digest,
-                        layout_contract=definition["contract"],
-                        is_published=language == LanguageCode.BG,
-                        published_by_id=(admin.id if language == LanguageCode.BG else None),
-                        created_by_id=admin.id,
-                        published_at=(utcnow() if language == LanguageCode.BG else None),
-                    )
+                existing = DocumentTemplateVersion(
+                    template_id=template.id,
+                    version=2,
+                    language=language.value,
+                    source_path=source_path,
+                    source_filename=source.name,
+                    source_media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    source_sha256=digest,
+                    layout_contract=definition["contract"],
+                    required_fields=definition["required_fields"],
+                    numbering_rule="AssetCore deterministic business reference",
+                    change_note="Машинно използваем шаблон, създаден по контролирания снимков образец.",
+                    created_by_id=admin.id,
                 )
+                report = validate_template(existing)
+                if not report["valid"]:
+                    raise RuntimeError("Невалиден начален шаблон: " + "; ".join(report["errors"]))
+                existing.validation_status = "PASSED"
+                existing.validation_report = report
+                existing.validated_at = utcnow()
+                existing.validated_by_id = admin.id
+                db.add(existing)
+            db.query(DocumentTemplateVersion).filter(
+                DocumentTemplateVersion.template_id == template.id,
+                DocumentTemplateVersion.language == language.value,
+                DocumentTemplateVersion.id != existing.id,
+            ).update(
+                {"is_published": False, "published_by_id": None, "published_at": None},
+                synchronize_session=False,
+            )
+            existing.is_published = True
+            existing.published_by_id = admin.id
+            existing.published_at = existing.published_at or utcnow()
     db.commit()
 
 def seed_database(db: Session) -> None:

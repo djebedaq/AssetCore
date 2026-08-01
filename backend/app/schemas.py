@@ -39,6 +39,16 @@ class UserOut(BaseModel):
     id: int
     email: str
     full_name: str
+    first_name: str | None = None
+    middle_name: str | None = None
+    last_name: str | None = None
+    job_title: str | None = None
+    department_id: int | None = None
+    profile_status: str = "PROFILE_INCOMPLETE"
+    legal_name_exception: bool = False
+    legal_name_exception_reason: str | None = None
+    legal_name_exception_approved_by_id: int | None = None
+    legal_name_exception_approved_at: datetime | None = None
     role: str
     preferred_language: LanguageCode
     is_active: bool
@@ -49,6 +59,7 @@ class UserOut(BaseModel):
     updated_at: datetime
     last_login_at: datetime | None = None
     password_changed_at: datetime | None = None
+    created_by_id: int | None = None
 
 
 def _normalize_email(value: str) -> str:
@@ -69,7 +80,12 @@ class UserCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: str
-    full_name: str = Field(min_length=2, max_length=255)
+    full_name: str | None = Field(default=None, min_length=2, max_length=255)
+    first_name: str = Field(min_length=1, max_length=120)
+    middle_name: str = Field(min_length=1, max_length=120)
+    last_name: str = Field(min_length=1, max_length=120)
+    job_title: str = Field(min_length=2, max_length=255)
+    department_id: int | None = None
     role: UserRole
     preferred_language: LanguageCode = LanguageCode.BG
     temporary_password: str
@@ -86,9 +102,13 @@ class UserCreate(BaseModel):
         if self.temporary_password != self.confirm_password:
             raise ValueError("Паролите не съвпадат.")
         validate_password_policy(self.temporary_password, self.email)
-        self.full_name = self.full_name.strip()
-        if len(self.full_name) < 2:
-            raise ValueError("Името трябва да съдържа поне два знака.")
+        self.first_name = self.first_name.strip()
+        self.middle_name = self.middle_name.strip()
+        self.last_name = self.last_name.strip()
+        self.job_title = self.job_title.strip()
+        if not all((self.first_name, self.middle_name, self.last_name, self.job_title)):
+            raise ValueError("Трите имена и длъжността са задължителни.")
+        self.full_name = " ".join((self.first_name, self.middle_name, self.last_name))
         return self
 
 
@@ -96,6 +116,11 @@ class UserUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     full_name: str | None = Field(default=None, min_length=2, max_length=255)
+    first_name: str | None = Field(default=None, min_length=1, max_length=120)
+    middle_name: str | None = Field(default=None, min_length=1, max_length=120)
+    last_name: str | None = Field(default=None, min_length=1, max_length=120)
+    job_title: str | None = Field(default=None, min_length=2, max_length=255)
+    department_id: int | None = None
     role: UserRole | None = None
     preferred_language: LanguageCode | None = None
     is_active: bool | None = None

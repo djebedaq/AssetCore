@@ -22,6 +22,11 @@ AssetCore е responsive PWA система за проследимо управ�
 - устойчиви технически кодове за статусите, които се превеждат само в API/UI слоя;
 - окончателна централизирана permission система за администратор, директор, механик и наблюдател;
 - защитен основен администратор, управление на акаунти, временни пароли и задължителна смяна при първи вход.
+- отделни потвърдени профилни полета, защитено owner designation без нова роля и неизменяем identity snapshot в официалните документи;
+- офлайн Ed25519 лицензиране без частен ключ в приложението, гратисен период и безопасен режим само за четене;
+- вътрешни/външни участници, конфигурируеми подписни позиции, еднократни mobile връзки и криптографски обвързан ръчен графичен подпис;
+- неизменяеми версии на официални документи, machine-readable DOCX templates, проверка преди публикуване и production PDF от същия DOCX source;
+- шифровани, checksummed PostgreSQL backup/restore инструменти и release checklist.
 
 ## Езици, роли и статуси
 
@@ -33,9 +38,9 @@ AssetCore е responsive PWA система за проследимо управ�
 
 ### Потребители и защитен собственик
 
-Конфигурирайте `ASSETCORE_OWNER_EMAIL` с нормализирания служебен имейл на единствения основен администратор. Стандартният интерфейс не може да създаде втори owner или administrator. Основният администратор управлява директорите, механиците и наблюдателите; директорът управлява само механици и наблюдатели. Деактивацията пази историята и обезсилва старите токени.
+Конфигурирайте `OWNER_FIRST_NAME`, `OWNER_MIDDLE_NAME`, `OWNER_LAST_NAME`, `OWNER_EMAIL`, `OWNER_JOB_TITLE` и еднократна `OWNER_INITIAL_PASSWORD` само за първоначалния bootstrap. След първия вход и задължителната смяна премахнете `OWNER_INITIAL_PASSWORD` от environment-а; следващите стартирания с вече създаден собственик не я изискват. Собственикът остава с роля `administrator`, но защитеното owner designation се пази отделно. Прехвърлянето изисква текущата парола, основание и друг активен administrator със завършен профил; системата не допуска момент без собственик. Основният администратор управлява директорите, механиците и наблюдателите; директорът управлява само механици и наблюдатели. Деактивацията пази историята и обезсилва старите токени.
 
-Нов акаунт се създава от „Потребители“ с временна парола. Паролата не се връща от API и се изчиства от клиентското състояние. До успешна смяна през задължителния екран потребителят няма достъп до работните операции. Password policy изисква минимум 10 знака, малка и главна буква, цифра и специален знак.
+Нов акаунт се създава от „Потребители“ с отделни три имена, длъжност, отдел и временна парола. Паролата не се връща от API и се изчиства от клиентското състояние. До успешна смяна през задължителния екран потребителят няма достъп до работните операции. Password policy изисква минимум 10 знака, малка и главна буква, цифра и специален знак. Законно изключение за липсващо бащино име се одобрява и одитира от administrator; не може да се самоодобри.
 
 ## Локален старт със SQLite
 
@@ -47,7 +52,7 @@ backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt -r b
 Copy-Item backend/.env.example backend/.env
 ```
 
-Задайте `ASSETCORE_OWNER_EMAIL`, собствен дълъг `SECRET_KEY` и силна `ADMIN_PASSWORD` в `backend/.env`. `ADMIN_EMAIL` е само migration fallback. Не записвайте `.env` в Git.
+Задайте `OWNER_*`, собствен дълъг `SECRET_KEY`, стабилен `INSTALLATION_ID` и публичния `LICENSE_PUBLIC_KEY` в `backend/.env`. За локална разработка enforcement може да остане false; production изисква `PRODUCTION_MODE=true` и `LICENSE_ENFORCEMENT_ENABLED=true`. Не записвайте `.env`, лицензионен частен ключ или реални пароли в Git.
 
 ```powershell
 backend/.venv/Scripts/python.exe -m alembic -c backend/alembic.ini upgrade head
@@ -66,7 +71,7 @@ pnpm dev
 
 ## Docker и PostgreSQL
 
-Копирайте `.env.example` като `.env` в главната папка и задайте собствени стойности за `POSTGRES_PASSWORD`, URL-encoded `DATABASE_URL`, `SECRET_KEY`, `ASSETCORE_OWNER_EMAIL` и `ADMIN_PASSWORD`, след което:
+Копирайте `.env.example` като `.env` в главната папка и задайте собствени стойности за `POSTGRES_PASSWORD`, URL-encoded `DATABASE_URL`, `SECRET_KEY`, всички `OWNER_*`, `INSTALLATION_ID`, `LICENSE_PUBLIC_KEY` и `SIGNATURE_ENCRYPTION_KEY`, след което:
 
 ```powershell
 docker compose up --build
@@ -88,7 +93,7 @@ docker compose up --build
 
 QR кодът съдържа уеб адрес към `/machine/{id}`. След удостоверяване операторът получава mobile-friendly цифров паспорт с текуща наличност, активно предаване/ремонт, последно движение/преглед/тест, разрешени действия, технически полета, immutable история, прикачени снимки, ремонти, предавания, заявки, генерирани протоколи и свързани технически документи.
 
-Seed-ът създава проверените български шаблони като публикувани. Английските и руските версии са чернови и официален документ на тези езици не се генерира, докато отговорно лице не качи проверения изходен DOCX/PDF, не опише промяната и не публикува конкретната езикова версия. Няма автоматичен машинен превод на официални документи.
+Seed-ът регистрира машинно използваеми BG/EN/RU DOCX v2 източници с SHA-256 и успешен validation report. Всеки езиков шаблон съдържа собствен текст; няма автоматичен машинен превод на официален документ. Reference снимките и историческите DOCX/PDF остават контролирани read-only източници и не се използват като нови бизнес записи.
 
 Ремонтът може да стане `COMPLETED` и машината — `READY` само след записан преглед, изискано почистване, извършена работа, успешен тест и краен резултат. Правилото е backend-authoritative и важи и за стария съвместим маршрут.
 
@@ -107,6 +112,7 @@ backend/.venv/Scripts/python.exe -m pytest -q
 backend/.venv/Scripts/python.exe -m compileall -q backend/app tests
 backend/.venv/Scripts/python.exe -m ruff check backend/app tests
 backend/.venv/Scripts/python.exe backend/scripts/document_qa.py <папка-за-QA-резултат>
+backend/.venv/Scripts/python.exe scripts/verify_release.py --output <папка-за-QA-резултат>
 cd frontend
 pnpm typecheck
 pnpm lint
@@ -128,5 +134,17 @@ pnpm build
 - [документни шаблони и визуална QA](docs/DOCUMENT_TEMPLATES_BG.md)
 - [пътна карта](docs/ROADMAP_BG.md)
 - [история на промените](CHANGELOG_BG.md)
+- [production hardening](docs/PRODUCTION_HARDENING_BG.md)
+- [управление на потребителски профили](docs/USER_MANAGEMENT_BG.md)
+- [лицензни операции](docs/LICENSE_OPERATIONS_BG.md)
+- [администриране на лиценза](docs/LICENSE_ADMIN_BG.md)
+- [официални документи и подписи](docs/SIGNATURE_OPERATIONS_BG.md)
+- [мобилен подписен поток](docs/SIGNATURE_WORKFLOW_BG.md)
+- [официален документен поток](docs/DOCUMENT_WORKFLOW_BG.md)
+- [backup и restore](docs/BACKUP_RESTORE_BG.md)
+- [модел за сигурност](docs/SECURITY_MODEL_BG.md)
+- [security policy](SECURITY.md)
+- [release checklist](docs/RELEASE_CHECKLIST_BG.md)
+- [собственически лиценз](LICENSE_PROPRIETARY_BG.md)
 
 AssetCore остава release candidate. Преди продукционна употреба организацията трябва да потвърди ролите, политиката за архивиране и окончателния фирмен вид на генерираните протоколи.

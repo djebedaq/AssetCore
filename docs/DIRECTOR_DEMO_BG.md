@@ -18,6 +18,10 @@
 12. Версионирана библиотека с SHA-256 и download на стара revision.
 13. Глобално търсене и административен преглед на роли, категории, custom fields, templates и защитен import preview.
 14. Audit журнал с потребител, предишен/нов статус и местоположение, batch/transfer/protocol препратки и rejection причина.
+15. Пълен профил с отделни три имена, длъжност и отдел; owner badge е свойство върху administrator, не пета роля.
+16. Външен участник без login, еднократна mobile връзка, signing summary, графичен подпис и partial/full progress.
+17. Download на immutable DOCX/PDF версия, проверка на SHA-256 и supersede с нова версия и нови подписи.
+18. Екран „Лиценз на AssetCore“ с правообладател, клиент, модули, срок, installation ID и безопасен read-only сценарий.
 
 ## Основно послание
 

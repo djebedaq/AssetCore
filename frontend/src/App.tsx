@@ -6,6 +6,7 @@ import {
   ClipboardSignature,
   Download,
   FileText,
+  FileCheck2,
   Gauge,
   History,
   Languages,
@@ -37,8 +38,12 @@ import {
 import { statusText, useI18n, type TranslationKey } from './i18n'
 import { SUPPORTED_LOCALES, type Locale } from './locale'
 import { hasPermission, storedUser } from './permissions'
-import type { AssetCategory, Department, Location, Machine, PartRequest, PermissionCode, Repair, UserSession } from './types'
+import type { AssetCategory, Department, EmergencyAccessStatus, Location, Machine, PartRequest, PermissionCode, Repair, UserSession } from './types'
 import UserAdministration from './UserAdministration'
+import GovernancePanel from './GovernancePanel'
+import OfficialDocuments from './OfficialDocuments'
+import ProfileCompletion from './ProfileCompletion'
+import SignaturePage from './SignaturePage'
 
 type Page =
   | 'dashboard'
@@ -48,6 +53,7 @@ type Page =
   | 'catalog'
   | 'parts'
   | 'documents'
+  | 'official'
   | 'reports'
   | 'audit'
   | 'qr'
@@ -236,19 +242,43 @@ function Login({ onLogin }: { onLogin: (user: UserSession) => void }) {
 }
 
 function App() {
-  const { t } = useI18n()
+  const { date, t } = useI18n()
   const [authenticated, setAuthenticated] = useState(Boolean(getToken()))
   const [session, setSession] = useState<UserSession | null>(() => storedUser())
   const [page, setPage] = useState<Page>(() => hasPermission('repairs.view') ? 'dashboard' : 'machines')
   const [catalogMachineId, setCatalogMachineId] = useState<number | null>(null)
   const [mobileMenu, setMobileMenu] = useState(false)
+  const [emergencyAccess, setEmergencyAccess] = useState<EmergencyAccessStatus | null>(null)
   const [passportMachineId, setPassportMachineId] = useState<number | null>(() => {
     const match = window.location.pathname.match(/^\/machine\/(\d+)\/?$/)
     return match ? Number(match[1]) : null
   })
 
+  useEffect(() => {
+    if (!authenticated || !session) {
+      setEmergencyAccess(null)
+      return
+    }
+    const loadEmergencyAccess = () => {
+      void api<EmergencyAccessStatus>('/emergency-access/status')
+        .then(setEmergencyAccess)
+        .catch(() => setEmergencyAccess(null))
+    }
+    loadEmergencyAccess()
+    window.addEventListener('assetcore-emergency-change', loadEmergencyAccess)
+    const timer = window.setInterval(loadEmergencyAccess, 30_000)
+    return () => {
+      window.removeEventListener('assetcore-emergency-change', loadEmergencyAccess)
+      window.clearInterval(timer)
+    }
+  }, [authenticated, session])
+
+  const signingMatch = window.location.pathname.match(/^\/sign\/([^/]+)\/?$/)
+  if (signingMatch) return <SignaturePage token={decodeURIComponent(signingMatch[1])} />
+
   if (!authenticated || !session) return <Login onLogin={(user) => { setSession(user); setAuthenticated(true); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
   if (session.must_change_password) return <ChangePassword forced onChanged={(user) => { setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
+  if (session.profile_status === 'PROFILE_INCOMPLETE') return <ProfileCompletion user={session} onCompleted={(user) => { setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
 
   const nav = ([
     ['dashboard', 'nav.dashboard', Gauge, 'repairs.view'],
@@ -258,6 +288,7 @@ function App() {
     ['catalog', 'nav.catalog', BookOpen, 'parts.view'],
     ['parts', 'nav.parts', PackageSearch, 'requests.view'],
     ['documents', 'nav.documents', FileText, 'documents.view'],
+    ['official', 'nav.officialDocuments', FileCheck2, 'documents.view'],
     ['reports', 'nav.reports', BarChart3, 'audit.view_operational'],
     ['audit', 'nav.audit', History, 'audit.view_operational'],
     ['qr', 'nav.qr', QrCode, 'documents.generate'],
@@ -314,7 +345,9 @@ function App() {
           </div>
           <GlobalSearchBox onMachine={setPassportMachineId} />
           <LanguageSwitcher compact />
+          {session.is_system_owner && <span className="owner-badge"><ShieldCheck size={15} />{t('governance.ownerBadge')}</span>}
         </header>
+        {emergencyAccess?.active && <div className="emergency-access-banner" role="status"><ShieldCheck size={18} /><span><strong>{t('emergency.activeTitle')}</strong>{t('emergency.activeMessage', { owner: emergencyAccess.owner_name || t('common.noValue'), expires: emergencyAccess.expires_at ? date(emergencyAccess.expires_at) : t('common.noValue') })}</span></div>}
         <section className="content">
           {page === 'dashboard' && <Dashboard />}
           {page === 'machines' && <Machines onOpenCatalog={(machineId) => { setCatalogMachineId(machineId); setPage('catalog') }} />}
@@ -323,6 +356,7 @@ function App() {
           {page === 'catalog' && <IndustrialCatalog defaultMachineId={catalogMachineId || undefined} />}
           {page === 'parts' && <IndustrialPartRequests />}
           {page === 'documents' && <TechnicalLibrary />}
+          {page === 'official' && <OfficialDocuments />}
           {page === 'reports' && <Reports />}
           {page === 'audit' && <Audit />}
           {page === 'qr' && <QrCodes />}
@@ -330,6 +364,7 @@ function App() {
           {page === 'settings' && <SettingsPage />}
           {page === 'password' && <ChangePassword onChanged={(user) => { setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} onCancel={() => setPage(session.permissions.includes('repairs.view') ? 'dashboard' : 'machines')} />}
         </section>
+        <footer className="application-footer">{t('app.copyright')}</footer>
       </main>
       {passportMachineId && <MachinePassportModal machineId={passportMachineId} onClose={() => setPassportMachineId(null)} onOpenCatalog={() => { setCatalogMachineId(passportMachineId); setPassportMachineId(null); setPage('catalog') }} />}
     </div>
@@ -872,6 +907,7 @@ function QrCodes() {
 
 function SettingsPage() {
   const { t } = useI18n()
+  const session = storedUser()
   return (
     <>
       <div className="panel">
@@ -883,6 +919,7 @@ function SettingsPage() {
           <div><b>{t('settings.database')}</b><span>{t('settings.databaseValue')}</span></div>
         </div>
       </div>
+      {session && <GovernancePanel session={session} />}
       <AdministrationPanel />
     </>
   )

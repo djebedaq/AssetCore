@@ -302,7 +302,7 @@ def test_audit_records_success_and_rejected_conflict(
         rejected = session.scalar(
             select(AuditLog).where(AuditLog.action == "Отказано групово издаване")
         )
-        assert rejected.user_name == "Администратор"
+        assert rejected.user_name == "Евтим Станиславов Горанов"
         assert "конфликти" in rejected.details
 
 

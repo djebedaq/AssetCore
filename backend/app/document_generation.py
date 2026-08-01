@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import re
 import zipfile
 from datetime import UTC, datetime
@@ -43,12 +44,18 @@ from .models import (
     DocumentType,
     GeneratedDocument,
     LanguageCode,
+    OfficialDocument,
+    OfficialDocumentStatus,
+    OfficialDocumentVersion,
     PartRequest,
     ProtocolDocument,
     Repair,
     TransferBatch,
     TransferProtocol,
+    User,
+    utcnow,
 )
+from .template_engine import TemplateValidationError, convert_docx_to_pdf, render_docx
 
 DOCX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -1077,6 +1084,7 @@ def _template_version(
             DocumentTemplate.is_active.is_(True),
             DocumentTemplateVersion.language == _language(language),
             DocumentTemplateVersion.is_published.is_(True),
+            DocumentTemplateVersion.validation_status == "PASSED",
             or_(
                 DocumentTemplateVersion.effective_from.is_(None),
                 DocumentTemplateVersion.effective_from <= now,
@@ -1091,6 +1099,80 @@ def _template_version(
     if version is None:
         raise ConfirmedTemplateUnavailableError(document_type, language)
     return version
+
+
+def _preparer_values(db: Session, created_by_id: int) -> dict[str, str]:
+    user = db.get(User, created_by_id)
+    if user is None:
+        raise TemplateValidationError("Съставителят на документа не е намерен.")
+    complete = bool(
+        user.first_name
+        and (
+            user.middle_name
+            or (
+                user.legal_name_exception
+                and user.legal_name_exception_reason
+                and user.legal_name_exception_approved_by_id
+                and user.legal_name_exception_approved_at
+            )
+        )
+        and user.last_name
+        and user.job_title
+        and user.profile_status == "PROFILE_COMPLETE"
+    )
+    if not complete:
+        raise TemplateValidationError(
+            "Профилът на съставителя трябва да съдържа потвърдени три имена и длъжност."
+        )
+    return {"PREPARER_NAME": user.full_name, "PREPARER_JOB_TITLE": user.job_title}
+
+
+def _signature_status(language: str) -> str:
+    return {
+        "bg": "НЕПЪЛНО ПОДПИСАН",
+        "en": "NOT FULLY SIGNED",
+        "ru": "ПОДПИСАН НЕ ПОЛНОСТЬЮ",
+    }[_language(language)]
+
+
+def _protocol_template_values(
+    db: Session,
+    transfer: TransferProtocol,
+    batch_reference: str,
+    operation: str,
+    language: str,
+    created_by_id: int,
+) -> dict[str, object]:
+    date_value = (
+        transfer.returned_at if operation == "return" else transfer.issued_at
+    ) or transfer.created_at
+    left_name = transfer.returned_by_name if operation == "return" else transfer.handed_over_by
+    right_name = transfer.return_accepted_by if operation == "return" else transfer.accepted_by
+    values: dict[str, object] = {
+        "DOCUMENT_NUMBER": f"{transfer.protocol_number}-R" if operation == "return" else transfer.protocol_number,
+        "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
+        "MACHINE_NAME": transfer.machine.name,
+        "MACHINE_NUMBER": transfer.machine.inventory_number,
+        "BRAND": transfer.machine.brand,
+        "MODEL": transfer.machine.model or "",
+        "SERIAL_NUMBER": transfer.machine.serial_number or "",
+        "PRESSURE_BAR": transfer.machine.pressure_bar,
+        "BATCH_REFERENCE": batch_reference,
+        "CONDITION_TEXT": transfer.return_condition_text if operation == "return" else transfer.condition_text,
+        "USAGE_TEXT": _usage_text(transfer),
+        "REMARKS": transfer.return_notes if operation == "return" else transfer.remarks,
+        "LEFT_SIGNER_NAME": left_name or "",
+        "LEFT_SIGNER_JOB_TITLE": "",
+        "RIGHT_SIGNER_NAME": right_name or "",
+        "RIGHT_SIGNER_JOB_TITLE": "",
+        "LEFT_SIGNATURE": "",
+        "RIGHT_SIGNATURE": "",
+        "SIGNATURE_STATUS": _signature_status(language),
+    }
+    for index in range(1, 11):
+        values[f"CHECK_{index}"] = ""
+    values.update(_preparer_values(db, created_by_id))
+    return values
 
 
 def _next_generated_number(db: Session, base: str) -> str:
@@ -1152,6 +1234,73 @@ def _generated_documents(
     return documents
 
 
+def _register_official_version(
+    db: Session,
+    *,
+    number: str,
+    document_type: str,
+    language: str,
+    docx: bytes,
+    pdf: bytes,
+    snapshot: dict,
+    created_by_id: int,
+    machine_id: int | None = None,
+    transfer_id: int | None = None,
+    batch_id: int | None = None,
+) -> OfficialDocument:
+    existing = db.scalar(
+        select(OfficialDocument).where(OfficialDocument.document_number == number)
+    )
+    if existing is not None:
+        raise TemplateValidationError(
+            f"Официален документ с номер {number} вече съществува и няма да бъде презаписан."
+        )
+    preparer = db.get(User, created_by_id)
+    preparer_values = _preparer_values(db, created_by_id)
+    official_snapshot = dict(snapshot)
+    official_snapshot["prepared_by"] = {
+        "user_id": preparer.id,
+        "first_name": preparer.first_name,
+        "middle_name": preparer.middle_name,
+        "last_name": preparer.last_name,
+        "display_name": preparer_values["PREPARER_NAME"],
+        "job_title": preparer_values["PREPARER_JOB_TITLE"],
+        "department_id": preparer.department_id,
+        "department": preparer.profile_department.name_bg if preparer.profile_department else None,
+        "operation_role": "PREPARER",
+        "captured_at": utcnow().isoformat(timespec="seconds") + "Z",
+    }
+    document = OfficialDocument(
+        document_number=number,
+        document_type=document_type,
+        machine_id=machine_id,
+        transfer_id=transfer_id,
+        batch_id=batch_id,
+        created_by_id=created_by_id,
+    )
+    db.add(document)
+    db.flush()
+    version = OfficialDocumentVersion(
+        document_id=document.id,
+        version=1,
+        status=OfficialDocumentStatus.DRAFT.value,
+        language=_language(language),
+        snapshot=official_snapshot,
+        snapshot_sha256=hashlib.sha256(
+            json.dumps(official_snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+        ).hexdigest(),
+        docx_content=docx,
+        docx_sha256=hashlib.sha256(docx).hexdigest(),
+        pdf_content=pdf,
+        pdf_sha256=hashlib.sha256(pdf).hexdigest(),
+        prepared_by_id=created_by_id,
+    )
+    db.add(version)
+    db.flush()
+    document.current_version_id = version.id
+    return document
+
+
 def make_protocol_documents(
     db: Session,
     transfer: TransferProtocol,
@@ -1164,9 +1313,31 @@ def make_protocol_documents(
         transfer, batch.batch_reference, "issue", _language(language)
     )
     stem = safe_filename(transfer.protocol_number)
+    docx = render_docx(
+        template,
+        _protocol_template_values(
+            db, transfer, batch.batch_reference, "issue", language, created_by_id
+        ),
+    )
+    pdf = convert_docx_to_pdf(docx) or build_protocol_pdf(
+        transfer, batch.batch_reference, language
+    )
+    _register_official_version(
+        db,
+        number=transfer.protocol_number,
+        document_type=DocumentType.TRANSFER_ISSUE.value,
+        language=language,
+        docx=docx,
+        pdf=pdf,
+        snapshot=snapshot,
+        created_by_id=created_by_id,
+        machine_id=transfer.machine_id,
+        transfer_id=transfer.id,
+        batch_id=batch.id,
+    )
     generated = [
-        ("docx", DOCX_MEDIA_TYPE, build_protocol_docx(transfer, batch.batch_reference, language)),
-        ("pdf", PDF_MEDIA_TYPE, build_protocol_pdf(transfer, batch.batch_reference, language)),
+        ("docx", DOCX_MEDIA_TYPE, docx),
+        ("pdf", PDF_MEDIA_TYPE, pdf),
     ]
     return [
         ProtocolDocument(
@@ -1200,14 +1371,36 @@ def make_return_documents(
     batch_reference = batch.batch_reference if batch else "-"
     base = f"{transfer.protocol_number}-R"
     number = _next_generated_number(db, base)
+    values = _protocol_template_values(
+        db, transfer, batch_reference, "return", language, created_by_id
+    )
+    values["DOCUMENT_NUMBER"] = number
+    docx = render_docx(template, values)
+    pdf = convert_docx_to_pdf(docx) or build_return_protocol_pdf(
+        transfer, batch_reference, language
+    )
+    snapshot = _protocol_snapshot(transfer, batch_reference, "return", _language(language))
+    _register_official_version(
+        db,
+        number=number,
+        document_type=DocumentType.TRANSFER_RETURN.value,
+        language=language,
+        docx=docx,
+        pdf=pdf,
+        snapshot=snapshot,
+        created_by_id=created_by_id,
+        machine_id=transfer.machine_id,
+        transfer_id=transfer.id,
+        batch_id=batch.id if batch else None,
+    )
     return _generated_documents(
         number=number,
         document_type=DocumentType.TRANSFER_RETURN.value,
         language=language,
         template_version=template,
-        docx=build_return_protocol_docx(transfer, batch_reference, language),
-        pdf=build_return_protocol_pdf(transfer, batch_reference, language),
-        snapshot=_protocol_snapshot(transfer, batch_reference, "return", _language(language)),
+        docx=docx,
+        pdf=pdf,
+        snapshot=snapshot,
         created_by_id=created_by_id,
         machine_id=transfer.machine_id,
         transfer_id=transfer.id,
@@ -1246,13 +1439,65 @@ def make_repair_documents(
         "part_ids": [part.id for part in repair.parts_used],
         "attachment_ids": [attachment.id for attachment in repair.attachments],
     }
+    machine = repair.machine
+    date_value = repair.closed_at or repair.opened_at
+    values: dict[str, object] = {
+        "DOCUMENT_NUMBER": number,
+        "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
+        "MACHINE_NAME": machine.name,
+        "MACHINE_NUMBER": machine.inventory_number,
+        "BRAND": machine.brand,
+        "MODEL": machine.model or "",
+        "SERIAL_NUMBER": machine.serial_number or "",
+        "PRESSURE_BAR": machine.pressure_bar,
+        "BATCH_REFERENCE": "",
+        "REPORTED_PROBLEM": repair.reported_problem,
+        "CONDITION_BEFORE": repair.condition_before or "",
+        "DIAGNOSIS": repair.diagnosis or "",
+        "WORK_PERFORMED": repair.work_performed or "",
+        "TEST_RESULT": repair.test_details or repair.functional_test_result or "",
+        "CONDITION_AFTER": repair.condition_after or repair.result or "",
+        "LEFT_SIGNER_NAME": repair.responsible_user.full_name if repair.responsible_user else "",
+        "LEFT_SIGNER_JOB_TITLE": repair.responsible_user.job_title if repair.responsible_user else "",
+        "RIGHT_SIGNER_NAME": repair.approved_by.full_name if repair.approved_by else "",
+        "RIGHT_SIGNER_JOB_TITLE": repair.approved_by.job_title if repair.approved_by else "",
+        "LEFT_SIGNATURE": "",
+        "RIGHT_SIGNATURE": "",
+        "SIGNATURE_STATUS": _signature_status(language),
+    }
+    values.update(_preparer_values(db, created_by_id))
+    event_rows = [["Дата", "Тип", "Описание"]] + [
+        [event.created_at.strftime("%d.%m.%Y %H:%M"), event.event_type, event.description]
+        for event in repair.events
+    ]
+    part_rows = [["Поз.", "Номер", "Описание", "Количество"]] + [
+        ["", part.part_number or "", part.description, f"{part.quantity:g} {part.unit or ''}".strip()]
+        for part in repair.parts_used
+    ]
+    docx = render_docx(
+        template,
+        values,
+        {"REPAIR_EVENTS": event_rows, "PARTS_USED": part_rows},
+    )
+    pdf = convert_docx_to_pdf(docx) or build_repair_protocol_pdf(repair, language)
+    _register_official_version(
+        db,
+        number=number,
+        document_type=DocumentType.REPAIR_PROTOCOL.value,
+        language=language,
+        docx=docx,
+        pdf=pdf,
+        snapshot=snapshot,
+        created_by_id=created_by_id,
+        machine_id=repair.machine_id,
+    )
     return _generated_documents(
         number=number,
         document_type=DocumentType.REPAIR_PROTOCOL.value,
         language=language,
         template_version=template,
-        docx=build_repair_protocol_docx(repair, language),
-        pdf=build_repair_protocol_pdf(repair, language),
+        docx=docx,
+        pdf=pdf,
         snapshot=snapshot,
         created_by_id=created_by_id,
         machine_id=repair.machine_id,
@@ -1266,14 +1511,54 @@ def make_part_request_documents(
     template = _template_version(db, DocumentType.PART_REQUEST.value, language)
     base = request.request_reference or f"PR-{request.id:06d}"
     number = _next_generated_number(db, base)
+    machine = request.machine
+    values: dict[str, object] = {
+        "DOCUMENT_NUMBER": number,
+        "CREATION_DATE": request.created_at.strftime("%d.%m.%Y"),
+        "MACHINE_NAME": machine.name if machine else "",
+        "MACHINE_NUMBER": machine.inventory_number if machine else "",
+        "BRAND": machine.brand if machine else "",
+        "MODEL": machine.model or "" if machine else "",
+        "SERIAL_NUMBER": machine.serial_number or "" if machine else "",
+        "PRESSURE_BAR": machine.pressure_bar if machine else "",
+        "BATCH_REFERENCE": "",
+        "REMARKS": request.reason or "",
+        "DECISION": request.decision_note or request.status,
+        "LEFT_SIGNER_NAME": request.requested_by.full_name if request.requested_by else "",
+        "LEFT_SIGNER_JOB_TITLE": request.requested_by.job_title if request.requested_by else "",
+        "RIGHT_SIGNER_NAME": request.decided_by.full_name if request.decided_by else "",
+        "RIGHT_SIGNER_JOB_TITLE": request.decided_by.job_title if request.decided_by else "",
+        "LEFT_SIGNATURE": "",
+        "RIGHT_SIGNATURE": "",
+        "SIGNATURE_STATUS": _signature_status(language),
+    }
+    values.update(_preparer_values(db, created_by_id))
+    line_rows = [["Поз.", "PART №", "Описание", "Количество", "Източник"]] + [
+        [line.position or "", line.part_number or "", line.description, f"{line.quantity:g} {line.unit or ''}".strip(), f"{line.source_document or ''} / {line.source_page or ''}".strip(" /")]
+        for line in request.lines
+    ]
+    docx = render_docx(template, values, {"REQUEST_LINES": line_rows})
+    pdf = convert_docx_to_pdf(docx) or build_part_request_pdf(request, language)
+    snapshot = _request_snapshot(request)
+    _register_official_version(
+        db,
+        number=number,
+        document_type=DocumentType.PART_REQUEST.value,
+        language=language,
+        docx=docx,
+        pdf=pdf,
+        snapshot=snapshot,
+        created_by_id=created_by_id,
+        machine_id=request.machine_id,
+    )
     return _generated_documents(
         number=number,
         document_type=DocumentType.PART_REQUEST.value,
         language=language,
         template_version=template,
-        docx=build_part_request_docx(request, language),
-        pdf=build_part_request_pdf(request, language),
-        snapshot=_request_snapshot(request),
+        docx=docx,
+        pdf=pdf,
+        snapshot=snapshot,
         created_by_id=created_by_id,
         machine_id=request.machine_id,
         part_request_id=request.id,

@@ -17,6 +17,11 @@ def _create_user(session_factory, *, email: str, role: str, language: str = "bg"
             User(
                 email=email,
                 full_name=f"Test {role}",
+                first_name="Test",
+                middle_name="Automation",
+                last_name=role.title(),
+                job_title=f"Test {role}",
+                profile_status="PROFILE_COMPLETE",
                 password_hash=hash_password("test-only-password"),
                 role=role,
                 preferred_language=language,

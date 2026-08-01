@@ -16,10 +16,63 @@ export type PermissionCode =
 export type UserSession = {
   id: number; email: string; full_name: string; role: UserRole; preferred_language: 'bg' | 'en' | 'ru';
   is_active: boolean; is_system_owner: boolean; must_change_password: boolean;
+  first_name?: string | null; middle_name?: string | null; last_name?: string | null;
+  job_title?: string | null; department_id?: number | null;
+  profile_status?: 'PROFILE_INCOMPLETE' | 'PROFILE_COMPLETE'; legal_name_exception?: boolean;
+  legal_name_exception_reason?: string | null; legal_name_exception_approved_by_id?: number | null;
+  legal_name_exception_approved_at?: string | null;
   permissions: PermissionCode[]; created_at: string; updated_at: string;
-  last_login_at?: string | null; password_changed_at?: string | null
+  last_login_at?: string | null; password_changed_at?: string | null; created_by_id?: number | null
 }
 export type ManagedUser = UserSession
+
+export type LicenseStatus = {
+  state: 'NOT_INSTALLED' | 'INVALID' | 'NOT_YET_VALID' | 'ACTIVE' | 'GRACE_PERIOD' | 'READ_ONLY';
+  message: string; read_only: boolean; license_id?: string | null; license_type?: string | null;
+  client_name?: string | null; installation_id?: string | null; valid_from?: string | null;
+  rightsholder?: string | null; valid_until?: string | null; grace_until?: string | null;
+  issued_at?: string | null; activated_at?: string | null; support_until?: string | null; checked_at: string;
+  modules: string[]; max_users?: number | null; max_assets?: number | null;
+  environment?: string | null; allowed_domains: string[]; max_installations?: number | null; version?: number | null
+}
+
+export type OwnerStatus = {
+  owner_user_id: number; owner_name: string; owner_email: string; role: UserRole;
+  designated_at: string; designation_version: number
+}
+
+export type EmergencyAccessStatus = {
+  active: boolean; session_id?: number | null; started_at?: string | null;
+  expires_at?: string | null; owner_name?: string | null; mfa_verified: boolean; message: string
+}
+
+export type SigningSummary = {
+  document_number: string; document_type: string; document_version: number; document_status: string;
+  document_sha256: string; participant: Record<string, unknown>; operation_role: string;
+  consent_notice: string; requires_confirmation: boolean
+}
+
+export type ExternalSigner = {
+  id: number; first_name: string; middle_name?: string | null; last_name: string;
+  job_title: string; company?: string | null; participant_role: string; note?: string | null;
+  is_active: boolean; created_by_id: number; created_at: string; updated_at: string
+}
+
+export type InternalParticipantCandidate = {
+  id: number; display_name: string; job_title?: string | null; role: UserRole
+}
+
+export type OfficialDocument = {
+  id: number; document_number: string; document_type: string; machine_id?: number | null;
+  transfer_id?: number | null; batch_id?: number | null; created_at: string;
+  current_version: { id: number; version: number; status: string; language: 'bg' | 'en' | 'ru';
+    snapshot_sha256: string; docx_sha256?: string | null; pdf_sha256?: string | null;
+    correction_reason?: string | null; created_at: string; finalized_at?: string | null };
+  signed_count: number; required_count: number;
+  participants: Array<{ id: number; slot_code: string; participant_kind: string;
+    operation_role: string; identity_snapshot: Record<string, unknown>; signed: boolean;
+    signature_id?: number | null }>
+}
 export type Machine = {
   id: number; inventory_number: string; name: string; category?: string; brand: string;
   model?: string | null; pressure_bar?: number; serial_number?: string | null; status: string;

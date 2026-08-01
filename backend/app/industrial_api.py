@@ -24,6 +24,7 @@ from .audit import add_audit_log
 from .database import get_db
 from .document_generation import (
     ConfirmedTemplateUnavailableError,
+    TemplateValidationError,
     make_part_request_documents,
     make_repair_documents,
 )
@@ -100,6 +101,7 @@ from .permissions import (
     require_permission,
 )
 from .settings import settings
+from .template_engine import validate_template
 from .workflow import (
     REPAIR_TO_MACHINE_STATUS,
     add_machine_event,
@@ -1159,6 +1161,10 @@ def generate_repair_documents(
             requested_language=exc.language,
             fallback_language="bg",
         ) from exc
+    except TemplateValidationError as exc:
+        raise business_conflict(
+            "document_generation_validation_failed", str(exc)
+        ) from exc
     db.add_all(documents)
     db.flush()
     add_audit_log(
@@ -1811,6 +1817,10 @@ def generate_part_request_documents(
             requested_language=exc.language,
             fallback_language="bg",
         ) from exc
+    except TemplateValidationError as exc:
+        raise business_conflict(
+            "document_generation_validation_failed", str(exc)
+        ) from exc
     db.add_all(documents)
     db.flush()
     add_audit_log(
@@ -2413,7 +2423,7 @@ def list_document_templates(
     _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     templates = db.scalars(select(DocumentTemplate).options(selectinload(DocumentTemplate.versions)).order_by(DocumentTemplate.document_type, DocumentTemplate.code)).all()
-    return [{"id": item.id, "code": item.code, "document_type": item.document_type, "name_bg": item.name_bg, "name_en": item.name_en, "name_ru": item.name_ru, "is_active": item.is_active, "versions": [{"id": version.id, "version": version.version, "language": version.language, "source_filename": version.source_filename or (Path(version.source_path).name if version.source_path else None), "source_media_type": version.source_media_type, "source_sha256": version.source_sha256, "layout_contract": version.layout_contract, "effective_from": version.effective_from, "effective_to": version.effective_to, "required_fields": version.required_fields, "numbering_rule": version.numbering_rule, "department": version.department, "change_note": version.change_note, "is_published": version.is_published, "created_by_id": version.created_by_id, "published_by_id": version.published_by_id, "created_at": version.created_at, "published_at": version.published_at, "download_endpoint": f"/document-template-versions/{version.id}/download"} for version in sorted(item.versions, key=lambda value: (value.language, value.version), reverse=True)]} for item in templates]
+    return [{"id": item.id, "code": item.code, "document_type": item.document_type, "name_bg": item.name_bg, "name_en": item.name_en, "name_ru": item.name_ru, "is_active": item.is_active, "versions": [{"id": version.id, "version": version.version, "language": version.language, "source_filename": version.source_filename or (Path(version.source_path).name if version.source_path else None), "source_media_type": version.source_media_type, "source_sha256": version.source_sha256, "layout_contract": version.layout_contract, "effective_from": version.effective_from, "effective_to": version.effective_to, "required_fields": version.required_fields, "numbering_rule": version.numbering_rule, "department": version.department, "change_note": version.change_note, "validation_status": version.validation_status, "validation_report": version.validation_report, "validated_at": version.validated_at, "is_published": version.is_published, "created_by_id": version.created_by_id, "published_by_id": version.published_by_id, "created_at": version.created_at, "published_at": version.published_at, "download_endpoint": f"/document-template-versions/{version.id}/download"} for version in sorted(item.versions, key=lambda value: (value.language, value.version), reverse=True)]} for item in templates]
 
 
 @router.post("/document-templates", status_code=201, response_model=None)
@@ -2425,6 +2435,11 @@ def create_document_template(
     item = DocumentTemplate(**payload.model_dump())
     db.add(item)
     db.flush()
+    report = validate_template(item)
+    item.validation_status = "PASSED" if report["valid"] else "FAILED"
+    item.validation_report = report
+    item.validated_at = utcnow()
+    item.validated_by_id = user.id
     add_audit_log(db, user, "document_template", item.id, "Създаден документен шаблон", {"code": item.code, "document_type": item.document_type})
     _commit(db)
     db.refresh(item)
@@ -2464,10 +2479,38 @@ def create_template_version(
         "numbering_rule": item.numbering_rule,
         "department": item.department,
         "change_note": item.change_note,
+        "validation_status": item.validation_status,
+        "validation_report": item.validation_report,
         "is_published": item.is_published,
         "created_at": item.created_at,
         "download_endpoint": f"/document-template-versions/{item.id}/download",
     }
+
+
+@router.post("/document-template-versions/{version_id}/validate")
+def validate_template_version(
+    version_id: int,
+    user: User = Depends(require_template_manager),
+    db: Session = Depends(get_db),
+) -> dict:
+    item = db.get(DocumentTemplateVersion, version_id)
+    if item is None:
+        raise HTTPException(404, "Версията на шаблона не е намерена.")
+    report = validate_template(item)
+    item.validation_status = "PASSED" if report["valid"] else "FAILED"
+    item.validation_report = report
+    item.validated_at = utcnow()
+    item.validated_by_id = user.id
+    add_audit_log(
+        db,
+        user,
+        "document_template_version",
+        item.id,
+        "Проверена версия на документен шаблон",
+        {"validation_status": item.validation_status, "source_sha256": item.source_sha256, "errors": report["errors"]},
+    )
+    _commit(db)
+    return {"id": item.id, "validation_status": item.validation_status, "validation_report": report, "validated_at": item.validated_at}
 
 
 @router.post("/document-template-versions/{version_id}/publish")
@@ -2481,6 +2524,19 @@ def publish_template_version(
         raise HTTPException(404, "Версията на шаблона не е намерена.")
     if not item.layout_contract or not item.source_sha256 or (item.source_content is None and not item.source_path):
         raise business_conflict("template_contract_missing", "Шаблонът не може да бъде публикуван без проверен изходен файл и договор за оформление.")
+    report = validate_template(item)
+    item.validation_status = "PASSED" if report["valid"] else "FAILED"
+    item.validation_report = report
+    item.validated_at = utcnow()
+    item.validated_by_id = user.id
+    if not report["valid"]:
+        add_audit_log(db, user, "document_template_version", item.id, "Отказано публикуване на невалиден шаблон", {"validation_status": item.validation_status, "errors": report["errors"]})
+        _commit(db)
+        raise business_conflict(
+            "template_validation_failed",
+            "Шаблонът не може да бъде публикуван, защото проверката му е неуспешна.",
+            errors=report["errors"],
+        )
     if item.effective_to is not None and item.effective_to <= utcnow():
         raise business_conflict(
             "template_period_expired",

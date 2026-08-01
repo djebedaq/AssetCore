@@ -22,7 +22,9 @@ from .document_generation import (
     build_protocol_pdf,
     safe_filename,
 )
+from .hardening_api import router as hardening_router
 from .industrial_api import router as industrial_router
+from .licensing import evaluate_license, serialize_license_state
 from .localization import normalize_language, translate
 from .migrations import run_migrations
 from .models import (
@@ -118,7 +120,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="AssetCore API",
-    version="1.2.0-industrial-foundation",
+    version="1.3.0-rc.1-production-hardening",
     description=(
         "API за професионално индустриално управление на активи, защитени "
         "предавания, ремонти, документи и проследима история."
@@ -134,6 +136,39 @@ app.add_middleware(
 )
 app.include_router(industrial_router)
 app.include_router(user_router)
+app.include_router(hardening_router)
+
+
+@app.middleware("http")
+async def enforce_license_read_only(request: Request, call_next):
+    """Expired licences preserve access, exports and backups, but block writes."""
+    exempt_writes = {
+        "/api/auth/login",
+        "/api/auth/change-password",
+        "/api/license/install",
+        "/api/users/me/profile",
+    }
+    if (
+        settings.license_enforcement_enabled
+        and request.method not in {"GET", "HEAD", "OPTIONS"}
+        and request.url.path not in exempt_writes
+        and not request.url.path.startswith("/api/emergency-access/")
+    ):
+        with SessionLocal() as license_db:
+            license_state = evaluate_license(license_db)
+        if license_state.read_only:
+            return JSONResponse(
+                status_code=status.HTTP_423_LOCKED,
+                content={
+                    "detail": {
+                        "code": "license_read_only",
+                        "message": license_state.message,
+                        "license": serialize_license_state(license_state),
+                    }
+                },
+                headers={"X-AssetCore-License-State": license_state.state},
+            )
+    return await call_next(request)
 
 
 @app.exception_handler(RequestValidationError)
@@ -208,7 +243,7 @@ def health() -> dict[str, str]:
     return {
         "status": "ok",
         "service": "AssetCore",
-        "version": "1.2.0-industrial-foundation",
+        "version": "1.3.0-rc.1-production-hardening",
     }
 
 

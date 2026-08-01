@@ -10,11 +10,13 @@ import argparse
 import hashlib
 import json
 import re
+import secrets
 import sys
 import zipfile
 from pathlib import Path
 
 from docx import Document
+from pypdf import PdfReader
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
@@ -26,16 +28,13 @@ from app.database import Base  # noqa: E402
 from app.document_generation import (  # noqa: E402
     PARTS_REFERENCE,
     REPAIR_REFERENCE,
-    build_part_request_docx,
-    build_part_request_pdf,
-    build_protocol_docx,
-    build_protocol_pdf,
-    build_repair_protocol_docx,
-    build_repair_protocol_pdf,
-    build_return_protocol_docx,
-    build_return_protocol_pdf,
+    make_part_request_documents,
+    make_protocol_documents,
+    make_repair_documents,
+    make_return_documents,
 )
 from app.models import (  # noqa: E402
+    DocumentTemplateVersion,
     Machine,
     PartCatalog,
     PartRequest,
@@ -53,6 +52,8 @@ from app.models import (  # noqa: E402
     utcnow,
 )
 from app.seed import seed_database  # noqa: E402
+from app.settings import settings  # noqa: E402
+from app.template_engine import TOKEN_RE, validate_template  # noqa: E402
 
 
 def _sha(path: Path) -> str:
@@ -61,6 +62,10 @@ def _sha(path: Path) -> str:
 
 def _docx_audit(path: Path) -> dict:
     document = Document(path)
+    visible_text = "\n".join(
+        [paragraph.text for paragraph in document.paragraphs]
+        + [paragraph.text for table in document.tables for row in table.rows for cell in row.cells for paragraph in cell.paragraphs]
+    )
     with zipfile.ZipFile(path) as archive:
         names = set(archive.namelist())
         preserved = {}
@@ -89,6 +94,9 @@ def _docx_audit(path: Path) -> dict:
         "package_parts": len(names),
         "preserved_parts": preserved,
         "media": media,
+        "has_cyrillic": bool(re.search(r"[А-Яа-я]", visible_text)),
+        "unresolved_placeholders": sorted(set(TOKEN_RE.findall(visible_text))),
+        "text": visible_text,
     }
 
 
@@ -102,10 +110,13 @@ def _pdf_audit(path: Path) -> dict:
             content,
         )
     ]
+    extracted_text = "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
     return {
         "sha256": _sha(path),
         "pages": page_count,
         "media_boxes": media_boxes,
+        "has_cyrillic": bool(re.search(r"[А-Яа-я]", extracted_text)),
+        "text_length": len(extracted_text),
     }
 
 
@@ -122,6 +133,9 @@ def generate(output: Path) -> dict:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     with Session(engine) as db:
+        settings.owner_email = settings.owner_email or "qa-only@assetcore.invalid"
+        settings.owner_job_title = settings.owner_job_title or "QA оператор"
+        settings.owner_initial_password = settings.owner_initial_password or secrets.token_urlsafe(32)
         seed_database(db)
         machine = db.scalar(select(Machine).where(Machine.inventory_number == "4"))
         user = db.scalar(select(User).order_by(User.id))
@@ -132,6 +146,13 @@ def generate(output: Path) -> dict:
         )
         if machine is None or user is None or part is None:
             raise RuntimeError("Verified seed prerequisites are missing.")
+
+        user.first_name = "Тест"
+        user.middle_name = "Само"
+        user.last_name = "Проверка"
+        user.full_name = "Тест Само Проверка"
+        user.job_title = "QA оператор"
+        user.profile_status = "PROFILE_COMPLETE"
 
         now = utcnow()
         batch = TransferBatch(
@@ -224,31 +245,56 @@ def generate(output: Path) -> dict:
         db.refresh(repair)
         db.refresh(request)
 
+        issue_documents = make_protocol_documents(db, transfer, batch, user.id, "bg")
+        transfer.is_active = False
+        transfer.returned_at = now
+        transfer.return_condition_text = "QA състояние при връщане"
+        transfer.return_result_text = "QA резултат от връщането"
+        transfer.return_notes = "QA бележка"
+        return_documents = make_return_documents(db, transfer, batch, user.id, "bg")
+        repair_documents = make_repair_documents(db, repair, user.id, "bg")
+        request_documents = make_part_request_documents(db, request, user.id, "bg")
+
+        def pair(records):
+            by_format = {record.format: record.content for record in records}
+            return by_format["docx"], by_format["pdf"]
+
+        issue_docx, issue_pdf = pair(issue_documents)
+        return_docx, return_pdf = pair(return_documents)
+        repair_docx, repair_pdf = pair(repair_documents)
+        request_docx, request_pdf = pair(request_documents)
+
         results = {
             "issue": _write_pair(
                 output,
                 "issue-protocol-bg",
-                build_protocol_docx(transfer, batch.batch_reference, "bg"),
-                build_protocol_pdf(transfer, batch.batch_reference, "bg"),
+                issue_docx,
+                issue_pdf,
             ),
             "return": _write_pair(
                 output,
                 "return-protocol-bg",
-                build_return_protocol_docx(transfer, batch.batch_reference, "bg"),
-                build_return_protocol_pdf(transfer, batch.batch_reference, "bg"),
+                return_docx,
+                return_pdf,
             ),
             "repair": _write_pair(
                 output,
                 "repair-protocol-bg",
-                build_repair_protocol_docx(repair, "bg"),
-                build_repair_protocol_pdf(repair, "bg"),
+                repair_docx,
+                repair_pdf,
             ),
             "part_request": _write_pair(
                 output,
                 "part-request-bg",
-                build_part_request_docx(request, "bg"),
-                build_part_request_pdf(request, "bg"),
+                request_docx,
+                request_pdf,
             ),
+        }
+        results["template_validation"] = {
+            str(version.id): validate_template(version)
+            for version in db.scalars(
+                select(DocumentTemplateVersion).where(DocumentTemplateVersion.is_published.is_(True))
+            )
         }
 
     source_hashes_after = {
@@ -266,12 +312,15 @@ def generate(output: Path) -> dict:
         == "39337dfc445d61b4d5144259ca35624c2049d266378e326780176de3104784c1",
         "parts_unchanged": source_hashes_after["parts_reference"]
         == "3ba8e43102ae044b02b6aa7a4cd3b06ff00bce444a56fc8da6ba737c42bbc7a7",
-        "repair_header_media_preserved": set(results["repair"]["docx"]["media"].values())
-        == set(source_structures["repair_reference"]["media"].values()),
-        "parts_header_media_preserved": set(
-            results["part_request"]["docx"]["media"].values()
-        )
-        == set(source_structures["parts_reference"]["media"].values()),
+    }
+    results["release_checks"] = {
+        "all_templates_valid": all(item["valid"] for item in results["template_validation"].values()),
+        "no_unresolved_placeholders": all(not results[name]["docx"]["unresolved_placeholders"] for name in ("issue", "return", "repair", "part_request")),
+        "cyrillic_in_docx": all(results[name]["docx"]["has_cyrillic"] for name in ("issue", "return", "repair", "part_request")),
+        "cyrillic_in_pdf": all(results[name]["pdf"]["has_cyrillic"] for name in ("issue", "return", "repair", "part_request")),
+        "source_hashes_unchanged": all(results["source_preservation"].values()),
+        "document_numbers_present": all("QA-ONLY" in results[name]["docx"]["text"] for name in ("issue", "return", "repair", "part_request")),
+        "signature_status_present": all("НЕПЪЛНО ПОДПИСАН" in results[name]["docx"]["text"] for name in ("issue", "return", "repair", "part_request")),
     }
     (output / "qa-manifest.json").write_text(
         json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -286,6 +335,8 @@ def main() -> None:
     args = parser.parse_args()
     result = generate(args.output.resolve())
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not all(result["release_checks"].values()):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ function response(value: unknown, status = 200): Response {
 
 function renderPage(session: ManagedUser, items: ManagedUser[], fetchMock?: ReturnType<typeof vi.fn>) {
   localStorage.setItem('assetcore_user', JSON.stringify(session))
-  vi.stubGlobal('fetch', fetchMock || vi.fn(async () => response(items)))
+  vi.stubGlobal('fetch', fetchMock || vi.fn(async (input: RequestInfo | URL) => response(String(input).includes('/departments') ? [] : items)))
   return render(<I18nProvider initialLocale="bg"><UserAdministration /></I18nProvider>)
 }
 
@@ -78,25 +78,28 @@ describe('управление на потребителски акаунти', 
     const owner = account(1, 'administrator', true)
     const target = account(2, 'mechanic')
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
-    const fetchMock = vi.fn(async () => response([owner, target]))
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => response(String(input).includes('/departments') ? [] : [owner, target]))
     renderPage(owner, [owner, target], fetchMock)
     const targetRow = (await screen.findByText('Test user 2')).closest('tr')!
     await userEvent.click(within(targetRow).getByRole('button', { name: 'Деактивирай' }))
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Test user 2'))
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('изчиства временната парола след успешно създаване', async () => {
     const owner = account(1, 'administrator', true)
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') return response(account(5, 'mechanic'), 201)
-      return response([owner])
+      return response(String(input).includes('/departments') ? [] : [owner])
     })
     renderPage(owner, [owner], fetchMock)
     await screen.findByText('Основен администратор')
     await userEvent.click(screen.getByRole('button', { name: 'Добави потребител' }))
     const dialog = within(screen.getByRole('dialog', { name: 'Добави потребител' }))
-    await userEvent.type(dialog.getByLabelText('Име'), 'Temporary test')
+    await userEvent.type(dialog.getByLabelText('Собствено име'), 'Temporary')
+    await userEvent.type(dialog.getByLabelText('Бащино име'), 'Automation')
+    await userEvent.type(dialog.getByLabelText('Фамилия'), 'Test')
+    await userEvent.type(dialog.getByLabelText('Длъжност'), 'Test mechanic')
     await userEvent.type(dialog.getByLabelText('Служебен имейл'), 'temporary@example.invalid')
     await userEvent.selectOptions(dialog.getByLabelText('Роля'), 'mechanic')
     await userEvent.type(dialog.getByLabelText('Временна парола'), 'Strong-Test9!')

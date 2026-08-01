@@ -1009,7 +1009,7 @@ def test_repair_kit_requires_verified_parts_and_expands_authoritatively(
         assert session.get(RepairKit, kit.json()["id"]).is_approved is True
 
 
-def test_unconfirmed_document_language_rolls_back_issue_atomically(
+def test_confirmed_english_document_language_issues_atomically(
     client, auth_headers, machine_ids, issue_payload, session_factory
 ):
     payload = issue_payload(machine_ids["4"])
@@ -1017,11 +1017,11 @@ def test_unconfirmed_document_language_rolls_back_issue_atomically(
     response = client.post(
         "/api/transfers/bulk-issue", headers=auth_headers, json=payload
     )
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"]["code"] == "document_template_unavailable"
+    assert response.status_code == 201, response.text
+    assert response.json()["transfers"][0]["documents"][0]["language"] == "en"
     with session_factory() as session:
-        assert session.scalar(select(func.count(TransferProtocol.id))) == 0
-        assert session.get(Machine, machine_ids["4"]).status == "READY"
+        assert session.scalar(select(func.count(TransferProtocol.id))) == 1
+        assert session.get(Machine, machine_ids["4"]).status == "ISSUED"
 
 
 def test_global_search_finds_protocol_batch_and_generated_document(
@@ -1105,5 +1105,5 @@ def test_template_version_upload_is_draft_until_human_publish(
         f"/api/document-template-versions/{version_id}/publish",
         headers=auth_headers,
     )
-    assert published.status_code == 200, published.text
-    assert published.json()["is_published"] is True
+    assert published.status_code == 409, published.text
+    assert published.json()["detail"]["code"] == "template_validation_failed"

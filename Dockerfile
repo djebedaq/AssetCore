@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY backend/requirements.txt ./backend/requirements.txt
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core libreoffice-writer postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ ./backend/

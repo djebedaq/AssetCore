@@ -13,6 +13,9 @@ These rules apply to the complete AssetCore repository.
 - Store workflow statuses as stable technical codes and translate them only at the API/UI presentation boundary.
 - Keep exactly the final roles `administrator`, `director`, `mechanic`, and `observer`. Centralize permission checks; protect the single owner selected by `ASSETCORE_OWNER_EMAIL` from demotion, deactivation, reset, deletion, or ordinary profile editing.
 - Never log, persist in client storage, or return plaintext, temporary, current, confirmation, or new passwords. Account deactivation, role changes, and password resets must invalidate existing sessions.
+- New standard user accounts require separated first, middle and last names plus job title. A legal-name exception must be approved and audited by an administrator; it is never self-approved.
+- The proprietary licence private signing key must remain outside the repository and customer installation. Expiry must never delete data or block verified export/backup.
+- Manual graphic signatures are document-version-specific evidence, not qualified electronic signatures. Keep signature data encrypted and images behind backend authorization.
 - Treat original DOCX/PDF files as controlled reference material. Official generated documents require an approved template for their language; OCR and repair-kit data always require human confirmation and source provenance.
 - Do not rewrite or delete existing audit or document history during normal feature work.
 - Run tests and quality checks that the repository supports. Report exact commands and results honestly; never state that an unexecuted check passed.

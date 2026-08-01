@@ -3,10 +3,12 @@
 - [ ] Потвърдени са точно 19 HPWJ машини и всички известни серийни номера спрямо `SOURCE_REGISTER_BG.md`.
 - [ ] Няма добавени измислени активи, потребители, ремонти, документи, части или исторически операции.
 - [ ] Реалните потребители и роли са утвърдени; default/example пароли не се използват.
+- [ ] Нов акаунт изисква отделни три имена и длъжност; изключение за име не може да се самоодобри и има administrator/UTC audit.
 - [ ] PostgreSQL migration `20260731_0001_bulk_transfers` е приложена и е създаден валидиран backup.
 - [ ] Alembic `head` включва `20260731_0002_i18n_status_roles`; познатите статуси са кодове, а непозната историческа стойност не е загубена.
 - [ ] Alembic `head` включва `20260731_0003_industrial_platform`; upgrade/downgrade/upgrade е проверен върху fresh и legacy SQLite.
 - [ ] Alembic `head` включва `20260801_0004_final_user_roles`; `ASSETCORE_OWNER_EMAIL` сочи точно един съществуващ owner преди production upgrade.
+- [ ] Alembic `head` включва `20260801_0005_production_hardening`; upgrade/downgrade/upgrade е проверен върху fresh и копие на legacy schema.
 - [ ] Българският, английският и руският интерфейс имат еднакъв набор от ключове; изборът се пази в профила и fallback-ът е български.
 - [ ] Новите акаунти приемат точно `administrator`, `director`, `mechanic` и `observer`; legacy ролите остават само в миграционния тест.
 - [ ] Има точно един активен `is_system_owner`; той е administrator и не може да бъде понижен, деактивиран, reset-нат или редактиран през user API.
@@ -29,7 +31,7 @@
 - [ ] Многоредова заявка минава през submit/decision и повторното генериране създава нова версия, без overwrite.
 - [ ] Непроверена каталожна част, hotspot или repair kit е ясно означена и не се представя като потвърден факт.
 - [ ] Technical library revision пази предходния файл, hash и change note.
-- [ ] Само публикуван шаблон на точния език и в активния срок се използва; BG seed версиите са публикувани, а непроверените EN/RU са чернови.
+- [ ] Само публикуван и успешно валидиран шаблон на точния език и в активния срок се използва; одобрените BG/EN/RU v2 seed версии имат source hash и validation report.
 - [ ] Part request fulfillment блокира намалено/надвишено количество и не допуска `DELIVERED` преди всички редове да са изпълнени.
 - [ ] Admin import preview не записва нищо и блокира verified HPWJ номера/категория.
 - [ ] Администраторът може да добави и деактивира местоположение/отдел; старият запис и audit историята остават налични.
@@ -41,3 +43,6 @@
 - [ ] Backend tests, compile, lint, migration smoke, frontend tests/typecheck/lint/build и Docker проверки са изпълнени и резултатите са архивирани.
 - [ ] Render secrets са зададени през платформата; production URL не е hardcoded във frontend-а.
 - [ ] Автоматичният PostgreSQL backup и процедурата за restore са тествани.
+- [ ] `verify_backup.py`, `export_documents.py` и `verify_document_hashes.py` приключват успешно върху контролирана staging копие.
+- [ ] Лицензът е проверен за ACTIVE, grace, read-only, tamper и `EMERGENCY_TEMPORARY`; private key не е в release-а.
+- [ ] Mobile подписът е проверен с вътрешен и външен участник, partial/full status, private image и immutable supersede.

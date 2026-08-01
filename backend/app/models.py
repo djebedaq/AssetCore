@@ -88,6 +88,29 @@ class LanguageCode(str, Enum):
     RU = "ru"
 
 
+class ProfileStatus(str, Enum):
+    INCOMPLETE = "PROFILE_INCOMPLETE"
+    COMPLETE = "PROFILE_COMPLETE"
+
+
+class LicenseType(str, Enum):
+    TEST = "TEST"
+    TRIAL = "TRIAL"
+    ANNUAL = "ANNUAL"
+    PERPETUAL = "PERPETUAL"
+    SUPPORT_ONLY = "SUPPORT_ONLY"
+    EMERGENCY_TEMPORARY = "EMERGENCY_TEMPORARY"
+
+
+class OfficialDocumentStatus(str, Enum):
+    DRAFT = "DRAFT"
+    READY_FOR_SIGNATURE = "READY_FOR_SIGNATURE"
+    PARTIALLY_SIGNED = "PARTIALLY_SIGNED"
+    SIGNED = "SIGNED"
+    SUPERSEDED = "SUPERSEDED"
+    CANCELLED = "CANCELLED"
+
+
 class FieldType(str, Enum):
     TEXT = "TEXT"
     INTEGER = "INTEGER"
@@ -150,6 +173,30 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), default="Администратор")
+    first_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    middle_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    department_id: Mapped[int | None] = mapped_column(
+        ForeignKey("departments.id"), nullable=True, index=True
+    )
+    profile_status: Mapped[str] = mapped_column(
+        String(30), default=ProfileStatus.INCOMPLETE.value,
+        server_default=text("'PROFILE_INCOMPLETE'"), nullable=False
+    )
+    legal_name_exception: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+    legal_name_exception_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    legal_name_exception_approved_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    legal_name_exception_approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
     password_hash: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(
         String(50), default=UserRole.OBSERVER.value,
@@ -177,6 +224,10 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     password_changed_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
+    )
+
+    profile_department: Mapped["Department | None"] = relationship(
+        foreign_keys=[department_id]
     )
 
 
@@ -898,6 +949,14 @@ class DocumentTemplateVersion(Base):
     numbering_rule: Mapped[str | None] = mapped_column(String(255), nullable=True)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     change_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    validation_status: Mapped[str] = mapped_column(
+        String(30), default="NOT_VALIDATED", server_default=text("'NOT_VALIDATED'"), nullable=False
+    )
+    validation_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    validated_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
     is_published: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
@@ -1139,3 +1198,215 @@ class AuditLog(Base):
     )
 
     user: Mapped[User | None] = relationship()
+
+
+class InstallationOwnership(Base):
+    """The protected owner designation is a property, never an RBAC role."""
+
+    __tablename__ = "installation_ownership"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), unique=True, nullable=False, index=True
+    )
+    designated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    designated_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    transfer_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
+
+    owner: Mapped[User] = relationship(foreign_keys=[owner_user_id])
+
+
+class EmergencyAccessSession(Base):
+    """Audited owner procedure; it never grants or expands RBAC permissions."""
+
+    __tablename__ = "emergency_access_sessions"
+    __table_args__ = (
+        Index(
+            "uq_emergency_access_active_owner",
+            "owner_user_id",
+            unique=True,
+            postgresql_where=text("ended_at IS NULL"),
+            sqlite_where=text("ended_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    reason: Mapped[str] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    reauthenticated_at: Mapped[datetime] = mapped_column(DateTime)
+    mfa_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    ended_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    end_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+
+
+class SoftwareLicense(Base):
+    __tablename__ = "software_licenses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    license_id: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    payload_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    signature: Mapped[str] = mapped_column(Text)
+    license_type: Mapped[str] = mapped_column(String(40), index=True)
+    client_name: Mapped[str] = mapped_column(String(255))
+    installation_id: Mapped[str] = mapped_column(String(255), index=True)
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    grace_days: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False
+    )
+    installed_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    installed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ExternalSigner(Base):
+    __tablename__ = "external_signers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    first_name: Mapped[str] = mapped_column(String(120))
+    middle_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    last_name: Mapped[str] = mapped_column(String(120))
+    job_title: Mapped[str] = mapped_column(String(255))
+    company: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    participant_role: Mapped[str] = mapped_column(String(120))
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False
+    )
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class OfficialDocument(Base):
+    __tablename__ = "official_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_number: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    document_type: Mapped[str] = mapped_column(String(80), index=True)
+    machine_id: Mapped[int | None] = mapped_column(ForeignKey("machines.id"), nullable=True, index=True)
+    transfer_id: Mapped[int | None] = mapped_column(ForeignKey("transfer_protocols.id"), nullable=True, index=True)
+    batch_id: Mapped[int | None] = mapped_column(ForeignKey("transfer_batches.id"), nullable=True, index=True)
+    current_version_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class OfficialDocumentVersion(Base):
+    __tablename__ = "official_document_versions"
+    __table_args__ = (
+        UniqueConstraint("document_id", "version", name="uq_official_document_version"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("official_documents.id"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(
+        String(40), default=OfficialDocumentStatus.DRAFT.value,
+        server_default=text("'DRAFT'"), index=True
+    )
+    language: Mapped[str] = mapped_column(String(2), default=LanguageCode.BG.value)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    snapshot_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    docx_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    docx_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    pdf_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    pdf_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    correction_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    supersedes_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("official_document_versions.id"), nullable=True
+    )
+    prepared_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class DocumentParticipant(Base):
+    __tablename__ = "document_participants"
+    __table_args__ = (
+        UniqueConstraint("document_version_id", "slot_code", name="uq_document_participant_slot"),
+        CheckConstraint(
+            "(user_id IS NOT NULL AND external_signer_id IS NULL) OR "
+            "(user_id IS NULL AND external_signer_id IS NOT NULL)",
+            name="ck_document_participant_identity",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_version_id: Mapped[int] = mapped_column(ForeignKey("official_document_versions.id"), index=True)
+    slot_code: Mapped[str] = mapped_column(String(80))
+    participant_kind: Mapped[str] = mapped_column(String(20))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    external_signer_id: Mapped[int | None] = mapped_column(ForeignKey("external_signers.id"), nullable=True, index=True)
+    operation_role: Mapped[str] = mapped_column(String(120))
+    identity_snapshot: Mapped[dict] = mapped_column(JSON)
+    identity_snapshot_sha256: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class SignatureSlot(Base):
+    __tablename__ = "signature_slots"
+    __table_args__ = (
+        UniqueConstraint("document_type", "code", name="uq_signature_slot_type_code"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_type: Mapped[str] = mapped_column(String(80), index=True)
+    code: Mapped[str] = mapped_column(String(80))
+    label_bg: Mapped[str] = mapped_column(String(255))
+    label_en: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    label_ru: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    required: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    allowed_participant_kind: Mapped[str] = mapped_column(String(20), default="ANY")
+    sequence: Mapped[int] = mapped_column(Integer, default=1)
+    signing_mode: Mapped[str] = mapped_column(String(20), default="PARALLEL")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+
+
+class SignatureSession(Base):
+    __tablename__ = "signature_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    participant_id: Mapped[int] = mapped_column(ForeignKey("document_participants.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class DocumentSignature(Base):
+    __tablename__ = "document_signatures"
+    __table_args__ = (
+        UniqueConstraint("participant_id", name="uq_document_signature_participant"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    participant_id: Mapped[int] = mapped_column(ForeignKey("document_participants.id"), index=True)
+    document_version_id: Mapped[int] = mapped_column(ForeignKey("official_document_versions.id"), index=True)
+    signature_kind: Mapped[str] = mapped_column(String(40), default="MANUAL_GRAPHIC")
+    consent_text: Mapped[str] = mapped_column(Text)
+    strokes_encrypted: Mapped[bytes] = mapped_column(LargeBinary)
+    image_encrypted: Mapped[bytes] = mapped_column(LargeBinary)
+    canvas_width: Mapped[int] = mapped_column(Integer)
+    canvas_height: Mapped[int] = mapped_column(Integer)
+    stroke_count: Mapped[int] = mapped_column(Integer)
+    point_count: Mapped[int] = mapped_column(Integer)
+    document_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    signature_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    signed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

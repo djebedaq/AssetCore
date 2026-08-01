@@ -1,5 +1,23 @@
 # Промени
 
+## Production hardening, licensing и signatures — 2026-08-01
+
+- Премахната е локалната SQLite база от Git tracking без изтриване на файла;
+  добавени са release проверки срещу DB, backups, secrets и private keys.
+- Добавени са пълни потребителски профили, отдели, защитено owner designation,
+  законово изключение за име с administrator approval и immutable snapshots.
+- Добавени са Ed25519 offline лицензи, grace/read-only режим и owner-only
+  инсталиране без private key, backdoor, master password или kill switch.
+- Добавени са external signers, configurable signature slots, mobile signature
+  pad, encrypted signature data и immutable versioned official documents.
+- Добавени са 12 контролирани DOCX шаблона за BG/EN/RU, template engine,
+  DOCX/PDF generation, validation, hashes и document QA.
+- Добавена е owner-only аварийна процедура с reauthentication, основание,
+  автоматичен край, видимо известие и audit, без повишаване на права.
+- Добавени са backup/restore/export/hash инструменти, правни draft документи,
+  third-party inventory, SBOM, deployment/security/operator документация и
+  cross-platform release verifier.
+
 ## Окончателна ролева система и потребителски акаунти — 2026-08-01
 
 - Legacy ролите са заменени с точно `administrator`, `director`, `mechanic` и `observer` чрез обратима Alembic миграция за PostgreSQL и SQLite.
