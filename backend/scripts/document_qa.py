@@ -117,6 +117,7 @@ def _pdf_audit(path: Path) -> dict:
         "media_boxes": media_boxes,
         "has_cyrillic": bool(re.search(r"[А-Яа-я]", extracted_text)),
         "text_length": len(extracted_text),
+        "text": extracted_text,
     }
 
 
@@ -320,7 +321,17 @@ def generate(output: Path) -> dict:
         "cyrillic_in_pdf": all(results[name]["pdf"]["has_cyrillic"] for name in ("issue", "return", "repair", "part_request")),
         "source_hashes_unchanged": all(results["source_preservation"].values()),
         "document_numbers_present": all("QA-ONLY" in results[name]["docx"]["text"] for name in ("issue", "return", "repair", "part_request")),
-        "signature_status_present": all("НЕПЪЛНО ПОДПИСАН" in results[name]["docx"]["text"] for name in ("issue", "return", "repair", "part_request")),
+        "signature_status_present": all(
+            "НЕПЪЛНО ПОДПИСАН" in results[name]["docx"]["text"]
+            for name in ("issue", "return", "part_request")
+        )
+        and "ОКОНЧАТЕЛЕН ВЪТРЕШЕН ПРОТОКОЛ"
+        in results["repair"]["docx"]["text"],
+        "repair_is_internal_only": all(
+            "ОКОНЧАТЕЛЕН ВЪТРЕШЕН ПРОТОКОЛ" in results["repair"][format_name]["text"]
+            and "Одобрил" not in results["repair"][format_name]["text"]
+            for format_name in ("docx", "pdf")
+        ),
     }
     (output / "qa-manifest.json").write_text(
         json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"

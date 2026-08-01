@@ -121,11 +121,31 @@ class ExternalSignerCreate(BaseModel):
     company: str | None = Field(default=None, max_length=255)
     participant_role: str = Field(min_length=2, max_length=120)
     note: str | None = Field(default=None, max_length=2000)
+    is_foreign_person: bool = False
+    name_exception_reason: str | None = Field(default=None, max_length=1000)
 
-    @field_validator("first_name", "middle_name", "last_name", "job_title", "company", "participant_role", "note")
+    @field_validator("first_name", "middle_name", "last_name", "job_title", "company", "participant_role", "note", "name_exception_reason")
     @classmethod
     def strip_values(cls, value: str | None) -> str | None:
         return _clean(value)
+
+    @model_validator(mode="after")
+    def validate_legal_name(self):
+        if self.middle_name:
+            if self.name_exception_reason and not self.is_foreign_person:
+                raise ValueError(
+                    "Причина за изключение се посочва само за чуждестранно лице."
+                )
+            return self
+        if not self.is_foreign_person:
+            raise ValueError(
+                "Външният подписващ трябва да има три имена и длъжност."
+            )
+        if not self.name_exception_reason or len(self.name_exception_reason) < 10:
+            raise ValueError(
+                "За чуждестранно лице без бащино име е задължителна изрична причина."
+            )
+        return self
 
 
 class ExternalSignerOut(ExternalSignerCreate):
@@ -148,9 +168,11 @@ class ExternalSignerUpdate(BaseModel):
     company: str | None = Field(default=None, max_length=255)
     participant_role: str | None = Field(default=None, min_length=2, max_length=120)
     note: str | None = Field(default=None, max_length=2000)
+    is_foreign_person: bool | None = None
+    name_exception_reason: str | None = Field(default=None, max_length=1000)
     is_active: bool | None = None
 
-    @field_validator("first_name", "middle_name", "last_name", "job_title", "company", "participant_role", "note")
+    @field_validator("first_name", "middle_name", "last_name", "job_title", "company", "participant_role", "note", "name_exception_reason")
     @classmethod
     def strip_values(cls, value: str | None) -> str | None:
         return _clean(value)
@@ -235,6 +257,7 @@ class OfficialDocumentVersionOut(BaseModel):
     status: OfficialDocumentStatus
     language: LanguageCode
     snapshot_sha256: str
+    signing_sha256: str | None = None
     docx_sha256: str | None = None
     pdf_sha256: str | None = None
     correction_reason: str | None = None

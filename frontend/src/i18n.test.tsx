@@ -48,6 +48,7 @@ describe('многоезична архитектура', () => {
       total_machines: 3,
       returned_machines: 1,
       still_issued_machines: 2,
+      awaiting_signature_machines: 0,
     }} /></I18nProvider>)
     expect(screen.getByText('Partially returned batch')).toBeVisible()
     expect(screen.getByText(/Returned: 1 · Still issued: 2 · Total: 3/)).toBeVisible()

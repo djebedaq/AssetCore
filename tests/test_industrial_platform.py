@@ -518,7 +518,7 @@ def test_multiline_part_request_approval_and_versioned_documents(
 
 
 def test_return_generates_individual_protocols_and_batch_zip(
-    client, auth_headers, machine_ids, issue_payload
+    client, auth_headers, machine_ids, issue_payload, finalize_signatures
 ):
     issued = client.post(
         "/api/transfers/bulk-issue",
@@ -526,6 +526,7 @@ def test_return_generates_individual_protocols_and_batch_zip(
         json=issue_payload(machine_ids["4"], machine_ids["5"]),
     )
     assert issued.status_code == 201, issued.text
+    finalize_signatures(client, issued)
     first = issued.json()["transfers"][0]
     returned = client.post(
         "/api/transfers/bulk-return",
@@ -538,11 +539,19 @@ def test_return_generates_individual_protocols_and_batch_zip(
                     "condition_text": "test-only return condition",
                     "result_text": "test-only return result",
                     "next_status": "INSPECTION",
+                    "returned_person": {
+                        "first_name": "Тестов",
+                        "middle_name": "Външен",
+                        "last_name": "Връщащ",
+                        "job_title": "Тестова длъжност",
+                        "company_or_department": "Тестово звено",
+                    },
                 }
             ]
         },
     )
     assert returned.status_code == 200, returned.text
+    finalize_signatures(client, returned)
     assert {item["format"] for item in returned.json()["returned"][0]["documents"]} == {
         "docx",
         "pdf",
@@ -1010,7 +1019,7 @@ def test_repair_kit_requires_verified_parts_and_expands_authoritatively(
 
 
 def test_confirmed_english_document_language_issues_atomically(
-    client, auth_headers, machine_ids, issue_payload, session_factory
+    client, auth_headers, machine_ids, issue_payload, session_factory, finalize_signatures
 ):
     payload = issue_payload(machine_ids["4"])
     payload["document_language"] = "en"
@@ -1018,6 +1027,7 @@ def test_confirmed_english_document_language_issues_atomically(
         "/api/transfers/bulk-issue", headers=auth_headers, json=payload
     )
     assert response.status_code == 201, response.text
+    finalize_signatures(client, response)
     assert response.json()["transfers"][0]["documents"][0]["language"] == "en"
     with session_factory() as session:
         assert session.scalar(select(func.count(TransferProtocol.id))) == 1

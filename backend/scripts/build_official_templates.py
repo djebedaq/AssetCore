@@ -35,6 +35,7 @@ LABELS = {
         "work": "Извършена работа", "test": "Резултат от теста",
         "before": "Състояние преди", "after": "Състояние след",
         "requester": "Заявител", "decision": "Решение",
+        "repairer": "Извършил ремонта",
     },
     "en": {
         "issue": "HIGH-PRESSURE WASHING EQUIPMENT ISSUE PROTOCOL",
@@ -52,6 +53,7 @@ LABELS = {
         "problem": "Reported problem", "diagnosis": "Diagnosis", "work": "Work performed",
         "test": "Test result", "before": "Condition before", "after": "Condition after",
         "requester": "Requester", "decision": "Decision",
+        "repairer": "Repair performed by",
     },
     "ru": {
         "issue": "ПРОТОКОЛ ВЫДАЧИ МОЕЧНОЙ ТЕХНИКИ",
@@ -69,6 +71,7 @@ LABELS = {
         "diagnosis": "Диагноз", "work": "Выполненные работы", "test": "Результат теста",
         "before": "Состояние до", "after": "Состояние после", "requester": "Заявитель",
         "decision": "Решение",
+        "repairer": "Выполнил ремонт",
     },
 }
 
@@ -159,6 +162,22 @@ def _signature_table(doc: Document, language: str, left: str, right: str) -> Non
     doc.add_paragraph(f'{t["preparer"]}: {{{{PREPARER_NAME}}}} | {t["job"]}: {{{{PREPARER_JOB_TITLE}}}}')
 
 
+def _repair_signature_table(doc: Document, language: str) -> None:
+    """Keep only the executor line from the controlled repair template."""
+    t = LABELS[language]
+    table = doc.add_table(rows=3, cols=1)
+    table.style = "Table Grid"
+    table.cell(0, 0).text = t["repairer"]
+    table.cell(1, 0).text = "{{LEFT_SIGNER_NAME}}\n{{LEFT_SIGNER_JOB_TITLE}}"
+    table.cell(2, 0).text = f'{t["signature"]}: {{{{LEFT_SIGNATURE}}}}'
+    table.cell(0, 0).paragraphs[0].runs[0].bold = True
+    _label_row(doc, t["status"], "{{SIGNATURE_STATUS}}")
+    doc.add_paragraph(
+        f'{t["preparer"]}: {{{{PREPARER_NAME}}}} | '
+        f'{t["job"]}: {{{{PREPARER_JOB_TITLE}}}}'
+    )
+
+
 def build_transfer(language: str, mode: str) -> Document:
     t = LABELS[language]
     doc = _base(t[mode], language)
@@ -195,7 +214,7 @@ def build_repair(language: str) -> Document:
         _label_row(doc, label, placeholder)
     doc.add_paragraph("{{TABLE:REPAIR_EVENTS}}")
     doc.add_paragraph("{{TABLE:PARTS_USED}}")
-    _signature_table(doc, language, t["preparer"], t["acceptance"])
+    _repair_signature_table(doc, language)
     return doc
 
 
@@ -219,8 +238,9 @@ def main() -> None:
         "part_request": build_parts,
     }
     for code, builder in builders.items():
+        version = 3 if code == "repair_protocol" else 2
         for language in LABELS:
-            builder(language).save(OUTPUT / f"{code}-{language}-v2.docx")
+            builder(language).save(OUTPUT / f"{code}-{language}-v{version}.docx")
 
 
 if __name__ == "__main__":

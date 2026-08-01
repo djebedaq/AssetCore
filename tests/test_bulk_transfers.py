@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import io
 import json
 import zipfile
@@ -15,13 +16,66 @@ from app.models import (
 )
 from docx import Document
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import func, inspect, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex
 
+_signature_sequence = 0
 
-def issue(client: TestClient, headers: dict, payload: dict):
-    return client.post("/api/transfers/bulk-issue", headers=headers, json=payload)
+
+def complete_signing(client: TestClient, response) -> None:
+    global _signature_sequence
+    tasks = [
+        task
+        for transfer in response.json().get("transfers", [])
+        for task in transfer.get("signing_tasks", [])
+    ] or [
+        task
+        for returned in response.json().get("returned", [])
+        for task in returned.get("signing_tasks", [])
+    ]
+    for task in tasks:
+        _signature_sequence += 1
+        token = task["signing_token"]
+        summary = client.get(f"/api/signing/{token}")
+        assert summary.status_code == 200, summary.text
+        output = io.BytesIO()
+        Image.new(
+            "RGB", (320, 120), (_signature_sequence % 250, 30, 60)
+        ).save(output, format="PNG")
+        points = [
+            {"x": 20 + index * 12, "y": 40 + index, "t": index * 10}
+            for index in range(8)
+        ]
+        submitted = client.post(
+            f"/api/signing/{token}",
+            json={
+                "consent_accepted": True,
+                "consent_text": summary.json()["consent_notice"],
+                "strokes": [points],
+                "image_base64": base64.b64encode(output.getvalue()).decode(),
+                "canvas_width": 320,
+                "canvas_height": 120,
+            },
+        )
+        assert submitted.status_code == 201, submitted.text
+        confirmed = client.post(f"/api/signing/{token}/confirm")
+        assert confirmed.status_code == 200, confirmed.text
+
+
+def issue(client: TestClient, headers: dict, payload: dict, *, sign: bool = True):
+    response = client.post("/api/transfers/bulk-issue", headers=headers, json=payload)
+    if sign and response.status_code == 201:
+        complete_signing(client, response)
+    return response
+
+
+def perform_return(client: TestClient, headers: dict, payload: dict, *, sign: bool = True):
+    response = client.post("/api/transfers/bulk-return", headers=headers, json=payload)
+    if sign and response.status_code == 200:
+        complete_signing(client, response)
+    return response
 
 
 def return_payload(*transfers: dict) -> dict:
@@ -35,6 +89,13 @@ def return_payload(*transfers: dict) -> dict:
                 "notes": "",
                 "returned_by": "",
                 "accepted_by": "",
+                "returned_person": {
+                    "first_name": "Тестов",
+                    "middle_name": "Външен",
+                    "last_name": "Връщащ",
+                    "job_title": "Тестова длъжност",
+                    "company_or_department": "Тестово звено",
+                },
                 "next_status": "INSPECTION",
             }
             for transfer in transfers
@@ -146,7 +207,12 @@ def test_two_simultaneous_issue_attempts_create_only_one_active_transfer(
 
     def attempt():
         barrier.wait()
-        return issue(client, auth_headers, issue_payload(machine_ids["4"])).status_code
+        return issue(
+            client,
+            auth_headers,
+            issue_payload(machine_ids["4"]),
+            sign=False,
+        ).status_code
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         statuses = sorted(executor.map(lambda _: attempt(), range(2)))
@@ -178,13 +244,11 @@ def test_full_batch_return_closes_every_individual_transfer(
             "repair_required": True,
         }
     )
-    response = client.post(
-        "/api/transfers/bulk-return",
-        headers=auth_headers,
-        json=payload,
-    )
+    response = perform_return(client, auth_headers, payload)
     assert response.status_code == 200, response.text
-    progress = response.json()["batches"][0]
+    progress = client.get(
+        f"/api/transfer-batches/{created['batch_id']}/progress", headers=auth_headers
+    ).json()
     assert progress["returned_machines"] == 2
     assert progress["still_issued_machines"] == 0
     assert progress["status"] == "RETURNED"
@@ -202,13 +266,13 @@ def test_partial_batch_return_keeps_remaining_machine_issued(
         auth_headers,
         issue_payload(machine_ids["4"], machine_ids["5"], machine_ids["7"]),
     ).json()
-    response = client.post(
-        "/api/transfers/bulk-return",
-        headers=auth_headers,
-        json=return_payload(created["transfers"][0]),
+    response = perform_return(
+        client, auth_headers, return_payload(created["transfers"][0])
     )
     assert response.status_code == 200
-    progress = response.json()["batches"][0]
+    progress = client.get(
+        f"/api/transfer-batches/{created['batch_id']}/progress", headers=auth_headers
+    ).json()
     assert progress["status"] == "PARTIALLY_RETURNED"
     assert progress["returned_machines"] == 1
     assert progress["still_issued_machines"] == 2
@@ -225,17 +289,21 @@ def test_mixed_batch_return_updates_each_batch_and_scopes_its_audit(
     first_transfer = first["transfers"][0]
     second_transfer = second["transfers"][0]
 
-    response = client.post(
-        "/api/transfers/bulk-return",
-        headers=auth_headers,
-        json=return_payload(first_transfer, second_transfer),
+    response = perform_return(
+        client, auth_headers, return_payload(first_transfer, second_transfer)
     )
     assert response.status_code == 200, response.text
-    assert {batch["batch_id"] for batch in response.json()["batches"]} == {
+    returned_batches = [
+        client.get(
+            f"/api/transfer-batches/{batch_id}/progress", headers=auth_headers
+        ).json()
+        for batch_id in (first["batch_id"], second["batch_id"])
+    ]
+    assert {batch["batch_id"] for batch in returned_batches} == {
         first["batch_id"],
         second["batch_id"],
     }
-    assert all(batch["still_issued_machines"] == 0 for batch in response.json()["batches"])
+    assert all(batch["still_issued_machines"] == 0 for batch in returned_batches)
 
     expected = {
         first["batch_reference"]: (
@@ -251,15 +319,16 @@ def test_mixed_batch_return_updates_each_batch_and_scopes_its_audit(
         logs = session.scalars(
             select(AuditLog).where(
                 AuditLog.entity_type == "transfer_batch",
-                AuditLog.action == "Актуализирано връщане на партида",
+                AuditLog.action == "Актуализиран подписан transfer workflow",
             )
         ).all()
+        logs = [log for log in logs if json.loads(log.details)["returned_machines"] == 1]
         assert len(logs) == 2
         for log in logs:
             details = json.loads(log.details)
             transfer_id, machine_number = expected[log.operation_reference]
-            assert details["returned_transfer_ids"] == [transfer_id]
-            assert details["returned_machine_numbers"] == [machine_number]
+            assert details["transfer_id"] == transfer_id
+            assert details["machine_number"] == machine_number
 
 
 def test_return_without_active_issue_and_double_return_are_rejected(
@@ -267,7 +336,7 @@ def test_return_without_active_issue_and_double_return_are_rejected(
 ):
     created = issue(client, auth_headers, issue_payload(machine_ids["4"])).json()
     payload = return_payload(created["transfers"][0])
-    assert client.post("/api/transfers/bulk-return", headers=auth_headers, json=payload).status_code == 200
+    assert perform_return(client, auth_headers, payload).status_code == 200
     repeated = client.post("/api/transfers/bulk-return", headers=auth_headers, json=payload)
     assert repeated.status_code == 409
     assert repeated.json()["detail"]["code"] == "return_conflict"
@@ -296,8 +365,8 @@ def test_audit_records_success_and_rejected_conflict(
     issue(client, auth_headers, issue_payload(machine_ids["4"]))
     with session_factory() as session:
         actions = session.scalars(select(AuditLog.action).order_by(AuditLog.id)).all()
-        assert "Издадена машина" in actions
-        assert "Групово издаване" in actions
+        assert "Издаването е приключено след задължителните подписи" in actions
+        assert "Групово издаване – очаква подписи" in actions
         assert "Отказано групово издаване" in actions
         rejected = session.scalar(
             select(AuditLog).where(AuditLog.action == "Отказано групово издаване")
@@ -419,11 +488,7 @@ def test_batch_details_show_individual_partial_progress(
     created = issue(
         client, auth_headers, issue_payload(machine_ids["4"], machine_ids["5"])
     ).json()
-    client.post(
-        "/api/transfers/bulk-return",
-        headers=auth_headers,
-        json=return_payload(created["transfers"][0]),
-    )
+    perform_return(client, auth_headers, return_payload(created["transfers"][0]))
     details = client.get(
         f"/api/transfer-batches/{created['batch_id']}", headers=auth_headers
     )

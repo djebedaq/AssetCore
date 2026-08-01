@@ -49,13 +49,27 @@ export type EmergencyAccessStatus = {
 export type SigningSummary = {
   document_number: string; document_type: string; document_version: number; document_status: string;
   document_sha256: string; participant: Record<string, unknown>; operation_role: string;
+  machine?: { id: number; number: string; name: string; brand: string } | null;
+  operation_description: string; operation_datetime: string;
   consent_notice: string; requires_confirmation: boolean
 }
 
 export type ExternalSigner = {
   id: number; first_name: string; middle_name?: string | null; last_name: string;
   job_title: string; company?: string | null; participant_role: string; note?: string | null;
+  is_foreign_person?: boolean; name_exception_reason?: string | null;
   is_active: boolean; created_by_id: number; created_at: string; updated_at: string
+}
+
+export type SignatureSlot = {
+  id: number; document_type: string; code: string;
+  label_bg: string; label_en?: string | null; label_ru?: string | null;
+  sequence: number; required: boolean; allowed_participant_kind: string; signing_mode: string; is_active: boolean
+}
+
+export type SigningTask = {
+  participant_id: number; slot_code: string; operation_role: string; signer_name: string;
+  signing_token: string; signing_endpoint: string; expires_at: string
 }
 
 export type InternalParticipantCandidate = {
@@ -100,7 +114,8 @@ export type ProtocolDocument = {
 export type TransferAvailability = {
   machine_id: number; machine_number: string; brand: string; pressure_bar: number; status: string;
   status_label?: string;
-  location?: string | null; available: boolean; unavailable_reason?: string | null;
+  location?: string | null; available: boolean; returnable: boolean; operation_status?: string | null;
+  unavailable_reason?: string | null;
   active_transfer_id?: number | null; protocol_number?: string | null; batch_reference?: string | null;
   issued_at?: string | null; current_recipient_or_location?: string | null
 }
@@ -109,6 +124,7 @@ export type BulkIssueResult = {
   message: string; batch_id: number; batch_reference: string;
   transfers: Array<{
     transfer_id: number; protocol_number: string; machine_id: number; machine_number: string;
+    workflow_status: string; official_document_id: number; signing_tasks: SigningTask[];
     documents: ProtocolDocument[]
   }>;
   zip_download_endpoint: string
@@ -116,14 +132,14 @@ export type BulkIssueResult = {
 
 export type BatchProgress = {
   batch_id: number; batch_reference: string; status: string; total_machines: number;
-  returned_machines: number; still_issued_machines: number; created_at?: string
+  returned_machines: number; still_issued_machines: number; awaiting_signature_machines: number; created_at?: string
 }
 
 export type BatchDetails = BatchProgress & {
   created_at: string; zip_download_endpoint: string;
   transfers: Array<{
     transfer_id: number; machine_id: number; machine_number: string; machine_name: string; brand: string;
-    pressure_bar: number; protocol_number: string; is_active: boolean; issued_at?: string | null;
+    pressure_bar: number; protocol_number: string; is_active: boolean; issue_status: string; return_status?: string | null; issued_at?: string | null;
     returned_at?: string | null; current_status: string; location?: string | null;
     documents: ProtocolDocument[]
   }>
@@ -131,7 +147,7 @@ export type BatchDetails = BatchProgress & {
 
 export type BulkReturnResult = {
   message: string;
-  returned: Array<{ transfer_id: number; machine_id: number; machine_number: string; new_status: string; returned_at: string; documents: ProtocolDocument[] }>;
+  returned: Array<{ transfer_id: number; machine_id: number; machine_number: string; new_status: string; returned_at?: string | null; workflow_status: string; official_document_id: number; signing_tasks: SigningTask[]; documents: ProtocolDocument[] }>;
   batches: BatchProgress[]
 }
 

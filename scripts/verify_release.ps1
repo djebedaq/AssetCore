@@ -60,6 +60,12 @@ if (Get-Command docker -ErrorAction SilentlyContinue) {
     Write-Host "SKIP: Docker is not installed on this workstation." -ForegroundColor Yellow
 }
 
+if ($env:ASSETCORE_POSTGRES_SOURCE_URL -and $env:ASSETCORE_POSTGRES_RESTORE_URL) {
+    Invoke-Check "PostgreSQL migrations and real backup/restore" { & $Python scripts/postgres_smoke_test.py }
+} else {
+    Write-Host "SKIP: Separate PostgreSQL QA database URLs are not configured." -ForegroundColor Yellow
+}
+
 if ($script:Failures -gt 0) {
     Write-Host "`nRelease verification failed: $script:Failures check(s)." -ForegroundColor Red
     exit 1

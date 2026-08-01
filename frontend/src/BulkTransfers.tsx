@@ -3,6 +3,7 @@ import { Archive, CheckCircle2, Download, RotateCcw, Search, Send, X } from 'luc
 import { ApiError, api, downloadApiFile } from './api'
 import { statusText, useI18n, type TranslationKey } from './i18n'
 import { hasPermission } from './permissions'
+import SignaturePage from './SignaturePage'
 import type {
   BatchDetails,
   BatchProgress,
@@ -10,6 +11,7 @@ import type {
   BulkReturnResult,
   Location,
   ProtocolDocument,
+  SigningTask,
   TransferAvailability,
 } from './types'
 
@@ -25,8 +27,13 @@ type IssueForm = {
   work_area: string
   location_text: string
   location_id: string
-  handed_over_by: string
-  accepted_by: string
+  recipient_first_name: string
+  recipient_middle_name: string
+  recipient_last_name: string
+  recipient_job_title: string
+  recipient_company_or_department: string
+  recipient_is_foreign_person: boolean
+  recipient_name_exception_reason: string
   equipment: string
   hoses: string
   nozzles: string
@@ -46,8 +53,13 @@ const EMPTY_ISSUE_FORM: IssueForm = {
   work_area: '',
   location_text: '',
   location_id: '',
-  handed_over_by: '',
-  accepted_by: '',
+  recipient_first_name: '',
+  recipient_middle_name: '',
+  recipient_last_name: '',
+  recipient_job_title: '',
+  recipient_company_or_department: '',
+  recipient_is_foreign_person: false,
+  recipient_name_exception_reason: '',
   equipment: '',
   hoses: '',
   nozzles: '',
@@ -69,8 +81,13 @@ type ReturnDraft = {
   cleaning_required: boolean
   inspection_required: boolean
   repair_required: boolean
-  returned_by: string
-  accepted_by: string
+  returned_first_name: string
+  returned_middle_name: string
+  returned_last_name: string
+  returned_job_title: string
+  returned_company_or_department: string
+  returned_is_foreign_person: boolean
+  returned_name_exception_reason: string
   location_id: string
   next_status: string
 }
@@ -198,12 +215,13 @@ export function IssueResult({ result, onDownload }: {
   onDownload: (path: string, filename: string) => void
 }) {
   const { t } = useI18n()
+  const completed = result.transfers.every((item) => item.workflow_status === 'COMPLETED')
   return (
     <div className="operation-result" role="status">
-      <CheckCircle2 size={36} />
-      <h4>{t('bulk.issueSuccess')}</h4>
+      {completed && <CheckCircle2 size={36} />}
+      <h4>{completed ? t('bulk.issueSuccess') : t('bulk.awaitingSignature')}</h4>
       <p>{t('bulk.batchLabel', { reference: result.batch_reference })}</p>
-      <button className="primary" onClick={() => onDownload(result.zip_download_endpoint, `${result.batch_reference}-protocols.zip`)}>
+      <button className="primary" disabled={!completed} onClick={() => onDownload(result.zip_download_endpoint, `${result.batch_reference}-protocols.zip`)}>
         <Archive size={17} />{t('bulk.downloadAllZip')}
       </button>
       <div className="result-protocols">
@@ -211,7 +229,7 @@ export function IssueResult({ result, onDownload }: {
         {result.transfers.map((item) => (
           <div key={item.transfer_id}>
             <span><b>{t('bulk.machineName', { number: item.machine_number })}</b><small>{item.protocol_number}</small></span>
-            <span>{item.documents.map((document) => (
+            <span>{completed && item.documents.map((document) => (
               <button key={document.id} className="secondary compact" onClick={() => onDownload(document.download_endpoint, document.filename)}>
                 <Download size={15} />{document.format.toUpperCase()}
               </button>
@@ -233,8 +251,10 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [query, setQuery] = useState('')
   const [form, setForm] = useState<IssueForm>(EMPTY_ISSUE_FORM)
-  const [step, setStep] = useState<'select' | 'confirm' | 'result'>('select')
+  const [step, setStep] = useState<'select' | 'confirm' | 'sign' | 'result'>('select')
   const [result, setResult] = useState<BulkIssueResult | null>(null)
+  const [signingTasks, setSigningTasks] = useState<SigningTask[]>([])
+  const [signingIndex, setSigningIndex] = useState(0)
   const [error, setError] = useState<Error | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -259,6 +279,10 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
       setError(new Error('selection_required'))
       return
     }
+    if (!form.recipient_first_name.trim() || !form.recipient_last_name.trim() || !form.recipient_job_title.trim() || !form.recipient_company_or_department.trim() || (!form.recipient_middle_name.trim() && (!form.recipient_is_foreign_person || form.recipient_name_exception_reason.trim().length < 10))) {
+      setError(new Error('recipient_required'))
+      return
+    }
     setError(null)
     setStep('confirm')
   }
@@ -267,15 +291,33 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
     setBusy(true)
     setError(null)
     try {
+      const {
+        recipient_first_name, recipient_middle_name, recipient_last_name,
+        recipient_job_title, recipient_company_or_department,
+        recipient_is_foreign_person, recipient_name_exception_reason,
+        ...operationFields
+      } = form
       const payload = {
         machine_ids: [...selected],
-        ...Object.fromEntries(Object.entries(form).map(([key, value]) => [key, value || null])),
+        ...Object.fromEntries(Object.entries(operationFields).map(([key, value]) => [key, value || null])),
         location_id: form.location_id ? Number(form.location_id) : null,
+        recipient: {
+          first_name: recipient_first_name,
+          middle_name: recipient_middle_name || null,
+          last_name: recipient_last_name,
+          job_title: recipient_job_title,
+          company_or_department: recipient_company_or_department,
+          is_foreign_person: recipient_is_foreign_person,
+          name_exception_reason: recipient_name_exception_reason || null,
+        },
       }
       const created = await api<BulkIssueResult>('/transfers/bulk-issue', { method: 'POST', body: JSON.stringify(payload) })
       setResult(created)
-      setStep('result')
-      onComplete()
+      const tasks = created.transfers.flatMap((item) => item.signing_tasks)
+      setSigningTasks(tasks)
+      setSigningIndex(0)
+      setStep(tasks.length ? 'sign' : 'result')
+      if (!tasks.length) onComplete()
     } catch (caught) {
       setError(caught instanceof Error ? caught : new Error('request_failed'))
       setStep('confirm')
@@ -287,10 +329,29 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
   const download = (path: string, filename: string) => downloadApiFile(path, filename)
     .catch(() => setError(new Error('request_failed')))
 
+  const finishSignature = (outcome: 'DONE' | 'REJECTED') => {
+    if (outcome === 'REJECTED') {
+      setError(new Error('signature_cancelled'))
+      setStep('result')
+      return
+    }
+    const next = signingIndex + 1
+    if (next < signingTasks.length) setSigningIndex(next)
+    else {
+      setResult((current) => current ? {
+        ...current,
+        message: t('bulk.issueSuccess'),
+        transfers: current.transfers.map((item) => ({ ...item, workflow_status: 'COMPLETED' })),
+      } : current)
+      setStep('result')
+      onComplete()
+    }
+  }
+
   return (
     <ModalShell title={t('bulk.issue')} onClose={onClose} wide>
-      {error?.message === 'selection_required'
-        ? <div className="conflict-notice" role="alert"><strong>{t('bulk.selectAvailableError')}</strong></div>
+      {error?.message === 'selection_required' || error?.message === 'recipient_required' || error?.message === 'signature_cancelled'
+        ? <div className="conflict-notice" role="alert"><strong>{error.message === 'selection_required' ? t('bulk.selectAvailableError') : error.message === 'recipient_required' ? t('bulk.recipientRequired') : t('bulk.signatureCancelled')}</strong></div>
         : <ConflictNotice error={error} />}
       {step === 'select' && (
         <>
@@ -309,8 +370,15 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
             <label>{t('bulk.workArea')}<input value={form.work_area} onChange={(event) => setField('work_area', event.target.value)} /></label>
             <label>{t('bulk.describedLocation')}<input value={form.location_text} onChange={(event) => setField('location_text', event.target.value)} /></label>
             <label>{t('bulk.systemLocation')}<select value={form.location_id} onChange={(event) => setField('location_id', event.target.value)}><option value="">{t('common.noChange')}</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
-            <label>{t('bulk.handedOverBy')}<input value={form.handed_over_by} onChange={(event) => setField('handed_over_by', event.target.value)} /></label>
-            <label>{t('bulk.acceptedBy')}<input value={form.accepted_by} onChange={(event) => setField('accepted_by', event.target.value)} /></label>
+            <fieldset className="wide party-fields"><legend>{t('bulk.recipient')}</legend><div className="form-grid three-columns">
+              <label>{t('profile.firstName')}<input required value={form.recipient_first_name} onChange={(event) => setField('recipient_first_name', event.target.value)} /></label>
+              <label>{t('profile.middleName')}<input required={!form.recipient_is_foreign_person} value={form.recipient_middle_name} onChange={(event) => setField('recipient_middle_name', event.target.value)} /></label>
+              <label>{t('profile.lastName')}<input required value={form.recipient_last_name} onChange={(event) => setField('recipient_last_name', event.target.value)} /></label>
+              <label>{t('profile.jobTitle')}<input required value={form.recipient_job_title} onChange={(event) => setField('recipient_job_title', event.target.value)} /></label>
+              <label>{t('bulk.companyOrDepartment')}<input required value={form.recipient_company_or_department} onChange={(event) => setField('recipient_company_or_department', event.target.value)} /></label>
+              <label className="checkbox-row"><input type="checkbox" checked={form.recipient_is_foreign_person} onChange={(event) => setField('recipient_is_foreign_person', event.target.checked)} />{t('bulk.foreignPerson')}</label>
+              {form.recipient_is_foreign_person && <label className="wide">{t('profile.exceptionReason')}<textarea required minLength={10} value={form.recipient_name_exception_reason} onChange={(event) => setField('recipient_name_exception_reason', event.target.value)} /></label>}
+            </div></fieldset>
             <label className="wide">{t('bulk.equipment')}<textarea value={form.equipment} onChange={(event) => setField('equipment', event.target.value)} /></label>
             <label>{t('bulk.hoses')}<textarea value={form.hoses} onChange={(event) => setField('hoses', event.target.value)} /></label>
             <label>{t('bulk.nozzles')}<textarea value={form.nozzles} onChange={(event) => setField('nozzles', event.target.value)} /></label>
@@ -328,7 +396,8 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
             [t('bulk.documentLanguage'), t(`language.${form.document_language}` as TranslationKey)],
             [t('bulk.companyUnit'), form.company_unit], [t('bulk.department'), form.department], [t('bulk.vessel'), form.vessel],
             [t('bulk.dock'), form.dock], [t('bulk.pier'), form.pier], [t('bulk.workArea'), form.work_area], [t('common.location'), form.location_text],
-            [t('bulk.handedOverBy'), form.handed_over_by], [t('bulk.acceptedBy'), form.accepted_by], [t('bulk.equipment'), form.equipment],
+            [t('bulk.recipient'), [form.recipient_first_name, form.recipient_middle_name, form.recipient_last_name].filter(Boolean).join(' ')],
+            [t('profile.jobTitle'), form.recipient_job_title], [t('bulk.companyOrDepartment'), form.recipient_company_or_department], [t('bulk.equipment'), form.equipment],
             [t('bulk.hoses'), form.hoses], [t('bulk.nozzles'), form.nozzles], [t('bulk.guns'), form.guns], [t('bulk.accessories'), form.accessories],
             [t('bulk.issueCondition'), form.condition_text], [t('common.notes'), form.remarks],
           ]} />
@@ -336,6 +405,7 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
           <div className="actions"><button className="secondary" onClick={() => setStep('select')} disabled={busy}>{t('common.back')}</button><button className="primary" onClick={submit} disabled={busy}>{busy ? t('bulk.issuing') : t('bulk.confirmIssue')}</button></div>
         </>
       )}
+      {step === 'sign' && signingTasks[signingIndex] && <section className="integrated-signing"><div className="signing-progress"><strong>{t('bulk.signatureProgress', { current: signingIndex + 1, total: signingTasks.length })}</strong><span>{signingTasks[signingIndex].signer_name} · {signingTasks[signingIndex].operation_role}</span></div><SignaturePage embedded token={signingTasks[signingIndex].signing_token} onFinished={finishSignature} /></section>}
       {step === 'result' && result && <><IssueResult result={result} onDownload={download} /><div className="actions"><button className="primary" onClick={onClose}>{t('common.done')}</button></div></>}
     </ModalShell>
   )
@@ -348,12 +418,14 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
   onComplete: () => void
 }) {
   const { t } = useI18n()
-  const activeItems = items.filter((item) => item.active_transfer_id)
+  const activeItems = items.filter((item) => item.returnable)
   const [drafts, setDrafts] = useState<Record<number, ReturnDraft>>({})
   const [query, setQuery] = useState('')
   const [documentLanguage, setDocumentLanguage] = useState<'bg' | 'en' | 'ru'>('bg')
-  const [step, setStep] = useState<'edit' | 'confirm' | 'result'>('edit')
+  const [step, setStep] = useState<'edit' | 'confirm' | 'sign' | 'result'>('edit')
   const [result, setResult] = useState<BulkReturnResult | null>(null)
+  const [signingTasks, setSigningTasks] = useState<SigningTask[]>([])
+  const [signingIndex, setSigningIndex] = useState(0)
   const [error, setError] = useState<Error | null>(null)
   const [busy, setBusy] = useState(false)
   const filtered = activeItems.filter((item) => (
@@ -377,8 +449,13 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
       cleaning_required: false,
       inspection_required: true,
       repair_required: false,
-      returned_by: '',
-      accepted_by: '',
+      returned_first_name: '',
+      returned_middle_name: '',
+      returned_last_name: '',
+      returned_job_title: '',
+      returned_company_or_department: '',
+      returned_is_foreign_person: false,
+      returned_name_exception_reason: '',
       location_id: '',
       next_status: 'INSPECTION',
     }
@@ -396,7 +473,7 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
       setError(new Error('selection_required'))
       return
     }
-    if (Object.values(drafts).some((draft) => !draft.condition_text.trim() || !draft.result_text.trim())) {
+    if (Object.values(drafts).some((draft) => !draft.condition_text.trim() || !draft.result_text.trim() || !draft.returned_first_name.trim() || !draft.returned_last_name.trim() || !draft.returned_job_title.trim() || !draft.returned_company_or_department.trim() || (!draft.returned_middle_name.trim() && (!draft.returned_is_foreign_person || draft.returned_name_exception_reason.trim().length < 10)))) {
       setError(new Error('details_required'))
       return
     }
@@ -410,15 +487,35 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
     try {
       const payload = {
         document_language: documentLanguage,
-        items: Object.values(drafts).map((draft) => ({
-          ...draft,
-          location_id: draft.location_id ? Number(draft.location_id) : null,
-        })),
+        items: Object.values(drafts).map((draft) => {
+          const {
+            returned_first_name, returned_middle_name, returned_last_name,
+            returned_job_title, returned_company_or_department,
+            returned_is_foreign_person, returned_name_exception_reason,
+            ...returnFields
+          } = draft
+          return {
+            ...returnFields,
+            location_id: draft.location_id ? Number(draft.location_id) : null,
+            returned_person: {
+              first_name: returned_first_name,
+              middle_name: returned_middle_name || null,
+              last_name: returned_last_name,
+              job_title: returned_job_title,
+              company_or_department: returned_company_or_department,
+              is_foreign_person: returned_is_foreign_person,
+              name_exception_reason: returned_name_exception_reason || null,
+            },
+          }
+        }),
       }
       const completed = await api<BulkReturnResult>('/transfers/bulk-return', { method: 'POST', body: JSON.stringify(payload) })
       setResult(completed)
-      setStep('result')
-      onComplete()
+      const tasks = completed.returned.flatMap((item) => item.signing_tasks)
+      setSigningTasks(tasks)
+      setSigningIndex(0)
+      setStep(tasks.length ? 'sign' : 'result')
+      if (!tasks.length) onComplete()
     } catch (caught) {
       setError(caught instanceof Error ? caught : new Error('request_failed'))
       setStep('confirm')
@@ -427,10 +524,31 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
     }
   }
 
+  const finishSignature = (outcome: 'DONE' | 'REJECTED') => {
+    if (outcome === 'REJECTED') {
+      setError(new Error('signature_cancelled'))
+      setStep('result')
+      return
+    }
+    const next = signingIndex + 1
+    if (next < signingTasks.length) setSigningIndex(next)
+    else {
+      setResult((current) => current ? {
+        ...current,
+        message: t('bulk.returnSuccess'),
+        returned: current.returned.map((item) => ({ ...item, workflow_status: 'COMPLETED' })),
+      } : current)
+      setStep('result')
+      onComplete()
+    }
+  }
+
   const localValidationMessage = error?.message === 'selection_required'
     ? t('bulk.selectIssuedError')
     : error?.message === 'details_required'
       ? t('bulk.returnDetailsError')
+      : error?.message === 'signature_cancelled'
+        ? t('bulk.signatureCancelled')
       : null
 
   return (
@@ -458,8 +576,15 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
                   <div className="form-grid return-fields">
                     <label>{t('bulk.nextStage')}<select value={drafts[item.machine_id].next_status} onChange={(event) => update(item.machine_id, 'next_status', event.target.value)}>{RETURN_STATUS_CODES.map((status) => <option value={status} key={status}>{statusText(t, status)}</option>)}</select></label>
                     <label>{t('common.location')}<select value={drafts[item.machine_id].location_id} onChange={(event) => update(item.machine_id, 'location_id', event.target.value)}><option value="">{t('common.noChange')}</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
-                    <label>{t('bulk.returnedBy')}<input value={drafts[item.machine_id].returned_by} onChange={(event) => update(item.machine_id, 'returned_by', event.target.value)} /></label>
-                    <label>{t('bulk.acceptedBy')}<input value={drafts[item.machine_id].accepted_by} onChange={(event) => update(item.machine_id, 'accepted_by', event.target.value)} /></label>
+                    <fieldset className="wide party-fields"><legend>{t('bulk.returnedBy')}</legend><div className="form-grid three-columns">
+                      <label>{t('profile.firstName')}<input required value={drafts[item.machine_id].returned_first_name} onChange={(event) => update(item.machine_id, 'returned_first_name', event.target.value)} /></label>
+                      <label>{t('profile.middleName')}<input required={!drafts[item.machine_id].returned_is_foreign_person} value={drafts[item.machine_id].returned_middle_name} onChange={(event) => update(item.machine_id, 'returned_middle_name', event.target.value)} /></label>
+                      <label>{t('profile.lastName')}<input required value={drafts[item.machine_id].returned_last_name} onChange={(event) => update(item.machine_id, 'returned_last_name', event.target.value)} /></label>
+                      <label>{t('profile.jobTitle')}<input required value={drafts[item.machine_id].returned_job_title} onChange={(event) => update(item.machine_id, 'returned_job_title', event.target.value)} /></label>
+                      <label>{t('bulk.companyOrDepartment')}<input required value={drafts[item.machine_id].returned_company_or_department} onChange={(event) => update(item.machine_id, 'returned_company_or_department', event.target.value)} /></label>
+                      <label className="checkbox-row"><input type="checkbox" checked={drafts[item.machine_id].returned_is_foreign_person} onChange={(event) => update(item.machine_id, 'returned_is_foreign_person', event.target.checked)} />{t('bulk.foreignPerson')}</label>
+                      {drafts[item.machine_id].returned_is_foreign_person && <label className="wide">{t('profile.exceptionReason')}<textarea required minLength={10} value={drafts[item.machine_id].returned_name_exception_reason} onChange={(event) => update(item.machine_id, 'returned_name_exception_reason', event.target.value)} /></label>}
+                    </div></fieldset>
                     <label className="wide">{t('bulk.returnCondition')}<textarea required value={drafts[item.machine_id].condition_text} onChange={(event) => update(item.machine_id, 'condition_text', event.target.value)} /></label>
                     <label className="wide">{t('bulk.returnResult')}<textarea required value={drafts[item.machine_id].result_text} onChange={(event) => update(item.machine_id, 'result_text', event.target.value)} /></label>
                     <label className="wide">{t('bulk.missingEquipment')}<textarea value={drafts[item.machine_id].missing_equipment} onChange={(event) => update(item.machine_id, 'missing_equipment', event.target.value)} /></label>
@@ -500,11 +625,12 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
           <div className="actions"><button className="secondary" onClick={() => setStep('edit')} disabled={busy}>{t('common.back')}</button><button className="primary" onClick={submit} disabled={busy}>{busy ? t('bulk.returning') : t('bulk.confirmReturn')}</button></div>
         </>
       )}
+      {step === 'sign' && signingTasks[signingIndex] && <section className="integrated-signing"><div className="signing-progress"><strong>{t('bulk.signatureProgress', { current: signingIndex + 1, total: signingTasks.length })}</strong><span>{signingTasks[signingIndex].signer_name} · {signingTasks[signingIndex].operation_role}</span></div><SignaturePage embedded token={signingTasks[signingIndex].signing_token} onFinished={finishSignature} /></section>}
       {step === 'result' && result && (
         <div className="operation-result" role="status">
-          <CheckCircle2 size={36} />
-          <h4>{t('bulk.returnSuccess')}</h4>
-          <div className="return-confirm-list">{result.returned.map((item) => <div key={item.transfer_id}><b>{t('bulk.machineName', { number: item.machine_number })}</b><span>{t('bulk.newStatus', { status: statusText(t, item.new_status) })}</span></div>)}</div>
+          {result.returned.every((item) => item.workflow_status === 'COMPLETED') && <CheckCircle2 size={36} />}
+          <h4>{result.returned.every((item) => item.workflow_status === 'COMPLETED') ? t('bulk.returnSuccess') : t('bulk.awaitingSignature')}</h4>
+          <div className="return-confirm-list">{result.returned.map((item) => <div key={item.transfer_id}><b>{t('bulk.machineName', { number: item.machine_number })}</b><span>{item.workflow_status === 'COMPLETED' ? t('bulk.newStatus', { status: statusText(t, item.new_status) }) : t('bulk.awaitingSignature')}</span>{item.workflow_status === 'COMPLETED' && <span>{item.documents.map((document) => <button key={document.id} className="secondary compact" onClick={() => void downloadApiFile(document.download_endpoint, document.filename)}><Download size={15} />{document.format.toUpperCase()}</button>)}</span>}</div>)}</div>
           {result.batches.map((batch) => <BatchProgressCard key={batch.batch_id} batch={batch} />)}
           <div className="actions"><button className="primary" onClick={onClose}>{t('common.done')}</button></div>
         </div>
@@ -520,6 +646,7 @@ export function BatchProgressCard({ batch, onOpen }: { batch: BatchProgress; onO
     <article className="batch-card">
       <div><span className={`badge ${batch.still_issued_machines ? 'batch-active' : 'batch-complete'}`}>{statusText(t, batch.status, 'batch')}</span><h4>{batch.batch_reference}</h4>{batch.created_at && <small>{date(batch.created_at)}</small>}</div>
       <div className="batch-progress"><span style={{ width: `${returnedPercent}%` }} /><small>{t('bulk.returnedProgress', { returned: batch.returned_machines, issued: batch.still_issued_machines, total: batch.total_machines })}</small></div>
+      {batch.awaiting_signature_machines > 0 && <small className="muted">{t('bulk.awaitingSignatureCount', { count: batch.awaiting_signature_machines })}</small>}
       {onOpen && <button className="secondary compact" onClick={() => onOpen(batch)}>{t('common.details')}</button>}
     </article>
   )
@@ -527,14 +654,15 @@ export function BatchProgressCard({ batch, onOpen }: { batch: BatchProgress; onO
 
 function BatchDetailsPanel({ details, onDownload }: { details: BatchDetails; onDownload: (path: string, filename: string) => void }) {
   const { t } = useI18n()
+  const hasFinalDocuments = details.transfers.some((transfer) => transfer.issue_status === 'COMPLETED' || transfer.return_status === 'COMPLETED')
   return (
     <div className="batch-details">
-      <button className="secondary" onClick={() => onDownload(details.zip_download_endpoint, `${details.batch_reference}-protocols.zip`)}><Archive size={16} />{t('bulk.zipProtocols')}</button>
+      <button className="secondary" disabled={!hasFinalDocuments} onClick={() => onDownload(details.zip_download_endpoint, `${details.batch_reference}-protocols.zip`)}><Archive size={16} />{hasFinalDocuments ? t('bulk.zipProtocols') : t('bulk.awaitingSignature')}</button>
       {details.transfers.map((transfer) => (
         <div key={transfer.transfer_id}>
           <span><b>{t('bulk.batchMachine', { number: transfer.machine_number })}</b><small>{transfer.brand} · {transfer.protocol_number}</small></span>
-          <span className={`availability-pill ${transfer.is_active ? 'blocked' : 'available'}`}>{transfer.is_active ? t('transfers.stillIssued') : t('transfers.returned')}</span>
-          <span>{transfer.documents.map((document: ProtocolDocument) => <button className="link" key={document.id} onClick={() => onDownload(document.download_endpoint, document.filename)}>{document.format.toUpperCase()}</button>)}</span>
+          <span className={`availability-pill ${transfer.is_active ? 'blocked' : 'available'}`}>{transfer.issue_status === 'AWAITING_SIGNATURE' || transfer.return_status === 'AWAITING_SIGNATURE' ? t('bulk.awaitingSignature') : transfer.is_active ? t('transfers.stillIssued') : t('transfers.returned')}</span>
+          <span>{transfer.issue_status === 'COMPLETED' && transfer.documents.map((document: ProtocolDocument) => <button className="link" key={document.id} onClick={() => onDownload(document.download_endpoint, document.filename)}>{document.format.toUpperCase()}</button>)}</span>
         </div>
       ))}
     </div>

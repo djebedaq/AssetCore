@@ -32,3 +32,16 @@ Restore използва `pg_restore --clean --if-exists` и е разрушит
 backend/.venv/Scripts/python.exe scripts/export_documents.py --output C:\AssetCoreExports\documents.zip
 backend/.venv/Scripts/python.exe scripts/verify_document_hashes.py
 ```
+
+За автоматизиран реален round-trip задайте две различни PostgreSQL QA бази с
+`test` или `qa` в имената им чрез `ASSETCORE_POSTGRES_SOURCE_URL` и
+`ASSETCORE_POSTGRES_RESTORE_URL`, както и пътищата `PG_DUMP`/`PG_RESTORE`, после:
+
+```powershell
+backend/.venv/Scripts/python.exe scripts/postgres_smoke_test.py
+```
+
+Скриптът мигрира изолираната source база, създава криптиран dump, проверява го,
+възстановява го с `--clean` в отделната restore база и сравнява Alembic head и
+проверения 19-машинен регистър. Той отказва production-подобно име или еднакви
+source/target URL-и и никога не отпечатва connection URL или ключ.

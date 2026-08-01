@@ -72,17 +72,25 @@ class ConfirmedTemplateUnavailableError(RuntimeError):
 
 RESOURCES = Path(__file__).resolve().parents[1] / "resources"
 ASSETS = RESOURCES / "assets"
-REPAIR_REFERENCE = (
-    RESOURCES
-    / "technical_docs"
-    / "protocols_hpwj"
-    / "10. REPORT BEFORE-AFTER REPAIR - Combijet - завършен !.docx"
+
+
+def _reference_by_sha256(folder: Path, expected_sha256: str) -> Path:
+    """Resolve a controlled reference by content, never by a locale-sensitive name."""
+    for candidate in sorted(folder.glob("*.docx")):
+        if hashlib.sha256(candidate.read_bytes()).hexdigest() == expected_sha256:
+            return candidate
+    raise FileNotFoundError(
+        f"Controlled DOCX reference {expected_sha256} is missing from {folder.name}."
+    )
+
+
+REPAIR_REFERENCE = _reference_by_sha256(
+    RESOURCES / "technical_docs" / "protocols_hpwj",
+    "39337dfc445d61b4d5144259ca35624c2049d266378e326780176de3104784c1",
 )
-PARTS_REFERENCE = (
-    RESOURCES
-    / "technical_docs"
-    / "parts_requests_hpwj"
-    / "KK 1001 FALCH 500.docx"
+PARTS_REFERENCE = _reference_by_sha256(
+    RESOURCES / "technical_docs" / "parts_requests_hpwj",
+    "3ba8e43102ae044b02b6aa7a4cd3b06ff00bce444a56fc8da6ba737c42bbc7a7",
 )
 
 TEXT = {
@@ -128,7 +136,7 @@ TEXT = {
         "yes": "Да",
         "no": "Не",
         "condition_after": "Състояние и резултат след ремонта",
-        "responsible": "Отговорно лице",
+        "responsible": "Извършил ремонта",
         "approver": "Одобрил",
         "part_request_title": "ТЕХНИЧЕСКА СПЕЦИФИКАЦИЯ\nЗА ДОСТАВКА НА РЕЗЕРВНИ ЧАСТИ",
         "position": "Поз.",
@@ -182,7 +190,7 @@ TEXT = {
         "yes": "Yes",
         "no": "No",
         "condition_after": "Condition and result after repair",
-        "responsible": "Responsible person",
+        "responsible": "Repair performed by",
         "approver": "Approved by",
         "part_request_title": "TECHNICAL SPECIFICATION\nFOR SPARE PARTS SUPPLY",
         "position": "Pos.",
@@ -236,7 +244,7 @@ TEXT = {
         "yes": "Да",
         "no": "Нет",
         "condition_after": "Состояние и результат после ремонта",
-        "responsible": "Ответственное лицо",
+        "responsible": "Ремонт выполнил",
         "approver": "Утвердил",
         "part_request_title": "ТЕХНИЧЕСКАЯ СПЕЦИФИКАЦИЯ\nНА ПОСТАВКУ ЗАПАСНЫХ ЧАСТЕЙ",
         "position": "Поз.",
@@ -448,7 +456,9 @@ def _return_findings(transfer: TransferProtocol, language: str) -> str:
 def _identity_rows(transfer: TransferProtocol, operation: str, language: str) -> list[tuple[str, str]]:
     t = TEXT[language]
     date_value = (
-        transfer.returned_at if operation == "return" else transfer.issued_at
+        (transfer.returned_at or transfer.return_requested_at)
+        if operation == "return"
+        else transfer.issued_at
     ) or transfer.created_at
     return [
         (t["date"], date_value.strftime("%d.%m.%Y")),
@@ -502,14 +512,37 @@ def _protocol_snapshot(
         "handed_over_by": (
             transfer.returned_by_name if operation == "return" else transfer.handed_over_by
         ),
+        "handed_over_job_title": (
+            transfer.returned_by_job_title
+            if operation == "return"
+            else transfer.handed_over_job_title
+        ),
+        "handed_over_organization": (
+            transfer.returned_by_company
+            if operation == "return"
+            else transfer.handed_over_department
+        ),
         "accepted_by": (
             transfer.return_accepted_by if operation == "return" else transfer.accepted_by
         ),
+        "accepted_by_job_title": (
+            transfer.return_accepted_job_title
+            if operation == "return"
+            else transfer.accepted_by_job_title
+        ),
+        "accepted_by_organization": (
+            transfer.return_accepted_department
+            if operation == "return"
+            else transfer.accepted_by_company
+        ),
         "document_date": (
-            transfer.returned_at if operation == "return" else transfer.issued_at
-        ).isoformat()
-        if (transfer.returned_at if operation == "return" else transfer.issued_at)
-        else transfer.created_at.isoformat(),
+            (
+                (transfer.returned_at or transfer.return_requested_at)
+                if operation == "return"
+                else transfer.issued_at
+            )
+            or transfer.created_at
+        ).isoformat(),
     }
 
 
@@ -901,12 +934,12 @@ def build_repair_protocol_docx(repair: Repair, language: str = "bg") -> bytes:
                     caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 except (ValueError, TypeError):
                     document.add_paragraph(item.filename)
-    signatures = document.add_table(rows=2, cols=2)
+    signatures = document.add_table(rows=1, cols=2)
     signatures.style = "Table Grid"
     _set_cell(signatures.cell(0, 0), f'{t["responsible"]}: {repair.responsible_user.full_name if repair.responsible_user else ""}', bold=True)
     _set_cell(signatures.cell(0, 1), t["signature"])
-    _set_cell(signatures.cell(1, 0), f'{t["approver"]}: {repair.approved_by.full_name if repair.approved_by else ""}', bold=True)
-    _set_cell(signatures.cell(1, 1), t["signature"])
+    status = document.add_paragraph(_signature_status(language, finalized_internal=True))
+    _set_run_font(status.runs[0], 8, True)
     output = io.BytesIO()
     document.save(output)
     return output.getvalue()
@@ -943,10 +976,15 @@ def build_repair_protocol_pdf(repair: Repair, language: str = "bg") -> bytes:
     if repair.attachments:
         for attachment in [item for item in repair.attachments if item.media_type in {"image/jpeg", "image/png"}]:
             story.extend([PageBreak(), ReportLabImage(io.BytesIO(attachment.content), width=170 * mm, height=220 * mm, kind="proportional"), Paragraph(escape(attachment.caption or attachment.filename), small)])
-    signature_data = [[Paragraph(f'<b>{escape(t["responsible"])}:</b> {escape(repair.responsible_user.full_name if repair.responsible_user else "")}', body), Paragraph(escape(t["signature"]), body)], [Paragraph(f'<b>{escape(t["approver"])}:</b> {escape(repair.approved_by.full_name if repair.approved_by else "")}', body), Paragraph(escape(t["signature"]), body)]]
-    signatures = Table(signature_data, colWidths=[156 * mm, 36 * mm], rowHeights=[14 * mm, 14 * mm])
+    signature_data = [[Paragraph(f'<b>{escape(t["responsible"])}:</b> {escape(repair.responsible_user.full_name if repair.responsible_user else "")}', body), Paragraph(escape(t["signature"]), body)]]
+    signatures = Table(signature_data, colWidths=[156 * mm, 36 * mm], rowHeights=[14 * mm])
     signatures.setStyle(_pdf_table_style())
-    story.extend([Spacer(1, 3 * mm), KeepTogether(signatures)])
+    story.extend([
+        Spacer(1, 3 * mm),
+        KeepTogether(signatures),
+        Spacer(1, 2 * mm),
+        Paragraph(escape(_signature_status(language, finalized_internal=True)), label),
+    ])
     pdf.build(story)
     return output.getvalue()
 
@@ -1127,7 +1165,13 @@ def _preparer_values(db: Session, created_by_id: int) -> dict[str, str]:
     return {"PREPARER_NAME": user.full_name, "PREPARER_JOB_TITLE": user.job_title}
 
 
-def _signature_status(language: str) -> str:
+def _signature_status(language: str, *, finalized_internal: bool = False) -> str:
+    if finalized_internal:
+        return {
+            "bg": "ОКОНЧАТЕЛЕН ВЪТРЕШЕН ПРОТОКОЛ",
+            "en": "FINAL INTERNAL PROTOCOL",
+            "ru": "ОКОНЧАТЕЛЬНЫЙ ВНУТРЕННИЙ ПРОТОКОЛ",
+        }[_language(language)]
     return {
         "bg": "НЕПЪЛНО ПОДПИСАН",
         "en": "NOT FULLY SIGNED",
@@ -1148,6 +1192,16 @@ def _protocol_template_values(
     ) or transfer.created_at
     left_name = transfer.returned_by_name if operation == "return" else transfer.handed_over_by
     right_name = transfer.return_accepted_by if operation == "return" else transfer.accepted_by
+    left_job = (
+        transfer.returned_by_job_title
+        if operation == "return"
+        else transfer.handed_over_job_title
+    )
+    right_job = (
+        transfer.return_accepted_job_title
+        if operation == "return"
+        else transfer.accepted_by_job_title
+    )
     values: dict[str, object] = {
         "DOCUMENT_NUMBER": f"{transfer.protocol_number}-R" if operation == "return" else transfer.protocol_number,
         "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
@@ -1162,9 +1216,9 @@ def _protocol_template_values(
         "USAGE_TEXT": _usage_text(transfer),
         "REMARKS": transfer.return_notes if operation == "return" else transfer.remarks,
         "LEFT_SIGNER_NAME": left_name or "",
-        "LEFT_SIGNER_JOB_TITLE": "",
+        "LEFT_SIGNER_JOB_TITLE": left_job or "",
         "RIGHT_SIGNER_NAME": right_name or "",
-        "RIGHT_SIGNER_JOB_TITLE": "",
+        "RIGHT_SIGNER_JOB_TITLE": right_job or "",
         "LEFT_SIGNATURE": "",
         "RIGHT_SIGNATURE": "",
         "SIGNATURE_STATUS": _signature_status(language),
@@ -1247,6 +1301,8 @@ def _register_official_version(
     machine_id: int | None = None,
     transfer_id: int | None = None,
     batch_id: int | None = None,
+    template_version_id: int | None = None,
+    initial_status: str = OfficialDocumentStatus.DRAFT.value,
 ) -> OfficialDocument:
     existing = db.scalar(
         select(OfficialDocument).where(OfficialDocument.document_number == number)
@@ -1280,20 +1336,50 @@ def _register_official_version(
     )
     db.add(document)
     db.flush()
+    snapshot_sha256 = hashlib.sha256(
+        json.dumps(
+            official_snapshot,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    docx_sha256 = hashlib.sha256(docx).hexdigest()
+    pdf_sha256 = hashlib.sha256(pdf).hexdigest()
+    signing_sha256 = hashlib.sha256(
+        json.dumps(
+            {
+                "document_number": number,
+                "document_type": document_type,
+                "snapshot_sha256": snapshot_sha256,
+                "docx_sha256": docx_sha256,
+                "pdf_sha256": pdf_sha256,
+                "version": 1,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
     version = OfficialDocumentVersion(
         document_id=document.id,
         version=1,
-        status=OfficialDocumentStatus.DRAFT.value,
+        status=initial_status,
         language=_language(language),
+        template_version_id=template_version_id,
         snapshot=official_snapshot,
-        snapshot_sha256=hashlib.sha256(
-            json.dumps(official_snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
-        ).hexdigest(),
+        snapshot_sha256=snapshot_sha256,
+        signing_sha256=signing_sha256,
         docx_content=docx,
-        docx_sha256=hashlib.sha256(docx).hexdigest(),
+        docx_sha256=docx_sha256,
         pdf_content=pdf,
-        pdf_sha256=hashlib.sha256(pdf).hexdigest(),
+        pdf_sha256=pdf_sha256,
         prepared_by_id=created_by_id,
+        finalized_at=(
+            utcnow()
+            if initial_status == OfficialDocumentStatus.FINALIZED.value
+            else None
+        ),
     )
     db.add(version)
     db.flush()
@@ -1334,6 +1420,7 @@ def make_protocol_documents(
         machine_id=transfer.machine_id,
         transfer_id=transfer.id,
         batch_id=batch.id,
+        template_version_id=template.id,
     )
     generated = [
         ("docx", DOCX_MEDIA_TYPE, docx),
@@ -1392,6 +1479,7 @@ def make_return_documents(
         machine_id=transfer.machine_id,
         transfer_id=transfer.id,
         batch_id=batch.id if batch else None,
+        template_version_id=template.id,
     )
     return _generated_documents(
         number=number,
@@ -1438,6 +1526,15 @@ def make_repair_documents(
         "event_ids": [event.id for event in repair.events],
         "part_ids": [part.id for part in repair.parts_used],
         "attachment_ids": [attachment.id for attachment in repair.attachments],
+        "responsible_user": {
+            "user_id": repair.responsible_user.id if repair.responsible_user else None,
+            "display_name": (
+                repair.responsible_user.full_name if repair.responsible_user else None
+            ),
+            "job_title": (
+                repair.responsible_user.job_title if repair.responsible_user else None
+            ),
+        },
     }
     machine = repair.machine
     date_value = repair.closed_at or repair.opened_at
@@ -1459,11 +1556,11 @@ def make_repair_documents(
         "CONDITION_AFTER": repair.condition_after or repair.result or "",
         "LEFT_SIGNER_NAME": repair.responsible_user.full_name if repair.responsible_user else "",
         "LEFT_SIGNER_JOB_TITLE": repair.responsible_user.job_title if repair.responsible_user else "",
-        "RIGHT_SIGNER_NAME": repair.approved_by.full_name if repair.approved_by else "",
-        "RIGHT_SIGNER_JOB_TITLE": repair.approved_by.job_title if repair.approved_by else "",
+        "RIGHT_SIGNER_NAME": "",
+        "RIGHT_SIGNER_JOB_TITLE": "",
         "LEFT_SIGNATURE": "",
         "RIGHT_SIGNATURE": "",
-        "SIGNATURE_STATUS": _signature_status(language),
+        "SIGNATURE_STATUS": _signature_status(language, finalized_internal=True),
     }
     values.update(_preparer_values(db, created_by_id))
     event_rows = [["Дата", "Тип", "Описание"]] + [
@@ -1490,6 +1587,8 @@ def make_repair_documents(
         snapshot=snapshot,
         created_by_id=created_by_id,
         machine_id=repair.machine_id,
+        template_version_id=template.id,
+        initial_status=OfficialDocumentStatus.FINALIZED.value,
     )
     return _generated_documents(
         number=number,
@@ -1503,6 +1602,107 @@ def make_repair_documents(
         machine_id=repair.machine_id,
         repair_id=repair.id,
     )
+
+
+def make_repair_correction(
+    db: Session,
+    repair: Repair,
+    created_by_id: int,
+    reason: str,
+    language: str = "bg",
+) -> tuple[list[GeneratedDocument], OfficialDocument, OfficialDocumentVersion]:
+    """Create a locked new version without rewriting the completed repair protocol."""
+    existing_numbers = list(
+        db.scalars(
+            select(GeneratedDocument.document_number)
+            .where(
+                GeneratedDocument.repair_id == repair.id,
+                GeneratedDocument.language == _language(language),
+            )
+            .order_by(GeneratedDocument.id)
+        )
+    )
+    original = db.scalar(
+        select(OfficialDocument)
+        .where(
+            OfficialDocument.document_type == DocumentType.REPAIR_PROTOCOL.value,
+            OfficialDocument.machine_id == repair.machine_id,
+            OfficialDocument.document_number.in_(existing_numbers or [""]),
+        )
+        .order_by(OfficialDocument.id)
+    )
+    if original is None or original.current_version_id is None:
+        raise TemplateValidationError("Липсва заключена начална версия на ремонтния протокол.")
+    previous = db.get(OfficialDocumentVersion, original.current_version_id)
+    if previous is None or previous.status not in {
+        OfficialDocumentStatus.FINALIZED.value,
+        OfficialDocumentStatus.SIGNED.value,
+    }:
+        raise TemplateValidationError("Само окончателен ремонтен протокол може да бъде коригиран.")
+
+    documents = make_repair_documents(db, repair, created_by_id, language)
+    temporary = db.scalar(
+        select(OfficialDocument).where(
+            OfficialDocument.document_number == documents[0].document_number
+        )
+    )
+    if temporary is None or temporary.current_version_id is None:
+        raise TemplateValidationError("Новата версия на ремонтния протокол не беше регистрирана.")
+    version = db.get(OfficialDocumentVersion, temporary.current_version_id)
+    assert version is not None
+    next_version = previous.version + 1
+    snapshot = dict(version.snapshot)
+    snapshot["correction"] = {
+        "reason": reason,
+        "supersedes_version": previous.version,
+        "created_by_id": created_by_id,
+        "created_at": utcnow().isoformat(timespec="seconds") + "Z",
+    }
+    snapshot_sha256 = hashlib.sha256(
+        json.dumps(
+            snapshot,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    signing_sha256 = hashlib.sha256(
+        json.dumps(
+            {
+                "document_number": original.document_number,
+                "document_type": original.document_type,
+                "snapshot_sha256": snapshot_sha256,
+                "docx_sha256": version.docx_sha256,
+                "pdf_sha256": version.pdf_sha256,
+                "version": next_version,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    version.document_id = original.id
+    version.version = next_version
+    version.snapshot = snapshot
+    version.snapshot_sha256 = snapshot_sha256
+    version.signing_sha256 = signing_sha256
+    version.correction_reason = reason
+    version.supersedes_version_id = previous.id
+    version.status = OfficialDocumentStatus.FINALIZED.value
+    version.finalized_at = utcnow()
+    previous.status = OfficialDocumentStatus.SUPERSEDED.value
+    original.current_version_id = version.id
+    temporary.current_version_id = None
+    db.delete(temporary)
+    for document in documents:
+        document.snapshot = {
+            **document.snapshot,
+            "official_document_id": original.id,
+            "official_document_version": next_version,
+            "correction_reason": reason,
+        }
+    db.flush()
+    return documents, original, version
 
 
 def make_part_request_documents(
@@ -1550,6 +1750,7 @@ def make_part_request_documents(
         snapshot=snapshot,
         created_by_id=created_by_id,
         machine_id=request.machine_id,
+        template_version_id=template.id,
     )
     return _generated_documents(
         number=number,

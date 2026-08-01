@@ -501,7 +501,7 @@ def test_no_physical_user_delete_endpoint(client, auth_headers, session_factory)
 
 
 def test_mechanic_operational_workflows_and_director_request_approval(
-    client, session_factory, machine_ids, issue_payload
+    client, session_factory, machine_ids, issue_payload, finalize_signatures
 ):
     """Integration coverage for the final mechanic/director operational boundary."""
     _add_user(session_factory, email="mechanic-workflow@example.invalid", role="mechanic")
@@ -515,6 +515,7 @@ def test_mechanic_operational_workflows_and_director_request_approval(
         json=issue_payload(machine_ids["4"]),
     )
     assert issued.status_code == 201, issued.text
+    finalize_signatures(client, issued)
     transfer = issued.json()["transfers"][0]
     assert len(transfer["documents"]) == 2
 
@@ -532,11 +533,19 @@ def test_mechanic_operational_workflows_and_director_request_approval(
                     "returned_by": "",
                     "accepted_by": "",
                     "next_status": "INSPECTION",
+                    "returned_person": {
+                        "first_name": "Тестов",
+                        "middle_name": "Външен",
+                        "last_name": "Връщащ",
+                        "job_title": "Тестова длъжност",
+                        "company_or_department": "Тестово звено",
+                    },
                 }
             ]
         },
     )
     assert returned.status_code == 200, returned.text
+    finalize_signatures(client, returned)
 
     repair = client.post(
         "/api/repair-cases",

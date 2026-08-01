@@ -8,7 +8,7 @@ Generic Render URLs с `postgresql://` или legacy `postgres://` се норм
 
 ## Миграция
 
-Текущият `head` е `20260801_0005`: отделни профилни полета, owner designation, лицензи, външни подписващи, участници, подписни позиции/сесии, криптографски metadata, official document versions и template validation. `20260801_0004_final_user_roles` преди него изисква нормализираният legacy owner email да съвпада с точно един съществуващ акаунт при непразна база. Нито една миграция не допълва имена, длъжности или business history чрез догадки.
+Текущият `head` е `20260801_0006`: добавя двуфазните `AWAITING_SIGNATURE` transfer операции, immutable signing hash, защита от повторен PNG подпис, snapshot полета за външните участници и връзка към точната template версия. Repair signature slots се деактивират, без да се изтрива историческа конфигурация. `20260801_0005` преди него добавя профилите, owner designation, лицензите и основата на official document/signature модела. Нито една миграция не допълва имена, длъжности или business history чрез догадки.
 
 Production Docker image включва LibreOffice Writer за PDF от exact filled DOCX source, DejaVu fonts и PostgreSQL client за backup/restore. След deploy проверете `/api/health`, Alembic head, owner designation, licence status и restore в отделна база. Вижте `BACKUP_RESTORE_BG.md` и `RELEASE_CHECKLIST_BG.md`.
 

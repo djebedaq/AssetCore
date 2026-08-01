@@ -152,6 +152,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The bulk issue was completed successfully.",
         "ru": "Групповая выдача успешно завершена.",
     },
+    "issue.awaiting_signature": {
+        "bg": "Издаването е подготвено и очаква задължителните подписи.",
+        "en": "The issue is prepared and awaiting the required signatures.",
+        "ru": "Выдача подготовлена и ожидает обязательных подписей.",
+    },
+    "issue.recipient_identity_required": {
+        "bg": "Въведете три имена, длъжност и фирма или отдел на приемащия.",
+        "en": "Enter the recipient's full three-part name, job title, and company or department.",
+        "ru": "Укажите три имени, должность и компанию или отдел получателя.",
+    },
     "locations.not_found": {
         "bg": "Едно или повече избрани местоположения не са намерени.",
         "en": "One or more selected locations were not found.",
@@ -181,6 +191,26 @@ MESSAGES: dict[str, dict[str, str]] = {
         "bg": "Връщането е записано успешно.",
         "en": "The return was recorded successfully.",
         "ru": "Возврат успешно зарегистрирован.",
+    },
+    "return.awaiting_signature": {
+        "bg": "Връщането е подготвено и очаква задължителните подписи.",
+        "en": "The return is prepared and awaiting the required signatures.",
+        "ru": "Возврат подготовлен и ожидает обязательных подписей.",
+    },
+    "return.issue_not_finalized": {
+        "bg": "Машината още очаква подписи по издаването и не може да бъде върната.",
+        "en": "The issue is still awaiting signatures, so the asset cannot be returned.",
+        "ru": "Выдача ещё ожидает подписей, поэтому оборудование нельзя вернуть.",
+    },
+    "return.already_awaiting_signature": {
+        "bg": "Връщането вече е подготвено и очаква подписи.",
+        "en": "The return is already prepared and awaiting signatures.",
+        "ru": "Возврат уже подготовлен и ожидает подписей.",
+    },
+    "return.returner_identity_required": {
+        "bg": "Въведете три имена, длъжност и фирма или отдел на връщащия.",
+        "en": "Enter the returner's full three-part name, job title, and company or department.",
+        "ru": "Укажите три имени, должность и компанию или отдел возвращающего.",
     },
     "batch.not_found": {
         "bg": "Партидата не е намерена.",
@@ -217,6 +247,7 @@ STATUS_LABELS: dict[str, dict[str, str]] = {
     "DIAGNOSIS": {"bg": "Диагностика", "en": "Diagnosis", "ru": "Диагностика"},
     "REPAIRING": {"bg": "В ремонт", "en": "Repairing", "ru": "Ремонт"},
     "COMPLETED": {"bg": "Завършена", "en": "Completed", "ru": "Завершено"},
+    "AWAITING_SIGNATURE": {"bg": "Очаква подпис", "en": "Awaiting signature", "ru": "Ожидает подписи"},
     "DRAFT": {"bg": "Чернова", "en": "Draft", "ru": "Черновик"},
     "SUBMITTED": {"bg": "Подадена", "en": "Submitted", "ru": "Подано"},
     "APPROVED": {"bg": "Одобрена", "en": "Approved", "ru": "Одобрено"},

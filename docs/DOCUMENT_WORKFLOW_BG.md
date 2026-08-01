@@ -18,6 +18,14 @@ finalized signed version. Достъпни са индивидуални DOCX/PD
 version history и hash verification. Подписана версия не се редактира и не се
 анулира; supersede създава версия N+1 с причина и връзка към предишната.
 
+Издаването и връщането регистрират immutable snapshot и участниците в самата
+операция. До пълното подписване документите не се публикуват за download и
+машината не се премества. Manual `POST /api/official-documents` не приема
+transfer document types, за да няма втори паралелен начин за същия протокол.
+Приключването на вътрешен ремонт автоматично създава заключен `FINALIZED`
+DOCX/PDF без handover/acceptance подписи. Корекцията изисква основание и създава
+нова версия чрез repair correction endpoint; старата остава достъпна.
+
 За QA изпълнете `backend/scripts/document_qa.py <изолирана-папка>`. Скриптът
 генерира DOCX/PDF само във временна QA база, проверява кирилица, placeholders,
 document number, signature status, templates и hashes, и връща ненулев exit code

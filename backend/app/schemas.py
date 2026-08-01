@@ -324,6 +324,48 @@ class PartRequestOut(PartRequestCreate):
     created_at: datetime
 
 
+class TransferPartyInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=120)
+    middle_name: str | None = Field(default=None, max_length=120)
+    last_name: str = Field(min_length=1, max_length=120)
+    job_title: str = Field(min_length=2, max_length=255)
+    company_or_department: str = Field(min_length=1, max_length=255)
+    is_foreign_person: bool = False
+    name_exception_reason: str | None = Field(default=None, max_length=1000)
+
+    @field_validator(
+        "first_name",
+        "middle_name",
+        "last_name",
+        "job_title",
+        "company_or_department",
+        "name_exception_reason",
+    )
+    @classmethod
+    def strip_party_values(cls, value: str | None) -> str | None:
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def require_three_names_or_foreign_exception(self):
+        if self.middle_name:
+            if self.name_exception_reason and not self.is_foreign_person:
+                raise ValueError(
+                    "Причина за изключение се посочва само за чуждестранно лице."
+                )
+            return self
+        if not self.is_foreign_person:
+            raise ValueError(
+                "За външен участник са задължителни собствено, бащино и фамилно име."
+            )
+        if not self.name_exception_reason or len(self.name_exception_reason) < 10:
+            raise ValueError(
+                "За чуждестранно лице без бащино име е задължителна изрична причина."
+            )
+        return self
+
+
 class TransferCreate(BaseModel):
     machine_id: int
     protocol_type: str = "Предаване"
@@ -344,6 +386,8 @@ class TransferCreate(BaseModel):
     accessories: str | None = None
     condition_text: str | None = None
     remarks: str | None = None
+    recipient: TransferPartyInput | None = None
+    returned_person: TransferPartyInput | None = None
 
 
 class TransferOut(BaseModel):
@@ -356,6 +400,8 @@ class TransferOut(BaseModel):
     batch_id: int | None = None
     batch_reference: str | None = None
     is_active: bool
+    issue_status: str = "COMPLETED"
+    return_status: str | None = None
     company_unit: str | None = None
     department: str | None = None
     vessel: str | None = None
@@ -390,6 +436,7 @@ class TransferOut(BaseModel):
 class BulkIssueRequest(BaseModel):
     machine_ids: list[int]
     document_language: LanguageCode = LanguageCode.BG
+    recipient: TransferPartyInput | None = None
     company_unit: str | None = None
     department: str | None = None
     vessel: str | None = None
@@ -426,11 +473,24 @@ class ProtocolDocumentOut(BaseModel):
     download_endpoint: str
 
 
+class SigningTaskOut(BaseModel):
+    participant_id: int
+    slot_code: str
+    operation_role: str
+    signer_name: str
+    signing_token: str
+    signing_endpoint: str
+    expires_at: datetime
+
+
 class BulkIssueTransferOut(BaseModel):
     transfer_id: int
     protocol_number: str
     machine_id: int
     machine_number: str
+    workflow_status: str
+    official_document_id: int
+    signing_tasks: list[SigningTaskOut] = Field(default_factory=list)
     documents: list[ProtocolDocumentOut]
 
 
@@ -467,6 +527,7 @@ class BulkReturnItem(BaseModel):
     repair_required: bool = False
     returned_by: str | None = None
     accepted_by: str | None = None
+    returned_person: TransferPartyInput | None = None
     location_id: int | None = None
     next_status: MachineStatus = MachineStatus.INSPECTION
 
@@ -510,6 +571,7 @@ class BatchProgressOut(BaseModel):
     total_machines: int
     returned_machines: int
     still_issued_machines: int
+    awaiting_signature_machines: int = 0
 
 
 class BatchSummaryOut(BatchProgressOut):
@@ -521,7 +583,10 @@ class BulkReturnItemOut(BaseModel):
     machine_id: int
     machine_number: str
     new_status: MachineStatus
-    returned_at: datetime
+    returned_at: datetime | None = None
+    workflow_status: str
+    official_document_id: int
+    signing_tasks: list[SigningTaskOut] = Field(default_factory=list)
     documents: list[ProtocolDocumentOut] = Field(default_factory=list)
 
 
@@ -540,6 +605,8 @@ class AvailabilityOut(BaseModel):
     status_label: str
     location: str | None = None
     available: bool
+    returnable: bool = False
+    operation_status: str | None = None
     unavailable_reason: str | None = None
     active_transfer_id: int | None = None
     protocol_number: str | None = None
@@ -557,6 +624,8 @@ class BatchTransferOut(BaseModel):
     pressure_bar: int
     protocol_number: str
     is_active: bool
+    issue_status: str = "COMPLETED"
+    return_status: str | None = None
     issued_at: datetime | None = None
     returned_at: datetime | None = None
     current_status: MachineStatus | str
