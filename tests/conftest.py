@@ -16,6 +16,7 @@ sys.path.insert(0, str(BACKEND))
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{ROOT / 'tests' / 'bootstrap.db'}")
 os.environ.setdefault("SECRET_KEY", "test-only-secret")
 os.environ.setdefault("ADMIN_EMAIL", "admin@assetcore.local")
+os.environ.setdefault("ASSETCORE_OWNER_EMAIL", "admin@assetcore.local")
 os.environ.setdefault("ADMIN_PASSWORD", "AssetCore123!")
 
 from app.database import Base, get_db  # noqa: E402
@@ -103,16 +104,16 @@ def viewer_headers(
     with session_factory() as session:
         session.add(
             User(
-                email="viewer@assetcore.test",
+                email="observer@assetcore.test",
                 full_name="Тестов наблюдател",
-                password_hash=hash_password("viewer-password"),
-                role="viewer",
+                password_hash=hash_password("Observer123!"),
+                role="observer",
             )
         )
         session.commit()
     response = client.post(
         "/api/auth/login",
-        json={"email": "viewer@assetcore.test", "password": "viewer-password"},
+        json={"email": "observer@assetcore.test", "password": "Observer123!"},
     )
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['access_token']}"}

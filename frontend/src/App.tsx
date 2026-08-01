@@ -17,11 +17,14 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  UserRoundCog,
   Wrench,
   X,
 } from 'lucide-react'
 import { api, downloadApiFile, getToken, logout, setToken } from './api'
+import AuthenticatedImage from './AuthenticatedImage'
 import BulkTransfers from './BulkTransfers'
+import ChangePassword from './ChangePassword'
 import {
   AdministrationPanel,
   GlobalSearchBox,
@@ -31,9 +34,11 @@ import {
   MachinePassportModal,
   TechnicalLibrary,
 } from './IndustrialPlatform'
-import { statusText, useI18n } from './i18n'
+import { statusText, useI18n, type TranslationKey } from './i18n'
 import { SUPPORTED_LOCALES, type Locale } from './locale'
-import type { AssetCategory, Department, Location, Machine, PartRequest, Repair, UserSession } from './types'
+import { hasPermission, storedUser } from './permissions'
+import type { AssetCategory, Department, Location, Machine, PartRequest, PermissionCode, Repair, UserSession } from './types'
+import UserAdministration from './UserAdministration'
 
 type Page =
   | 'dashboard'
@@ -46,6 +51,8 @@ type Page =
   | 'reports'
   | 'audit'
   | 'qr'
+  | 'users'
+  | 'password'
   | 'settings'
 
 type DashboardData = {
@@ -144,18 +151,6 @@ const PART_STATUS_CODES = [
 
 const PART_PRIORITY_CODES = ['LOW', 'NORMAL', 'URGENT']
 
-function storedUser(): UserSession | null {
-  try {
-    return JSON.parse(localStorage.getItem('assetcore_user') || 'null') as UserSession | null
-  } catch {
-    return null
-  }
-}
-
-function hasRole(...roles: string[]): boolean {
-  return roles.includes(storedUser()?.role || '')
-}
-
 export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   const { locale, setLocale, t } = useI18n()
   return (
@@ -175,7 +170,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   )
 }
 
-function Login({ onLogin }: { onLogin: () => void }) {
+function Login({ onLogin }: { onLogin: (user: UserSession) => void }) {
   const { setLocale, t } = useI18n()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -194,7 +189,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
       setToken(data.access_token)
       localStorage.setItem('assetcore_user', JSON.stringify(data.user))
       setLocale(data.user.preferred_language, false)
-      onLogin()
+      onLogin(data.user)
     } catch {
       setError(t('login.error'))
     } finally {
@@ -243,7 +238,8 @@ function Login({ onLogin }: { onLogin: () => void }) {
 function App() {
   const { t } = useI18n()
   const [authenticated, setAuthenticated] = useState(Boolean(getToken()))
-  const [page, setPage] = useState<Page>('dashboard')
+  const [session, setSession] = useState<UserSession | null>(() => storedUser())
+  const [page, setPage] = useState<Page>(() => hasPermission('repairs.view') ? 'dashboard' : 'machines')
   const [catalogMachineId, setCatalogMachineId] = useState<number | null>(null)
   const [mobileMenu, setMobileMenu] = useState(false)
   const [passportMachineId, setPassportMachineId] = useState<number | null>(() => {
@@ -251,21 +247,23 @@ function App() {
     return match ? Number(match[1]) : null
   })
 
-  if (!authenticated) return <Login onLogin={() => setAuthenticated(true)} />
+  if (!authenticated || !session) return <Login onLogin={(user) => { setSession(user); setAuthenticated(true); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
+  if (session.must_change_password) return <ChangePassword forced onChanged={(user) => { setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
 
-  const nav = [
-    ['dashboard', 'nav.dashboard', Gauge],
-    ['machines', 'nav.machines', Boxes],
-    ['transfers', 'nav.transfers', ClipboardSignature],
-    ['repairs', 'nav.repairs', Wrench],
-    ['catalog', 'nav.catalog', BookOpen],
-    ['parts', 'nav.parts', PackageSearch],
-    ['documents', 'nav.documents', FileText],
-    ['reports', 'nav.reports', BarChart3],
-    ['audit', 'nav.audit', History],
-    ['qr', 'nav.qr', QrCode],
-    ['settings', 'nav.settings', Settings],
-  ] as const
+  const nav = ([
+    ['dashboard', 'nav.dashboard', Gauge, 'repairs.view'],
+    ['machines', 'nav.machines', Boxes, 'assets.view'],
+    ['transfers', 'nav.transfers', ClipboardSignature, 'transfers.view'],
+    ['repairs', 'nav.repairs', Wrench, 'repairs.view'],
+    ['catalog', 'nav.catalog', BookOpen, 'parts.view'],
+    ['parts', 'nav.parts', PackageSearch, 'requests.view'],
+    ['documents', 'nav.documents', FileText, 'documents.view'],
+    ['reports', 'nav.reports', BarChart3, 'audit.view_operational'],
+    ['audit', 'nav.audit', History, 'audit.view_operational'],
+    ['qr', 'nav.qr', QrCode, 'documents.generate'],
+    ['users', 'nav.users', UserRoundCog, 'users.view'],
+    ['settings', 'nav.settings', Settings, 'settings.manage'],
+  ] as Array<[Exclude<Page, 'password'>, TranslationKey, typeof Gauge, PermissionCode]>).filter(([, , , permission]) => session.permissions.includes(permission))
 
   return (
     <div className="app-shell">
@@ -289,10 +287,12 @@ function App() {
             </button>
           ))}
         </nav>
+        <button className="logout" onClick={() => setPage('password')}><UserRoundCog size={18} />{t('password.title')}</button>
         <button
           className="logout"
           onClick={() => {
             logout()
+            setSession(null)
             setAuthenticated(false)
           }}
         >
@@ -309,7 +309,7 @@ function App() {
             {mobileMenu ? <X /> : <Menu />}
           </button>
           <div className="header-copy">
-            <h2>{t(nav.find((item) => item[0] === page)?.[1] || 'nav.dashboard')}</h2>
+            <h2>{page === 'password' ? t('password.title') : t(nav.find((item) => item[0] === page)?.[1] || 'nav.machines')}</h2>
             <p>{t('app.headerSubtitle')}</p>
           </div>
           <GlobalSearchBox onMachine={setPassportMachineId} />
@@ -326,7 +326,9 @@ function App() {
           {page === 'reports' && <Reports />}
           {page === 'audit' && <Audit />}
           {page === 'qr' && <QrCodes />}
+          {page === 'users' && <UserAdministration />}
           {page === 'settings' && <SettingsPage />}
+          {page === 'password' && <ChangePassword onChanged={(user) => { setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} onCancel={() => setPage(session.permissions.includes('repairs.view') ? 'dashboard' : 'machines')} />}
         </section>
       </main>
       {passportMachineId && <MachinePassportModal machineId={passportMachineId} onClose={() => setPassportMachineId(null)} onOpenCatalog={() => { setCatalogMachineId(passportMachineId); setPassportMachineId(null); setPage('catalog') }} />}
@@ -407,8 +409,11 @@ function Machines({ onOpenCatalog }: { onOpenCatalog: (machineId: number) => voi
   const [showNew, setShowNew] = useState(false)
   const [passportId, setPassportId] = useState<number | null>(null)
   const [error, setError] = useState(false)
+  const showTechnicalDetails = hasPermission('documents.view')
 
-  const load = () => Promise.all([api<Machine[]>('/machines'), api<Location[]>('/locations'), api<AssetCategory[]>('/categories'), api<Department[]>('/departments')])
+  const load = () => (showTechnicalDetails
+    ? Promise.all([api<Machine[]>('/machines'), api<Location[]>('/locations'), api<AssetCategory[]>('/categories'), api<Department[]>('/departments')])
+    : api<Machine[]>('/machines').then((machines) => [machines, [], [], []] as [Machine[], Location[], AssetCategory[], Department[]]))
     .then(([machines, locationItems, categoryItems, departmentItems]) => {
       setItems(machines)
       setLocations(locationItems)
@@ -438,7 +443,7 @@ function Machines({ onOpenCatalog }: { onOpenCatalog: (machineId: number) => voi
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        {hasRole('admin') && (
+        {hasPermission('assets.create') && (
           <button className="primary" onClick={() => setShowNew(true)}><Plus size={18} />{t('machines.new')}</button>
         )}
       </div>
@@ -447,7 +452,7 @@ function Machines({ onOpenCatalog }: { onOpenCatalog: (machineId: number) => voi
         <table>
           <thead><tr>
             <th>{t('machines.columnMachine')}</th><th>{t('machines.columnBrand')}</th>
-            <th>{t('machines.columnPressure')}</th><th>{t('machines.columnStatus')}</th>
+            {showTechnicalDetails && <th>{t('machines.columnPressure')}</th>}<th>{t('machines.columnStatus')}</th>
             <th>{t('machines.columnLocation')}</th><th />
           </tr></thead>
           <tbody>
@@ -455,10 +460,10 @@ function Machines({ onOpenCatalog }: { onOpenCatalog: (machineId: number) => voi
               <tr key={machine.id}>
                 <td><strong>{machine.name}</strong><small>{t('machines.inventoryPrefix', { number: machine.inventory_number })}</small></td>
                 <td>{machine.brand}<small>{machine.model}</small></td>
-                <td>{machine.pressure_bar} bar</td>
+                {showTechnicalDetails && <td>{machine.pressure_bar} bar</td>}
                 <td><span className="badge">{statusText(t, machine.status)}</span></td>
                 <td>{machine.location?.name || t('common.notSpecified')}</td>
-                <td><button className="link" onClick={() => setPassportId(machine.id)}>{t('passport.tab.passport')}</button>{hasRole('admin') && <button className="link" onClick={() => setSelected(machine)}>{t('common.details')}</button>}</td>
+                <td><button className="link" onClick={() => setPassportId(machine.id)}>{t('passport.tab.passport')}</button>{hasPermission('assets.edit') && <button className="link" onClick={() => setSelected(machine)}>{t('common.details')}</button>}</td>
               </tr>
             ))}
           </tbody>
@@ -554,7 +559,7 @@ function MachineModal({ machine, locations, departments, categories, onClose, on
     is_active: machine?.is_active ?? true,
   })
   const [error, setError] = useState('')
-  const canEdit = !machine || hasRole('admin')
+  const canEdit = !machine ? hasPermission('assets.create') : hasPermission('assets.edit')
 
   async function save(event: FormEvent) {
     event.preventDefault()
@@ -603,7 +608,7 @@ function MachineModal({ machine, locations, departments, categories, onClose, on
           <label>{t('machines.dimensions')}<input disabled={!canEdit} value={form.dimensions} onChange={(event) => field('dimensions', event.target.value)} /></label>
           <label className="check-label"><input disabled={!canEdit} type="checkbox" checked={form.is_active} onChange={(event) => field('is_active', event.target.checked)} />{t('machines.active')}</label>
           <label className="wide">{t('machines.notes')}<textarea disabled={!canEdit} value={form.notes} onChange={(event) => field('notes', event.target.value)} /></label>
-          {machine && <div className="qr-box"><img src={`/api/machines/${machine.id}/qr`} alt={t('machines.qrAlt', { number: machine.inventory_number })} /><span>{t('machines.qrLabel')}</span></div>}
+          {machine && <div className="qr-box"><AuthenticatedImage src={`/machines/${machine.id}/qr`} alt={t('machines.qrAlt', { number: machine.inventory_number })} /><span>{t('machines.qrLabel')}</span></div>}
           {error && <div className="error wide" role="alert">{error}</div>}
           <div className="actions wide">
             <button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button>
@@ -637,7 +642,7 @@ export function Repairs() {
     <>
       <div className="toolbar">
         <div><h3>{t('repairs.title')}</h3><p className="muted">{t('repairs.subtitle')}</p></div>
-        {hasRole('admin', 'mechanic') && <button className="primary" onClick={() => setShow(true)}><Plus size={18} />{t('repairs.new')}</button>}
+        {hasPermission('repairs.create') && <button className="primary" onClick={() => setShow(true)}><Plus size={18} />{t('repairs.new')}</button>}
       </div>
       {error && <div className="error" role="alert">{t('errors.generic')}</div>}
       <div className="cards-list">
@@ -652,7 +657,7 @@ export function Repairs() {
             </div>
             <div className="repair-side">
               <small>{date(repair.opened_at)}</small>
-              {!repair.closed_at && hasRole('admin', 'mechanic') && (
+              {!repair.closed_at && hasPermission('repairs.edit') && (
                 <button onClick={() => setClosing(repair)}>{t('repairs.finishAfterTest')}</button>
               )}
             </div>
@@ -765,7 +770,7 @@ export function Parts() {
     <>
       <div className="toolbar">
         <div><h3>{t('parts.title')}</h3><p className="muted">{t('parts.subtitle')}</p></div>
-        {hasRole('admin', 'mechanic') && <button className="primary" onClick={() => setShow(true)}><Plus size={18} />{t('parts.new')}</button>}
+        {hasPermission('requests.create') && <button className="primary" onClick={() => setShow(true)}><Plus size={18} />{t('parts.new')}</button>}
       </div>
       {error && <div className="error" role="alert">{t('errors.generic')}</div>}
       <div className="table-card">
@@ -856,7 +861,7 @@ function QrCodes() {
     <div className="qr-grid printable-qr-labels">
       {machines.map((machine) => (
         <div className="qr-card" key={machine.id}>
-          <img src={`/api/machines/${machine.id}/qr`} alt={t('qr.alt', { number: machine.inventory_number })} />
+          <AuthenticatedImage src={`/machines/${machine.id}/qr`} alt={t('qr.alt', { number: machine.inventory_number })} />
           <strong>{machine.name}</strong><span>{machine.brand} · {machine.pressure_bar} bar</span>
         </div>
       ))}

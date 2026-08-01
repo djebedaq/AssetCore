@@ -17,7 +17,9 @@ from .models import (
     PartRequestStatus,
     RepairStatus,
     TransferBatchStatus,
+    UserRole,
 )
+from .security import validate_password_policy
 
 
 class LoginRequest(BaseModel):
@@ -39,6 +41,106 @@ class UserOut(BaseModel):
     full_name: str
     role: str
     preferred_language: LanguageCode
+    is_active: bool
+    is_system_owner: bool
+    must_change_password: bool
+    permissions: list[str] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+    last_login_at: datetime | None = None
+    password_changed_at: datetime | None = None
+
+
+def _normalize_email(value: str) -> str:
+    normalized = value.strip().casefold()
+    if (
+        not normalized
+        or "@" not in normalized
+        or normalized.startswith("@")
+        or normalized.endswith("@")
+        or "." not in normalized.rsplit("@", 1)[1]
+        or len(normalized) > 255
+    ):
+        raise ValueError("Въведете валиден служебен имейл адрес.")
+    return normalized
+
+
+class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str
+    full_name: str = Field(min_length=2, max_length=255)
+    role: UserRole
+    preferred_language: LanguageCode = LanguageCode.BG
+    temporary_password: str
+    confirm_password: str
+    is_active: bool = True
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return _normalize_email(value)
+
+    @model_validator(mode="after")
+    def validate_account(self):
+        if self.temporary_password != self.confirm_password:
+            raise ValueError("Паролите не съвпадат.")
+        validate_password_policy(self.temporary_password, self.email)
+        self.full_name = self.full_name.strip()
+        if len(self.full_name) < 2:
+            raise ValueError("Името трябва да съдържа поне два знака.")
+        return self
+
+
+class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str | None = Field(default=None, min_length=2, max_length=255)
+    role: UserRole | None = None
+    preferred_language: LanguageCode | None = None
+    is_active: bool | None = None
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if len(normalized) < 2:
+            raise ValueError("Името трябва да съдържа поне два знака.")
+        return normalized
+
+
+class PasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    temporary_password: str
+    confirm_password: str
+
+    @model_validator(mode="after")
+    def passwords_match(self):
+        if self.temporary_password != self.confirm_password:
+            raise ValueError("Паролите не съвпадат.")
+        return self
+
+
+class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+    @model_validator(mode="after")
+    def passwords_match(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError("Паролите не съвпадат.")
+        return self
+
+
+class UserActionResponse(BaseModel):
+    message: str
+    user: UserOut
 
 
 class LanguagePreferenceUpdate(BaseModel):

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     public_base_url: str | None = None
     admin_email: str = "admin@assetcore.local"
     admin_password: str = "change-me-before-use"
+    assetcore_owner_email: str | None = None
 
     @field_validator("database_url", mode="before")
     @classmethod

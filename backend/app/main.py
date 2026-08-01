@@ -44,9 +44,9 @@ from .models import (
     TransferBatch,
     TransferProtocol,
     User,
-    UserRole,
     utcnow,
 )
+from .permissions import Permission, ensure_permission, is_observer, require_permission
 from .schemas import (
     AuditLogOut,
     AvailabilityOut,
@@ -76,7 +76,12 @@ from .schemas import (
     TransferOut,
     UserOut,
 )
-from .security import create_access_token, get_current_user, verify_password
+from .security import (
+    create_access_token,
+    get_authenticated_user,
+    get_current_active_user,
+    verify_password,
+)
 from .seed import seed_database
 from .settings import settings
 from .transfer_service import (
@@ -89,6 +94,8 @@ from .transfer_service import (
     get_protocol_document,
     list_batches,
 )
+from .user_api import router as user_router
+from .user_api import serialize_user
 from .workflow import (
     REPAIR_TO_MACHINE_STATUS,
     add_machine_event,
@@ -126,6 +133,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(industrial_router)
+app.include_router(user_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -160,56 +168,19 @@ def _raise_service_error(exc: TransferServiceError) -> None:
     raise HTTPException(status_code=exc.status_code, detail=exc.as_detail()) from exc
 
 
-def require_transfer_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role not in {UserRole.ADMIN.value, UserRole.MANAGER.value}:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "transfer_permission_denied",
-                "message": translate("permission.transfer", user.preferred_language),
-            },
-        )
-    return user
-
-
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != UserRole.ADMIN.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "permission_denied",
-                "message": translate("permission.denied", user.preferred_language),
-            },
-        )
-    return user
-
-
-def require_repair_operator(user: User = Depends(get_current_user)) -> User:
-    if user.role not in {UserRole.ADMIN.value, UserRole.MECHANIC.value}:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "permission_denied",
-                "message": translate("permission.denied", user.preferred_language),
-            },
-        )
-    return user
-
-
-def require_audit_reader(user: User = Depends(get_current_user)) -> User:
-    if user.role not in {
-        UserRole.ADMIN.value,
-        UserRole.APPROVER.value,
-        UserRole.VIEWER.value,
-    }:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "permission_denied",
-                "message": translate("permission.denied", user.preferred_language),
-            },
-        )
-    return user
+require_transfer_admin = require_permission(Permission.TRANSFERS_CREATE)
+require_transfer_return = require_permission(Permission.TRANSFERS_RETURN)
+require_repair_creator = require_permission(Permission.REPAIRS_CREATE)
+require_repair_operator = require_permission(Permission.REPAIRS_EDIT)
+require_audit_reader = require_permission(Permission.AUDIT_VIEW_OPERATIONAL)
+require_asset_viewer = require_permission(Permission.ASSETS_VIEW)
+require_transfer_viewer = require_permission(Permission.TRANSFERS_VIEW)
+require_repair_viewer = require_permission(Permission.REPAIRS_VIEW)
+require_request_viewer = require_permission(Permission.REQUESTS_VIEW)
+require_request_creator = require_permission(Permission.REQUESTS_CREATE)
+require_parts_viewer = require_permission(Permission.PARTS_VIEW)
+require_document_viewer = require_permission(Permission.DOCUMENTS_VIEW)
+require_document_generator = require_permission(Permission.DOCUMENTS_GENERATE)
 
 
 def _active_transfer(db: Session, machine_id: int) -> TransferProtocol | None:
@@ -245,31 +216,35 @@ def health() -> dict[str, str]:
 def login(
     data: LoginRequest, request: Request, db: Session = Depends(get_db)
 ) -> TokenResponse:
-    user = db.scalar(select(User).where(User.email == data.email))
+    normalized_email = data.email.strip().casefold()
+    user = db.scalar(select(User).where(func.lower(User.email) == normalized_email))
     if not user or not verify_password(data.password, user.password_hash):
         language = normalize_language(request.headers.get("Accept-Language"))
         raise HTTPException(401, translate("auth.invalid_credentials", language))
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "account_inactive", "message": "Акаунтът е деактивиран."},
+        )
+    user.last_login_at = utcnow()
+    user.updated_at = utcnow()
+    db.commit()
+    db.refresh(user)
     return TokenResponse(
         access_token=create_access_token(user),
-        user={
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "role": user.role,
-            "preferred_language": user.preferred_language,
-        },
+        user=serialize_user(user),
     )
 
 
 @app.get("/api/auth/me", response_model=UserOut)
-def current_user(user: User = Depends(get_current_user)) -> User:
-    return user
+def current_user(user: User = Depends(get_authenticated_user)) -> dict:
+    return serialize_user(user)
 
 
 @app.patch("/api/users/me/preferences", response_model=UserOut)
 def update_user_preferences(
     data: LanguagePreferenceUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ) -> User:
     previous_language = user.preferred_language
@@ -287,12 +262,12 @@ def update_user_preferences(
     )
     db.commit()
     db.refresh(user)
-    return user
+    return serialize_user(user)
 
 
 @app.get("/api/dashboard")
 def dashboard(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_repair_viewer), db: Session = Depends(get_db)
 ) -> dict:
     total = db.scalar(select(func.count(Machine.id))) or 0
     by_status = dict(
@@ -350,28 +325,46 @@ def dashboard(
 
 @app.get("/api/locations", response_model=list[LocationOut])
 def locations(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
 ) -> list[Location]:
     return db.scalars(select(Location).order_by(Location.name)).all()
 
 
-@app.get("/api/machines", response_model=list[MachineOut])
+def _limited_machine(item: Machine) -> dict:
+    return {
+        "id": item.id,
+        "inventory_number": item.inventory_number,
+        "name": item.name,
+        "brand": item.brand,
+        "model": item.model,
+        "status": item.status,
+        "is_active": item.is_active,
+        "location": (
+            {"id": item.location.id, "name": item.location.name}
+            if item.location
+            else None
+        ),
+    }
+
+
+@app.get("/api/machines", response_model=None)
 def machines(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
-) -> list[Machine]:
-    return db.scalars(
+    user: User = Depends(require_asset_viewer), db: Session = Depends(get_db)
+) -> list[Machine] | list[dict]:
+    items = db.scalars(
         select(Machine)
         .options(joinedload(Machine.location))
         .order_by(Machine.pressure_bar.desc(), Machine.inventory_number)
     ).all()
+    return [_limited_machine(item) for item in items] if is_observer(user) else items
 
 
-@app.get("/api/machines/{machine_id}", response_model=MachineOut)
+@app.get("/api/machines/{machine_id}", response_model=None)
 def machine(
     machine_id: int,
-    _: User = Depends(get_current_user),
+    user: User = Depends(require_asset_viewer),
     db: Session = Depends(get_db),
-) -> Machine:
+) -> Machine | dict:
     item = db.scalar(
         select(Machine)
         .options(joinedload(Machine.location))
@@ -379,13 +372,13 @@ def machine(
     )
     if not item:
         raise HTTPException(404, "Машината не е намерена")
-    return item
+    return _limited_machine(item) if is_observer(user) else item
 
 
 @app.post("/api/machines", response_model=MachineOut, status_code=201)
 def create_machine(
     data: MachineCreate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission(Permission.ASSETS_CREATE)),
     db: Session = Depends(get_db),
 ) -> Machine:
     if db.scalar(select(Machine).where(Machine.inventory_number == data.inventory_number)):
@@ -421,7 +414,7 @@ def create_machine(
 def update_machine(
     machine_id: int,
     data: MachineUpdate,
-    user: User = Depends(require_admin),
+    user: User = Depends(require_permission(Permission.ASSETS_EDIT)),
     db: Session = Depends(get_db),
 ) -> Machine:
     item = db.get(Machine, machine_id)
@@ -497,7 +490,12 @@ def update_machine(
 
 
 @app.get("/api/machines/{machine_id}/qr")
-def qr(machine_id: int, request: Request, db: Session = Depends(get_db)) -> Response:
+def qr(
+    machine_id: int,
+    request: Request,
+    _: User = Depends(require_document_generator),
+    db: Session = Depends(get_db),
+) -> Response:
     item = db.get(Machine, machine_id)
     if not item:
         raise HTTPException(404, "Машината не е намерена")
@@ -510,7 +508,7 @@ def qr(machine_id: int, request: Request, db: Session = Depends(get_db)) -> Resp
 
 @app.get("/api/repairs", response_model=list[RepairOut])
 def repairs(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_repair_viewer), db: Session = Depends(get_db)
 ) -> list[Repair]:
     return db.scalars(
         select(Repair)
@@ -522,7 +520,7 @@ def repairs(
 @app.post("/api/repairs", response_model=RepairOut, status_code=201)
 def create_repair(
     data: RepairCreate,
-    user: User = Depends(require_repair_operator),
+    user: User = Depends(require_repair_creator),
     db: Session = Depends(get_db),
 ) -> Repair:
     machine_statement = select(Machine).where(Machine.id == data.machine_id)
@@ -629,6 +627,8 @@ def update_repair(
     user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> Repair:
+    if data.close or data.status == RepairStatus.COMPLETED:
+        ensure_permission(user, Permission.REPAIRS_COMPLETE)
     repair = db.get(Repair, repair_id)
     if not repair:
         raise HTTPException(404, "Ремонтът не е намерен")
@@ -713,7 +713,7 @@ def update_repair(
 
 @app.get("/api/parts", response_model=list[PartRequestOut])
 def parts(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_request_viewer), db: Session = Depends(get_db)
 ) -> list[PartRequest]:
     return db.scalars(
         select(PartRequest)
@@ -725,7 +725,7 @@ def parts(
 @app.post("/api/parts", response_model=PartRequestOut, status_code=201)
 def create_part(
     data: PartRequestCreate,
-    user: User = Depends(require_repair_operator),
+    user: User = Depends(require_request_creator),
     db: Session = Depends(get_db),
 ) -> PartRequest:
     if data.status.value != PartRequestStatus.DRAFT.value:
@@ -786,7 +786,7 @@ def create_part(
 def catalog(
     q: str = "",
     brand: str = "",
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_parts_viewer),
     db: Session = Depends(get_db),
 ) -> list[PartCatalog]:
     statement = select(PartCatalog)
@@ -815,7 +815,7 @@ def catalog(
 
 @app.get("/api/transfers", response_model=list[TransferOut])
 def transfers(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_transfer_viewer), db: Session = Depends(get_db)
 ) -> list[TransferProtocol]:
     return db.scalars(
         select(TransferProtocol)
@@ -829,7 +829,7 @@ def transfers(
 
 @app.get("/api/transfers/availability", response_model=list[AvailabilityOut])
 def transfer_availability(
-    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    user: User = Depends(require_transfer_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     return availability(db, user.preferred_language)
 
@@ -853,7 +853,7 @@ def bulk_issue_endpoint(
 @app.post("/api/transfers/bulk-return", response_model=BulkReturnResponse)
 def bulk_return_endpoint(
     data: BulkReturnRequest,
-    user: User = Depends(require_transfer_admin),
+    user: User = Depends(require_transfer_return),
     db: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -896,6 +896,7 @@ def create_transfer(
             )
             transfer_id = result["transfers"][0]["transfer_id"]
         elif data.protocol_type in {"Приемане", "Връщане"}:
+            ensure_permission(user, Permission.TRANSFERS_RETURN)
             active = _active_transfer(db, data.machine_id)
             if active is None:
                 raise TransferServiceError(
@@ -951,7 +952,7 @@ def create_transfer(
 
 @app.get("/api/transfer-batches", response_model=list[BatchSummaryOut])
 def transfer_batches(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_transfer_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     return list_batches(db)
 
@@ -959,7 +960,7 @@ def transfer_batches(
 @app.get("/api/transfer-batches/{batch_id}", response_model=BatchDetailsOut)
 def transfer_batch_details(
     batch_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_transfer_viewer),
     db: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -973,7 +974,7 @@ def transfer_batch_details(
 )
 def transfer_batch_progress(
     batch_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_transfer_viewer),
     db: Session = Depends(get_db),
 ) -> dict:
     try:
@@ -985,7 +986,7 @@ def transfer_batch_progress(
 @app.get("/api/protocol-documents/{document_id}/download")
 def protocol_document_download(
     document_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     try:
@@ -1005,7 +1006,7 @@ def protocol_document_download(
 @app.get("/api/transfer-batches/{batch_id}/documents.zip")
 def batch_documents_zip(
     batch_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     batch = db.scalar(
@@ -1081,7 +1082,7 @@ def _legacy_protocol_response(
 @app.get("/api/transfers/{transfer_id}/docx")
 def protocol_docx(
     transfer_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     return _legacy_protocol_response(transfer_id, "docx", db)
@@ -1090,7 +1091,7 @@ def protocol_docx(
 @app.get("/api/transfers/{transfer_id}/pdf")
 def protocol_pdf(
     transfer_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> Response:
     return _legacy_protocol_response(transfer_id, "pdf", db)
@@ -1098,7 +1099,7 @@ def protocol_pdf(
 
 @app.get("/api/documents", response_model=list[TechnicalDocumentOut])
 def documents(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
 ) -> list[TechnicalDocument]:
     return db.scalars(
         select(TechnicalDocument).order_by(
@@ -1112,7 +1113,7 @@ def documents(
 @app.get("/api/documents/{doc_id}/download")
 def download_doc(
     doc_id: int,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> FileResponse:
     document = db.get(TechnicalDocument, doc_id)
@@ -1135,7 +1136,7 @@ def audit(
 
 @app.get("/api/reports/daily.pdf")
 def daily_report(
-    _: User = Depends(get_current_user), db: Session = Depends(get_db)
+    _: User = Depends(require_audit_reader), db: Session = Depends(get_db)
 ) -> Response:
     repairs = db.scalars(
         select(Repair)

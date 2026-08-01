@@ -111,9 +111,13 @@ def test_admin_reference_data_is_authorized_audited_and_deactivated_without_dele
         json={"code": "TEST_DEPARTMENT", "name_bg": "Дубликат"},
     ).status_code == 409
 
-    public_departments = client.get("/api/departments", headers=viewer_headers)
-    assert public_departments.status_code == 200
-    assert any(item["id"] == department.json()["id"] for item in public_departments.json())
+    assert client.get("/api/departments", headers=viewer_headers).status_code == 403
+    operational_departments = client.get("/api/departments", headers=auth_headers)
+    assert operational_departments.status_code == 200
+    assert any(
+        item["id"] == department.json()["id"]
+        for item in operational_departments.json()
+    )
 
     deactivated_location = client.patch(
         f"/api/admin/locations/{location.json()['id']}",
@@ -717,8 +721,7 @@ def test_visual_part_hotspot_requires_provenance_and_human_verification(
         f"/api/catalog/hotspots?technical_document_id={document.json()['id']}&page_number=1",
         headers=viewer_headers,
     )
-    assert document_hotspots.status_code == 200, document_hotspots.text
-    assert [item["id"] for item in document_hotspots.json()] == [created.json()["id"]]
+    assert document_hotspots.status_code == 403
     verified = client.post(
         f"/api/catalog/hotspots/{created.json()['id']}/verify",
         headers=auth_headers,
@@ -756,13 +759,11 @@ def test_visual_part_hotspot_requires_provenance_and_human_verification(
     listed = client.get(
         f"/api/catalog/parts/{part['id']}/images", headers=viewer_headers
     )
-    assert listed.status_code == 200, listed.text
-    assert listed.json()[0]["id"] == uploaded.json()["id"]
+    assert listed.status_code == 403
     downloaded = client.get(
         f"/api{uploaded.json()['download_endpoint']}", headers=viewer_headers
     )
-    assert downloaded.status_code == 200
-    assert downloaded.headers["content-type"] == "image/png"
+    assert downloaded.status_code == 403
 
     with session_factory() as session:
         assert session.get(PartHotspot, created.json()["id"]).is_verified is True

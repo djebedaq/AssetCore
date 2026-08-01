@@ -19,6 +19,17 @@ from .settings import settings
 
 bearer = HTTPBearer(auto_error=False)
 
+OBVIOUSLY_WEAK_PASSWORDS = {
+    "password",
+    "password1",
+    "password123",
+    "qwerty123",
+    "admin123",
+    "changeme",
+    "letmein123",
+    "assetcore",
+}
+
 
 def _b64(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode().rstrip("=")
@@ -45,10 +56,32 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
+def validate_password_policy(password: str, email: str | None = None) -> None:
+    normalized = password.casefold()
+    email_value = (email or "").strip().casefold()
+    email_local_part = email_value.split("@", 1)[0]
+    valid = (
+        len(password) >= 10
+        and any(character.islower() for character in password)
+        and any(character.isupper() for character in password)
+        and any(character.isdigit() for character in password)
+        and any(not character.isalnum() for character in password)
+        and normalized not in OBVIOUSLY_WEAK_PASSWORDS
+        and normalized != email_value
+        and (not email_local_part or normalized != email_local_part)
+    )
+    if not valid:
+        raise ValueError(
+            "Паролата трябва да е поне 10 знака и да съдържа малка и главна "
+            "буква, цифра и специален знак."
+        )
+
+
 def create_access_token(user: User) -> str:
     payload = {
         "sub": str(user.id),
         "role": user.role,
+        "ver": user.token_version,
         "exp": int(time.time()) + settings.access_token_minutes * 60,
     }
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
@@ -79,7 +112,7 @@ def _decode(token: str, language: str = "bg") -> dict:
         ) from exc
 
 
-def get_current_user(
+def get_authenticated_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
@@ -106,4 +139,27 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=translate("auth.user_not_found", language),
         )
+    if payload.get("ver") != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=translate("auth.invalid_session", language),
+        )
+    return user
+
+
+def get_current_user(
+    user: User = Depends(get_authenticated_user),
+) -> User:
+    if user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "password_change_required",
+                "message": "Трябва да смените временната си парола, преди да продължите.",
+            },
+        )
+    return user
+
+
+def get_current_active_user(user: User = Depends(get_current_user)) -> User:
     return user

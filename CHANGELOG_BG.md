@@ -1,5 +1,17 @@
 # Промени
 
+## Окончателна ролева система и потребителски акаунти — 2026-08-01
+
+- Legacy ролите са заменени с точно `administrator`, `director`, `mechanic` и `observer` чрез обратима Alembic миграция за PostgreSQL и SQLite.
+- Добавен е единствен защитен system owner, определен с `ASSETCORE_OWNER_EMAIL`, с database ограничения срещу втори owner, понижаване и деактивация.
+- Добавена е централизирана permission матрица и всички съществуващи API операции са приведени към permission dependencies.
+- Добавени са `/api/users` CRUD без физическо изтриване, scoped управление от director, activation/deactivation, временен password reset и structured 403/409/422 отговори.
+- Добавени са token-version invalidation, `must_change_password`, `last_login_at`, `password_changed_at` и задължителен екран за смяна на временната парола.
+- Добавен е responsive BG/EN/RU екран „Потребители“ с търсене, филтри, confirmation, success/error/loading/empty състояния и защитен знак за основния администратор.
+- Observer получава само машинен номер, марка/модел, текущ статус, местоположение и наличност; чувствителните API, QR, документи и действия връщат 403 или не се визуализират.
+- Добавени са audit записи за успешни account операции, отказани role-escalation/owner промени и legacy role migration, без пароли, hash-ове или tokens.
+- Добавени са backend миграционни/permission/security тестове и frontend тестове за ролевото меню, user administration, forced password и локализирани грешки.
+
 ## Universal industrial platform — 2026-07-31
 
 - Добавени са универсални asset категории, configurable passport fields, attachments, QR web passport и immutable machine timeline.

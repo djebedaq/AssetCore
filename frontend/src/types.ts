@@ -3,12 +3,26 @@ export type Department = {
   id: number; code: string; name_bg: string; name_en?: string | null; name_ru?: string | null;
   description?: string | null; is_active: boolean; created_at: string
 }
+export type UserRole = 'administrator' | 'director' | 'mechanic' | 'observer'
+export type PermissionCode =
+  | 'users.view' | 'users.create' | 'users.edit' | 'users.activate' | 'users.deactivate'
+  | 'users.reset_password' | 'users.assign_director' | 'users.assign_administrator'
+  | 'assets.view' | 'assets.create' | 'assets.edit' | 'assets.change_location'
+  | 'transfers.view' | 'transfers.create' | 'transfers.return'
+  | 'repairs.view' | 'repairs.create' | 'repairs.edit' | 'repairs.complete'
+  | 'requests.view' | 'requests.create' | 'requests.approve'
+  | 'parts.view' | 'parts.manage' | 'documents.view' | 'documents.generate'
+  | 'templates.manage' | 'audit.view_operational' | 'audit.view_full' | 'settings.manage'
 export type UserSession = {
-  id: number; email: string; full_name: string; role: string; preferred_language: 'bg' | 'en' | 'ru'
+  id: number; email: string; full_name: string; role: UserRole; preferred_language: 'bg' | 'en' | 'ru';
+  is_active: boolean; is_system_owner: boolean; must_change_password: boolean;
+  permissions: PermissionCode[]; created_at: string; updated_at: string;
+  last_login_at?: string | null; password_changed_at?: string | null
 }
+export type ManagedUser = UserSession
 export type Machine = {
-  id: number; inventory_number: string; name: string; category: string; brand: string;
-  model?: string | null; pressure_bar: number; serial_number?: string | null; status: string;
+  id: number; inventory_number: string; name: string; category?: string; brand: string;
+  model?: string | null; pressure_bar?: number; serial_number?: string | null; status: string;
   location_id?: number | null; location?: Location | null; notes?: string | null;
   created_at: string; updated_at: string
   category_id?: number | null; asset_type?: string | null; subtype?: string | null;
@@ -88,6 +102,7 @@ export type StoredAttachment = {
 }
 
 export type MachinePassport = {
+  limited_view?: boolean;
   machine: Machine & { category_definition?: AssetCategory | null };
   custom_fields: Array<AssetCategoryField & { field_id: number; value?: string | null }>;
   attachments: StoredAttachment[];
@@ -111,7 +126,7 @@ export type MachinePassport = {
   };
   audit_visible: boolean;
   audit: Array<{ id: number; entity_type: string; entity_id?: number | null; action: string; details?: string | null; user_name?: string | null; operation_reference?: string | null; created_at: string }>;
-  qr_endpoint: string
+  qr_endpoint?: string | null
 }
 
 export type RepairEvent = {

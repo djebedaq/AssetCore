@@ -64,13 +64,47 @@ MACHINES = [
 
 
 def _seed_verified_registry(db: Session) -> None:
-    if not db.scalar(select(User).limit(1)):
-        db.add(User(
-            email=settings.admin_email,
+    if not settings.assetcore_owner_email or not settings.assetcore_owner_email.strip():
+        raise RuntimeError(
+            "ASSETCORE_OWNER_EMAIL е задължителна настройка за стартиране на AssetCore."
+        )
+    owner_email = settings.assetcore_owner_email.strip().casefold()
+    local_part, separator, domain = owner_email.partition("@")
+    if (
+        not local_part
+        or separator != "@"
+        or not domain
+        or "." not in domain
+        or any(character.isspace() for character in owner_email)
+    ):
+        raise RuntimeError(
+            "ASSETCORE_OWNER_EMAIL трябва да съдържа валиден служебен имейл адрес."
+        )
+    users = list(db.scalars(select(User).order_by(User.id)))
+    if not users:
+        owner = User(
+            email=owner_email,
             full_name="Администратор",
             password_hash=hash_password(settings.admin_password),
-            role=UserRole.ADMIN.value,
-        ))
+            role=UserRole.ADMINISTRATOR.value,
+            is_active=True,
+            is_system_owner=True,
+            must_change_password=False,
+        )
+        db.add(owner)
+    else:
+        matches = [user for user in users if user.email.strip().casefold() == owner_email]
+        owners = [user for user in users if user.is_system_owner]
+        if len(matches) != 1 or (owners and owners != matches):
+            raise RuntimeError(
+                "Не може безопасно да се определи точно един системен собственик. "
+                "Задайте ASSETCORE_OWNER_EMAIL към съществуващ уникален акаунт."
+            )
+        owner = matches[0]
+        owner.email = owner_email
+        owner.role = UserRole.ADMINISTRATOR.value
+        owner.is_active = True
+        owner.is_system_owner = True
 
     existing_locations = {x.name: x for x in db.scalars(select(Location)).all()}
     for name in LOCATIONS:
@@ -180,7 +214,7 @@ def _seed_documents_and_catalog(db: Session) -> None:
             db.add(PartCatalog(brand=brand,model=model,assembly=assembly,position=pos,part_number=pn,description=desc,quantity=qty,source_document=src,source_page=page))
     db.commit()
 
-    admin = db.scalar(select(User).order_by(User.id))
+    admin = db.scalar(select(User).where(User.is_system_owner.is_(True)))
     if admin:
         for part in db.scalars(select(PartCatalog)).all():
             if part.source_document and part.source_page:
@@ -192,7 +226,7 @@ def _seed_documents_and_catalog(db: Session) -> None:
 
 
 def _seed_document_templates(db: Session) -> None:
-    admin = db.scalar(select(User).order_by(User.id))
+    admin = db.scalar(select(User).where(User.is_system_owner.is_(True)))
     if admin is None:
         return
     resources = Path(__file__).resolve().parents[1] / "resources"

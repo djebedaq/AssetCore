@@ -1,12 +1,18 @@
 # AssetCore API
 
-Интерактивната OpenAPI документация е достъпна на `/docs`, а схемата — на `/openapi.json`. Всички описани endpoints, освен `/api/health` и `/api/auth/login`, изискват Bearer token. Операциите за издаване и връщане изискват роля `admin` или `manager`.
+Интерактивната OpenAPI документация е достъпна на `/docs`, а схемата — на `/openapi.json`. Всички описани endpoints, освен `/api/health` и `/api/auth/login`, изискват Bearer token. Авторизацията използва централизирани permission кодове; ролите са точно `administrator`, `director`, `mechanic` и `observer`. Издаване и връщане изискват съответно `transfers.create` и `transfers.return`.
 
 ## Основни endpoints
 
 | Метод | Endpoint | Резултат |
 |---|---|---|
-| `GET` | `/api/auth/me` | текущ потребител, роля и предпочитан език |
+| `GET` | `/api/auth/me` | безопасен текущ профил, owner знак и permission кодове |
+| `POST` | `/api/auth/change-password` | проверява текущата и задава новата парола; връща нов token |
+| `GET/POST` | `/api/users` | scoped списък/създаване на потребители |
+| `GET/PATCH` | `/api/users/{user_id}` | scoped профил и разрешени промени |
+| `POST` | `/api/users/{user_id}/activate` | активира акаунт и обезсилва старите му токени |
+| `POST` | `/api/users/{user_id}/deactivate` | деактивира акаунт без изтриване на историята |
+| `POST` | `/api/users/{user_id}/reset-password` | задава временна парола и задължителна смяна |
 | `PATCH` | `/api/users/me/preferences` | записва `preferred_language`: `bg`, `en` или `ru` |
 | `GET` | `/api/transfers/availability` | наличност и причина за недостъпност за всяка машина |
 | `POST` | `/api/transfers/bulk-issue` | атомарно групово издаване, HTTP 201 |
@@ -40,8 +46,7 @@
 | `GET/POST` | `/api/technical-library` | филтрирана, версионирана техническа библиотека |
 | `POST` | `/api/technical-library/{id}/revisions` | добавя нова версия без подмяна на старата |
 | `GET` | `/api/search?q=...` | групирано глобално търсене |
-| `GET/POST/PATCH` | `/api/admin/users...` | потребители, роли и активност |
-| `GET` | `/api/departments` | достъпни справочни отдели за удостоверени потребители |
+| `GET` | `/api/departments` | справочни отдели за роли с `documents.view` |
 | `GET` | `/api/admin/reference-data` | местоположения и отдели, включително неактивни записи |
 | `POST/PATCH` | `/api/admin/locations...` | създаване и активиране/деактивиране на местоположения |
 | `POST/PATCH` | `/api/admin/departments...` | триезични отдели и активност |
@@ -49,11 +54,49 @@
 | `POST` | `/api/admin/import-confirm` | потвърждава непроменен валиден preview |
 | `GET/POST` | `/api/document-templates` | шаблони и версии |
 | `POST` | `/api/document-templates/{id}/versions` | качва защитен DOCX/PDF като непубликувана версия |
-| `GET` | `/api/document-template-versions/{id}/download` | admin download на проверявания изходен файл |
+| `GET` | `/api/document-template-versions/{id}/download` | administrator download на проверявания изходен файл |
 | `POST` | `/api/document-template-versions/{id}/publish` | публикува версия само за езика ѝ |
 | `GET` | `/api/generated-documents/{id}/download` | удостоверено изтегляне без вътрешен path |
 
 Старият `POST /api/transfers` остава съвместим и използва същия защитен service слой за единично издаване/връщане.
+
+## Потребители, роли и пароли
+
+`GET /api/users` поддържа query параметри `search`, `role` и `is_active`. Основният administrator вижда всички акаунти. Director вижда само `mechanic` и `observer`; mechanic и observer получават HTTP 403. Отговорите никога не съдържат `password_hash`.
+
+`POST /api/users` приема само:
+
+```json
+{
+  "email": "<служебен-имейл>",
+  "full_name": "<име>",
+  "role": "mechanic",
+  "preferred_language": "bg",
+  "temporary_password": "<временна-парола>",
+  "confirm_password": "<същата-временна-парола>",
+  "is_active": true
+}
+```
+
+Стандартният endpoint не приема `administrator`, `is_system_owner`, hash, timestamps или други защитени полета. Owner може да създава `director`, `mechanic` и `observer`; director — само `mechanic` и `observer`. Имейлът се нормализира, дублиран имейл връща 409, а невалидна роля, език или password policy — 422.
+
+`PATCH /api/users/{id}` приема само `full_name`, `role`, `preferred_language` и `is_active`. За activation/deactivation използвайте и изричните action endpoints. Owner не се променя през нито един от тях; потребител не може да смени собствената си роля или да се деактивира.
+
+`POST /api/users/{id}/reset-password` приема `temporary_password` и `confirm_password`. Успехът задава `must_change_password = true`, променя token version и не връща паролата. До `POST /api/auth/change-password` всички работни permission dependencies връщат 403 `password_change_required`. Успешната смяна връща нов Bearer token и безопасен профил.
+
+Основни structured errors:
+
+| HTTP | `code` | Значение |
+|---:|---|---|
+| 403 | `permission_denied` | липсва изискван permission |
+| 403 | `user_scope_denied` | director опитва да управлява director/administrator |
+| 403 | `role_escalation_denied` | опит за неразрешена роля |
+| 403 | `system_owner_protected` | опит за промяна на основния администратор |
+| 403 | `password_change_required` | временната парола трябва първо да бъде сменена |
+| 409 | `duplicate_email` | нормализираният имейл вече съществува |
+| 422 | `password_policy` / `validation_error` | невалидни входни данни |
+
+Password policy: минимум 10 знака, поне една малка и главна буква, цифра и специален знак, без съвпадение със служебния имейл и без очевидно слаба стойност. Пароли, hash-ове и tokens не се включват в API или audit payload-и.
 
 ## Групово издаване
 
@@ -118,7 +161,7 @@
 
 ## Шаблони и официални документи
 
-Новата версия приема `language`, проверен `filename`/`media_type`/`content_base64`, `layout_contract`, `effective_from`, `effective_to`, `required_fields`, `numbering_rule`, `department` и задължително `change_note`. Тя остава чернова. Само admin може отделно да я изтегли за проверка и да извика publish endpoint-а. При генериране backend-ът избира само публикувана версия за точния език, чийто период на валидност е активен; иначе връща HTTP 409 `document_template_unavailable` и цялата бизнес операция се отменя.
+Новата версия приема `language`, проверен `filename`/`media_type`/`content_base64`, `layout_contract`, `effective_from`, `effective_to`, `required_fields`, `numbering_rule`, `department` и задължително `change_note`. Тя остава чернова. Само administrator с `templates.manage` може отделно да я изтегли за проверка и да извика publish endpoint-а. При генериране backend-ът избира само публикувана версия за точния език, чийто период на валидност е активен; иначе връща HTTP 409 `document_template_unavailable` и цялата бизнес операция се отменя.
 
 ## Изпълнение на заявка за части
 
@@ -151,11 +194,10 @@
 
 ## Ролеви граници
 
-- `admin`: пълен оперативен достъп;
-- `manager`: издаване и връщане;
-- `mechanic`: ремонти и заявки за части;
-- `approver`: преглед на audit историята;
-- `viewer`: read-only достъп, включително audit, без мутации.
+- `administrator`: пълен достъп; основният owner управлява директорите и критичната конфигурация;
+- `director`: широк оперативен достъп, издаване/връщане, ремонти, одобрение, протоколи, оперативен audit и mechanic/observer accounts;
+- `mechanic`: издаване/връщане, ремонти, технически документи и създаване на заявки без одобрение;
+- `observer`: само ограничен регистър, търсене, текущ статус, местоположение и наличност.
 
 Backend-ът е авторитетен за тези права. Скриването или деактивирането на действия във frontend-а е само допълнителна защита на интерфейса.
 
@@ -169,4 +211,4 @@ Upload endpoint-ите приемат base64 content, ограничен раз�
 
 ## Административни справочници
 
-Създаването и промяната на местоположение/отдел изисква `admin`. Дубликат връща HTTP 409 със стабилен `location_duplicate` или `department_duplicate`. `PATCH` променя само подадените полета. `is_active=false` не изтрива записа и не променя историческите връзки; формите не предлагат неактивен запис за нов избор, но продължават да показват вече използвана стойност. Всяко действие създава audit запис.
+Създаването и промяната на местоположение/отдел изисква `settings.manage`, предоставен само на administrator. Дубликат връща HTTP 409 със стабилен `location_duplicate` или `department_duplicate`. `PATCH` променя само подадените полета. `is_active=false` не изтрива записа и не променя историческите връзки; формите не предлагат неактивен запис за нов избор, но продължават да показват вече използвана стойност. Всяко действие създава audit запис.

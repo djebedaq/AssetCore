@@ -404,13 +404,13 @@ def test_active_transfer_index_compiles_for_postgresql():
     assert "WHERE is_active IS TRUE" in ddl
 
 
-def test_new_transfer_operations_require_authentication_and_admin_role(
+def test_new_transfer_operations_require_authentication_and_transfer_permission(
     client, viewer_headers, machine_ids, issue_payload
 ):
     assert issue(client, {}, issue_payload(machine_ids["4"])).status_code == 401
     forbidden = issue(client, viewer_headers, issue_payload(machine_ids["4"]))
     assert forbidden.status_code == 403
-    assert forbidden.json()["detail"]["code"] == "transfer_permission_denied"
+    assert forbidden.json()["detail"]["code"] == "permission_denied"
 
 
 def test_batch_details_show_individual_partial_progress(

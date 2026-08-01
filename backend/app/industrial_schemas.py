@@ -540,30 +540,6 @@ class TechnicalDocumentUpload(BaseModel):
         return value
 
 
-class UserAdminCreate(BaseModel):
-    email: str = Field(min_length=3, max_length=255)
-    full_name: str = Field(min_length=2, max_length=255)
-    password: str = Field(min_length=12, max_length=255)
-    role: str
-    preferred_language: LanguageCode = LanguageCode.BG
-
-    @field_validator("role")
-    @classmethod
-    def validate_role(cls, value: str) -> str:
-        allowed = {"admin", "mechanic", "manager", "approver", "viewer"}
-        if value not in allowed:
-            raise ValueError("Невалидна потребителска роля.")
-        return value
-
-
-class UserAdminUpdate(BaseModel):
-    full_name: str | None = Field(default=None, min_length=2, max_length=255)
-    role: str | None = None
-    preferred_language: LanguageCode | None = None
-    is_active: bool | None = None
-    password: str | None = Field(default=None, min_length=12, max_length=255)
-
-
 class ImportPreviewRequest(BaseModel):
     records: list[dict] = Field(min_length=1, max_length=5000)
 

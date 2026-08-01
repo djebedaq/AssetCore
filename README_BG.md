@@ -20,7 +20,8 @@ AssetCore е responsive PWA система за проследимо управ�
 - неизменяем през нормалния API журнал на действията;
 - миграции с Alembic, Docker, Render и GitHub Actions.
 - устойчиви технически кодове за статусите, които се превеждат само в API/UI слоя;
-- ролеви права за администратор, ръководител, механик, одобряващ и наблюдател.
+- окончателна централизирана permission система за администратор, директор, механик и наблюдател;
+- защитен основен администратор, управление на акаунти, временни пароли и задължителна смяна при първи вход.
 
 ## Езици, роли и статуси
 
@@ -29,6 +30,12 @@ AssetCore е responsive PWA система за проследимо управ�
 Статусите в базата и API са стабилни кодове (`READY`, `ISSUED`, `INSPECTION`, `REPAIR`, `TESTING` и други). Човешките имена се визуализират според избрания език. Старите български стойности се приемат за обратна съвместимост и миграция.
 
 Ролевата матрица и архитектурните граници са описани в [I18N_AND_ROLES_BG.md](docs/I18N_AND_ROLES_BG.md) и [ARCHITECTURE_BG.md](docs/ARCHITECTURE_BG.md).
+
+### Потребители и защитен собственик
+
+Конфигурирайте `ASSETCORE_OWNER_EMAIL` с нормализирания служебен имейл на единствения основен администратор. Стандартният интерфейс не може да създаде втори owner или administrator. Основният администратор управлява директорите, механиците и наблюдателите; директорът управлява само механици и наблюдатели. Деактивацията пази историята и обезсилва старите токени.
+
+Нов акаунт се създава от „Потребители“ с временна парола. Паролата не се връща от API и се изчиства от клиентското състояние. До успешна смяна през задължителния екран потребителят няма достъп до работните операции. Password policy изисква минимум 10 знака, малка и главна буква, цифра и специален знак.
 
 ## Локален старт със SQLite
 
@@ -40,7 +47,7 @@ backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt -r b
 Copy-Item backend/.env.example backend/.env
 ```
 
-Задайте собствен дълъг `SECRET_KEY` и силна `ADMIN_PASSWORD` в `backend/.env`. Не записвайте `.env` в Git.
+Задайте `ASSETCORE_OWNER_EMAIL`, собствен дълъг `SECRET_KEY` и силна `ADMIN_PASSWORD` в `backend/.env`. `ADMIN_EMAIL` е само migration fallback. Не записвайте `.env` в Git.
 
 ```powershell
 backend/.venv/Scripts/python.exe -m alembic -c backend/alembic.ini upgrade head
@@ -59,7 +66,7 @@ pnpm dev
 
 ## Docker и PostgreSQL
 
-Копирайте `.env.example` като `.env` в главната папка и задайте собствени стойности за `POSTGRES_PASSWORD`, URL-encoded `DATABASE_URL`, `SECRET_KEY`, `ADMIN_EMAIL` и `ADMIN_PASSWORD`, след което:
+Копирайте `.env.example` като `.env` в главната папка и задайте собствени стойности за `POSTGRES_PASSWORD`, URL-encoded `DATABASE_URL`, `SECRET_KEY`, `ASSETCORE_OWNER_EMAIL` и `ADMIN_PASSWORD`, след което:
 
 ```powershell
 docker compose up --build
