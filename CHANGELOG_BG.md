@@ -1,5 +1,17 @@
 # Промени
 
+## Universal industrial platform — 2026-07-31
+
+- Добавени са универсални asset категории, configurable passport fields, attachments, QR web passport и immutable machine timeline.
+- Добавен е пълен валидиран repair lifecycle с inspection/cleaning/test completion gates, събития, използвани части, снимки и отделни DOCX/PDF протоколи.
+- Добавени са multi-line part requests, проследимо submit/approval решение и immutable versioned документи.
+- Разширен е каталогът с provenance, confidence, verification, изображения, алтернативни номера/заместители, визуални hotspots и human-approved repair kits.
+- Техническата библиотека вече пази SHA-256 и всяка revision; добавено е глобално търсене.
+- Добавени са versioned BG/EN/RU document templates, generated-document snapshots и QA generator за сравнение със съществуващите снимкови/DOCX образци.
+- Добавени са admin operations за users/roles, categories/fields, деактивируеми местоположения, триезични отдели, templates и signed two-step import със защита на verified HPWJ регистъра.
+- Добавени са свързани ремонти и файлови приложения към заявките за части, както и директно пренасяне на машината от паспорта към заявка през каталога.
+- Добавен е responsive BG/EN/RU frontend за всички нови workflows и API/миграционни/integration тестове.
+
 ## Industrial foundation — 2026-07-31
 
 - Добавена е централизирана многоезична архитектура с пълни `bg`, `en` и `ru` каталози, български fallback, локално и профилно запазване на езика и locale-aware дати/числа.

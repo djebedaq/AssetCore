@@ -22,17 +22,23 @@ from .document_generation import (
     build_protocol_pdf,
     safe_filename,
 )
+from .industrial_api import router as industrial_router
 from .localization import normalize_language, translate
 from .migrations import run_migrations
 from .models import (
+    AssetCategory,
     AuditLog,
+    GeneratedDocument,
     Location,
     Machine,
     MachineStatus,
     PartCatalog,
     PartRequest,
+    PartRequestLine,
     PartRequestStatus,
     Repair,
+    RepairEvent,
+    RepairEventType,
     RepairStatus,
     TechnicalDocument,
     TransferBatch,
@@ -83,6 +89,13 @@ from .transfer_service import (
     get_protocol_document,
     list_batches,
 )
+from .workflow import (
+    REPAIR_TO_MACHINE_STATUS,
+    add_machine_event,
+    ensure_machine_transition,
+    ensure_repair_can_complete,
+    ensure_repair_transition,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = ROOT / "resources"
@@ -112,6 +125,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(industrial_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -376,10 +390,24 @@ def create_machine(
 ) -> Machine:
     if db.scalar(select(Machine).where(Machine.inventory_number == data.inventory_number)):
         raise HTTPException(409, "Дублиран инвентарен номер")
+    category = db.get(AssetCategory, data.category_id) if data.category_id is not None else None
+    if data.category_id is not None and category is None:
+        raise HTTPException(404, "Категорията не е намерена")
     values = data.model_dump(mode="json")
+    if category is not None:
+        values["category"] = category.code
     item = Machine(**values)
     db.add(item)
     db.flush()
+    add_machine_event(
+        db,
+        item,
+        user,
+        "MACHINE_CREATED",
+        new_status=item.status,
+        new_location_id=item.location_id,
+        details={"inventory_number": item.inventory_number},
+    )
     add_audit_log(db, user, "machine", item.id, "Създадена машина", values)
     db.commit()
     return db.scalar(
@@ -400,6 +428,13 @@ def update_machine(
     if not item:
         raise HTTPException(404, "Машината не е намерена")
     changes = data.model_dump(exclude_unset=True, mode="json")
+    category = (
+        db.get(AssetCategory, changes["category_id"])
+        if changes.get("category_id") is not None
+        else None
+    )
+    if changes.get("category_id") is not None and category is None:
+        raise HTTPException(404, "Категорията не е намерена")
     active = _active_transfer(db, machine_id)
     if "status" in changes:
         requested_status = changes["status"]
@@ -427,10 +462,24 @@ def update_machine(
                     ),
                 },
             )
+        ensure_machine_transition(item.status, requested_status)
     before = {"status": item.status, "location_id": item.location_id}
     for key, value in changes.items():
         setattr(item, key, value)
+    if category is not None:
+        item.category = category.code
     item.updated_at = utcnow()
+    add_machine_event(
+        db,
+        item,
+        user,
+        "MACHINE_UPDATED",
+        previous_status=before["status"],
+        new_status=item.status,
+        previous_location_id=before["location_id"],
+        new_location_id=item.location_id,
+        details={"changed_fields": sorted(changes)},
+    )
     add_audit_log(
         db,
         user,
@@ -448,11 +497,12 @@ def update_machine(
 
 
 @app.get("/api/machines/{machine_id}/qr")
-def qr(machine_id: int, db: Session = Depends(get_db)) -> Response:
+def qr(machine_id: int, request: Request, db: Session = Depends(get_db)) -> Response:
     item = db.get(Machine, machine_id)
     if not item:
         raise HTTPException(404, "Машината не е намерена")
-    image = qrcode.make(f"assetcore://machine/{item.id}")
+    base_url = (settings.public_base_url or str(request.base_url)).rstrip("/")
+    image = qrcode.make(f"{base_url}/machine/{item.id}")
     output = io.BytesIO()
     image.save(output, format="PNG")
     return Response(output.getvalue(), media_type="image/png")
@@ -475,7 +525,10 @@ def create_repair(
     user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> Repair:
-    item = db.get(Machine, data.machine_id)
+    machine_statement = select(Machine).where(Machine.id == data.machine_id)
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        machine_statement = machine_statement.with_for_update()
+    item = db.scalar(machine_statement)
     if not item:
         raise HTTPException(404, "Машината не е намерена")
     active = _active_transfer(db, item.id)
@@ -490,17 +543,76 @@ def create_repair(
                 ),
             },
         )
-    repair = Repair(**data.model_dump(mode="json"))
-    item.status = MachineStatus.REPAIR.value
+    if data.status.value != RepairStatus.ACCEPTED.value:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "repair_must_start_as_accepted",
+                "message": "Нов ремонт винаги започва от етап „Приемане“.",
+            },
+        )
+    open_repair = db.scalar(
+        select(Repair.id).where(
+            Repair.machine_id == item.id,
+            Repair.status != RepairStatus.COMPLETED.value,
+        )
+    )
+    if open_repair:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "open_repair_exists",
+                "message": f"Машина №{item.inventory_number} вече има незавършен ремонт.",
+            },
+        )
+    previous_status = item.status
+    ensure_machine_transition(previous_status, MachineStatus.INSPECTION.value)
+    repair = Repair(
+        machine_id=item.id,
+        reported_problem=data.reported_problem,
+        diagnosis=data.diagnosis,
+        work_performed=data.work_performed,
+        result=data.result,
+        status=RepairStatus.ACCEPTED.value,
+        responsible_user_id=user.id,
+        accepted_by_id=user.id,
+    )
     db.add(repair)
     db.flush()
+    repair.repair_reference = f"REP-{repair.opened_at:%Y}-{repair.id:06d}"
+    item.status = MachineStatus.INSPECTION.value
+    db.add(
+        RepairEvent(
+            repair_id=repair.id,
+            event_type=RepairEventType.ACCEPTED.value,
+            status_after=repair.status,
+            description=data.reported_problem,
+            user_id=user.id,
+        )
+    )
+    add_machine_event(
+        db,
+        item,
+        user,
+        "REPAIR_ACCEPTED",
+        reference=repair.repair_reference,
+        previous_status=previous_status,
+        new_status=item.status,
+        details={"repair_id": repair.id},
+    )
     add_audit_log(
         db,
         user,
         "repair",
         repair.id,
         "Приета машина за ремонт",
-        {"machine": item.inventory_number, "problem": data.reported_problem},
+        {
+            "machine": item.inventory_number,
+            "repair_reference": repair.repair_reference,
+            "problem": data.reported_problem,
+            "previous_status": previous_status,
+            "new_status": item.status,
+        },
     )
     db.commit()
     return db.scalar(
@@ -520,29 +632,76 @@ def update_repair(
     repair = db.get(Repair, repair_id)
     if not repair:
         raise HTTPException(404, "Ремонтът не е намерен")
-    changes = data.model_dump(exclude={"close"}, exclude_unset=True, mode="json")
+    changes = data.model_dump(
+        exclude={"close", "status"}, exclude_unset=True, mode="json"
+    )
     for key, value in changes.items():
         setattr(repair, key, value)
+    previous_status = repair.status
+    previous_machine_status = repair.machine.status
+    if data.status is not None and data.status.value != repair.status:
+        ensure_repair_transition(repair.status, data.status.value)
+        if data.status.value == RepairStatus.COMPLETED.value:
+            ensure_repair_can_complete(repair)
+            repair.closed_at = utcnow()
+        repair.status = data.status.value
+        next_machine_status = REPAIR_TO_MACHINE_STATUS[repair.status]
+        ensure_machine_transition(repair.machine.status, next_machine_status)
+        repair.machine.status = next_machine_status
     if data.close:
-        requested_status = data.status.value if data.status else repair.status
-        if requested_status != RepairStatus.TESTING.value or not (
-            data.result or repair.result
-        ):
+        if repair.status != RepairStatus.TESTING.value:
             raise HTTPException(
                 409,
                 detail={
                     "code": "repair_testing_required",
                     "message": (
-                        "Ремонтът може да бъде приключен като готов само след статус "
-                        "„Тестване“ и записан резултат от теста."
+                        "Ремонтът може да бъде приключен само от етап „Тестване“. "
+                        "Използвайте ремонтната карта за запис на прегледа и теста."
                     ),
                 },
             )
+        ensure_repair_can_complete(repair)
         repair.closed_at = utcnow()
         repair.status = RepairStatus.COMPLETED.value
         repair.machine.status = MachineStatus.READY.value
+    db.add(
+        RepairEvent(
+            repair_id=repair.id,
+            event_type=(
+                RepairEventType.COMPLETED.value
+                if data.close
+                else RepairEventType.STATUS_CHANGE.value
+            ),
+            status_before=previous_status,
+            status_after=repair.status,
+            description="Обновена ремонтна карта през съвместимия API маршрут",
+            user_id=user.id,
+        )
+    )
+    if previous_machine_status != repair.machine.status:
+        add_machine_event(
+            db,
+            repair.machine,
+            user,
+            "REPAIR_STATUS_CHANGED",
+            reference=repair.repair_reference,
+            previous_status=previous_machine_status,
+            new_status=repair.machine.status,
+            details={"repair_id": repair.id, "repair_status": repair.status},
+        )
     add_audit_log(
-        db, user, "repair", repair.id, "Актуализиран ремонт", data.model_dump()
+        db,
+        user,
+        "repair",
+        repair.id,
+        "Актуализиран ремонт",
+        {
+            "previous_status": previous_status,
+            "new_status": repair.status,
+            "previous_machine_status": previous_machine_status,
+            "new_machine_status": repair.machine.status,
+            "changed_fields": sorted(data.model_fields_set),
+        },
     )
     db.commit()
     return db.scalar(
@@ -569,16 +728,51 @@ def create_part(
     user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> PartRequest:
-    request = PartRequest(**data.model_dump(mode="json"))
+    if data.status.value != PartRequestStatus.DRAFT.value:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "part_request_must_start_as_draft",
+                "message": "Новата заявка за части трябва да започне като чернова.",
+            },
+        )
+    if data.machine_id is not None and db.get(Machine, data.machine_id) is None:
+        raise HTTPException(404, "Машината не е намерена")
+    request = PartRequest(
+        machine_id=data.machine_id,
+        part_name=data.part_name,
+        part_number=data.part_number,
+        quantity=data.quantity,
+        reason=data.reason,
+        priority=data.priority.value,
+        status=PartRequestStatus.DRAFT.value,
+        language=user.preferred_language,
+        requested_by_id=user.id,
+    )
     db.add(request)
     db.flush()
+    request.request_reference = f"PR-{request.created_at:%Y}-{request.id:06d}"
+    db.add(
+        PartRequestLine(
+            request_id=request.id,
+            part_number=data.part_number,
+            description=data.part_name,
+            quantity=float(data.quantity),
+            reason=data.reason,
+        )
+    )
     add_audit_log(
         db,
         user,
         "part_request",
         request.id,
         "Създадена заявка за части",
-        data.model_dump(),
+        {
+            "request_reference": request.request_reference,
+            "machine_id": request.machine_id,
+            "line_count": 1,
+            "status": request.status,
+        },
     )
     db.commit()
     return db.scalar(
@@ -602,8 +796,14 @@ def catalog(
         statement = statement.where(
             or_(
                 PartCatalog.part_number.ilike(f"%{q}%"),
+                PartCatalog.alternative_part_number.ilike(f"%{q}%"),
+                PartCatalog.name_bg.ilike(f"%{q}%"),
+                PartCatalog.name_en.ilike(f"%{q}%"),
+                PartCatalog.name_ru.ilike(f"%{q}%"),
+                PartCatalog.original_name.ilike(f"%{q}%"),
                 PartCatalog.description.ilike(f"%{q}%"),
                 PartCatalog.assembly.ilike(f"%{q}%"),
+                PartCatalog.position.ilike(f"%{q}%"),
             )
         )
     return db.scalars(
@@ -676,12 +876,20 @@ def create_transfer(
                 BulkIssueRequest(
                     machine_ids=[data.machine_id],
                     company_unit=data.company_unit,
+                    department=data.department,
                     vessel=data.vessel,
+                    dock=data.dock,
+                    pier=data.pier,
+                    work_area=data.work_area,
                     location_text=data.location_text,
                     location_id=data.location_id,
                     handed_over_by=data.handed_over_by,
                     accepted_by=data.accepted_by,
                     equipment=data.equipment,
+                    hoses=data.hoses,
+                    nozzles=data.nozzles,
+                    guns=data.guns,
+                    accessories=data.accessories,
                     condition_text=data.condition_text,
                     remarks=data.remarks,
                 ),
@@ -807,11 +1015,16 @@ def batch_documents_zip(
     )
     if batch is None:
         raise HTTPException(404, "Партидата не е намерена")
-    if not batch.documents:
+    generated = db.scalars(
+        select(GeneratedDocument).where(GeneratedDocument.batch_id == batch.id)
+    ).all()
+    if not batch.documents and not generated:
         raise HTTPException(404, "Партидата няма генерирани протоколи")
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for document in sorted(batch.documents, key=lambda item: item.filename):
+            archive.writestr(safe_filename(document.filename), document.content)
+        for document in sorted(generated, key=lambda item: item.filename):
             archive.writestr(safe_filename(document.filename), document.content)
     filename = f"{safe_filename(batch.batch_reference)}-protocols.zip"
     return Response(

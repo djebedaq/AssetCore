@@ -4,6 +4,7 @@ import {
   BookOpen,
   Boxes,
   ClipboardSignature,
+  Download,
   FileText,
   Gauge,
   History,
@@ -21,9 +22,18 @@ import {
 } from 'lucide-react'
 import { api, downloadApiFile, getToken, logout, setToken } from './api'
 import BulkTransfers from './BulkTransfers'
+import {
+  AdministrationPanel,
+  GlobalSearchBox,
+  IndustrialCatalog,
+  IndustrialPartRequests,
+  IndustrialRepairs,
+  MachinePassportModal,
+  TechnicalLibrary,
+} from './IndustrialPlatform'
 import { statusText, useI18n } from './i18n'
 import { SUPPORTED_LOCALES, type Locale } from './locale'
-import type { Location, Machine, PartRequest, Repair, UserSession } from './types'
+import type { AssetCategory, Department, Location, Machine, PartRequest, Repair, UserSession } from './types'
 
 type Page =
   | 'dashboard'
@@ -95,6 +105,7 @@ type AuditEntry = {
   entity_id?: number | null
   action: string
   details?: string | null
+  operation_reference?: string | null
 }
 
 const MACHINE_STATUS_CODES = [
@@ -233,7 +244,12 @@ function App() {
   const { t } = useI18n()
   const [authenticated, setAuthenticated] = useState(Boolean(getToken()))
   const [page, setPage] = useState<Page>('dashboard')
+  const [catalogMachineId, setCatalogMachineId] = useState<number | null>(null)
   const [mobileMenu, setMobileMenu] = useState(false)
+  const [passportMachineId, setPassportMachineId] = useState<number | null>(() => {
+    const match = window.location.pathname.match(/^\/machine\/(\d+)\/?$/)
+    return match ? Number(match[1]) : null
+  })
 
   if (!authenticated) return <Login onLogin={() => setAuthenticated(true)} />
 
@@ -265,6 +281,7 @@ function App() {
               className={page === id ? 'active' : ''}
               onClick={() => {
                 setPage(id)
+                setCatalogMachineId(null)
                 setMobileMenu(false)
               }}
             >
@@ -295,22 +312,24 @@ function App() {
             <h2>{t(nav.find((item) => item[0] === page)?.[1] || 'nav.dashboard')}</h2>
             <p>{t('app.headerSubtitle')}</p>
           </div>
+          <GlobalSearchBox onMachine={setPassportMachineId} />
           <LanguageSwitcher compact />
         </header>
         <section className="content">
           {page === 'dashboard' && <Dashboard />}
-          {page === 'machines' && <Machines />}
+          {page === 'machines' && <Machines onOpenCatalog={(machineId) => { setCatalogMachineId(machineId); setPage('catalog') }} />}
           {page === 'transfers' && <Transfers />}
-          {page === 'repairs' && <Repairs />}
-          {page === 'catalog' && <PartCatalog />}
-          {page === 'parts' && <Parts />}
-          {page === 'documents' && <Documents />}
+          {page === 'repairs' && <IndustrialRepairs />}
+          {page === 'catalog' && <IndustrialCatalog defaultMachineId={catalogMachineId || undefined} />}
+          {page === 'parts' && <IndustrialPartRequests />}
+          {page === 'documents' && <TechnicalLibrary />}
           {page === 'reports' && <Reports />}
           {page === 'audit' && <Audit />}
           {page === 'qr' && <QrCodes />}
           {page === 'settings' && <SettingsPage />}
         </section>
       </main>
+      {passportMachineId && <MachinePassportModal machineId={passportMachineId} onClose={() => setPassportMachineId(null)} onOpenCatalog={() => { setCatalogMachineId(passportMachineId); setPassportMachineId(null); setPage('catalog') }} />}
     </div>
   )
 }
@@ -377,19 +396,24 @@ function Dashboard() {
   )
 }
 
-function Machines() {
+function Machines({ onOpenCatalog }: { onOpenCatalog: (machineId: number) => void }) {
   const { t } = useI18n()
   const [items, setItems] = useState<Machine[]>([])
   const [locations, setLocations] = useState<Location[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [categories, setCategories] = useState<AssetCategory[]>([])
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Machine | null>(null)
   const [showNew, setShowNew] = useState(false)
+  const [passportId, setPassportId] = useState<number | null>(null)
   const [error, setError] = useState(false)
 
-  const load = () => Promise.all([api<Machine[]>('/machines'), api<Location[]>('/locations')])
-    .then(([machines, locationItems]) => {
+  const load = () => Promise.all([api<Machine[]>('/machines'), api<Location[]>('/locations'), api<AssetCategory[]>('/categories'), api<Department[]>('/departments')])
+    .then(([machines, locationItems, categoryItems, departmentItems]) => {
       setItems(machines)
       setLocations(locationItems)
+      setCategories(categoryItems)
+      setDepartments(departmentItems)
       setError(false)
     })
     .catch(() => setError(true))
@@ -434,7 +458,7 @@ function Machines() {
                 <td>{machine.pressure_bar} bar</td>
                 <td><span className="badge">{statusText(t, machine.status)}</span></td>
                 <td>{machine.location?.name || t('common.notSpecified')}</td>
-                <td><button className="link" onClick={() => setSelected(machine)}>{t('common.open')}</button></td>
+                <td><button className="link" onClick={() => setPassportId(machine.id)}>{t('passport.tab.passport')}</button>{hasRole('admin') && <button className="link" onClick={() => setSelected(machine)}>{t('common.details')}</button>}</td>
               </tr>
             ))}
           </tbody>
@@ -445,6 +469,8 @@ function Machines() {
         <MachineModal
           machine={selected}
           locations={locations}
+          departments={departments}
+          categories={categories}
           onClose={() => setSelected(null)}
           onSaved={() => {
             setSelected(null)
@@ -455,6 +481,8 @@ function Machines() {
       {showNew && (
         <MachineModal
           locations={locations}
+          departments={departments}
+          categories={categories}
           onClose={() => setShowNew(false)}
           onSaved={() => {
             setShowNew(false)
@@ -462,6 +490,7 @@ function Machines() {
           }}
         />
       )}
+      {passportId && <MachinePassportModal machineId={passportId} onClose={() => setPassportId(null)} onOpenCatalog={() => { setPassportId(null); onOpenCatalog(passportId) }} />}
     </>
   )
 }
@@ -477,15 +506,29 @@ type MachineForm = {
   status: string
   location_id: number | ''
   notes: string
+  category_id: number | ''
+  asset_type: string
+  subtype: string
+  manufacturer: string
+  manufacture_year: number | ''
+  commissioning_date: string
+  ownership: string
+  department: string
+  responsible_person: string
+  capacity: string
+  dimensions: string
+  is_active: boolean
 }
 
-function MachineModal({ machine, locations, onClose, onSaved }: {
+function MachineModal({ machine, locations, departments, categories, onClose, onSaved }: {
   machine?: Machine
   locations: Location[]
+  departments: Department[]
+  categories: AssetCategory[]
   onClose: () => void
   onSaved: () => void
 }) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const [form, setForm] = useState<MachineForm>({
     inventory_number: machine?.inventory_number || '',
     name: machine?.name || '',
@@ -495,8 +538,20 @@ function MachineModal({ machine, locations, onClose, onSaved }: {
     serial_number: machine?.serial_number || '',
     pressure_bar: machine?.pressure_bar || 500,
     status: machine?.status || 'READY',
-    location_id: machine?.location_id || locations[0]?.id || '',
+    location_id: machine?.location_id || locations.find((item) => item.is_active)?.id || '',
     notes: machine?.notes || '',
+    category_id: machine?.category_id || categories.find((item) => item.code === machine?.category)?.id || '',
+    asset_type: machine?.asset_type || '',
+    subtype: machine?.subtype || '',
+    manufacturer: machine?.manufacturer || '',
+    manufacture_year: machine?.manufacture_year || '',
+    commissioning_date: machine?.commissioning_date?.slice(0, 10) || '',
+    ownership: machine?.ownership || '',
+    department: machine?.department || '',
+    responsible_person: machine?.responsible_person || '',
+    capacity: machine?.capacity || '',
+    dimensions: machine?.dimensions || '',
+    is_active: machine?.is_active ?? true,
   })
   const [error, setError] = useState('')
   const canEdit = !machine || hasRole('admin')
@@ -507,7 +562,7 @@ function MachineModal({ machine, locations, onClose, onSaved }: {
     try {
       await api(machine ? `/machines/${machine.id}` : '/machines', {
         method: machine ? 'PATCH' : 'POST',
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, category_id: form.category_id || null, location_id: form.location_id || null, manufacture_year: form.manufacture_year || null, commissioning_date: form.commissioning_date || null }),
       })
       onSaved()
     } catch {
@@ -529,13 +584,24 @@ function MachineModal({ machine, locations, onClose, onSaved }: {
         <form onSubmit={save} className="form-grid">
           <label>{t('machines.inventoryNumber')}<input required disabled={Boolean(machine)} value={form.inventory_number} onChange={(event) => field('inventory_number', event.target.value)} /></label>
           <label>{t('machines.name')}<input required disabled={!canEdit} value={form.name} onChange={(event) => field('name', event.target.value)} /></label>
-          <label>{t('machines.category')}<input required disabled={!canEdit} value={form.category} onChange={(event) => field('category', event.target.value)} /></label>
+          <label>{t('machines.category')}<select required disabled={!canEdit} value={form.category_id} onChange={(event) => { const selectedCategory = categories.find((item) => item.id === Number(event.target.value)); field('category_id', event.target.value ? Number(event.target.value) : ''); if (selectedCategory) field('category', selectedCategory.code) }}><option value="">{t('common.notSpecified')}</option>{categories.map((category) => <option value={category.id} key={category.id}>{category[`name_${locale}` as 'name_bg'] || category.name_bg}</option>)}</select></label>
           <label>{t('machines.brand')}<input required disabled={!canEdit} value={form.brand} onChange={(event) => field('brand', event.target.value)} /></label>
           <label>{t('machines.model')}<input disabled={!canEdit} value={form.model} onChange={(event) => field('model', event.target.value)} /></label>
           <label>{t('machines.serialNumber')}<input disabled={!canEdit} value={form.serial_number} onChange={(event) => field('serial_number', event.target.value)} /></label>
           <label>{t('machines.pressure')}<input disabled={!canEdit} type="number" min="0" value={form.pressure_bar} onChange={(event) => field('pressure_bar', Number(event.target.value))} /></label>
           <label>{t('common.status')}<select disabled={!canEdit} value={form.status} onChange={(event) => field('status', event.target.value)}>{MACHINE_STATUS_CODES.map((status) => <option key={status} value={status}>{statusText(t, status)}</option>)}</select></label>
-          <label>{t('common.location')}<select disabled={!canEdit} value={form.location_id} onChange={(event) => field('location_id', event.target.value ? Number(event.target.value) : '')}><option value="">{t('common.notSpecified')}</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
+          <label>{t('common.location')}<select disabled={!canEdit} value={form.location_id} onChange={(event) => field('location_id', event.target.value ? Number(event.target.value) : '')}><option value="">{t('common.notSpecified')}</option>{locations.map((location) => <option disabled={!location.is_active && location.id !== form.location_id} key={location.id} value={location.id}>{location.name}{!location.is_active ? ` · ${t('admin.inactive')}` : ''}</option>)}</select></label>
+          <label>{t('passport.manufacturer')}<input disabled={!canEdit} value={form.manufacturer} onChange={(event) => field('manufacturer', event.target.value)} /></label>
+          <label>{t('passport.manufactureYear')}<input disabled={!canEdit} type="number" min="1800" max="2200" value={form.manufacture_year} onChange={(event) => field('manufacture_year', event.target.value ? Number(event.target.value) : '')} /></label>
+          <label>{t('machines.assetType')}<input disabled={!canEdit} value={form.asset_type} onChange={(event) => field('asset_type', event.target.value)} /></label>
+          <label>{t('machines.subtype')}<input disabled={!canEdit} value={form.subtype} onChange={(event) => field('subtype', event.target.value)} /></label>
+          <label>{t('machines.commissioningDate')}<input disabled={!canEdit} type="date" value={form.commissioning_date} onChange={(event) => field('commissioning_date', event.target.value)} /></label>
+          <label>{t('machines.ownership')}<input disabled={!canEdit} value={form.ownership} onChange={(event) => field('ownership', event.target.value)} /></label>
+          <label>{t('passport.department')}<select disabled={!canEdit} value={form.department} onChange={(event) => field('department', event.target.value)}><option value="">{t('common.notSpecified')}</option>{form.department && !departments.some((item) => item.code === form.department) && <option value={form.department}>{form.department}</option>}{departments.map((department) => <option disabled={!department.is_active && department.code !== form.department} value={department.code} key={department.id}>{department[`name_${locale}` as 'name_bg'] || department.name_bg} · {department.code}{!department.is_active ? ` · ${t('admin.inactive')}` : ''}</option>)}</select></label>
+          <label>{t('passport.responsible')}<input disabled={!canEdit} value={form.responsible_person} onChange={(event) => field('responsible_person', event.target.value)} /></label>
+          <label>{t('machines.capacity')}<input disabled={!canEdit} value={form.capacity} onChange={(event) => field('capacity', event.target.value)} /></label>
+          <label>{t('machines.dimensions')}<input disabled={!canEdit} value={form.dimensions} onChange={(event) => field('dimensions', event.target.value)} /></label>
+          <label className="check-label"><input disabled={!canEdit} type="checkbox" checked={form.is_active} onChange={(event) => field('is_active', event.target.checked)} />{t('machines.active')}</label>
           <label className="wide">{t('machines.notes')}<textarea disabled={!canEdit} value={form.notes} onChange={(event) => field('notes', event.target.value)} /></label>
           {machine && <div className="qr-box"><img src={`/api/machines/${machine.id}/qr`} alt={t('machines.qrAlt', { number: machine.inventory_number })} /><span>{t('machines.qrLabel')}</span></div>}
           {error && <div className="error wide" role="alert">{error}</div>}
@@ -549,7 +615,7 @@ function MachineModal({ machine, locations, onClose, onSaved }: {
   )
 }
 
-function Repairs() {
+export function Repairs() {
   const { date, t } = useI18n()
   const [items, setItems] = useState<Repair[]>([])
   const [machines, setMachines] = useState<Machine[]>([])
@@ -678,7 +744,7 @@ function RepairCloseModal({ repair, onClose, onSaved }: { repair: Repair; onClos
   )
 }
 
-function Parts() {
+export function Parts() {
   const { t } = useI18n()
   const [items, setItems] = useState<PartRequest[]>([])
   const [machines, setMachines] = useState<Machine[]>([])
@@ -776,7 +842,7 @@ function Reports() {
     <div className="panel">
       <div className="panel-title"><div><h3>{t('reports.title')}</h3><p className="muted">{t('reports.subtitle')}</p></div><FileText /></div>
       {error && <div className="error" role="alert">{error}</div>}
-      <div className="report-options"><button className="primary" onClick={download}>{t('reports.downloadDaily')}</button><div className="coming">{t('reports.description')}</div></div>
+      <div className="report-options"><button className="primary" onClick={download}>{t('reports.downloadDaily')}</button><div className="report-description">{t('reports.description')}</div></div>
     </div>
   )
 }
@@ -785,8 +851,9 @@ function QrCodes() {
   const { t } = useI18n()
   const [machines, setMachines] = useState<Machine[]>([])
   useEffect(() => { void api<Machine[]>('/machines').then(setMachines).catch(() => undefined) }, [])
-  return (
-    <div className="qr-grid">
+  return (<>
+    <div className="toolbar qr-toolbar"><div><h3>{t('nav.qr')}</h3></div><button className="primary" onClick={() => window.print()}>{t('qr.printLabels')}</button></div>
+    <div className="qr-grid printable-qr-labels">
       {machines.map((machine) => (
         <div className="qr-card" key={machine.id}>
           <img src={`/api/machines/${machine.id}/qr`} alt={t('qr.alt', { number: machine.inventory_number })} />
@@ -795,21 +862,24 @@ function QrCodes() {
       ))}
       {!machines.length && <div className="empty-state">{t('qr.empty')}</div>}
     </div>
-  )
+  </>)
 }
 
 function SettingsPage() {
   const { t } = useI18n()
   return (
-    <div className="panel">
-      <div className="panel-title"><h3>{t('settings.title')}</h3><Settings /></div>
-      <div className="settings-list">
-        <div><b>{t('language.label')}</b><LanguageSwitcher compact /></div>
-        <div><b>{t('settings.organization')}</b><span>{t('settings.organizationValue')}</span></div>
-        <div><b>{t('settings.version')}</b><span>{t('settings.versionValue')}</span></div>
-        <div><b>{t('settings.database')}</b><span>{t('settings.databaseValue')}</span></div>
+    <>
+      <div className="panel">
+        <div className="panel-title"><h3>{t('settings.title')}</h3><Settings /></div>
+        <div className="settings-list">
+          <div><b>{t('language.label')}</b><LanguageSwitcher compact /></div>
+          <div><b>{t('settings.organization')}</b><span>{t('settings.organizationValue')}</span></div>
+          <div><b>{t('settings.version')}</b><span>{t('settings.versionValue')}</span></div>
+          <div><b>{t('settings.database')}</b><span>{t('settings.databaseValue')}</span></div>
+        </div>
       </div>
-    </div>
+      <AdministrationPanel />
+    </>
   )
 }
 
@@ -856,7 +926,7 @@ function Transfers() {
   )
 }
 
-function PartCatalog() {
+export function PartCatalog() {
   const { t } = useI18n()
   const [items, setItems] = useState<CatalogPart[]>([])
   const [query, setQuery] = useState('')
@@ -892,7 +962,7 @@ function PartCatalog() {
   )
 }
 
-function Documents() {
+export function Documents() {
   const { t } = useI18n()
   const [items, setItems] = useState<TechnicalDocument[]>([])
   const [error, setError] = useState('')
@@ -955,14 +1025,23 @@ function Audit() {
   const { date, t } = useI18n()
   const [items, setItems] = useState<AuditEntry[]>([])
   const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
   useEffect(() => {
     void api<AuditEntry[]>('/audit').then(setItems).catch(() => setError(t('audit.restricted')))
   }, [t])
+  const filtered = useMemo(() => items.filter((entry) => (
+    `${entry.user_name || ''} ${entry.entity_type} ${entry.entity_id || ''} ${entry.action} ${entry.operation_reference || ''} ${entry.details || ''}`
+      .toLowerCase()
+      .includes(query.toLowerCase())
+  )), [items, query])
+  const exportLog = () => downloadApiFile('/audit/export.json', 'assetcore-audit.json')
+    .catch(() => setError(t('audit.exportError')))
   return (
     <>
-      <div className="toolbar"><div><h3>{t('audit.title')}</h3><p className="muted">{t('audit.subtitle')}</p></div></div>
+      <div className="toolbar"><div><h3>{t('audit.title')}</h3><p className="muted">{t('audit.subtitle')}</p></div><button className="secondary" onClick={exportLog}><Download size={16} />{t('audit.export')}</button></div>
+      <div className="filters"><div className="searchbox"><Search size={18} /><input aria-label={t('audit.search')} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('audit.searchPlaceholder')} /></div></div>
       {error && <div className="error" role="alert">{error}</div>}
-      <div className="table-card"><table><thead><tr><th>{t('audit.date')}</th><th>{t('audit.user')}</th><th>{t('audit.entity')}</th><th>{t('audit.action')}</th><th>{t('audit.details')}</th></tr></thead><tbody>{items.map((entry) => <tr key={entry.id}><td>{date(entry.created_at)}</td><td>{entry.user_name || t('common.system')}</td><td>{entry.entity_type} #{entry.entity_id || t('common.noValue')}</td><td>{entry.action}</td><td><AuditDetails details={entry.details} /></td></tr>)}</tbody></table>{!items.length && !error && <div className="empty-state">{t('audit.empty')}</div>}</div>
+      <div className="table-card"><table><thead><tr><th>{t('audit.date')}</th><th>{t('audit.user')}</th><th>{t('audit.entity')}</th><th>{t('audit.action')}</th><th>{t('audit.details')}</th></tr></thead><tbody>{filtered.map((entry) => <tr key={entry.id}><td>{date(entry.created_at)}</td><td>{entry.user_name || t('common.system')}</td><td>{entry.entity_type} #{entry.entity_id || t('common.noValue')}</td><td>{entry.action}</td><td><AuditDetails details={entry.details} /></td></tr>)}</tbody></table>{!filtered.length && !error && <div className="empty-state">{t('audit.empty')}</div>}</div>
     </>
   )
 }

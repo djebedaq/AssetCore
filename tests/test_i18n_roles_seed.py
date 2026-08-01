@@ -207,6 +207,7 @@ def test_react_components_contain_no_hardcoded_cyrillic_user_text():
     for relative_path in [
         "frontend/src/App.tsx",
         "frontend/src/BulkTransfers.tsx",
+        "frontend/src/IndustrialPlatform.tsx",
         "frontend/src/api.ts",
     ]:
         source = (root / relative_path).read_text(encoding="utf-8")

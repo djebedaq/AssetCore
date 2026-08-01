@@ -43,14 +43,37 @@ def return_payload(*transfers: dict) -> dict:
 
 
 def test_issue_one_available_machine_successfully(
-    client, auth_headers, machine_ids, issue_payload
+    client, auth_headers, machine_ids, issue_payload, session_factory
 ):
-    response = issue(client, auth_headers, issue_payload(machine_ids["4"]))
+    payload = issue_payload(machine_ids["4"])
+    payload.update(
+        {
+            "department": "Тестов отдел",
+            "dock": "Тестов док",
+            "pier": "Тестов кей",
+            "work_area": "Тестова работна зона",
+            "hoses": "Тестово описание на шлангове",
+            "nozzles": "Тестово описание на дюзи",
+            "guns": "Тестово описание на пистолети",
+            "accessories": "Тестово описание на принадлежности",
+        }
+    )
+    response = issue(client, auth_headers, payload)
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["batch_reference"].startswith("HPWJ-B-")
     assert [item["machine_number"] for item in body["transfers"]] == ["4"]
     assert len(body["transfers"][0]["documents"]) == 2
+    with session_factory() as session:
+        transfer = session.scalar(select(TransferProtocol))
+        assert transfer.department == "Тестов отдел"
+        assert transfer.dock == "Тестов док"
+        assert transfer.hoses == "Тестово описание на шлангове"
+        document = session.scalar(
+            select(ProtocolDocument).where(ProtocolDocument.format == "docx")
+        )
+        assert document.snapshot["department"] == "Тестов отдел"
+        assert document.snapshot["accessories"] == "Тестово описание на принадлежности"
 
 
 def test_reject_already_issued_machine_with_structured_bulgarian_conflict(
@@ -139,21 +162,36 @@ def test_two_simultaneous_issue_attempts_create_only_one_active_transfer(
 
 
 def test_full_batch_return_closes_every_individual_transfer(
-    client, auth_headers, machine_ids, issue_payload
+    client, auth_headers, machine_ids, issue_payload, session_factory
 ):
     created = issue(
         client, auth_headers, issue_payload(machine_ids["4"], machine_ids["5"])
     ).json()
+    payload = return_payload(*created["transfers"])
+    payload["items"][0].update(
+        {
+            "missing_equipment": "Тестова липса",
+            "damage": "Тестова повреда",
+            "contamination": "Тестово замърсяване",
+            "cleaning_required": True,
+            "inspection_required": True,
+            "repair_required": True,
+        }
+    )
     response = client.post(
         "/api/transfers/bulk-return",
         headers=auth_headers,
-        json=return_payload(*created["transfers"]),
+        json=payload,
     )
     assert response.status_code == 200, response.text
     progress = response.json()["batches"][0]
     assert progress["returned_machines"] == 2
     assert progress["still_issued_machines"] == 0
     assert progress["status"] == "RETURNED"
+    with session_factory() as session:
+        transfer = session.get(TransferProtocol, created["transfers"][0]["transfer_id"])
+        assert transfer.return_missing_equipment == "Тестова липса"
+        assert transfer.return_repair_required is True
 
 
 def test_partial_batch_return_keeps_remaining_machine_issued(

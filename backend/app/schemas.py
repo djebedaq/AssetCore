@@ -50,12 +50,15 @@ class LocationOut(BaseModel):
 
     id: int
     name: str
+    description: str | None = None
+    is_active: bool = True
 
 
 class MachineBase(BaseModel):
     inventory_number: str
     name: str
     category: str = "HPWJ"
+    category_id: int | None = None
     brand: str
     model: str | None = None
     pressure_bar: int = 500
@@ -63,6 +66,17 @@ class MachineBase(BaseModel):
     status: MachineStatus = MachineStatus.READY
     location_id: int | None = None
     notes: str | None = None
+    asset_type: str | None = None
+    subtype: str | None = None
+    manufacturer: str | None = None
+    manufacture_year: int | None = Field(default=None, ge=1800, le=2200)
+    commissioning_date: datetime | None = None
+    ownership: str | None = None
+    department: str | None = None
+    responsible_person: str | None = None
+    capacity: str | None = None
+    dimensions: str | None = None
+    is_active: bool = True
 
     @field_validator("status", mode="before")
     @classmethod
@@ -75,6 +89,7 @@ class MachineCreate(MachineBase):
 
 
 class MachineUpdate(BaseModel):
+    category_id: int | None = None
     name: str | None = None
     brand: str | None = None
     model: str | None = None
@@ -83,6 +98,17 @@ class MachineUpdate(BaseModel):
     status: MachineStatus | None = None
     location_id: int | None = None
     notes: str | None = None
+    asset_type: str | None = None
+    subtype: str | None = None
+    manufacturer: str | None = None
+    manufacture_year: int | None = Field(default=None, ge=1800, le=2200)
+    commissioning_date: datetime | None = None
+    ownership: str | None = None
+    department: str | None = None
+    responsible_person: str | None = None
+    capacity: str | None = None
+    dimensions: str | None = None
+    is_active: bool | None = None
 
     @field_validator("status", mode="before")
     @classmethod
@@ -175,12 +201,20 @@ class TransferCreate(BaseModel):
     machine_id: int
     protocol_type: str = "Предаване"
     company_unit: str | None = None
+    department: str | None = None
     vessel: str | None = None
+    dock: str | None = None
+    pier: str | None = None
+    work_area: str | None = None
     location_text: str | None = None
     location_id: int | None = None
     handed_over_by: str | None = None
     accepted_by: str | None = None
     equipment: str | None = None
+    hoses: str | None = None
+    nozzles: str | None = None
+    guns: str | None = None
+    accessories: str | None = None
     condition_text: str | None = None
     remarks: str | None = None
 
@@ -196,11 +230,19 @@ class TransferOut(BaseModel):
     batch_reference: str | None = None
     is_active: bool
     company_unit: str | None = None
+    department: str | None = None
     vessel: str | None = None
+    dock: str | None = None
+    pier: str | None = None
+    work_area: str | None = None
     location_text: str | None = None
     handed_over_by: str | None = None
     accepted_by: str | None = None
     equipment: str | None = None
+    hoses: str | None = None
+    nozzles: str | None = None
+    guns: str | None = None
+    accessories: str | None = None
     condition_text: str | None = None
     remarks: str | None = None
     issued_at: datetime | None = None
@@ -208,19 +250,34 @@ class TransferOut(BaseModel):
     return_condition_text: str | None = None
     return_result_text: str | None = None
     return_notes: str | None = None
+    return_missing_equipment: str | None = None
+    return_damage: str | None = None
+    return_contamination: str | None = None
+    return_cleaning_required: bool = False
+    return_inspection_required: bool = True
+    return_repair_required: bool = False
     created_at: datetime
     machine: MachineOut
 
 
 class BulkIssueRequest(BaseModel):
     machine_ids: list[int]
+    document_language: LanguageCode = LanguageCode.BG
     company_unit: str | None = None
+    department: str | None = None
     vessel: str | None = None
+    dock: str | None = None
+    pier: str | None = None
+    work_area: str | None = None
     location_text: str | None = None
     location_id: int | None = None
     handed_over_by: str | None = None
     accepted_by: str | None = None
     equipment: str | None = None
+    hoses: str | None = None
+    nozzles: str | None = None
+    guns: str | None = None
+    accessories: str | None = None
     condition_text: str | None = None
     remarks: str | None = None
 
@@ -235,6 +292,8 @@ class BulkIssueRequest(BaseModel):
 
 class ProtocolDocumentOut(BaseModel):
     id: int
+    document_number: str | None = None
+    language: str | None = None
     format: str
     filename: str
     download_endpoint: str
@@ -273,6 +332,12 @@ class BulkReturnItem(BaseModel):
     condition_text: str = Field(min_length=1)
     result_text: str = Field(min_length=1)
     notes: str | None = None
+    missing_equipment: str | None = None
+    damage: str | None = None
+    contamination: str | None = None
+    cleaning_required: bool = False
+    inspection_required: bool = True
+    repair_required: bool = False
     returned_by: str | None = None
     accepted_by: str | None = None
     location_id: int | None = None
@@ -296,6 +361,7 @@ class BulkReturnItem(BaseModel):
 
 class BulkReturnRequest(BaseModel):
     items: list[BulkReturnItem]
+    document_language: LanguageCode = LanguageCode.BG
 
     @model_validator(mode="after")
     def validate_items(self) -> BulkReturnRequest:
@@ -329,6 +395,7 @@ class BulkReturnItemOut(BaseModel):
     machine_number: str
     new_status: MachineStatus
     returned_at: datetime
+    documents: list[ProtocolDocumentOut] = Field(default_factory=list)
 
 
 class BulkReturnResponse(BaseModel):
@@ -382,13 +449,33 @@ class PartCatalogOut(BaseModel):
     id: int
     brand: str
     model: str | None = None
+    manufacturer: str | None = None
     assembly: str | None = None
     position: str | None = None
     part_number: str
     description: str
     quantity: int | None = None
+    unit: str | None = None
+    technical_specification: str | None = None
+    compatible_models: str | None = None
+    compatible_machine_numbers: list[str] | None = None
+    technical_notes: str | None = None
+    alternative_part_number: str | None = None
+    alternative_part_numbers: list[str] | None = None
+    replacement_part_ids: list[int] | None = None
+    supplier: str | None = None
+    supplier_code: str | None = None
+    estimated_price: float | None = None
+    currency: str | None = None
+    lead_time_days: int | None = None
+    revision: str | None = None
+    is_active: bool = True
     source_document: str | None = None
     source_page: int | None = None
+    source_excerpt: str | None = None
+    provenance_confidence: float | None = None
+    is_verified: bool = False
+    verified_at: datetime | None = None
 
 
 class TechnicalDocumentOut(BaseModel):

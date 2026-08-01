@@ -2,6 +2,10 @@ import { getStoredLocale } from './locale'
 
 const BASE = '/api'
 
+function apiUrl(path: string): string {
+  return path === BASE || path.startsWith(`${BASE}/`) ? path : `${BASE}${path}`
+}
+
 export type StructuredApiError = {
   code?: string
   message?: string
@@ -66,7 +70,7 @@ function authenticatedHeaders(options: RequestInit): Headers {
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, { ...options, headers: authenticatedHeaders(options) })
+  const response = await fetch(apiUrl(path), { ...options, headers: authenticatedHeaders(options) })
   if (response.status === 401) logout()
   if (!response.ok) throw await errorFromResponse(response)
   if (response.status === 204) return undefined as T
@@ -81,7 +85,7 @@ function responseFilename(response: Response, fallback: string): string {
 }
 
 export async function downloadApiFile(path: string, fallbackName: string): Promise<void> {
-  const response = await fetch(`${BASE}${path}`, { headers: authenticatedHeaders({}) })
+  const response = await fetch(apiUrl(path), { headers: authenticatedHeaders({}) })
   if (response.status === 401) logout()
   if (!response.ok) throw await errorFromResponse(response)
   const blob = await response.blob()
@@ -93,4 +97,15 @@ export async function downloadApiFile(path: string, fallbackName: string): Promi
   anchor.click()
   anchor.remove()
   URL.revokeObjectURL(url)
+}
+
+export async function createApiObjectUrl(path: string): Promise<{ url: string; mediaType: string }> {
+  const response = await fetch(apiUrl(path), { headers: authenticatedHeaders({}) })
+  if (response.status === 401) logout()
+  if (!response.ok) throw await errorFromResponse(response)
+  const blob = await response.blob()
+  return {
+    url: URL.createObjectURL(blob),
+    mediaType: blob.type || response.headers.get('Content-Type') || 'application/octet-stream',
+  }
 }
