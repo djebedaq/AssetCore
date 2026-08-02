@@ -26,6 +26,7 @@ from .document_generation import (
     ConfirmedTemplateUnavailableError,
     TemplateValidationError,
     make_part_request_documents,
+    make_repair_correction,
     make_repair_documents,
 )
 from .industrial_schemas import (
@@ -50,6 +51,7 @@ from .industrial_schemas import (
     RepairEventCreate,
     RepairKitCreate,
     RepairPartCreate,
+    RepairProtocolCorrection,
     TechnicalDocumentUpload,
     TemplateCreate,
     TemplateVersionCreate,
@@ -69,6 +71,9 @@ from .models import (
     MachineAttachment,
     MachineFieldValue,
     MachineStatus,
+    OfficialDocument,
+    OfficialDocumentStatus,
+    OfficialDocumentVersion,
     PartCatalog,
     PartCatalogImage,
     PartHotspot,
@@ -1151,6 +1156,35 @@ def generate_repair_documents(
     db: Session = Depends(get_db),
 ) -> dict:
     repair = _load_repair(db, repair_id)
+    existing_documents = list(
+        db.scalars(
+            select(GeneratedDocument)
+            .where(
+                GeneratedDocument.repair_id == repair.id,
+                GeneratedDocument.language == language,
+            )
+            .order_by(GeneratedDocument.id)
+        )
+    )
+    if existing_documents:
+        return {
+            "document_number": existing_documents[0].document_number,
+            "documents": [
+                {
+                    "id": document.id,
+                    "format": document.format,
+                    "filename": document.filename,
+                    "sha256": document.sha256,
+                    "download_endpoint": f"/generated-documents/{document.id}/download",
+                }
+                for document in existing_documents
+            ],
+        }
+    if repair.status != RepairStatus.COMPLETED.value:
+        raise business_conflict(
+            "repair_protocol_requires_completion",
+            "Ремонтният протокол се заключва след приключване на ремонта.",
+        )
     try:
         documents = make_repair_documents(db, repair, user.id, language)
     except ConfirmedTemplateUnavailableError as exc:
@@ -1184,6 +1218,72 @@ def generate_repair_documents(
     _commit(db)
     return {
         "document_number": documents[0].document_number,
+        "documents": [
+            {
+                "id": document.id,
+                "format": document.format,
+                "filename": document.filename,
+                "sha256": document.sha256,
+                "download_endpoint": f"/generated-documents/{document.id}/download",
+            }
+            for document in documents
+        ],
+    }
+
+
+@router.post("/repair-cases/{repair_id}/documents/corrections", status_code=201)
+def correct_repair_protocol(
+    repair_id: int,
+    payload: RepairProtocolCorrection,
+    user: User = Depends(require_document_generator),
+    db: Session = Depends(get_db),
+) -> dict:
+    repair = _load_repair(db, repair_id, lock=True)
+    if repair.status != RepairStatus.COMPLETED.value:
+        raise business_conflict(
+            "repair_protocol_requires_completion",
+            "Само протокол на приключен ремонт може да бъде коригиран.",
+        )
+    try:
+        documents, official, version = make_repair_correction(
+            db, repair, user.id, payload.reason, payload.language.value
+        )
+    except ConfirmedTemplateUnavailableError as exc:
+        raise business_conflict(
+            "document_template_unavailable",
+            exc.message,
+            document_type=exc.document_type,
+            requested_language=exc.language,
+            fallback_language="bg",
+        ) from exc
+    except TemplateValidationError as exc:
+        raise business_conflict(
+            "repair_protocol_correction_failed", str(exc)
+        ) from exc
+    db.add_all(documents)
+    db.flush()
+    add_audit_log(
+        db,
+        user,
+        "repair",
+        repair.id,
+        "Създадена нова версия на вътрешен ремонтен протокол",
+        {
+            "repair_reference": repair.repair_reference,
+            "official_document_id": official.id,
+            "official_document_version": version.version,
+            "supersedes_version_id": version.supersedes_version_id,
+            "correction_reason": payload.reason,
+            "generated_document_ids": [item.id for item in documents],
+        },
+        repair.repair_reference,
+    )
+    _commit(db)
+    return {
+        "official_document_id": official.id,
+        "version": version.version,
+        "status": version.status,
+        "correction_reason": version.correction_reason,
         "documents": [
             {
                 "id": document.id,
@@ -1287,6 +1387,8 @@ def update_repair_case(
         if next_status == RepairStatus.COMPLETED.value:
             ensure_repair_can_complete(repair)
             repair.closed_at = utcnow()
+            repair.responsible_user_id = user.id
+            repair.responsible_user = user
         if next_status == RepairStatus.REPAIRING.value and repair.started_at is None:
             repair.started_at = utcnow()
         repair.status = next_status
@@ -1303,13 +1405,38 @@ def update_repair_case(
         user_id=user.id,
     )
     db.add(event)
+    generated_on_completion: list[GeneratedDocument] = []
+    if (
+        payload.status == RepairStatus.COMPLETED
+        and previous_status != RepairStatus.COMPLETED.value
+    ):
+        db.flush()
+        db.expire(repair, ["events", "parts_used", "attachments"])
+        try:
+            generated_on_completion = make_repair_documents(
+                db, repair, user.id, user.preferred_language
+            )
+        except ConfirmedTemplateUnavailableError as exc:
+            raise business_conflict(
+                "document_template_unavailable",
+                exc.message,
+                document_type=exc.document_type,
+                requested_language=exc.language,
+                fallback_language="bg",
+            ) from exc
+        except TemplateValidationError as exc:
+            raise business_conflict(
+                "document_generation_validation_failed", str(exc)
+            ) from exc
+        db.add_all(generated_on_completion)
+        db.flush()
     if previous_machine_status != repair.machine.status:
         add_machine_event(
             db, repair.machine, user, "REPAIR_STATUS_CHANGED", reference=repair.repair_reference,
             previous_status=previous_machine_status, new_status=repair.machine.status,
             details={"repair_id": repair.id, "repair_status": repair.status},
         )
-    add_audit_log(db, user, "repair", repair.id, "Обновена ремонтна карта", {"repair_reference": repair.repair_reference, "previous_status": previous_status, "new_status": repair.status, "machine_previous_status": previous_machine_status, "machine_new_status": repair.machine.status})
+    add_audit_log(db, user, "repair", repair.id, "Обновена ремонтна карта", {"repair_reference": repair.repair_reference, "previous_status": previous_status, "new_status": repair.status, "machine_previous_status": previous_machine_status, "machine_new_status": repair.machine.status, "completed_by_user_id": user.id if generated_on_completion else None, "generated_document_ids": [item.id for item in generated_on_completion]})
     _commit(db)
     return _repair_dict(_load_repair(db, repair.id))
 
@@ -1325,8 +1452,14 @@ def add_repair_event(
         ensure_permission(user, Permission.REPAIRS_COMPLETE)
     repair = _load_repair(db, repair_id, lock=True)
     previous = repair.status
+    generated_on_completion: list[GeneratedDocument] = []
     if payload.next_status is not None:
         ensure_repair_transition(repair.status, payload.next_status.value)
+        if payload.next_status == RepairStatus.COMPLETED:
+            ensure_repair_can_complete(repair)
+            repair.closed_at = utcnow()
+            repair.responsible_user_id = user.id
+            repair.responsible_user = user
         repair.status = payload.next_status.value
         machine_status = REPAIR_TO_MACHINE_STATUS[repair.status]
         ensure_machine_transition(repair.machine.status, machine_status)
@@ -1344,7 +1477,14 @@ def add_repair_event(
     )
     db.add(event)
     db.flush()
-    add_audit_log(db, user, "repair_event", event.id, "Добавено събитие към ремонта", {"repair_reference": repair.repair_reference, "event_type": event.event_type, "previous_status": previous, "new_status": repair.status})
+    if payload.next_status == RepairStatus.COMPLETED:
+        db.expire(repair, ["events", "parts_used", "attachments"])
+        generated_on_completion = make_repair_documents(
+            db, repair, user.id, user.preferred_language
+        )
+        db.add_all(generated_on_completion)
+        db.flush()
+    add_audit_log(db, user, "repair_event", event.id, "Добавено събитие към ремонта", {"repair_reference": repair.repair_reference, "event_type": event.event_type, "previous_status": previous, "new_status": repair.status, "completed_by_user_id": user.id if generated_on_completion else None, "generated_document_ids": [item.id for item in generated_on_completion]})
     _commit(db)
     return {"id": event.id, "event_type": event.event_type, "status_before": event.status_before, "status_after": event.status_after, "description": event.description, "structured_data": event.structured_data, "user_id": event.user_id, "created_at": event.created_at}
 
@@ -2586,6 +2726,28 @@ def download_generated_document(
     item = db.get(GeneratedDocument, document_id)
     if item is None:
         raise HTTPException(404, "Генерираният документ не е намерен.")
+    official = db.scalar(
+        select(OfficialDocument).where(
+            OfficialDocument.document_number == item.document_number
+        )
+    )
+    version = (
+        db.get(OfficialDocumentVersion, official.current_version_id)
+        if official
+        else None
+    )
+    if (
+        item.document_type in {"TRANSFER_ISSUE", "TRANSFER_RETURN"}
+        and version is not None
+        and version.status != OfficialDocumentStatus.SIGNED.value
+    ):
+        raise HTTPException(
+            409,
+            detail={
+                "code": "document_awaiting_signatures",
+                "message": "Окончателният протокол ще бъде достъпен след всички задължителни подписи.",
+            },
+        )
     return Response(item.content, media_type=item.media_type, headers={"Content-Disposition": f'attachment; filename="{item.filename}"', "X-Content-Type-Options": "nosniff"})
 
 

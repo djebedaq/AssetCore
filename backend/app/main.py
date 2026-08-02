@@ -34,6 +34,9 @@ from .models import (
     Location,
     Machine,
     MachineStatus,
+    OfficialDocument,
+    OfficialDocumentStatus,
+    OfficialDocumentVersion,
     PartCatalog,
     PartRequest,
     PartRequestLine,
@@ -910,6 +913,7 @@ def create_transfer(
                 user,
                 BulkIssueRequest(
                     machine_ids=[data.machine_id],
+                    recipient=data.recipient,
                     company_unit=data.company_unit,
                     department=data.department,
                     vessel=data.vessel,
@@ -963,6 +967,7 @@ def create_transfer(
                             result_text=data.remarks,
                             returned_by=data.handed_over_by,
                             accepted_by=data.accepted_by,
+                            returned_person=data.returned_person,
                             location_id=data.location_id,
                             next_status=MachineStatus.INSPECTION,
                         )
@@ -1028,6 +1033,25 @@ def protocol_document_download(
         document = get_protocol_document(db, document_id, user.preferred_language)
     except TransferServiceError as exc:
         _raise_service_error(exc)
+    official = db.scalar(
+        select(OfficialDocument).where(
+            OfficialDocument.transfer_id == document.transfer_id,
+            OfficialDocument.document_number == document.document_number,
+        )
+    )
+    version = (
+        db.get(OfficialDocumentVersion, official.current_version_id)
+        if official
+        else None
+    )
+    if version is not None and version.status != OfficialDocumentStatus.SIGNED.value:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "document_awaiting_signatures",
+                "message": "Окончателният протокол ще бъде достъпен след всички задължителни подписи.",
+            },
+        )
     return Response(
         document.content,
         media_type=document.media_type,
@@ -1056,12 +1080,31 @@ def batch_documents_zip(
     ).all()
     if not batch.documents and not generated:
         raise HTTPException(404, "Партидата няма генерирани протоколи")
+    transfer_by_id = {item.id: item for item in batch.transfers}
+    archive_entries: list[tuple[str, bytes]] = []
+    for document in sorted(batch.documents, key=lambda item: item.filename):
+        transfer = transfer_by_id.get(document.transfer_id)
+        if transfer is not None and transfer.issue_status == "COMPLETED":
+            archive_entries.append((safe_filename(document.filename), document.content))
+    for document in sorted(generated, key=lambda item: item.filename):
+        transfer = transfer_by_id.get(document.transfer_id)
+        if transfer is not None and transfer.return_status == "COMPLETED":
+            archive_entries.append((safe_filename(document.filename), document.content))
+    if not archive_entries:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "batch_documents_awaiting_signatures",
+                "message": (
+                    "Окончателните протоколи ще бъдат достъпни след всички "
+                    "задължителни подписи."
+                ),
+            },
+        )
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for document in sorted(batch.documents, key=lambda item: item.filename):
-            archive.writestr(safe_filename(document.filename), document.content)
-        for document in sorted(generated, key=lambda item: item.filename):
-            archive.writestr(safe_filename(document.filename), document.content)
+        for filename_in_archive, content in archive_entries:
+            archive.writestr(filename_in_archive, content)
     filename = f"{safe_filename(batch.batch_reference)}-protocols.zip"
     return Response(
         output.getvalue(),
@@ -1087,6 +1130,14 @@ def _legacy_protocol_response(
     )
     if not transfer:
         raise HTTPException(404, "Протоколът не е намерен")
+    if transfer.issue_status != "COMPLETED":
+        raise HTTPException(
+            409,
+            detail={
+                "code": "document_awaiting_signatures",
+                "message": "Окончателният протокол ще бъде достъпен след всички задължителни подписи.",
+            },
+        )
     stored = next(
         (document for document in transfer.documents if document.format == format_name),
         None,

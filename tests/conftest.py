@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import io
 import os
 import sys
 from collections.abc import Iterator
@@ -7,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -91,9 +94,62 @@ def issue_payload():
             "equipment": "",
             "condition_text": "",
             "remarks": "",
+            "recipient": {
+                "first_name": "Тестов",
+                "middle_name": "Външен",
+                "last_name": "Получател",
+                "job_title": "Тестова длъжност",
+                "company_or_department": "Тестово звено",
+            },
         }
 
     return make
+
+
+@pytest.fixture()
+def finalize_signatures():
+    sequence = 0
+
+    def finalize(client: TestClient, response) -> None:
+        nonlocal sequence
+        body = response.json()
+        tasks = [
+            task
+            for item in body.get("transfers", []) + body.get("returned", [])
+            for task in item.get("signing_tasks", [])
+        ]
+        for task in tasks:
+            sequence += 1
+            token = task["signing_token"]
+            summary = client.get(f"/api/signing/{token}")
+            assert summary.status_code == 200, summary.text
+            output = io.BytesIO()
+            Image.new("RGB", (320, 120), (sequence % 250, 70, 90)).save(
+                output, format="PNG"
+            )
+            submitted = client.post(
+                f"/api/signing/{token}",
+                json={
+                    "consent_accepted": True,
+                    "consent_text": summary.json()["consent_notice"],
+                    "strokes": [[
+                        {
+                            "x": 20 + index * 12,
+                            "y": 40 + index,
+                            "t": index * 10,
+                        }
+                        for index in range(8)
+                    ]],
+                    "image_base64": base64.b64encode(output.getvalue()).decode(),
+                    "canvas_width": 320,
+                    "canvas_height": 120,
+                },
+            )
+            assert submitted.status_code == 201, submitted.text
+            confirmed = client.post(f"/api/signing/{token}/confirm")
+            assert confirmed.status_code == 200, confirmed.text
+
+    return finalize
 
 
 @pytest.fixture()

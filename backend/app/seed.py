@@ -153,12 +153,10 @@ def _seed_verified_registry(db: Session) -> None:
     db.commit()
 
     default_signature_slots = (
-        (DocumentType.TRANSFER_ISSUE.value, "HANDOVER", "Предал", "Handed over by", "Передал", 1),
-        (DocumentType.TRANSFER_ISSUE.value, "ACCEPTANCE", "Приел", "Accepted by", "Принял", 2),
+        (DocumentType.TRANSFER_ISSUE.value, "ACCEPTANCE", "Приел", "Accepted by", "Принял", 1),
+        (DocumentType.TRANSFER_ISSUE.value, "HANDOVER", "Предал", "Handed over by", "Передал", 2),
         (DocumentType.TRANSFER_RETURN.value, "RETURNED_BY", "Върнал", "Returned by", "Вернул", 1),
         (DocumentType.TRANSFER_RETURN.value, "ACCEPTED_RETURN", "Приел връщането", "Return accepted by", "Принял возврат", 2),
-        (DocumentType.REPAIR_PROTOCOL.value, "MECHANIC", "Изпълнил ремонта", "Repair performed by", "Выполнил ремонт", 1),
-        (DocumentType.REPAIR_PROTOCOL.value, "ACCEPTANCE", "Приел ремонта", "Repair accepted by", "Принял ремонт", 2),
         (DocumentType.PART_REQUEST.value, "REQUESTED_BY", "Заявил", "Requested by", "Заявил", 1),
         (DocumentType.PART_REQUEST.value, "APPROVED_BY", "Одобрил", "Approved by", "Утвердил", 2),
     )
@@ -166,6 +164,13 @@ def _seed_verified_registry(db: Session) -> None:
     for document_type, code, bg, en, ru, sequence in default_signature_slots:
         if (document_type, code) not in existing_slots:
             db.add(SignatureSlot(document_type=document_type, code=code, label_bg=bg, label_en=en, label_ru=ru, sequence=sequence, signing_mode="SEQUENTIAL"))
+    for slot in db.scalars(
+        select(SignatureSlot).where(
+            SignatureSlot.document_type == DocumentType.REPAIR_PROTOCOL.value
+        )
+    ):
+        slot.required = False
+        slot.is_active = False
     db.commit()
 
     locations = {x.name: x for x in db.scalars(select(Location)).all()}
@@ -296,6 +301,7 @@ def _seed_document_templates(db: Session) -> None:
             "name_en": "High-pressure washing equipment issue protocol",
             "name_ru": "Протокол выдачи моечной техники высокого давления",
             "template_stem": "transfer_issue",
+            "template_version": 2,
             "required_fields": ["MACHINE_NUMBER", "SERIAL_NUMBER", "CONDITION_TEXT"],
             "contract": {
                 "page": "A4 portrait",
@@ -312,6 +318,7 @@ def _seed_document_templates(db: Session) -> None:
             "name_en": "High-pressure washing equipment return protocol",
             "name_ru": "Протокол возврата моечной техники после использования",
             "template_stem": "transfer_return",
+            "template_version": 2,
             "required_fields": ["MACHINE_NUMBER", "SERIAL_NUMBER", "CONDITION_TEXT"],
             "contract": {
                 "page": "A4 portrait",
@@ -328,10 +335,11 @@ def _seed_document_templates(db: Session) -> None:
             "name_en": "Before/after repair protocol",
             "name_ru": "Протокол до/после ремонта",
             "template_stem": "repair_protocol",
+            "template_version": 3,
             "required_fields": ["MACHINE_NUMBER", "REPORTED_PROBLEM", "DIAGNOSIS", "WORK_PERFORMED"],
             "contract": {
                 "page": "A4 portrait",
-                "sections": ["machine_identity", "condition_before", "diagnosis", "repair_actions", "parts", "test", "condition_after", "signatures"],
+                "sections": ["machine_identity", "condition_before", "diagnosis", "repair_actions", "parts", "test", "condition_after", "repair_executor"],
                 "reference_only": False,
                 "controlled_reference": "technical_docs/protocols_hpwj/10. REPORT BEFORE-AFTER REPAIR - Combijet - завършен !.docx",
             },
@@ -343,6 +351,7 @@ def _seed_document_templates(db: Session) -> None:
             "name_en": "Technical specification for spare-parts supply",
             "name_ru": "Техническая спецификация на поставку запасных частей",
             "template_stem": "part_request",
+            "template_version": 2,
             "required_fields": ["MACHINE_NUMBER", "REMARKS", "DECISION"],
             "contract": {
                 "page": "A4 portrait",
@@ -370,7 +379,8 @@ def _seed_document_templates(db: Session) -> None:
             db.add(template)
             db.flush()
         for language in LanguageCode:
-            source_path = f"templates/{definition['template_stem']}-{language.value}-v2.docx"
+            template_version = definition["template_version"]
+            source_path = f"templates/{definition['template_stem']}-{language.value}-v{template_version}.docx"
             source = resources / source_path
             if not source.is_file():
                 raise RuntimeError(f"Липсва контролиран шаблон: {source_path}")
@@ -378,14 +388,14 @@ def _seed_document_templates(db: Session) -> None:
             existing = db.scalar(
                 select(DocumentTemplateVersion).where(
                     DocumentTemplateVersion.template_id == template.id,
-                    DocumentTemplateVersion.version == 2,
+                    DocumentTemplateVersion.version == template_version,
                     DocumentTemplateVersion.language == language.value,
                 )
             )
             if existing is None:
                 existing = DocumentTemplateVersion(
                     template_id=template.id,
-                    version=2,
+                    version=template_version,
                     language=language.value,
                     source_path=source_path,
                     source_filename=source.name,

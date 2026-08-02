@@ -69,10 +69,20 @@ class Verification:
 
 
 def _tracked_files() -> list[str]:
-    result = subprocess.run(
-        ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
-    )
-    return [line.strip().replace("\\", "/") for line in result.stdout.splitlines()]
+    if (ROOT / ".git").exists():
+        result = subprocess.run(
+            ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
+        )
+        return [line.strip().replace("\\", "/") for line in result.stdout.splitlines()]
+    excluded_parts = {
+        ".git", ".pytest_cache", ".ruff_cache", ".tmp", "__pycache__",
+        "node_modules", "dist", ".pnpm-store",
+    }
+    return [
+        path.relative_to(ROOT).as_posix()
+        for path in ROOT.rglob("*")
+        if path.is_file() and not (set(path.relative_to(ROOT).parts) & excluded_parts)
+    ]
 
 
 def _seed_literal() -> list[dict]:
@@ -104,7 +114,7 @@ def _verify_migrations(verification: Verification) -> None:
                     tables = set(inspect(connection).get_table_names())
                 verification.check(
                     "Alembic migrations достигат текущия head",
-                    revision == "20260801_0005"
+                    revision == "20260801_0006"
                     and {
                         "installation_ownership",
                         "software_licenses",
@@ -175,7 +185,16 @@ def run(output: Path) -> Verification:
             and len({item.template_id for item in published}) == 4
             and all(validate_template(item)["valid"] for item in published),
         )
-        verification.check("Signature workflow конфигурацията е налична", (db.scalar(select(func.count(SignatureSlot.id))) or 0) >= 8)
+        active_slots = list(
+            db.scalars(select(SignatureSlot).where(SignatureSlot.is_active.is_(True)))
+        )
+        verification.check(
+            "Signature slots са backend-конфигурирани без repair handover роли",
+            len(active_slots) == 6
+            and not any(
+                item.document_type == "REPAIR_PROTOCOL" for item in active_slots
+            ),
+        )
         verification.check("Audit таблицата е достъпна", (db.scalar(select(func.count(AuditLog.id))) or 0) >= 0)
         licence = evaluate_license(db)
         verification.check("License validation връща контролиран статус", licence.state in {"NOT_INSTALLED", "ACTIVE", "GRACE_PERIOD", "READ_ONLY", "INVALID", "NOT_YET_VALID"})

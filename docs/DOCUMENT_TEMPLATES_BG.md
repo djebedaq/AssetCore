@@ -7,7 +7,7 @@
 ## Генериране
 
 - Issue/return: A4 portrait, тройна фирмена идентичност, protocol title, машинен snapshot, точно десет checklist реда, общо състояние, предназначение, бележки, подписи и batch trace.
-- Repair: фирмен header, before/problem/diagnosis/work/event/part/test/after секции и подписи; снимки само ако са качени към ремонта.
+- Repair: фирмен header, before/problem/diagnosis/work/event/part/test/after секции и автоматично записан извършил ремонта; няма handover/acceptance позиции; снимки само ако са качени към ремонта.
 - Parts request: компактна technical-specification форма, машинен block само при linked asset, четири колони за записаните редове, provenance, request/date/requester/decision.
 - Condition клетките не се попълват автоматично. `READY`, използвани части, получател, местоположение и подписи не се измислят.
 
@@ -17,7 +17,7 @@
 
 Seed-ът регистрира BG/EN/RU машинно използваеми DOCX v2 шаблони с отделен човешки текст, SHA-256 и validation report. Снимките и историческите документи са provenance reference, не executable template и не нов бизнес факт.
 
-Нова версия се качва през Administration като DOCX и съдържа език, начало/край на валидност, задължителни полета, правило за номерация, отдел, layout contract и описание на промяната. Server-ът изчислява SHA-256 и проверява четим DOCX ZIP, `TEMPLATE_LANGUAGE`, `DOCUMENT_NUMBER`, `SIGNATURE_STATUS`, съставител, две подписни позиции, required fields и забраната за `reference_only`. Невалиден файл остава `FAILED` и не може да бъде публикуван.
+Нова версия се качва през Administration като DOCX и съдържа език, начало/край на валидност, задължителни полета, правило за номерация, отдел, layout contract и описание на промяната. Server-ът изчислява SHA-256 и проверява четим DOCX ZIP, `TEMPLATE_LANGUAGE`, `DOCUMENT_NUMBER`, `SIGNATURE_STATUS`, съставител, required fields и забраната за `reference_only`. Issue/return/part-request шаблоните изискват двете си подписни позиции; вътрешният repair v3 изисква само позицията за извършилия ремонта. Невалиден файл остава `FAILED` и не може да бъде публикуван.
 
 Генераторът зарежда exact bytes на избраната версия и попълва placeholders/tables. Неизвестен или останал placeholder прекратява цялата бизнес транзакция. Production PDF се конвертира от същия попълнен DOCX с LibreOffice. Локалният ReportLab fallback се отчита изрично и не е доказателство за визуална DOCX/PDF идентичност.
 

@@ -132,8 +132,8 @@ def test_russian_profile_localizes_duplicate_issue_conflict(
     assert second.status_code == 409
     detail = second.json()["detail"]
     assert "Оборудование №7" in detail["message"]
-    assert detail["conflicts"][0]["status"] == "ISSUED"
-    assert detail["conflicts"][0]["status_label"] == "Выдано"
+    assert detail["conflicts"][0]["status"] == "READY"
+    assert detail["conflicts"][0]["issue_status"] == "AWAITING_SIGNATURE"
 
 
 def test_seed_never_deletes_user_managed_future_category(session_factory):

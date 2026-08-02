@@ -50,6 +50,7 @@
 | `GET/POST` | `/api/repair-cases` | списък и приемане за преглед/ремонт |
 | `PATCH` | `/api/repair-cases/{repair_id}` | валидиран ремонтен преход и completion gates |
 | `POST` | `/api/repair-cases/{repair_id}/documents` | индивидуален ремонтен DOCX/PDF |
+| `POST` | `/api/repair-cases/{repair_id}/documents/corrections` | нова заключена repair версия с задължително основание |
 | `GET/POST` | `/api/part-requests/multi` | многоредови заявки за части |
 | `POST` | `/api/part-requests/{id}/submit` | подава чернова за одобрение |
 | `POST` | `/api/part-requests/{id}/decision` | проследимо решение от одобряващ |
@@ -81,7 +82,17 @@
 | `POST` | `/api/document-template-versions/{id}/validate` | structural/hash/language/placeholder проверка |
 | `GET` | `/api/generated-documents/{id}/download` | удостоверено изтегляне без вътрешен path |
 
-Старият `POST /api/transfers` остава съвместим и използва същия защитен service слой за единично издаване/връщане. При активен режим за лиценз и изтекъл grace всяка пишеща операция, освен login/change-password и license install, връща HTTP `423` с `code=license_read_only`; GET/export/backup достъпът остава.
+`POST /api/transfers/bulk-issue` и `POST /api/transfers/bulk-return` връщат
+`workflow_status=AWAITING_SIGNATURE`, `official_document_id` и последователни
+`signing_tasks`. Машинното движение се прилага от backend едва след последния
+потвърден подпис. `GET /api/signature-slots` е авторитетът за нужните позиции.
+Manual `POST /api/official-documents` отказва `TRANSFER_ISSUE` и
+`TRANSFER_RETURN` с HTTP 409, защото тези документи се създават само от transfer
+workflow. Старият `POST /api/transfers` използва същия service слой, но новите
+клиенти трябва да използват structured bulk договора, за да получат signing tasks.
+При активен режим за лиценз и изтекъл grace всяка пишеща операция, освен
+login/change-password и license install, връща HTTP `423` с
+`code=license_read_only`; GET/export/backup достъпът остава.
 
 ## Потребители, роли и пароли
 

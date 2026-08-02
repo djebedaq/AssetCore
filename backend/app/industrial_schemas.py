@@ -200,6 +200,18 @@ class RepairCaseUpdate(BaseModel):
     target_date: datetime | None = None
 
 
+class RepairProtocolCorrection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=10, max_length=2000)
+    language: LanguageCode = LanguageCode.BG
+
+    @field_validator("reason")
+    @classmethod
+    def clean_reason(cls, value: str) -> str:
+        return value.strip()
+
+
 class RepairEventCreate(BaseModel):
     event_type: RepairEventType
     description: str | None = None

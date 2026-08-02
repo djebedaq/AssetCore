@@ -122,10 +122,14 @@ def _document_files() -> tuple[str, str]:
     )
 
 
-def _signature_payload() -> dict:
+def _signature_payload(consent_text: str, variant: int) -> dict:
     output = io.BytesIO()
     image = Image.new("RGBA", (320, 120), "white")
-    ImageDraw.Draw(image).line([(15, 80), (70, 30), (135, 88), (205, 25), (300, 75)], fill="black", width=5)
+    ImageDraw.Draw(image).line(
+        [(15, 80), (70, 30 + variant), (135, 88), (205, 25), (300, 75)],
+        fill="black",
+        width=5,
+    )
     image.save(output, format="PNG")
     points = [
         {"x": 20 + index * 20, "y": 30 + (index % 2) * 25, "t": index * 10, "pressure": 0.5}
@@ -133,7 +137,7 @@ def _signature_payload() -> dict:
     ]
     return {
         "consent_accepted": True,
-        "consent_text": "Потвърждавам полагането на този тестов графичен подпис.",
+        "consent_text": consent_text,
         "strokes": [points],
         "image_base64": base64.b64encode(output.getvalue()).decode(),
         "canvas_width": 320,
@@ -398,14 +402,14 @@ def test_sequential_mobile_signatures_finalize_immutable_version_and_allow_super
         headers=auth_headers,
         json={
             "document_number": "QA-SIGN-001",
-            "document_type": "TRANSFER_ISSUE",
+            "document_type": "PART_REQUEST",
             "language": "bg",
             "snapshot": {"purpose": "isolated automated signature test"},
             "docx_base64": docx,
             "pdf_base64": pdf,
             "participants": [
-                {"slot_code": "HANDOVER", "operation_role": "Handed over", "external_signer_id": first["id"]},
-                {"slot_code": "ACCEPTANCE", "operation_role": "Accepted", "external_signer_id": second["id"]},
+                {"slot_code": "REQUESTED_BY", "operation_role": "Requested by", "external_signer_id": first["id"]},
+                {"slot_code": "APPROVED_BY", "operation_role": "Approved by", "external_signer_id": second["id"]},
             ],
         },
     )
@@ -416,7 +420,7 @@ def test_sequential_mobile_signatures_finalize_immutable_version_and_allow_super
     blocked = client.post(
         "/api/signatures/sessions",
         headers=auth_headers,
-        json={"participant_id": participants["ACCEPTANCE"]["id"]},
+        json={"participant_id": participants["APPROVED_BY"]["id"]},
     )
     assert blocked.status_code == 409
     assert blocked.json()["detail"]["code"] == "signature_sequence_blocked"
@@ -424,12 +428,16 @@ def test_sequential_mobile_signatures_finalize_immutable_version_and_allow_super
     first_session = client.post(
         "/api/signatures/sessions",
         headers=auth_headers,
-        json={"participant_id": participants["HANDOVER"]["id"]},
+        json={"participant_id": participants["REQUESTED_BY"]["id"]},
     )
     assert first_session.status_code == 201
     first_token = first_session.json()["signing_token"]
-    assert client.get(f"/api/signing/{first_token}").status_code == 200
-    assert client.post(f"/api/signing/{first_token}", json=_signature_payload()).status_code == 201
+    first_summary = client.get(f"/api/signing/{first_token}")
+    assert first_summary.status_code == 200
+    assert client.post(
+        f"/api/signing/{first_token}",
+        json=_signature_payload(first_summary.json()["consent_notice"], 1),
+    ).status_code == 201
     first_confirmed = client.post(f"/api/signing/{first_token}/confirm")
     assert first_confirmed.status_code == 200, first_confirmed.text
     assert first_confirmed.json()["document_status"] == "PARTIALLY_SIGNED"
@@ -438,10 +446,14 @@ def test_sequential_mobile_signatures_finalize_immutable_version_and_allow_super
     second_session = client.post(
         "/api/signatures/sessions",
         headers=auth_headers,
-        json={"participant_id": participants["ACCEPTANCE"]["id"]},
+        json={"participant_id": participants["APPROVED_BY"]["id"]},
     )
     second_token = second_session.json()["signing_token"]
-    assert client.post(f"/api/signing/{second_token}", json=_signature_payload()).status_code == 201
+    second_summary = client.get(f"/api/signing/{second_token}")
+    assert client.post(
+        f"/api/signing/{second_token}",
+        json=_signature_payload(second_summary.json()["consent_notice"], 2),
+    ).status_code == 201
     second_confirmed = client.post(f"/api/signing/{second_token}/confirm")
     assert second_confirmed.status_code == 200, second_confirmed.text
     assert second_confirmed.json()["document_status"] == "SIGNED"

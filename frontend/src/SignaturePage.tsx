@@ -1,13 +1,19 @@
 import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Eraser, FileSignature, XCircle } from 'lucide-react'
+import { CheckCircle2, Eraser, FileSignature, RotateCcw, XCircle } from 'lucide-react'
 import { api } from './api'
 import { useI18n } from './i18n'
 import type { SigningSummary } from './types'
 
 type Point = { x: number; y: number; t: number; pressure?: number }
 
-export default function SignaturePage({ token }: { token: string }) {
-  const { t } = useI18n()
+type SignaturePageProps = {
+  token: string
+  embedded?: boolean
+  onFinished?: (result: 'DONE' | 'REJECTED') => void
+}
+
+export default function SignaturePage({ token, embedded = false, onFinished }: SignaturePageProps) {
+  const { date, t } = useI18n()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const activeStroke = useRef<Point[] | null>(null)
   const [strokes, setStrokes] = useState<Point[][]>([])
@@ -19,10 +25,18 @@ export default function SignaturePage({ token }: { token: string }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    setStrokes([])
+    setSummary(null)
+    setConsent(false)
+    setPreview('')
+    setStep('SIGN')
+    setError('')
     void api<SigningSummary>(`/signing/${encodeURIComponent(token)}`)
       .then(setSummary)
       .catch(() => setError(t('signature.sessionUnavailable')))
   }, [t, token])
+
+  useEffect(() => () => { document.body.style.overflow = '' }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -51,12 +65,15 @@ export default function SignaturePage({ token }: { token: string }) {
   }
 
   function start(event: ReactPointerEvent<HTMLCanvasElement>) {
+    event.preventDefault()
+    document.body.style.overflow = 'hidden'
     event.currentTarget.setPointerCapture(event.pointerId)
     activeStroke.current = [canvasPoint(event)]
   }
 
   function move(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (!activeStroke.current) return
+    event.preventDefault()
     const point = canvasPoint(event)
     activeStroke.current.push(point)
     const canvas = event.currentTarget
@@ -75,6 +92,7 @@ export default function SignaturePage({ token }: { token: string }) {
   }
 
   function finish() {
+    document.body.style.overflow = ''
     const completedStroke = activeStroke.current
     activeStroke.current = null
     if (completedStroke?.length) setStrokes((current) => [...current, completedStroke])
@@ -120,6 +138,7 @@ export default function SignaturePage({ token }: { token: string }) {
     try {
       await api(`/signing/${encodeURIComponent(token)}/confirm`, { method: 'POST' })
       setStep('DONE')
+      onFinished?.('DONE')
     } catch {
       setError(t('signature.confirmError'))
     } finally {
@@ -133,6 +152,7 @@ export default function SignaturePage({ token }: { token: string }) {
     try {
       await api(`/signing/${encodeURIComponent(token)}/reject`, { method: 'POST' })
       setStep('REJECTED')
+      onFinished?.('REJECTED')
     } catch {
       setError(t('signature.rejectError'))
     } finally {
@@ -144,14 +164,14 @@ export default function SignaturePage({ token }: { token: string }) {
   const job = summary?.participant.job_title
 
   if (step === 'DONE' || step === 'REJECTED') {
-    return <main className="signature-page signature-finished">{step === 'DONE' ? <CheckCircle2 size={54} /> : <XCircle size={54} />}<h1>{step === 'DONE' ? t('signature.done') : t('signature.rejected')}</h1><p>{t('signature.closeHint')}</p></main>
+    return <main className={`signature-page signature-finished ${embedded ? 'signature-embedded' : ''}`}>{step === 'DONE' ? <CheckCircle2 size={54} /> : <XCircle size={54} />}<h1>{step === 'DONE' ? t('signature.done') : t('signature.rejected')}</h1><p>{t('signature.closeHint')}</p></main>
   }
 
   return (
-    <main className="signature-page">
+    <main className={`signature-page ${embedded ? 'signature-embedded' : ''}`}>
       <header className="signature-header"><FileSignature /><div><strong>AssetCore</strong><span>{t('signature.manualGraphic')}</span></div></header>
-      {summary && <section className="signature-summary"><h1>{t('signature.title')}</h1><dl><div><dt>{t('signature.document')}</dt><dd>{summary.document_number}</dd></div><div><dt>{t('signature.version')}</dt><dd>{summary.document_version}</dd></div><div><dt>{t('signature.signer')}</dt><dd>{String(name || '')}</dd></div><div><dt>{t('signature.jobTitle')}</dt><dd>{String(job || '')}</dd></div><div><dt>{t('signature.role')}</dt><dd>{summary.operation_role}</dd></div></dl><small>{summary.document_sha256}</small></section>}
-      {step === 'SIGN' ? <section className="signature-workspace"><p>{t('signature.drawHint')}</p><canvas ref={canvasRef} className="signature-canvas" aria-label={t('signature.canvas')} onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} /><button className="secondary" type="button" onClick={clear}><Eraser size={17} />{t('signature.clear')}</button><label className="signature-consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{summary?.consent_notice || t('signature.consent')}</span></label>{error && <div className="error" role="alert">{error}</div>}<div className="signature-actions"><button className="secondary danger" onClick={reject} disabled={busy}>{t('signature.reject')}</button><button className="primary" onClick={submit} disabled={busy || !summary}>{busy ? t('common.loading') : t('signature.review')}</button></div></section> : <section className="signature-review"><h2>{t('signature.reviewTitle')}</h2><p>{t('signature.reviewHint')}</p>{preview && <img src={preview} alt={t('signature.preview')} />}{error && <div className="error" role="alert">{error}</div>}<div className="signature-actions"><button className="secondary danger" onClick={reject} disabled={busy}>{t('signature.reject')}</button><button className="primary" onClick={confirm} disabled={busy}>{busy ? t('common.loading') : t('signature.confirm')}</button></div></section>}
+      {summary && <section className="signature-summary"><h1>{t('signature.title')}</h1><dl>{summary.machine && <div><dt>{t('signature.machine')}</dt><dd>№{summary.machine.number} · {summary.machine.brand}</dd></div>}<div><dt>{t('signature.operation')}</dt><dd>{summary.operation_description}</dd></div><div><dt>{t('signature.dateTime')}</dt><dd>{date(summary.operation_datetime)}</dd></div><div><dt>{t('signature.document')}</dt><dd>{summary.document_number}</dd></div><div><dt>{t('signature.version')}</dt><dd>{summary.document_version}</dd></div><div><dt>{t('signature.signer')}</dt><dd>{String(name || '')}</dd></div><div><dt>{t('signature.jobTitle')}</dt><dd>{String(job || '')}</dd></div><div><dt>{t('signature.role')}</dt><dd>{summary.operation_role}</dd></div></dl><small>SHA-256: {summary.document_sha256}</small></section>}
+      {step === 'SIGN' ? <section className="signature-workspace"><p>{t('signature.drawHint')}</p><canvas ref={canvasRef} className="signature-canvas" aria-label={t('signature.canvas')} onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerLeave={finish} onPointerCancel={finish} /><button className="secondary" type="button" onClick={clear}><Eraser size={17} />{t('signature.clear')}</button><label className="signature-consent"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{summary?.consent_notice || t('signature.consent')}</span></label>{error && <div className="error" role="alert">{error}</div>}<div className="signature-actions"><button className="secondary danger" onClick={reject} disabled={busy}>{t('signature.reject')}</button><button className="primary" onClick={submit} disabled={busy || !summary}>{busy ? t('common.loading') : t('signature.review')}</button></div></section> : <section className="signature-review"><h2>{t('signature.reviewTitle')}</h2><p>{t('signature.reviewHint')}</p>{preview && <img src={preview} alt={t('signature.preview')} />}{error && <div className="error" role="alert">{error}</div>}<div className="signature-actions"><button className="secondary" onClick={() => { setStep('SIGN'); setPreview(''); clear() }} disabled={busy}><RotateCcw size={17} />{t('signature.repeat')}</button><button className="secondary danger" onClick={reject} disabled={busy}>{t('signature.reject')}</button><button className="primary" onClick={confirm} disabled={busy}>{busy ? t('common.loading') : t('signature.confirm')}</button></div></section>}
       <footer>{t('app.copyright')}</footer>
     </main>
   )

@@ -2,20 +2,25 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import re
+import shutil
+import signal
 import subprocess
 import tempfile
 from pathlib import Path
+from threading import RLock
 
 from docx import Document
 from docx.document import Document as DocumentObject
 from docx.oxml import OxmlElement
 from docx.text.paragraph import Paragraph
 
-from .models import DocumentTemplateVersion
+from .models import DocumentTemplateVersion, DocumentType
 
 TOKEN_RE = re.compile(r"\{\{([A-Za-z0-9_:.-]+)\}\}")
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+_LIBREOFFICE_LOCK = RLock()
 
 
 class TemplateValidationError(ValueError):
@@ -76,14 +81,23 @@ def validate_template(version: DocumentTemplateVersion) -> dict:
         errors.append(str(exc))
         tokens = []
     language_token = f"TEMPLATE_LANGUAGE:{version.language}"
-    for token, message in (
+    required_tokens = [
         (language_token, "Шаблонът не декларира правилния език."),
         ("DOCUMENT_NUMBER", "Липсва поле за номер на документа."),
         ("SIGNATURE_STATUS", "Липсва поле за статуса на подписите."),
         ("PREPARER_NAME", "Липсва поле за съставителя."),
         ("LEFT_SIGNATURE", "Липсва лява подписна позиция."),
-        ("RIGHT_SIGNATURE", "Липсва дясна подписна позиция."),
-    ):
+    ]
+    document_type = version.template.document_type if version.template else None
+    is_internal_repair = (
+        document_type == DocumentType.REPAIR_PROTOCOL.value
+        or version.source_filename.startswith("repair_protocol-")
+    )
+    if not is_internal_repair:
+        required_tokens.append(
+            ("RIGHT_SIGNATURE", "Липсва дясна подписна позиция.")
+        )
+    for token, message in required_tokens:
         if token not in tokens:
             errors.append(message)
     required = [str(value).upper() for value in (version.required_fields or [])]
@@ -192,21 +206,85 @@ def render_docx(
 
 
 def convert_docx_to_pdf(docx: bytes) -> bytes | None:
-    """Use the same filled DOCX as the PDF source; return None if LO is absent."""
-    with tempfile.TemporaryDirectory(prefix="assetcore-docx-") as temp_name:
+    """Convert from the filled DOCX with an isolated, bounded LO lifecycle."""
+    executable = shutil.which("soffice") or shutil.which("libreoffice")
+    if executable is None:
+        return None
+    with _LIBREOFFICE_LOCK, tempfile.TemporaryDirectory(
+        prefix="assetcore-docx-"
+    ) as temp_name:
         temp = Path(temp_name)
         source = temp / "document.docx"
+        profile = temp / "lo-profile"
+        output = temp / "output"
+        profile.mkdir()
+        output.mkdir()
         source.write_bytes(docx)
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "HOME": str(profile),
+                "XDG_CACHE_HOME": str(profile / "cache"),
+                "XDG_CONFIG_HOME": str(profile / "config"),
+                "XDG_DATA_HOME": str(profile / "data"),
+            }
+        )
+        command = [
+            executable,
+            "--headless",
+            "--nologo",
+            "--nodefault",
+            "--nolockcheck",
+            "--nofirststartwizard",
+            f"-env:UserInstallation={profile.resolve().as_uri()}",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            str(output),
+            str(source),
+        ]
+        process_options: dict[str, object] = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "env": environment,
+        }
+        if os.name == "nt":
+            process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            process_options["start_new_session"] = True
+        process = subprocess.Popen(command, **process_options)
         try:
-            result = subprocess.run(
-                ["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(temp), str(source)],
-                capture_output=True,
-                timeout=90,
-                check=False,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
+            process.communicate(timeout=45)
+        except subprocess.TimeoutExpired:
+            _terminate_process_tree(process)
             return None
-        target = temp / "document.pdf"
-        if result.returncode != 0 or not target.is_file():
+        finally:
+            if process.poll() is None:
+                _terminate_process_tree(process)
+        target = output / "document.pdf"
+        if process.returncode != 0 or not target.is_file() or target.stat().st_size == 0:
             return None
         return target.read_bytes()
+
+
+def _terminate_process_tree(process: subprocess.Popen) -> None:
+    """Terminate the exact conversion process and children after a timeout."""
+    if process.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
+        process.communicate(timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        process.kill()
+        try:
+            process.communicate(timeout=5)
+        except subprocess.SubprocessError:
+            pass

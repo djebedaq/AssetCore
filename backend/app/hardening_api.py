@@ -63,6 +63,7 @@ from .models import (
     Department,
     DocumentParticipant,
     DocumentSignature,
+    DocumentType,
     EmergencyAccessSession,
     ExternalSigner,
     InstallationOwnership,
@@ -82,6 +83,10 @@ from .permissions import Permission, require_permission
 from .security import get_authenticated_user, get_current_active_user, verify_password
 from .settings import settings
 from .template_engine import convert_docx_to_pdf
+from .transfer_service import (
+    TransferServiceError,
+    finalize_signed_transfer_workflow,
+)
 from .user_api import serialize_user
 
 router = APIRouter(prefix="/api", tags=["production-hardening"])
@@ -93,6 +98,37 @@ def _canonical(value: object) -> bytes:
 
 def _sha(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _signing_hash(
+    *,
+    document_number: str,
+    document_type: str,
+    version: int,
+    snapshot_sha256: str,
+    docx_sha256: str | None,
+    pdf_sha256: str | None,
+) -> str:
+    return _sha(
+        _canonical(
+            {
+                "document_number": document_number,
+                "document_type": document_type,
+                "version": version,
+                "snapshot_sha256": snapshot_sha256,
+                "docx_sha256": docx_sha256,
+                "pdf_sha256": pdf_sha256,
+            }
+        )
+    )
+
+
+def _signature_consent(language: str) -> str:
+    return {
+        "bg": "Потвърждавам, че положеният подпис е мой и че приемам съдържанието на документа.",
+        "en": "I confirm that the signature is mine and that I accept the contents of the document.",
+        "ru": "Подтверждаю, что подпись принадлежит мне и что я принимаю содержание документа.",
+    }.get(language, "Потвърждавам, че положеният подпис е мой и че приемам съдържанието на документа.")
 
 
 def _correlation_id(request: Request) -> str | None:
@@ -149,6 +185,8 @@ def _external_snapshot(signer: ExternalSigner, operation_role: str) -> dict:
         "display_name": " ".join(filter(None, [signer.first_name, signer.middle_name, signer.last_name])),
         "job_title": signer.job_title,
         "company": signer.company,
+        "is_foreign_person": signer.is_foreign_person,
+        "name_exception_reason": signer.name_exception_reason,
         "participant_role": signer.participant_role,
         "operation_role": operation_role,
         "captured_at": utcnow().isoformat(timespec="seconds") + "Z",
@@ -767,6 +805,18 @@ def update_external_signer(
     previous = {"is_active": item.is_active, "job_title": item.job_title, "company": item.company}
     for field, value in data.model_dump(exclude_unset=True, exclude_none=True).items():
         setattr(item, field, value)
+    if not item.middle_name and not (
+        item.is_foreign_person
+        and item.name_exception_reason
+        and len(item.name_exception_reason.strip()) >= 10
+    ):
+        raise HTTPException(
+            422,
+            detail={
+                "code": "external_signer_full_name_required",
+                "message": "Външният подписващ трябва да има три имена; изключение е допустимо само за изрично отбелязано чуждестранно лице.",
+            },
+        )
     item.updated_at = utcnow()
     add_audit_log(
         db,
@@ -879,7 +929,7 @@ def _build_participants(db: Session, version: OfficialDocumentVersion, document_
 
 
 def _version_out(db: Session, item: OfficialDocumentVersion) -> dict:
-    return {"id": item.id, "version": item.version, "status": item.status, "language": item.language, "snapshot_sha256": item.snapshot_sha256, "docx_sha256": item.docx_sha256, "pdf_sha256": item.pdf_sha256, "correction_reason": item.correction_reason, "created_at": item.created_at, "finalized_at": item.finalized_at}
+    return {"id": item.id, "version": item.version, "status": item.status, "language": item.language, "snapshot_sha256": item.snapshot_sha256, "signing_sha256": item.signing_sha256, "docx_sha256": item.docx_sha256, "pdf_sha256": item.pdf_sha256, "correction_reason": item.correction_reason, "created_at": item.created_at, "finalized_at": item.finalized_at}
 
 
 def _document_out(db: Session, item: OfficialDocument) -> dict:
@@ -917,6 +967,20 @@ def create_official_document(
     db: Session = Depends(get_db),
 ) -> dict:
     _require_complete_profile(actor)
+    if data.document_type in {
+        DocumentType.TRANSFER_ISSUE.value,
+        DocumentType.TRANSFER_RETURN.value,
+    }:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "transfer_document_requires_workflow",
+                "message": (
+                    "Протоколите за издаване и връщане се създават само "
+                    "чрез съответната операция с директно подписване."
+                ),
+            },
+        )
     if db.scalar(select(OfficialDocument.id).where(OfficialDocument.document_number == data.document_number)):
         raise HTTPException(409, detail={"code": "document_number_exists", "message": "Номерът на документа вече съществува."})
     docx, pdf = _decode_file(data.docx_base64, "DOCX"), _decode_file(data.pdf_base64, "PDF")
@@ -927,7 +991,10 @@ def create_official_document(
     document = OfficialDocument(document_number=data.document_number, document_type=data.document_type, machine_id=data.machine_id, transfer_id=data.transfer_id, batch_id=data.batch_id, created_by_id=actor.id)
     db.add(document)
     db.flush()
-    version = OfficialDocumentVersion(document_id=document.id, version=1, status=OfficialDocumentStatus.READY_FOR_SIGNATURE.value if data.participants else OfficialDocumentStatus.DRAFT.value, language=data.language.value, snapshot=snapshot, snapshot_sha256=_sha(_canonical(snapshot)), docx_content=docx, docx_sha256=_sha(docx) if docx else None, pdf_content=pdf, pdf_sha256=_sha(pdf) if pdf else None, prepared_by_id=actor.id)
+    snapshot_sha256 = _sha(_canonical(snapshot))
+    docx_sha256 = _sha(docx) if docx else None
+    pdf_sha256 = _sha(pdf) if pdf else None
+    version = OfficialDocumentVersion(document_id=document.id, version=1, status=OfficialDocumentStatus.READY_FOR_SIGNATURE.value if data.participants else OfficialDocumentStatus.DRAFT.value, language=data.language.value, snapshot=snapshot, snapshot_sha256=snapshot_sha256, signing_sha256=_signing_hash(document_number=data.document_number, document_type=data.document_type, version=1, snapshot_sha256=snapshot_sha256, docx_sha256=docx_sha256, pdf_sha256=pdf_sha256), docx_content=docx, docx_sha256=docx_sha256, pdf_content=pdf, pdf_sha256=pdf_sha256, prepared_by_id=actor.id)
     db.add(version)
     db.flush()
     _build_participants(db, version, data.document_type, data.participants)
@@ -995,6 +1062,20 @@ def download_document_version(document_id: int, version_number: int, file_format
     version = db.scalar(select(OfficialDocumentVersion).where(OfficialDocumentVersion.document_id == document_id, OfficialDocumentVersion.version == version_number))
     if document is None or version is None:
         raise HTTPException(404, detail={"code": "document_version_not_found", "message": "Версията на документа не е намерена."})
+    if (
+        document.document_type in {"TRANSFER_ISSUE", "TRANSFER_RETURN"}
+        and version.status not in {
+            OfficialDocumentStatus.SIGNED.value,
+            OfficialDocumentStatus.SUPERSEDED.value,
+        }
+    ):
+        raise HTTPException(
+            409,
+            detail={
+                "code": "document_awaiting_signatures",
+                "message": "Окончателният документ ще бъде достъпен след всички задължителни подписи.",
+            },
+        )
     if file_format == "docx":
         content, media = version.docx_content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     elif file_format == "pdf":
@@ -1106,7 +1187,11 @@ def supersede_document(document_id: int, data: SupersedeDocumentRequest, request
     snapshot["document_number"] = document.document_number
     snapshot["document_type"] = document.document_type
     snapshot["correction_reason"] = data.reason.strip()
-    version = OfficialDocumentVersion(document_id=document.id, version=previous.version + 1, status=OfficialDocumentStatus.READY_FOR_SIGNATURE.value if data.participants else OfficialDocumentStatus.DRAFT.value, language=previous.language, snapshot=snapshot, snapshot_sha256=_sha(_canonical(snapshot)), docx_content=docx, docx_sha256=_sha(docx) if docx else None, pdf_content=pdf, pdf_sha256=_sha(pdf) if pdf else None, correction_reason=data.reason.strip(), supersedes_version_id=previous.id, prepared_by_id=actor.id)
+    next_version = previous.version + 1
+    snapshot_sha256 = _sha(_canonical(snapshot))
+    docx_sha256 = _sha(docx) if docx else None
+    pdf_sha256 = _sha(pdf) if pdf else None
+    version = OfficialDocumentVersion(document_id=document.id, version=next_version, status=OfficialDocumentStatus.READY_FOR_SIGNATURE.value if data.participants else OfficialDocumentStatus.DRAFT.value, language=previous.language, template_version_id=previous.template_version_id, snapshot=snapshot, snapshot_sha256=snapshot_sha256, signing_sha256=_signing_hash(document_number=document.document_number, document_type=document.document_type, version=next_version, snapshot_sha256=snapshot_sha256, docx_sha256=docx_sha256, pdf_sha256=pdf_sha256), docx_content=docx, docx_sha256=docx_sha256, pdf_content=pdf, pdf_sha256=pdf_sha256, correction_reason=data.reason.strip(), supersedes_version_id=previous.id, prepared_by_id=actor.id)
     db.add(version)
     db.flush()
     _build_participants(db, version, document.document_type, data.participants)
@@ -1265,15 +1350,34 @@ def _signing_context(token: str, db: Session, lock: bool = False):
     if session.expires_at < utcnow() or session.consumed_at or session.rejected_at:
         raise HTTPException(410, detail={"code": "signing_session_closed", "message": "Сесията за подпис е изтекла или вече е приключена."})
     participant = db.get(DocumentParticipant, session.participant_id)
-    version = db.get(OfficialDocumentVersion, participant.document_version_id)
-    document = db.get(OfficialDocument, version.document_id)
+    version_query = select(OfficialDocumentVersion).where(
+        OfficialDocumentVersion.id == participant.document_version_id
+    )
+    if lock:
+        version_query = version_query.with_for_update()
+    version = db.scalar(version_query)
+    document_query = select(OfficialDocument).where(
+        OfficialDocument.id == version.document_id
+    )
+    if lock:
+        document_query = document_query.with_for_update()
+    document = db.scalar(document_query)
     return session, participant, version, document
 
 
 @router.get("/signing/{token}")
 def signing_summary(token: str, db: Session = Depends(get_db)) -> dict:
     _, participant, version, document = _signing_context(token, db)
-    return {"document_number": document.document_number, "document_type": document.document_type, "document_version": version.version, "document_status": version.status, "document_sha256": version.pdf_sha256 or version.docx_sha256 or version.snapshot_sha256, "participant": participant.identity_snapshot, "operation_role": participant.operation_role, "consent_notice": "Полагам ръчен графичен подпис към точно тази версия на документа. Това не е квалифициран или усъвършенстван електронен подпис.", "requires_confirmation": True}
+    machine = db.get(Machine, document.machine_id) if document.machine_id else None
+    operation_labels = {
+        "TRANSFER_ISSUE": {"bg": "Издаване / предаване на машина", "en": "Machine issue / handover", "ru": "Выдача / передача машины"},
+        "TRANSFER_RETURN": {"bg": "Връщане / приемане на машина", "en": "Machine return / acceptance", "ru": "Возврат / приём машины"},
+        "REPAIR_PROTOCOL": {"bg": "Вътрешен ремонтен протокол", "en": "Internal repair protocol", "ru": "Внутренний ремонтный протокол"},
+    }
+    operation_description = operation_labels.get(document.document_type, {}).get(
+        version.language, document.document_type
+    )
+    return {"document_number": document.document_number, "document_type": document.document_type, "document_version": version.version, "document_status": version.status, "document_sha256": version.signing_sha256 or version.snapshot_sha256, "machine": {"id": machine.id, "number": machine.inventory_number, "name": machine.name, "brand": machine.brand} if machine else None, "operation_description": operation_description, "operation_datetime": version.created_at, "participant": participant.identity_snapshot, "operation_role": participant.operation_role, "consent_notice": _signature_consent(version.language), "requires_confirmation": True}
 
 
 @router.post("/signing/{token}", status_code=201)
@@ -1301,14 +1405,46 @@ def submit_signature(token: str, data: SignatureSubmit, db: Session = Depends(ge
                 "message": "Изображението на подписа е повредено или не е валиден PNG файл.",
             },
         ) from exc
+    expected_consent = _signature_consent(version.language)
+    if data.consent_text.strip() != expected_consent:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "signature_consent_mismatch",
+                "message": "Текстът за съгласие не съответства на тази версия на документа.",
+            },
+        )
+    image_sha256 = _sha(image)
+    if db.scalar(
+        select(DocumentSignature.id).where(
+            DocumentSignature.image_sha256 == image_sha256
+        )
+    ):
+        raise HTTPException(
+            409,
+            detail={
+                "code": "signature_reuse_forbidden",
+                "message": "Това изображение на подпис вече е използвано и не може да се приложи към друг документ.",
+            },
+        )
     strokes = [[point.model_dump() for point in stroke] for stroke in data.strokes]
     strokes_bytes = _canonical(strokes)
     signed_at = utcnow()
-    document_hash = version.pdf_sha256 or version.docx_sha256 or version.snapshot_sha256
-    signature_binding = {"document_sha256": document_hash, "document_version": version.version, "participant_snapshot_sha256": participant.identity_snapshot_sha256, "strokes_sha256": _sha(strokes_bytes), "image_sha256": _sha(image), "canvas_width": data.canvas_width, "canvas_height": data.canvas_height, "signed_at": signed_at.isoformat(timespec="microseconds") + "Z", "signature_kind": "MANUAL_GRAPHIC"}
-    signature = DocumentSignature(participant_id=participant.id, document_version_id=version.id, consent_text=data.consent_text, strokes_encrypted=_fernet().encrypt(strokes_bytes), image_encrypted=_fernet().encrypt(image), canvas_width=data.canvas_width, canvas_height=data.canvas_height, stroke_count=len(strokes), point_count=sum(len(stroke) for stroke in strokes), document_sha256=document_hash, signature_sha256=_sha(_canonical(signature_binding)), signed_at=signed_at)
+    document_hash = version.signing_sha256 or version.snapshot_sha256
+    signature_binding = {"document_sha256": document_hash, "document_version": version.version, "participant_snapshot_sha256": participant.identity_snapshot_sha256, "strokes_sha256": _sha(strokes_bytes), "image_sha256": image_sha256, "canvas_width": data.canvas_width, "canvas_height": data.canvas_height, "signed_at": signed_at.isoformat(timespec="microseconds") + "Z", "signature_kind": "MANUAL_GRAPHIC"}
+    signature = DocumentSignature(participant_id=participant.id, document_version_id=version.id, consent_text=data.consent_text, strokes_encrypted=_fernet().encrypt(strokes_bytes), image_encrypted=_fernet().encrypt(image), canvas_width=data.canvas_width, canvas_height=data.canvas_height, stroke_count=len(strokes), point_count=sum(len(stroke) for stroke in strokes), document_sha256=document_hash, image_sha256=image_sha256, signature_sha256=_sha(_canonical(signature_binding)), signed_at=signed_at)
     db.add(signature)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            409,
+            detail={
+                "code": "signature_reuse_forbidden",
+                "message": "Подписът вече е използван или позицията вече е подписана.",
+            },
+        ) from exc
     creator = db.get(User, session.created_by_id)
     add_audit_log(db, creator, "document_signature", signature.id, "Подаден ръчен графичен подпис за потвърждение", {"document_id": document.id, "document_version": version.version, "participant_id": participant.id, "document_sha256": document_hash, "signature_sha256": signature.signature_sha256, "stroke_count": signature.stroke_count, "point_count": signature.point_count})
     db.commit()
@@ -1329,6 +1465,12 @@ def confirm_signature(token: str, db: Session = Depends(get_db)) -> dict:
     db.flush()
     _refresh_document_status(db, document, version)
     creator = db.get(User, session.created_by_id)
+    try:
+        if version.status == OfficialDocumentStatus.SIGNED.value:
+            finalize_signed_transfer_workflow(db, document, version, creator)
+    except TransferServiceError as exc:
+        db.rollback()
+        raise HTTPException(exc.status_code, detail=exc.as_detail()) from exc
     add_audit_log(db, creator, "document_signature", signature.id, "Потвърден ръчен графичен подпис", {"document_id": document.id, "document_version": version.version, "participant_id": participant.id, "document_sha256": signature.document_sha256, "signature_sha256": signature.signature_sha256, "new_document_status": version.status})
     db.commit()
     return {"message": "Подписът е потвърден.", "document_status": version.status, "signature_sha256": signature.signature_sha256}

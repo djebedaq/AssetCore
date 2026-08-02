@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from contextlib import nullcontext
 from dataclasses import dataclass
 from threading import RLock
@@ -12,24 +13,38 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .audit import add_audit_log
 from .document_generation import (
+    DOCX_MEDIA_TYPE,
+    PDF_MEDIA_TYPE,
     ConfirmedTemplateUnavailableError,
     TemplateValidationError,
     make_protocol_documents,
     make_return_documents,
+    safe_filename,
 )
 from .localization import status_label, translate
 from .models import (
+    DocumentType,
+    GeneratedDocument,
     Location,
     Machine,
     MachineStatus,
+    OfficialDocument,
+    OfficialDocumentStatus,
+    OfficialDocumentVersion,
     ProtocolDocument,
     TransferBatch,
     TransferBatchStatus,
+    TransferOperationStatus,
     TransferProtocol,
     User,
     utcnow,
 )
 from .schemas import BulkIssueRequest, BulkReturnRequest
+from .transfer_signing import (
+    TransferSigningConfigurationError,
+    create_external_party,
+    prepare_transfer_signing,
+)
 from .workflow import add_machine_event
 
 _sqlite_transfer_lock = RLock()
@@ -86,6 +101,8 @@ def _conflict_item(
         "machine_number": machine.inventory_number,
         "status": machine.status,
         "status_label": status_label(machine.status, language),
+        "issue_status": transfer.issue_status if transfer else None,
+        "return_status": transfer.return_status if transfer else None,
         "active_transfer_id": transfer.id if transfer else None,
         "protocol_number": transfer.protocol_number if transfer else None,
         "batch_reference": transfer.batch_reference if transfer else None,
@@ -187,6 +204,12 @@ def availability(db: Session, language: str = "bg") -> list[dict[str, Any]]:
     for machine in machines:
         transfer = active.get(machine.id)
         is_available = transfer is None and machine.status == MachineStatus.READY.value
+        is_returnable = bool(
+            transfer
+            and transfer.issue_status == TransferOperationStatus.COMPLETED.value
+            and transfer.return_status
+            != TransferOperationStatus.AWAITING_SIGNATURE.value
+        )
         result.append(
             {
                 "machine_id": machine.id,
@@ -197,6 +220,10 @@ def availability(db: Session, language: str = "bg") -> list[dict[str, Any]]:
                 "status_label": status_label(machine.status, language),
                 "location": machine.location.name if machine.location else None,
                 "available": is_available,
+                "returnable": is_returnable,
+                "operation_status": (
+                    transfer.return_status or transfer.issue_status if transfer else None
+                ),
                 "unavailable_reason": None
                 if is_available
                 else _availability_message(machine, transfer, language),
@@ -266,15 +293,25 @@ def _issue_conflicts(
     return conflicts
 
 
-def _issue_result(batch: TransferBatch, language: str) -> dict[str, Any]:
+def _issue_result(
+    batch: TransferBatch,
+    language: str,
+    signing: dict[int, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    signing = signing or {}
     transfers = []
     for transfer in sorted(batch.transfers, key=lambda item: item.id):
+        signing_data = signing.get(transfer.id, {})
         transfers.append(
             {
                 "transfer_id": transfer.id,
                 "protocol_number": transfer.protocol_number,
                 "machine_id": transfer.machine_id,
                 "machine_number": transfer.machine.inventory_number,
+                "workflow_status": transfer.issue_status,
+                "official_document_id": signing_data.get("official_document_id")
+                or 0,
+                "signing_tasks": signing_data.get("signing_tasks", []),
                 "documents": [
                     {
                         "id": document.id,
@@ -291,7 +328,7 @@ def _issue_result(batch: TransferBatch, language: str) -> dict[str, Any]:
             }
         )
     return {
-        "message": translate("issue.success", language),
+        "message": translate("issue.awaiting_signature", language),
         "batch_id": batch.id,
         "batch_reference": batch.batch_reference,
         "transfers": transfers,
@@ -305,6 +342,13 @@ def _bulk_issue_impl(
     machine_ids = list(data.machine_ids)
     language = user.preferred_language
     try:
+        if data.recipient is None:
+            raise TransferServiceError(
+                422,
+                "recipient_identity_required",
+                translate("issue.recipient_identity_required", language),
+                {},
+            )
         machines, active = _load_issue_machines(db, machine_ids, language)
         _validate_location_ids(
             db,
@@ -321,6 +365,19 @@ def _bulk_issue_impl(
             )
 
         now = utcnow()
+        recipient = data.recipient
+        recipient_name = " ".join(
+            value
+            for value in (
+                recipient.first_name,
+                recipient.middle_name,
+                recipient.last_name,
+            )
+            if value
+        )
+        external_signer = create_external_party(
+            db, recipient, user, "ACCEPTANCE"
+        )
         batch = TransferBatch(
             batch_reference=f"TEMP-{uuid4().hex}",
             status=TransferBatchStatus.ACTIVE.value,
@@ -335,6 +392,7 @@ def _bulk_issue_impl(
         machine_by_id = {machine.id: machine for machine in machines}
         transfers: list[TransferProtocol] = []
         document_ids: list[int] = []
+        signing_by_transfer: dict[int, dict[str, Any]] = {}
         for machine_id in machine_ids:
             machine = machine_by_id[machine_id]
             previous_status = machine.status
@@ -345,6 +403,7 @@ def _bulk_issue_impl(
                 protocol_type="Предаване",
                 protocol_number=f"TEMP-{uuid4().hex}",
                 is_active=True,
+                issue_status=TransferOperationStatus.AWAITING_SIGNATURE.value,
                 company_unit=data.company_unit,
                 department=data.department,
                 vessel=data.vessel,
@@ -352,8 +411,16 @@ def _bulk_issue_impl(
                 pier=data.pier,
                 work_area=data.work_area,
                 location_text=data.location_text,
-                handed_over_by=data.handed_over_by,
-                accepted_by=data.accepted_by,
+                handed_over_by=user.full_name,
+                handed_over_job_title=user.job_title,
+                handed_over_department=(
+                    user.profile_department.name_bg
+                    if user.profile_department
+                    else None
+                ),
+                accepted_by=recipient_name,
+                accepted_by_job_title=recipient.job_title,
+                accepted_by_company=recipient.company_or_department,
                 equipment=data.equipment,
                 hoses=data.hoses,
                 nozzles=data.nozzles,
@@ -365,34 +432,43 @@ def _bulk_issue_impl(
                 previous_location_id=previous_location_id,
                 issue_location_id=data.location_id,
                 issued_by_id=user.id,
-                issued_at=now,
+                issued_at=None,
                 created_at=now,
             )
             db.add(transfer)
             db.flush()
             transfer.protocol_number = f"HPWJ-{now:%Y%m%d}-{transfer.id:06d}"
-            machine.status = MachineStatus.ISSUED.value
-            if data.location_id is not None:
-                machine.location_id = data.location_id
-            machine.updated_at = now
             transfer.machine = machine
             documents = make_protocol_documents(
                 db, transfer, batch, user.id, data.document_language.value
             )
             db.add_all(documents)
             db.flush()
+            official_document, signing_tasks = prepare_transfer_signing(
+                db,
+                document_number=transfer.protocol_number,
+                document_type=DocumentType.TRANSFER_ISSUE.value,
+                actor=user,
+                external_signer=external_signer,
+                external_slot_code="ACCEPTANCE",
+                internal_slot_code="HANDOVER",
+            )
+            signing_by_transfer[transfer.id] = {
+                "official_document_id": official_document.id,
+                "signing_tasks": signing_tasks,
+            }
             document_ids.extend(document.id for document in documents)
             transfers.append(transfer)
             add_machine_event(
                 db,
                 machine,
                 user,
-                "TRANSFER_ISSUED",
+                "TRANSFER_ISSUE_AWAITING_SIGNATURE",
                 reference=transfer.protocol_number,
                 previous_status=previous_status,
-                new_status=machine.status,
+                new_status=previous_status,
                 previous_location_id=previous_location_id,
-                new_location_id=machine.location_id,
+                new_location_id=previous_location_id,
                 details={
                     "batch_reference": batch.batch_reference,
                     "transfer_id": transfer.id,
@@ -410,13 +486,13 @@ def _bulk_issue_impl(
                 user,
                 "transfer",
                 transfer.id,
-                "Издадена машина",
+                "Издаването очаква подписи",
                 {
                     "machine_number": machine.inventory_number,
                     "previous_status": previous_status,
-                    "new_status": machine.status,
+                    "new_status": previous_status,
                     "previous_location_id": previous_location_id,
-                    "new_location_id": machine.location_id,
+                    "new_location_id": previous_location_id,
                     "batch_reference": batch.batch_reference,
                     "transfer_id": transfer.id,
                     "protocol_number": transfer.protocol_number,
@@ -432,6 +508,8 @@ def _bulk_issue_impl(
                     "guns": data.guns,
                     "accessories": data.accessories,
                     "protocol_document_ids": [document.id for document in documents],
+                    "official_document_id": official_document.id,
+                    "workflow_status": transfer.issue_status,
                 },
                 batch.batch_reference,
             )
@@ -441,14 +519,14 @@ def _bulk_issue_impl(
             user,
             "transfer_batch",
             batch.id,
-            "Групово издаване",
+            "Групово издаване – очаква подписи",
             {
                 "machine_numbers": _machine_numbers(machines),
                 "previous_statuses": {
                     transfer.machine.inventory_number: transfer.previous_status
                     for transfer in transfers
                 },
-                "new_status": MachineStatus.ISSUED.value,
+                "new_status": "UNCHANGED_UNTIL_SIGNATURES",
                 "transfer_ids": [transfer.id for transfer in transfers],
                 "protocol_document_ids": document_ids,
             },
@@ -466,7 +544,7 @@ def _bulk_issue_impl(
             .where(TransferBatch.id == batch.id)
         )
         assert loaded is not None
-        return _issue_result(loaded, language)
+        return _issue_result(loaded, language, signing_by_transfer)
     except TransferServiceError as exc:
         db.rollback()
         _record_rejection(
@@ -510,6 +588,21 @@ def _bulk_issue_impl(
             409,
             "document_generation_validation_failed",
             str(exc),
+        ) from exc
+    except TransferSigningConfigurationError as exc:
+        db.rollback()
+        _record_rejection(
+            db,
+            user,
+            "Отказано групово издаване",
+            machine_ids,
+            str(exc),
+        )
+        raise TransferServiceError(
+            409,
+            "signature_configuration_invalid",
+            str(exc),
+            {},
         ) from exc
     except IntegrityError as exc:
         db.rollback()
@@ -583,9 +676,26 @@ def _batch_progress(db: Session, batch: TransferBatch) -> dict[str, Any]:
         select(func.count(TransferProtocol.id)).where(
             TransferProtocol.batch_id == batch.id,
             TransferProtocol.is_active.is_(True),
+            TransferProtocol.issue_status
+            == TransferOperationStatus.COMPLETED.value,
         )
     ) or 0
-    returned = total - still_issued
+    returned = db.scalar(
+        select(func.count(TransferProtocol.id)).where(
+            TransferProtocol.batch_id == batch.id,
+            TransferProtocol.return_status
+            == TransferOperationStatus.COMPLETED.value,
+        )
+    ) or 0
+    awaiting_signature = db.scalar(
+        select(func.count(TransferProtocol.id)).where(
+            TransferProtocol.batch_id == batch.id,
+            (
+                (TransferProtocol.issue_status == TransferOperationStatus.AWAITING_SIGNATURE.value)
+                | (TransferProtocol.return_status == TransferOperationStatus.AWAITING_SIGNATURE.value)
+            ),
+        )
+    ) or 0
     return {
         "batch_id": batch.id,
         "batch_reference": batch.batch_reference,
@@ -593,6 +703,7 @@ def _batch_progress(db: Session, batch: TransferBatch) -> dict[str, Any]:
         "total_machines": total,
         "returned_machines": returned,
         "still_issued_machines": still_issued,
+        "awaiting_signature_machines": awaiting_signature,
     }
 
 
@@ -607,6 +718,259 @@ def _set_batch_status(db: Session, batch: TransferBatch) -> dict[str, Any]:
     batch.updated_at = utcnow()
     progress["status"] = batch.status
     return progress
+
+
+def finalize_signed_transfer_workflow(
+    db: Session,
+    document: OfficialDocument,
+    version: OfficialDocumentVersion,
+    actor: User,
+) -> None:
+    """Apply the machine movement only after the bound version is fully signed."""
+    if document.document_type not in {
+        DocumentType.TRANSFER_ISSUE.value,
+        DocumentType.TRANSFER_RETURN.value,
+    }:
+        return
+    if version.status != OfficialDocumentStatus.SIGNED.value:
+        raise TransferServiceError(
+            409,
+            "signatures_incomplete",
+            "Операцията не може да приключи преди всички задължителни подписи.",
+            {"official_document_id": document.id},
+        )
+    transfer_statement = select(TransferProtocol).where(
+        TransferProtocol.id == document.transfer_id
+    )
+    transfer = db.scalar(_for_update(db, transfer_statement))
+    if transfer is None:
+        raise TransferServiceError(
+            409,
+            "transfer_for_document_missing",
+            "Свързаното предаване не е намерено; документът не е приложен.",
+            {"official_document_id": document.id},
+        )
+    machine = db.scalar(
+        _for_update(db, select(Machine).where(Machine.id == transfer.machine_id))
+    )
+    if machine is None:
+        raise TransferServiceError(
+            409,
+            "machine_for_transfer_missing",
+            "Свързаната машина не е намерена; документът не е приложен.",
+            {"transfer_id": transfer.id},
+        )
+    now = version.finalized_at or utcnow()
+
+    if document.document_type == DocumentType.TRANSFER_ISSUE.value:
+        if transfer.issue_status == TransferOperationStatus.COMPLETED.value:
+            return
+        if transfer.issue_status != TransferOperationStatus.AWAITING_SIGNATURE.value:
+            raise TransferServiceError(
+                409,
+                "issue_workflow_not_pending",
+                "Издаването не е в статус „Очаква подпис“.",
+                {"transfer_id": transfer.id},
+            )
+        if machine.status != transfer.previous_status or machine.location_id != transfer.previous_location_id:
+            raise TransferServiceError(
+                409,
+                "machine_changed_during_signing",
+                "Машината е променена след началото на подписването; операцията не е приложена.",
+                {"transfer_id": transfer.id, "machine_number": machine.inventory_number},
+            )
+        previous_status = machine.status
+        previous_location_id = machine.location_id
+        machine.status = MachineStatus.ISSUED.value
+        if transfer.issue_location_id is not None:
+            machine.location_id = transfer.issue_location_id
+        machine.updated_at = now
+        transfer.issue_status = TransferOperationStatus.COMPLETED.value
+        transfer.issued_at = now
+        published_ids: list[int] = []
+        for protocol_document in db.scalars(
+            select(ProtocolDocument).where(
+                ProtocolDocument.transfer_id == transfer.id
+            )
+        ):
+            content = (
+                version.docx_content
+                if protocol_document.format == "docx"
+                else version.pdf_content
+            )
+            if content:
+                protocol_document.content = content
+                protocol_document.sha256 = hashlib.sha256(content).hexdigest()
+            published_ids.append(protocol_document.id)
+        add_machine_event(
+            db,
+            machine,
+            actor,
+            "TRANSFER_ISSUED",
+            reference=transfer.protocol_number,
+            previous_status=previous_status,
+            new_status=machine.status,
+            previous_location_id=previous_location_id,
+            new_location_id=machine.location_id,
+            details={
+                "batch_reference": transfer.batch_reference,
+                "transfer_id": transfer.id,
+                "official_document_id": document.id,
+                "document_version": version.version,
+                "signing_sha256": version.signing_sha256,
+                "protocol_document_ids": published_ids,
+            },
+        )
+        add_audit_log(
+            db,
+            actor,
+            "transfer",
+            transfer.id,
+            "Издаването е приключено след задължителните подписи",
+            {
+                "machine_number": machine.inventory_number,
+                "previous_status": previous_status,
+                "new_status": machine.status,
+                "previous_location_id": previous_location_id,
+                "new_location_id": machine.location_id,
+                "batch_reference": transfer.batch_reference,
+                "official_document_id": document.id,
+                "document_version": version.version,
+                "signing_sha256": version.signing_sha256,
+                "protocol_document_ids": published_ids,
+            },
+            transfer.batch_reference,
+        )
+    else:
+        if transfer.return_status == TransferOperationStatus.COMPLETED.value:
+            return
+        if transfer.return_status != TransferOperationStatus.AWAITING_SIGNATURE.value:
+            raise TransferServiceError(
+                409,
+                "return_workflow_not_pending",
+                "Връщането не е в статус „Очаква подпис“.",
+                {"transfer_id": transfer.id},
+            )
+        if not transfer.is_active:
+            raise TransferServiceError(
+                409,
+                "return_already_completed",
+                "Предаването вече е приключено и не може да се върне повторно.",
+                {"transfer_id": transfer.id},
+            )
+        if (
+            machine.status != transfer.return_previous_status
+            or machine.location_id != transfer.return_previous_location_id
+        ):
+            raise TransferServiceError(
+                409,
+                "machine_changed_during_signing",
+                "Машината е променена след началото на подписването; връщането не е приложено.",
+                {"transfer_id": transfer.id, "machine_number": machine.inventory_number},
+            )
+        previous_status = machine.status
+        previous_location_id = machine.location_id
+        transfer.is_active = False
+        transfer.return_status = TransferOperationStatus.COMPLETED.value
+        transfer.returned_at = now
+        transfer.returned_by_id = actor.id
+        machine.status = transfer.return_next_status or MachineStatus.INSPECTION.value
+        if transfer.return_location_id is not None:
+            machine.location_id = transfer.return_location_id
+        machine.updated_at = now
+        generated_ids: list[int] = []
+        for format_name, media_type, content in (
+            ("docx", DOCX_MEDIA_TYPE, version.docx_content),
+            ("pdf", PDF_MEDIA_TYPE, version.pdf_content),
+        ):
+            if not content:
+                continue
+            generated = db.scalar(
+                select(GeneratedDocument).where(
+                    GeneratedDocument.document_number == document.document_number,
+                    GeneratedDocument.format == format_name,
+                )
+            )
+            if generated is None:
+                generated = GeneratedDocument(
+                    document_number=document.document_number,
+                    document_type=document.document_type,
+                    format=format_name,
+                    language=version.language,
+                    filename=f"{safe_filename(document.document_number)}.{format_name}",
+                    media_type=media_type,
+                    content=content,
+                    sha256=hashlib.sha256(content).hexdigest(),
+                    template_version_id=version.template_version_id,
+                    machine_id=machine.id,
+                    transfer_id=transfer.id,
+                    batch_id=transfer.batch_id,
+                    snapshot=version.snapshot,
+                    created_by_id=actor.id,
+                )
+                db.add(generated)
+                db.flush()
+            else:
+                generated.content = content
+                generated.sha256 = hashlib.sha256(content).hexdigest()
+            generated_ids.append(generated.id)
+        add_machine_event(
+            db,
+            machine,
+            actor,
+            "TRANSFER_RETURNED",
+            reference=document.document_number,
+            previous_status=previous_status,
+            new_status=machine.status,
+            previous_location_id=previous_location_id,
+            new_location_id=machine.location_id,
+            details={
+                "batch_reference": transfer.batch_reference,
+                "transfer_id": transfer.id,
+                "official_document_id": document.id,
+                "document_version": version.version,
+                "signing_sha256": version.signing_sha256,
+                "generated_document_ids": generated_ids,
+            },
+        )
+        add_audit_log(
+            db,
+            actor,
+            "transfer",
+            transfer.id,
+            "Връщането е приключено след задължителните подписи",
+            {
+                "machine_number": machine.inventory_number,
+                "previous_status": previous_status,
+                "new_status": machine.status,
+                "previous_location_id": previous_location_id,
+                "new_location_id": machine.location_id,
+                "batch_reference": transfer.batch_reference,
+                "official_document_id": document.id,
+                "document_version": version.version,
+                "signing_sha256": version.signing_sha256,
+                "generated_document_ids": generated_ids,
+                "condition": transfer.return_condition_text,
+                "result": transfer.return_result_text,
+                "notes": transfer.return_notes,
+            },
+            transfer.batch_reference,
+        )
+
+    db.flush()
+    if transfer.batch_id is not None:
+        batch = db.get(TransferBatch, transfer.batch_id)
+        if batch is not None:
+            progress = _set_batch_status(db, batch)
+            add_audit_log(
+                db,
+                actor,
+                "transfer_batch",
+                batch.id,
+                "Актуализиран подписан transfer workflow",
+                {**progress, "transfer_id": transfer.id, "machine_number": machine.inventory_number},
+                batch.batch_reference,
+            )
 
 
 def _bulk_return_impl(
@@ -684,6 +1048,42 @@ def _bulk_return_impl(
                         ),
                     }
                 )
+            elif transfer.issue_status != TransferOperationStatus.COMPLETED.value:
+                conflicts.append(
+                    {
+                        "machine_id": machine.id,
+                        "machine_number": machine.inventory_number,
+                        "transfer_id": transfer.id,
+                        "protocol_number": transfer.protocol_number,
+                        "message": translate(
+                            "return.issue_not_finalized", language
+                        ),
+                    }
+                )
+            elif transfer.return_status == TransferOperationStatus.AWAITING_SIGNATURE.value:
+                conflicts.append(
+                    {
+                        "machine_id": machine.id,
+                        "machine_number": machine.inventory_number,
+                        "transfer_id": transfer.id,
+                        "protocol_number": transfer.protocol_number,
+                        "message": translate(
+                            "return.already_awaiting_signature", language
+                        ),
+                    }
+                )
+            elif item.returned_person is None:
+                conflicts.append(
+                    {
+                        "machine_id": machine.id,
+                        "machine_number": machine.inventory_number,
+                        "transfer_id": transfer.id,
+                        "protocol_number": transfer.protocol_number,
+                        "message": translate(
+                            "return.returner_identity_required", language
+                        ),
+                    }
+                )
         if conflicts:
             raise TransferServiceError(
                 409,
@@ -700,9 +1100,23 @@ def _bulk_return_impl(
             machine = machine_by_id[item.machine_id]
             previous_status = machine.status
             previous_location_id = machine.location_id
-            transfer.is_active = False
-            transfer.returned_at = now
-            transfer.returned_by_id = user.id
+            returned_person = item.returned_person
+            assert returned_person is not None
+            returned_name = " ".join(
+                value
+                for value in (
+                    returned_person.first_name,
+                    returned_person.middle_name,
+                    returned_person.last_name,
+                )
+                if value
+            )
+            external_signer = create_external_party(
+                db, returned_person, user, "RETURNED_BY"
+            )
+            transfer.return_status = TransferOperationStatus.AWAITING_SIGNATURE.value
+            transfer.return_requested_at = now
+            transfer.returned_at = None
             transfer.return_condition_text = item.condition_text
             transfer.return_result_text = item.result_text
             transfer.return_notes = item.notes
@@ -712,13 +1126,18 @@ def _bulk_return_impl(
             transfer.return_cleaning_required = item.cleaning_required
             transfer.return_inspection_required = item.inspection_required
             transfer.return_repair_required = item.repair_required
-            transfer.returned_by_name = item.returned_by
-            transfer.return_accepted_by = item.accepted_by
+            transfer.returned_by_name = returned_name
+            transfer.returned_by_job_title = returned_person.job_title
+            transfer.returned_by_company = returned_person.company_or_department
+            transfer.return_accepted_by = user.full_name
+            transfer.return_accepted_job_title = user.job_title
+            transfer.return_accepted_department = (
+                user.profile_department.name_bg if user.profile_department else None
+            )
             transfer.return_location_id = item.location_id
-            machine.status = item.next_status.value
-            if item.location_id is not None:
-                machine.location_id = item.location_id
-            machine.updated_at = now
+            transfer.return_next_status = item.next_status.value
+            transfer.return_previous_status = previous_status
+            transfer.return_previous_location_id = previous_location_id
             if transfer.batch is not None:
                 affected_batches[transfer.batch.id] = transfer.batch
             transfer.machine = machine
@@ -731,16 +1150,38 @@ def _bulk_return_impl(
             )
             db.add_all(return_documents)
             db.flush()
+            official_document = db.scalar(
+                select(OfficialDocument)
+                .where(
+                    OfficialDocument.transfer_id == transfer.id,
+                    OfficialDocument.document_type
+                    == DocumentType.TRANSFER_RETURN.value,
+                )
+                .order_by(OfficialDocument.id.desc())
+            )
+            if official_document is None:
+                raise TransferSigningConfigurationError(
+                    "Официалният документ за връщането не е намерен."
+                )
+            official_document, signing_tasks = prepare_transfer_signing(
+                db,
+                document_number=official_document.document_number,
+                document_type=DocumentType.TRANSFER_RETURN.value,
+                actor=user,
+                external_signer=external_signer,
+                external_slot_code="RETURNED_BY",
+                internal_slot_code="ACCEPTED_RETURN",
+            )
             add_machine_event(
                 db,
                 machine,
                 user,
-                "TRANSFER_RETURNED",
+                "TRANSFER_RETURN_AWAITING_SIGNATURE",
                 reference=f"{transfer.protocol_number}-R",
                 previous_status=previous_status,
-                new_status=machine.status,
+                new_status=previous_status,
                 previous_location_id=previous_location_id,
-                new_location_id=machine.location_id,
+                new_location_id=previous_location_id,
                 details={
                     "batch_reference": transfer.batch_reference,
                     "transfer_id": transfer.id,
@@ -762,13 +1203,13 @@ def _bulk_return_impl(
                 user,
                 "transfer",
                 transfer.id,
-                "Върната машина",
+                "Връщането очаква подписи",
                 {
                     "machine_number": machine.inventory_number,
                     "previous_status": previous_status,
-                    "new_status": machine.status,
+                    "new_status": previous_status,
                     "previous_location_id": previous_location_id,
-                    "new_location_id": machine.location_id,
+                    "new_location_id": previous_location_id,
                     "batch_reference": transfer.batch_reference,
                     "transfer_id": transfer.id,
                     "protocol_number": transfer.protocol_number,
@@ -781,8 +1222,10 @@ def _bulk_return_impl(
                     "cleaning_required": item.cleaning_required,
                     "inspection_required": item.inspection_required,
                     "repair_required": item.repair_required,
-                    "returned_by": item.returned_by,
-                    "accepted_by": item.accepted_by,
+                    "returned_by": returned_name,
+                    "accepted_by": user.full_name,
+                    "workflow_status": transfer.return_status,
+                    "official_document_id": official_document.id,
                     "generated_document_ids": [
                         document.id for document in return_documents
                     ],
@@ -794,8 +1237,11 @@ def _bulk_return_impl(
                     "transfer_id": transfer.id,
                     "machine_id": machine.id,
                     "machine_number": machine.inventory_number,
-                    "new_status": machine.status,
-                    "returned_at": now,
+                    "new_status": item.next_status.value,
+                    "returned_at": None,
+                    "workflow_status": transfer.return_status,
+                    "official_document_id": official_document.id,
+                    "signing_tasks": signing_tasks,
                     "documents": [
                         {
                             "id": document.id,
@@ -813,36 +1259,10 @@ def _bulk_return_impl(
             )
 
         db.flush()
-        progresses = []
-        for batch in affected_batches.values():
-            progress = _set_batch_status(db, batch)
-            progresses.append(progress)
-            batch_transfers = [
-                transfer
-                for transfer in transfer_by_id.values()
-                if transfer.batch_id == batch.id
-            ]
-            add_audit_log(
-                db,
-                user,
-                "transfer_batch",
-                batch.id,
-                "Актуализирано връщане на партида",
-                {
-                    **progress,
-                    "returned_transfer_ids": [
-                        transfer.id for transfer in batch_transfers
-                    ],
-                    "returned_machine_numbers": [
-                        machine_by_id[transfer.machine_id].inventory_number
-                        for transfer in batch_transfers
-                    ],
-                },
-                batch.batch_reference,
-            )
+        progresses = [_batch_progress(db, batch) for batch in affected_batches.values()]
         db.commit()
         return {
-            "message": translate("return.success", language),
+            "message": translate("return.awaiting_signature", language),
             "returned": returned_results,
             "batches": sorted(progresses, key=lambda item: item["batch_id"]),
         }
@@ -889,6 +1309,21 @@ def _bulk_return_impl(
             409,
             "document_generation_validation_failed",
             str(exc),
+        ) from exc
+    except TransferSigningConfigurationError as exc:
+        db.rollback()
+        _record_rejection(
+            db,
+            user,
+            "Отказано групово връщане",
+            machine_ids,
+            str(exc),
+        )
+        raise TransferServiceError(
+            409,
+            "signature_configuration_invalid",
+            str(exc),
+            {},
         ) from exc
     except Exception:
         db.rollback()
@@ -961,6 +1396,8 @@ def batch_details(
                 "pressure_bar": transfer.machine.pressure_bar,
                 "protocol_number": transfer.protocol_number,
                 "is_active": transfer.is_active,
+                "issue_status": transfer.issue_status,
+                "return_status": transfer.return_status,
                 "issued_at": transfer.issued_at,
                 "returned_at": transfer.returned_at,
                 "current_status": transfer.machine.status,

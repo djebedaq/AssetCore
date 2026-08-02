@@ -47,6 +47,12 @@ class TransferBatchStatus(str, Enum):
     RETURNED = "RETURNED"
 
 
+class TransferOperationStatus(str, Enum):
+    AWAITING_SIGNATURE = "AWAITING_SIGNATURE"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
 class RepairStatus(str, Enum):
     ACCEPTED = "ACCEPTED"
     DIAGNOSIS = "DIAGNOSIS"
@@ -107,6 +113,7 @@ class OfficialDocumentStatus(str, Enum):
     READY_FOR_SIGNATURE = "READY_FOR_SIGNATURE"
     PARTIALLY_SIGNED = "PARTIALLY_SIGNED"
     SIGNED = "SIGNED"
+    FINALIZED = "FINALIZED"
     SUPERSEDED = "SUPERSEDED"
     CANCELLED = "CANCELLED"
 
@@ -430,6 +437,16 @@ class TransferProtocol(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False, index=True
     )
+    issue_status: Mapped[str] = mapped_column(
+        String(40),
+        default=TransferOperationStatus.COMPLETED.value,
+        server_default=text("'COMPLETED'"),
+        nullable=False,
+        index=True,
+    )
+    return_status: Mapped[str | None] = mapped_column(
+        String(40), nullable=True, index=True
+    )
     company_unit: Mapped[str | None] = mapped_column(String(255), nullable=True)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     vessel: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -438,7 +455,11 @@ class TransferProtocol(Base):
     work_area: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
     handed_over_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    handed_over_job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    handed_over_department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     accepted_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    accepted_by_job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    accepted_by_company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     equipment: Mapped[str | None] = mapped_column(Text, nullable=True)
     hoses: Mapped[str | None] = mapped_column(Text, nullable=True)
     nozzles: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -454,6 +475,15 @@ class TransferProtocol(Base):
         ForeignKey("locations.id"), nullable=True
     )
     return_location_id: Mapped[int | None] = mapped_column(
+        ForeignKey("locations.id"), nullable=True
+    )
+    return_next_status: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+    return_previous_status: Mapped[str | None] = mapped_column(
+        String(80), nullable=True
+    )
+    return_previous_location_id: Mapped[int | None] = mapped_column(
         ForeignKey("locations.id"), nullable=True
     )
     return_condition_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -472,7 +502,11 @@ class TransferProtocol(Base):
         Boolean, default=False, server_default=text("false"), nullable=False
     )
     returned_by_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    returned_by_job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    returned_by_company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     return_accepted_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    return_accepted_job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    return_accepted_department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     issued_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True
     )
@@ -480,6 +514,7 @@ class TransferProtocol(Base):
         ForeignKey("users.id"), nullable=True, index=True
     )
     issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    return_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     returned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -1283,6 +1318,10 @@ class ExternalSigner(Base):
     company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     participant_role: Mapped[str] = mapped_column(String(120))
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_foreign_person: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
+    name_exception_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=text("true"), nullable=False
     )
@@ -1319,8 +1358,14 @@ class OfficialDocumentVersion(Base):
         server_default=text("'DRAFT'"), index=True
     )
     language: Mapped[str] = mapped_column(String(2), default=LanguageCode.BG.value)
+    template_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("document_template_versions.id"), nullable=True, index=True
+    )
     snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
     snapshot_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    signing_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     docx_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     docx_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     pdf_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
@@ -1393,6 +1438,13 @@ class DocumentSignature(Base):
     __tablename__ = "document_signatures"
     __table_args__ = (
         UniqueConstraint("participant_id", name="uq_document_signature_participant"),
+        Index(
+            "uq_document_signatures_image_sha256",
+            "image_sha256",
+            unique=True,
+            sqlite_where=text("image_sha256 IS NOT NULL"),
+            postgresql_where=text("image_sha256 IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1407,6 +1459,9 @@ class DocumentSignature(Base):
     stroke_count: Mapped[int] = mapped_column(Integer)
     point_count: Mapped[int] = mapped_column(Integer)
     document_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    image_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     signature_sha256: Mapped[str] = mapped_column(String(64), index=True)
     signed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

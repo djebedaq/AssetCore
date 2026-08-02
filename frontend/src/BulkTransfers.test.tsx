@@ -14,11 +14,11 @@ import type { BulkIssueResult, TransferAvailability } from './types'
 
 const available: TransferAvailability = {
   machine_id: 1, machine_number: '4', brand: 'CombiJet', pressure_bar: 500,
-  status: 'READY', location: 'Цех', available: true,
+  status: 'READY', location: 'Цех', available: true, returnable: false,
 }
 const unavailable: TransferAvailability = {
   machine_id: 2, machine_number: '7', brand: 'Falch', pressure_bar: 1000,
-  status: 'ISSUED', location: 'Док 2', available: false,
+  status: 'ISSUED', location: 'Док 2', available: false, returnable: true,
   unavailable_reason: 'Машината има активно предаване.', protocol_number: 'HPWJ-1',
 }
 
@@ -36,6 +36,11 @@ describe('групови предавания', () => {
     render(<IssueModal items={[available]} locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />)
     await userEvent.click(screen.getByLabelText('Машина №4'))
     expect(screen.getByText('Избрани машини: 1')).toBeVisible()
+    await userEvent.type(screen.getByLabelText('Собствено име'), 'Иван')
+    await userEvent.type(screen.getByLabelText('Бащино име'), 'Иванов')
+    await userEvent.type(screen.getByLabelText('Фамилия'), 'Петров')
+    await userEvent.type(screen.getByLabelText('Длъжност'), 'Оператор')
+    await userEvent.type(screen.getByLabelText('Фирма или отдел'), 'Външно звено')
     await userEvent.click(screen.getByRole('button', { name: 'Преглед и потвърждение' }))
     expect(screen.getByRole('heading', { name: 'Потвърждение на груповото издаване' })).toBeVisible()
     expect(screen.getByText(/№4/)).toBeVisible()
@@ -57,6 +62,7 @@ describe('групови предавания', () => {
     render(<BatchProgressCard batch={{
       batch_id: 1, batch_reference: 'HPWJ-B-1', status: 'PARTIALLY_RETURNED',
       total_machines: 3, returned_machines: 1, still_issued_machines: 2,
+      awaiting_signature_machines: 0,
     }} />)
     expect(screen.getByText('Частично върната партида')).toBeVisible()
     expect(screen.getByText(/Все още издадени: 2/)).toBeVisible()
@@ -69,6 +75,7 @@ describe('групови предавания', () => {
       zip_download_endpoint: '/batch.zip',
       transfers: [{
         transfer_id: 10, protocol_number: 'HPWJ-10', machine_id: 1, machine_number: '4',
+        workflow_status: 'COMPLETED', official_document_id: 20, signing_tasks: [],
         documents: [
           { id: 1, format: 'docx', filename: 'HPWJ-10.docx', download_endpoint: '/docx' },
           { id: 2, format: 'pdf', filename: 'HPWJ-10.pdf', download_endpoint: '/pdf' },
