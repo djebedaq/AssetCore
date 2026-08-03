@@ -29,9 +29,9 @@ services:
       - key: LICENSE_PUBLIC_KEY
         sync: false
       - key: LICENSE_ENFORCEMENT_ENABLED
-        value: true
+        value: false
       - key: DEPLOYMENT_ENVIRONMENT
-        value: production
+        value: staging
       - key: PUBLIC_BASE_URL
         sync: false
       - key: FRONTEND_ORIGIN
