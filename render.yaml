@@ -39,7 +39,7 @@ services:
       - key: SIGNATURE_ENCRYPTION_KEY
         generateValue: true
       - key: PRODUCTION_MODE
-        value: true
+        value: false
 
 databases:
   - name: assetcore-db
