@@ -350,7 +350,7 @@ function RepairCreateModal({ machines, onClose, onSaved }: { machines: Machine[]
 }
 
 function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; onClose: () => void; onChanged: () => void }) {
-  const { date, locale, t } = useI18n()
+  const { date, t } = useI18n()
   const [repair, setRepair] = useState<RepairCase | null>(null)
   const [form, setForm] = useState({ diagnosis: '', required_work: '', removed_parts_text: '', work_performed: '', result: '', condition_after: '', test_method: '', test_pressure_bar: '', leaks_detected: '', electrical_test_result: '', functional_test_result: '', test_details: '', test_passed: '' })
   const [error, setError] = useState('')
