@@ -45,6 +45,7 @@ class TransferBatchStatus(str, Enum):
     ACTIVE = "ACTIVE"
     PARTIALLY_RETURNED = "PARTIALLY_RETURNED"
     RETURNED = "RETURNED"
+    CANCELLED = "CANCELLED"
 
 
 class TransferOperationStatus(str, Enum):
@@ -383,6 +384,9 @@ class Repair(Base):
     parts_used: Mapped[list[RepairPart]] = relationship(
         back_populates="repair", cascade="all, delete-orphan"
     )
+    participants: Mapped[list[RepairParticipant]] = relationship(
+        back_populates="repair", cascade="all, delete-orphan"
+    )
     attachments: Mapped[list[RepairAttachment]] = relationship(
         back_populates="repair", cascade="all, delete-orphan"
     )
@@ -405,8 +409,24 @@ class TransferBatch(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, onupdate=utcnow
     )
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancelled_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    issue_manifest: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    issue_manifest_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    issue_signing_document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("official_documents.id"), nullable=True, unique=True, index=True
+    )
+    issue_signing_status: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    return_manifest: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    return_manifest_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    return_signing_document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("official_documents.id"), nullable=True, unique=True, index=True
+    )
+    return_signing_status: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
 
     created_by: Mapped[User] = relationship(foreign_keys=[created_by_id])
+    cancelled_by: Mapped[User | None] = relationship(foreign_keys=[cancelled_by_id])
     transfers: Mapped[list[TransferProtocol]] = relationship(
         back_populates="batch", cascade="all, delete-orphan"
     )
@@ -466,6 +486,8 @@ class TransferProtocol(Base):
     guns: Mapped[str | None] = mapped_column(Text, nullable=True)
     accessories: Mapped[str | None] = mapped_column(Text, nullable=True)
     condition_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    issue_checklist: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    return_checklist: Mapped[list | None] = mapped_column(JSON, nullable=True)
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     previous_status: Mapped[str | None] = mapped_column(String(80), nullable=True)
     previous_location_id: Mapped[int | None] = mapped_column(
@@ -647,9 +669,17 @@ class PartCatalog(Base):
     position: Mapped[str | None] = mapped_column(String(40), nullable=True)
     part_number: Mapped[str] = mapped_column(String(120), index=True)
     description: Mapped[str] = mapped_column(String(500))
-    quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_document: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_page: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_figure: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    diagram_page: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_version: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_document_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    verification_status: Mapped[str] = mapped_column(
+        String(50), default="UNVERIFIED", server_default=text("'UNVERIFIED'"), nullable=False
+    )
+    replaced_by_part_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     manufacturer: Mapped[str | None] = mapped_column(String(255), nullable=True)
     category: Mapped[str | None] = mapped_column(String(120), nullable=True)
     name_bg: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -897,6 +927,25 @@ class RepairEvent(Base):
     user: Mapped[User] = relationship()
 
 
+class RepairParticipant(Base):
+    __tablename__ = "repair_participants"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repair_id: Mapped[int] = mapped_column(ForeignKey("repairs.id"), index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    full_name_snapshot: Mapped[str] = mapped_column(String(255))
+    job_title_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contribution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    repair: Mapped[Repair] = relationship(back_populates="participants")
+    user: Mapped[User | None] = relationship(foreign_keys=[user_id])
+    created_by: Mapped[User] = relationship(foreign_keys=[created_by_id])
+
+
 class RepairPart(Base):
     __tablename__ = "repair_parts"
 
@@ -1072,9 +1121,28 @@ class PartRequestLine(Base):
     delivered_quantity: Mapped[float] = mapped_column(
         Float, default=0.0, server_default=text("0"), nullable=False
     )
+    is_unknown_part: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False, index=True
+    )
+    assembly: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    linked_catalog_part_id: Mapped[int | None] = mapped_column(
+        ForeignKey("part_catalog.id"), nullable=True, index=True
+    )
+    linked_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    linked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    link_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     request: Mapped[PartRequest] = relationship(back_populates="lines")
-    catalog_part: Mapped[PartCatalog | None] = relationship()
+    catalog_part: Mapped[PartCatalog | None] = relationship(
+        foreign_keys=[catalog_part_id]
+    )
+    linked_catalog_part: Mapped[PartCatalog | None] = relationship(
+        foreign_keys=[linked_catalog_part_id]
+    )
+    linked_by: Mapped[User | None] = relationship(foreign_keys=[linked_by_id])
 
 
 class PartRequestApproval(Base):
@@ -1096,6 +1164,9 @@ class PartRequestAttachment(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     request_id: Mapped[int] = mapped_column(ForeignKey("part_requests.id"), index=True)
+    request_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("part_request_lines.id"), nullable=True, index=True
+    )
     filename: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[str] = mapped_column(String(150))
     content: Mapped[bytes] = mapped_column(LargeBinary)
@@ -1105,6 +1176,7 @@ class PartRequestAttachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     request: Mapped[PartRequest] = relationship(back_populates="attachments")
+    request_line: Mapped[PartRequestLine | None] = relationship()
     created_by: Mapped[User] = relationship()
 
 
@@ -1314,7 +1386,7 @@ class ExternalSigner(Base):
     first_name: Mapped[str] = mapped_column(String(120))
     middle_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     last_name: Mapped[str] = mapped_column(String(120))
-    job_title: Mapped[str] = mapped_column(String(255))
+    job_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     participant_role: Mapped[str] = mapped_column(String(120))
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -1439,11 +1511,11 @@ class DocumentSignature(Base):
     __table_args__ = (
         UniqueConstraint("participant_id", name="uq_document_signature_participant"),
         Index(
-            "uq_document_signatures_image_sha256",
+            "uq_document_signatures_original_image_sha256",
             "image_sha256",
             unique=True,
-            sqlite_where=text("image_sha256 IS NOT NULL"),
-            postgresql_where=text("image_sha256 IS NOT NULL"),
+            sqlite_where=text("image_sha256 IS NOT NULL AND source_signature_id IS NULL"),
+            postgresql_where=text("image_sha256 IS NOT NULL AND source_signature_id IS NULL"),
         ),
     )
 
@@ -1463,5 +1535,9 @@ class DocumentSignature(Base):
         String(64), nullable=True, index=True
     )
     signature_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    source_signature_id: Mapped[int | None] = mapped_column(
+        ForeignKey("document_signatures.id"), nullable=True, index=True
+    )
+    batch_manifest_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     signed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -26,16 +26,24 @@ describe('индустриален каталог', () => {
     const machineId = 22
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input)
-      if (path.endsWith('/api/catalog/parts')) {
+      if (path.includes('/api/catalog/parts?verified_only=true&machine_id=')) {
         return jsonResponse([{
           id: 1,
           brand: 'test-only brand',
           part_number: 'TEST-PART',
           description: 'test-only verified part',
+          assembly: 'Pump assembly',
+          position: '1',
+          quantity: 1,
+          unit: 'бр.',
+          source_document: 'technical_docs/test-only-manual.pdf',
+          source_page: 10,
+          verification_status: 'VERIFIED',
           is_verified: true,
         }])
       }
       if (path.endsWith('/api/repair-kits')) return jsonResponse([])
+      if (path.includes('/api/technical-library?')) return jsonResponse([])
       if (path.endsWith('/api/machines')) {
         return jsonResponse([{
           id: machineId,

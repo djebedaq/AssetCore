@@ -209,3 +209,261 @@ def prepare_transfer_signing(
             }
         )
     return document, tasks
+
+
+def prepare_issue_batch_signing(
+    db: Session,
+    *,
+    batch,
+    transfers: list,
+    actor: User,
+    external_signer: ExternalSigner,
+    language: str,
+    expires_minutes: int = 30,
+) -> tuple[OfficialDocument, list[dict]]:
+    """Create one immutable signing act for every issue protocol in a batch."""
+    from .models import DocumentType, TransferOperationStatus
+
+    manifest_items: list[dict] = []
+    for transfer in transfers:
+        official = db.scalar(
+            select(OfficialDocument).where(
+                OfficialDocument.transfer_id == transfer.id,
+                OfficialDocument.document_type == DocumentType.TRANSFER_ISSUE.value,
+            )
+        )
+        if official is None or official.current_version_id is None:
+            raise TransferSigningConfigurationError(
+                f"Липсва официален протокол за машина №{transfer.machine.inventory_number}."
+            )
+        version = db.get(OfficialDocumentVersion, official.current_version_id)
+        if version is None or version.status != OfficialDocumentStatus.DRAFT.value:
+            raise TransferSigningConfigurationError(
+                f"Протоколът за машина №{transfer.machine.inventory_number} не е готов за batch подписване."
+            )
+        manifest_items.append(
+            {
+                "transfer_id": transfer.id,
+                "machine_id": transfer.machine_id,
+                "machine_number": transfer.machine.inventory_number,
+                "brand": transfer.machine.brand,
+                "model": transfer.machine.model,
+                "protocol_number": transfer.protocol_number,
+                "official_document_id": official.id,
+                "official_document_version_id": version.id,
+                "official_document_signing_sha256": version.signing_sha256,
+            }
+        )
+
+    manifest = {
+        "operation": "ISSUE",
+        "batch_id": batch.id,
+        "batch_reference": batch.batch_reference,
+        "created_by_id": actor.id,
+        "created_at": utcnow().isoformat(timespec="seconds") + "Z",
+        "recipient_external_signer_id": external_signer.id,
+        "machine_count": len(manifest_items),
+        "machines": manifest_items,
+    }
+    manifest_sha256 = _sha(_canonical(manifest))
+    document_number = f"{batch.batch_reference}-ISSUE-SIGN"
+    if db.scalar(
+        select(OfficialDocument.id).where(
+            OfficialDocument.document_number == document_number
+        )
+    ):
+        raise TransferSigningConfigurationError(
+            "За този batch вече съществува подписващ акт."
+        )
+
+    snapshot = {
+        "batch_signing": manifest,
+        "batch_manifest_sha256": manifest_sha256,
+        "prepared_by": _internal_snapshot(actor, "PREPARER"),
+    }
+    snapshot_sha256 = _sha(_canonical(snapshot))
+    signing_sha256 = _sha(
+        _canonical(
+            {
+                "document_number": document_number,
+                "document_type": DocumentType.TRANSFER_ISSUE.value,
+                "version": 1,
+                "snapshot_sha256": snapshot_sha256,
+                "batch_manifest_sha256": manifest_sha256,
+            }
+        )
+    )
+    document = OfficialDocument(
+        document_number=document_number,
+        document_type=DocumentType.TRANSFER_ISSUE.value,
+        machine_id=None,
+        transfer_id=None,
+        batch_id=batch.id,
+        created_by_id=actor.id,
+    )
+    db.add(document)
+    db.flush()
+    version = OfficialDocumentVersion(
+        document_id=document.id,
+        version=1,
+        status=OfficialDocumentStatus.DRAFT.value,
+        language=language,
+        snapshot=snapshot,
+        snapshot_sha256=snapshot_sha256,
+        signing_sha256=signing_sha256,
+        docx_content=None,
+        docx_sha256=None,
+        pdf_content=None,
+        pdf_sha256=None,
+        prepared_by_id=actor.id,
+    )
+    db.add(version)
+    db.flush()
+    document.current_version_id = version.id
+    batch.issue_manifest = manifest
+    batch.issue_manifest_sha256 = manifest_sha256
+    batch.issue_signing_document_id = document.id
+    batch.issue_signing_status = TransferOperationStatus.AWAITING_SIGNATURE.value
+
+    return prepare_transfer_signing(
+        db,
+        document_number=document_number,
+        document_type=DocumentType.TRANSFER_ISSUE.value,
+        actor=actor,
+        external_signer=external_signer,
+        external_slot_code="ACCEPTANCE",
+        internal_slot_code="HANDOVER",
+        expires_minutes=expires_minutes,
+    )
+
+
+def prepare_return_batch_signing(
+    db: Session,
+    *,
+    batch,
+    transfers: list,
+    actor: User,
+    external_signer: ExternalSigner,
+    language: str,
+    expires_minutes: int = 30,
+) -> tuple[OfficialDocument, list[dict]]:
+    """Create one immutable signing act for selected return protocols."""
+    from .models import DocumentType, TransferOperationStatus
+
+    manifest_items: list[dict] = []
+    for transfer in transfers:
+        official = db.scalar(
+            select(OfficialDocument)
+            .where(
+                OfficialDocument.transfer_id == transfer.id,
+                OfficialDocument.document_type == DocumentType.TRANSFER_RETURN.value,
+            )
+            .order_by(OfficialDocument.id.desc())
+        )
+        if official is None or official.current_version_id is None:
+            raise TransferSigningConfigurationError(
+                f"Липсва официален протокол за приемане на машина №{transfer.machine.inventory_number}."
+            )
+        version = db.get(OfficialDocumentVersion, official.current_version_id)
+        if version is None or version.status != OfficialDocumentStatus.DRAFT.value:
+            raise TransferSigningConfigurationError(
+                f"Протоколът за приемане на машина №{transfer.machine.inventory_number} не е готов за batch подписване."
+            )
+        manifest_items.append(
+            {
+                "transfer_id": transfer.id,
+                "issue_batch_id": transfer.batch_id,
+                "issue_batch_reference": transfer.batch_reference,
+                "machine_id": transfer.machine_id,
+                "machine_number": transfer.machine.inventory_number,
+                "brand": transfer.machine.brand,
+                "model": transfer.machine.model,
+                "protocol_number": official.document_number,
+                "official_document_id": official.id,
+                "official_document_version_id": version.id,
+                "official_document_signing_sha256": version.signing_sha256,
+                "next_status": transfer.return_next_status,
+                "return_location_id": transfer.return_location_id,
+            }
+        )
+
+    manifest = {
+        "operation": "RETURN",
+        "batch_id": batch.id,
+        "batch_reference": batch.batch_reference,
+        "created_by_id": actor.id,
+        "created_at": utcnow().isoformat(timespec="seconds") + "Z",
+        "returner_external_signer_id": external_signer.id,
+        "machine_count": len(manifest_items),
+        "machines": manifest_items,
+    }
+    manifest_sha256 = _sha(_canonical(manifest))
+    document_number = f"{batch.batch_reference}-RETURN-SIGN"
+    if db.scalar(
+        select(OfficialDocument.id).where(
+            OfficialDocument.document_number == document_number
+        )
+    ):
+        raise TransferSigningConfigurationError(
+            "За тази batch операция по приемане вече съществува подписващ акт."
+        )
+
+    snapshot = {
+        "batch_signing": manifest,
+        "batch_manifest_sha256": manifest_sha256,
+        "prepared_by": _internal_snapshot(actor, "PREPARER"),
+    }
+    snapshot_sha256 = _sha(_canonical(snapshot))
+    signing_sha256 = _sha(
+        _canonical(
+            {
+                "document_number": document_number,
+                "document_type": DocumentType.TRANSFER_RETURN.value,
+                "version": 1,
+                "snapshot_sha256": snapshot_sha256,
+                "batch_manifest_sha256": manifest_sha256,
+            }
+        )
+    )
+    document = OfficialDocument(
+        document_number=document_number,
+        document_type=DocumentType.TRANSFER_RETURN.value,
+        machine_id=None,
+        transfer_id=None,
+        batch_id=batch.id,
+        created_by_id=actor.id,
+    )
+    db.add(document)
+    db.flush()
+    version = OfficialDocumentVersion(
+        document_id=document.id,
+        version=1,
+        status=OfficialDocumentStatus.DRAFT.value,
+        language=language,
+        snapshot=snapshot,
+        snapshot_sha256=snapshot_sha256,
+        signing_sha256=signing_sha256,
+        docx_content=None,
+        docx_sha256=None,
+        pdf_content=None,
+        pdf_sha256=None,
+        prepared_by_id=actor.id,
+    )
+    db.add(version)
+    db.flush()
+    document.current_version_id = version.id
+    batch.return_manifest = manifest
+    batch.return_manifest_sha256 = manifest_sha256
+    batch.return_signing_document_id = document.id
+    batch.return_signing_status = TransferOperationStatus.AWAITING_SIGNATURE.value
+
+    return prepare_transfer_signing(
+        db,
+        document_number=document_number,
+        document_type=DocumentType.TRANSFER_RETURN.value,
+        actor=actor,
+        external_signer=external_signer,
+        external_slot_code="RETURNED_BY",
+        internal_slot_code="ACCEPTED_RETURN",
+        expires_minutes=expires_minutes,
+    )

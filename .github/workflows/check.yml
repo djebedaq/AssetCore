@@ -1,5 +1,9 @@
 name: Build check
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches: [main]
+
 jobs:
   frontend:
     runs-on: ubuntu-latest
@@ -19,6 +23,7 @@ jobs:
         working-directory: frontend
       - run: pnpm build
         working-directory: frontend
+
   backend:
     runs-on: ubuntu-latest
     steps:
@@ -26,7 +31,72 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
       - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
-      - run: python -m compileall backend/app
-      - run: python -m ruff check backend/app tests
+      - run: python -m compileall backend/app backend/scripts scripts tests
+      - run: python -m ruff check --select E9 backend/app backend/scripts scripts tests
       - run: python -m pytest -q
+      - run: python scripts/verify_release.py --output release-verification
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-verification
+          path: release-verification
+          if-no-files-found: ignore
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: assetcore
+          POSTGRES_PASSWORD: assetcore-ci-password
+          POSTGRES_DB: assetcore_test_source
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U assetcore -d assetcore_test_source"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ASSETCORE_POSTGRES_SOURCE_URL: postgresql+psycopg://assetcore:assetcore-ci-password@localhost:5432/assetcore_test_source
+      ASSETCORE_POSTGRES_RESTORE_URL: postgresql+psycopg://assetcore:assetcore-ci-password@localhost:5432/assetcore_test_restore
+      PG_DUMP: /usr/bin/pg_dump
+      PG_RESTORE: /usr/bin/pg_restore
+      PGPASSWORD: assetcore-ci-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pip install -r backend/requirements.txt
+      - name: Create isolated restore database
+        run: psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_restore;'
+      - name: PostgreSQL migration and encrypted backup/restore round trip
+        run: python scripts/postgres_smoke_test.py
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        env:
+          POSTGRES_PASSWORD: compose-validation-password
+          DATABASE_URL: postgresql+psycopg://assetcore:compose-validation-password@db:5432/assetcore
+          SECRET_KEY: compose-validation-secret-key-which-is-not-used
+          OWNER_EMAIL: ci-owner@assetcore.invalid
+          OWNER_JOB_TITLE: CI operator
+          INSTALLATION_ID: assetcore-ci
+          LICENSE_PUBLIC_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          SIGNATURE_ENCRYPTION_KEY: compose-validation-signature-key
+        run: docker compose config --quiet
+      - name: Build production image
+        run: docker build --pull --tag assetcore:ci .

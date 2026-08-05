@@ -379,8 +379,10 @@ def _add_centered(document: Document, text: str, size: float, bold: bool = False
 
 def _machine_model(transfer: TransferProtocol) -> str:
     machine = transfer.machine
-    components = [machine.brand, machine.model, f"{machine.pressure_bar} bar"]
-    return "; ".join(value for value in components if value)
+    brand = (machine.brand or machine.manufacturer or "").strip()
+    pressure = f"{machine.pressure_bar}bar" if machine.pressure_bar else ""
+    family = " - ".join(value for value in (brand, pressure) if value)
+    return "; ".join(value for value in (family, machine.model or "") if value)
 
 
 def _usage_text(transfer: TransferProtocol) -> str:
@@ -451,6 +453,47 @@ def _return_findings(transfer: TransferProtocol, language: str) -> str:
         (labels["repair"], labels["yes"] if transfer.return_repair_required else labels["no"]),
     ]
     return "; ".join(f"{label}: {value}" for label, value in values if value)
+
+
+
+
+
+def _protocol_remarks(transfer: TransferProtocol, operation: str, language: str) -> str:
+    if operation == "return":
+        return "; ".join(
+            value
+            for value in (
+                transfer.return_result_text,
+                _return_findings(transfer, language),
+                transfer.return_notes,
+            )
+            if value
+        )
+    return "; ".join(
+        value
+        for value in (_equipment_text(transfer, language), transfer.remarks)
+        if value
+    )
+
+def _checklist_rows(transfer: TransferProtocol, operation: str, language: str) -> list[tuple[str, str]]:
+    stored = transfer.return_checklist if operation == "return" else transfer.issue_checklist
+    condition_labels = {
+        "bg": {"GOOD": "Добро", "SATISFACTORY": "Задоволително", "REPAIR": "За ремонт", "FAULTY": "Неизправно", "MISSING": "Липсва", "NA": "Не се прилага"},
+        "en": {"GOOD": "Good", "SATISFACTORY": "Satisfactory", "REPAIR": "For repair", "FAULTY": "Faulty", "MISSING": "Missing", "NA": "N/A"},
+        "ru": {"GOOD": "Хорошее", "SATISFACTORY": "Удовлетворительное", "REPAIR": "В ремонт", "FAULTY": "Неисправно", "MISSING": "Отсутствует", "NA": "Не применяется"},
+    }[language]
+    if not stored:
+        return [(component, "") for component in CHECKLIST[language]]
+    rows = []
+    for item in stored:
+        label = str(item.get("label") or item.get("code") or "")
+        value = condition_labels.get(str(item.get("condition") or ""), str(item.get("condition") or ""))
+        if item.get("length_m") is not None:
+            value += f" · {item['length_m']} m"
+        if item.get("note"):
+            value += f" · {item['note']}"
+        rows.append((label, value))
+    return rows
 
 
 def _identity_rows(transfer: TransferProtocol, operation: str, language: str) -> list[tuple[str, str]]:
@@ -612,21 +655,7 @@ def _build_protocol_docx(
     _set_run_font(usage.add_run(f"{usage_label}: "), 8.5, True)
     _set_run_font(usage.add_run(_usage_text(transfer)), 8.5)
 
-    remarks_value = transfer.return_notes if operation == "return" else transfer.remarks
-    if operation == "return":
-        remarks_value = "; ".join(
-            value
-            for value in (
-                transfer.return_result_text,
-                _return_findings(transfer, language),
-                remarks_value,
-            )
-            if value
-        )
-    else:
-        remarks_value = "; ".join(
-            value for value in (_equipment_text(transfer, language), remarks_value) if value
-        )
+    remarks_value = _protocol_remarks(transfer, operation, language)
     remarks = document.add_paragraph()
     remarks.paragraph_format.space_before = Pt(1)
     remarks.paragraph_format.space_after = Pt(2)
@@ -801,20 +830,12 @@ def _build_protocol_pdf(
     identity.setStyle(_pdf_table_style())
     story.extend([identity, Spacer(1, 3 * mm)])
     checklist_data = [[Paragraph(escape(t["number"]), label), Paragraph(escape(t["element"]), label), Paragraph(escape(t["condition"]), label)]]
-    checklist_data.extend([[Paragraph(f"{index}.", body), Paragraph(escape(component), body), ""] for index, component in enumerate(CHECKLIST[language], start=1)])
+    checklist_data.extend([[Paragraph(f"{index}.", body), Paragraph(escape(component), body), Paragraph(escape(value), body)] for index, (component, value) in enumerate(_checklist_rows(transfer, operation, language), start=1)])
     checklist = Table(checklist_data, colWidths=[10 * mm, 66 * mm, 116 * mm], repeatRows=1)
     checklist.setStyle(_pdf_table_style(header_rows=1))
     condition_value = (transfer.return_condition_text if operation == "return" else transfer.condition_text) or ""
     usage_label = t["usage_return"] if operation == "return" else t["usage_issue"]
-    remarks_value = transfer.return_notes if operation == "return" else transfer.remarks
-    if operation == "return":
-        remarks_value = "; ".join(
-            value for value in (transfer.return_result_text, _return_findings(transfer, language), remarks_value) if value
-        )
-    else:
-        remarks_value = "; ".join(
-            value for value in (_equipment_text(transfer, language), remarks_value) if value
-        )
+    remarks_value = _protocol_remarks(transfer, operation, language)
     story.extend([checklist, Spacer(1, 2 * mm), Paragraph(f'<b>{escape(t["overall_condition"])}:</b> {escape(condition_value)}', body), Paragraph(f"<b>{escape(usage_label)}:</b> {escape(_usage_text(transfer))}", body), Paragraph(f'<b>{escape(t["remarks"])}:</b> {escape(remarks_value or "")}', body), Spacer(1, 3 * mm)])
     handed_label = t["returned"] if operation == "return" else t["handed"]
     handed_name = (transfer.returned_by_name if operation == "return" else transfer.handed_over_by) or ""
@@ -903,6 +924,16 @@ def build_repair_protocol_docx(repair: Repair, language: str = "bg") -> bytes:
             cells = parts.add_row().cells
             for cell, value in zip(cells, (str(index), part.part_number or "", part.description, f"{part.quantity:g} {part.unit or ''}".strip()), strict=True):
                 _set_cell(cell, value, size=8)
+    if repair.participants:
+        _add_section_title(document, t.get("participants", "Допълнителни участници"))
+        participants = document.add_table(rows=1, cols=3)
+        participants.style = "Table Grid"
+        for cell, value in zip(participants.rows[0].cells, (t.get("full_name", "Три имена"), t.get("job_title", "Длъжност"), t.get("contribution", "Участие")), strict=True):
+            _set_cell(cell, value, bold=True, size=8)
+        for participant in repair.participants:
+            cells = participants.add_row().cells
+            for cell, value in zip(cells, (participant.full_name_snapshot, participant.job_title_snapshot or "", participant.contribution or ""), strict=True):
+                _set_cell(cell, value, size=8)
     _add_section_title(document, t["test"])
     test_text = "; ".join(
         value
@@ -936,7 +967,8 @@ def build_repair_protocol_docx(repair: Repair, language: str = "bg") -> bytes:
                     document.add_paragraph(item.filename)
     signatures = document.add_table(rows=1, cols=2)
     signatures.style = "Table Grid"
-    _set_cell(signatures.cell(0, 0), f'{t["responsible"]}: {repair.responsible_user.full_name if repair.responsible_user else ""}', bold=True)
+    responsible_identity = " · ".join(value for value in ((repair.responsible_user.full_name if repair.responsible_user else ""), (repair.responsible_user.job_title if repair.responsible_user else "")) if value)
+    _set_cell(signatures.cell(0, 0), f'{t["responsible"]}: {responsible_identity}', bold=True)
     _set_cell(signatures.cell(0, 1), t["signature"])
     status = document.add_paragraph(_signature_status(language, finalized_internal=True))
     _set_run_font(status.runs[0], 8, True)
@@ -971,12 +1003,22 @@ def build_repair_protocol_pdf(repair: Repair, language: str = "bg") -> bytes:
         table = Table(data, colWidths=[14 * mm, 38 * mm, 110 * mm, 30 * mm], repeatRows=1)
         table.setStyle(_pdf_table_style(header_rows=1))
         story.extend([Spacer(1, 2 * mm), Paragraph(escape(t["parts_used"]), label), table])
-    test_text = "; ".join(value for value in (f"cleaning={repair.cleaning_completed_at.strftime('%d.%m.%Y %H:%M')}" if repair.cleaning_completed_at else None, f"test={'PASS' if repair.test_passed else 'FAIL'}" if repair.test_passed is not None else None, f'{t["test_method"]}: {repair.test_method}' if repair.test_method else None, f'{t["test_pressure"]}: {repair.test_pressure_bar} bar' if repair.test_pressure_bar is not None else None, f'{t["leaks"]}: {t["yes"] if repair.leaks_detected else t["no"]}' if repair.leaks_detected is not None else None, f'{t["electrical_test"]}: {repair.electrical_test_result}' if repair.electrical_test_result else None, f'{t["functional_test"]}: {repair.functional_test_result}' if repair.functional_test_result else None, repair.test_details) if value)
+    if repair.participants:
+        data = [[Paragraph(escape(value), label) for value in (t.get("full_name", "Три имена"), t.get("job_title", "Длъжност"), t.get("contribution", "Участие"))]]
+        data.extend([
+            [Paragraph(escape(participant.full_name_snapshot), small), Paragraph(escape(participant.job_title_snapshot or ""), small), Paragraph(escape(participant.contribution or ""), small)]
+            for participant in repair.participants
+        ])
+        table = Table(data, colWidths=[70 * mm, 52 * mm, 70 * mm], repeatRows=1)
+        table.setStyle(_pdf_table_style(header_rows=1))
+        story.extend([Spacer(1, 2 * mm), Paragraph(escape(t.get("participants", "Допълнителни участници")), label), table])
+    test_text = _repair_test_summary(repair, language)
     story.extend([Spacer(1, 2 * mm), Paragraph(escape(t["test"]), label), Paragraph(escape(test_text), body), Spacer(1, 2 * mm), Paragraph(escape(t["condition_after"]), label), Paragraph(escape("; ".join(value for value in (repair.condition_after, repair.result) if value)), body)])
     if repair.attachments:
         for attachment in [item for item in repair.attachments if item.media_type in {"image/jpeg", "image/png"}]:
             story.extend([PageBreak(), ReportLabImage(io.BytesIO(attachment.content), width=170 * mm, height=220 * mm, kind="proportional"), Paragraph(escape(attachment.caption or attachment.filename), small)])
-    signature_data = [[Paragraph(f'<b>{escape(t["responsible"])}:</b> {escape(repair.responsible_user.full_name if repair.responsible_user else "")}', body), Paragraph(escape(t["signature"]), body)]]
+    responsible_identity = " · ".join(value for value in ((repair.responsible_user.full_name if repair.responsible_user else ""), (repair.responsible_user.job_title if repair.responsible_user else "")) if value)
+    signature_data = [[Paragraph(f'<b>{escape(t["responsible"])}:</b> {escape(responsible_identity)}', body), Paragraph(escape(t["signature"]), body)]]
     signatures = Table(signature_data, colWidths=[156 * mm, 36 * mm], rowHeights=[14 * mm])
     signatures.setStyle(_pdf_table_style())
     story.extend([
@@ -1020,10 +1062,32 @@ def _request_snapshot(request: PartRequest) -> dict:
                 "source_document": line.source_document,
                 "source_page": line.source_page,
                 "delivered_quantity": line.delivered_quantity,
+                "is_unknown_part": line.is_unknown_part,
+                "assembly": line.assembly,
+                "note": line.note,
+                "linked_catalog_part_id": line.linked_catalog_part_id,
+                "linked_part_number": line.linked_catalog_part.part_number if line.linked_catalog_part else None,
+                "linked_at": line.linked_at.isoformat() if line.linked_at else None,
             }
             for line in request.lines
         ],
     }
+
+
+def _part_request_line_description(line: PartRequestLine, language: str) -> str:
+    if not line.is_unknown_part:
+        return line.description
+    label = {
+        "bg": "Част без потвърден part number",
+        "en": "Part without a confirmed part number",
+        "ru": "Деталь без подтверждённого part number",
+    }[_language(language)]
+    assembly = {"bg": "Възел", "en": "Assembly", "ru": "Узел"}[_language(language)]
+    linked = ""
+    if line.linked_catalog_part:
+        linked_label = {"bg": "Свързана с", "en": "Linked to", "ru": "Связана с"}[_language(language)]
+        linked = f"; {linked_label}: {line.linked_catalog_part.part_number}"
+    return f"[{label}] {assembly}: {line.assembly or '-'}; {line.description}{linked}"
 
 
 def build_part_request_docx(request: PartRequest, language: str = "bg") -> bytes:
@@ -1052,7 +1116,7 @@ def build_part_request_docx(request: PartRequest, language: str = "bg") -> bytes
     _set_repeat_table_header(table.rows[0])
     for line in request.lines:
         cells = table.add_row().cells
-        values = (line.position or "", line.part_number or "", line.description, f"{line.quantity:g} {line.unit or ''}".strip())
+        values = (line.position or "", line.part_number or "", _part_request_line_description(line, language), f"{line.quantity:g} {line.unit or ''}".strip())
         for index, value in enumerate(values):
             cells[index].width = widths[index]
             _set_cell(cells[index], value, size=8)
@@ -1092,7 +1156,7 @@ def build_part_request_pdf(request: PartRequest, language: str = "bg") -> bytes:
             story.append(Paragraph(f"<b>{escape(label_text)}:</b> {escape(value)}", body))
     story.append(Spacer(1, 3 * mm))
     data = [[Paragraph(escape(value), label) for value in (t["position"], t["part_number"], t["description"], t["quantity"])]]
-    data.extend([[Paragraph(escape(line.position or ""), small), Paragraph(escape(line.part_number or ""), small), Paragraph(escape(line.description), small), Paragraph(escape(f"{line.quantity:g} {line.unit or ''}".strip()), small)] for line in request.lines])
+    data.extend([[Paragraph(escape(line.position or ""), small), Paragraph(escape(line.part_number or ""), small), Paragraph(escape(_part_request_line_description(line, language)), small), Paragraph(escape(f"{line.quantity:g} {line.unit or ''}".strip()), small)] for line in request.lines])
     table = Table(data, colWidths=[14 * mm, 31 * mm, 127 * mm, 20 * mm], repeatRows=1)
     table.setStyle(_pdf_table_style(header_rows=1))
     story.append(table)
@@ -1187,6 +1251,8 @@ def _protocol_template_values(
     language: str,
     created_by_id: int,
 ) -> dict[str, object]:
+    language = _language(language)
+    t = TEXT[language]
     date_value = (
         transfer.returned_at if operation == "return" else transfer.issued_at
     ) or transfer.created_at
@@ -1202,32 +1268,45 @@ def _protocol_template_values(
         if operation == "return"
         else transfer.accepted_by_job_title
     )
+    if operation == "return":
+        left_role = t["returned"]
+        right_role = " · ".join(value for value in (t["accepted"], right_job) if value)
+    else:
+        left_role = " · ".join(value for value in (t["handed"], left_job) if value)
+        right_role = t["accepted"]
     values: dict[str, object] = {
         "DOCUMENT_NUMBER": f"{transfer.protocol_number}-R" if operation == "return" else transfer.protocol_number,
         "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
+        "EQUIPMENT_TYPE": transfer.machine.category or "HPWJ",
         "MACHINE_NAME": transfer.machine.name,
         "MACHINE_NUMBER": transfer.machine.inventory_number,
         "BRAND": transfer.machine.brand,
         "MODEL": transfer.machine.model or "",
+        "MODEL_DISPLAY": _machine_model(transfer),
         "SERIAL_NUMBER": transfer.machine.serial_number or "",
         "PRESSURE_BAR": transfer.machine.pressure_bar,
         "BATCH_REFERENCE": batch_reference,
+        "CONDITION_LABEL": t["overall_condition"],
         "CONDITION_TEXT": transfer.return_condition_text if operation == "return" else transfer.condition_text,
         "USAGE_TEXT": _usage_text(transfer),
-        "REMARKS": transfer.return_notes if operation == "return" else transfer.remarks,
+        "REMARKS": _protocol_remarks(transfer, operation, language),
         "LEFT_SIGNER_NAME": left_name or "",
         "LEFT_SIGNER_JOB_TITLE": left_job or "",
+        "LEFT_SIGNER_ROLE": left_role or "",
         "RIGHT_SIGNER_NAME": right_name or "",
         "RIGHT_SIGNER_JOB_TITLE": right_job or "",
-        "LEFT_SIGNATURE": "",
-        "RIGHT_SIGNATURE": "",
+        "RIGHT_SIGNER_ROLE": right_role or "",
+        "LEFT_SIGNATURE": "[[ASSETCORE_LEFT_SIGNATURE]]",
+        "RIGHT_SIGNATURE": "[[ASSETCORE_RIGHT_SIGNATURE]]",
         "SIGNATURE_STATUS": _signature_status(language),
     }
+    checklist_rows = _checklist_rows(transfer, operation, language)
     for index in range(1, 11):
-        values[f"CHECK_{index}"] = ""
+        values[f"CHECK_{index}"] = (
+            checklist_rows[index - 1][1] if index <= len(checklist_rows) else ""
+        )
     values.update(_preparer_values(db, created_by_id))
     return values
-
 
 def _next_generated_number(db: Session, base: str) -> str:
     existing = db.scalars(
@@ -1496,6 +1575,24 @@ def make_return_documents(
     )
 
 
+def _repair_test_summary(repair: Repair, language: str = "bg") -> str:
+    language = _language(language)
+    t = TEXT[language]
+    values = (
+        f'{t["test_method"]}: {repair.test_method}' if repair.test_method else None,
+        f'{t["test_pressure"]}: {repair.test_pressure_bar} bar' if repair.test_pressure_bar is not None else None,
+        f'{t["leaks"]}: {t["yes"] if repair.leaks_detected else t["no"]}' if repair.leaks_detected is not None else None,
+        f'{t["electrical_test"]}: {repair.electrical_test_result}' if repair.electrical_test_result else None,
+        f'{t["functional_test"]}: {repair.functional_test_result}' if repair.functional_test_result else None,
+        repair.test_details,
+        f'{ {"bg": "Краен резултат", "en": "Final result", "ru": "Итоговый результат"}[language]}: {repair.result}' if repair.result else None,
+    )
+    passed = None
+    if repair.test_passed is not None:
+        passed = f'{t["test"]}: {t["yes"] if repair.test_passed else t["no"]}'
+    return "; ".join(value for value in (passed, *values) if value)
+
+
 def make_repair_documents(
     db: Session, repair: Repair, created_by_id: int, language: str = "bg"
 ) -> list[GeneratedDocument]:
@@ -1523,8 +1620,36 @@ def make_repair_documents(
         "electrical_test_result": repair.electrical_test_result,
         "functional_test_result": repair.functional_test_result,
         "closed_at": repair.closed_at.isoformat() if repair.closed_at else None,
-        "event_ids": [event.id for event in repair.events],
-        "part_ids": [part.id for part in repair.parts_used],
+        "events": [
+            {
+                "id": event.id,
+                "event_type": event.event_type,
+                "description": event.description,
+                "created_at": event.created_at.isoformat(),
+            }
+            for event in repair.events
+        ],
+        "parts_used": [
+            {
+                "id": part.id,
+                "part_number": part.part_number,
+                "description": part.description,
+                "quantity": part.quantity,
+                "unit": part.unit,
+                "source": part.source,
+            }
+            for part in repair.parts_used
+        ],
+        "participants": [
+            {
+                "id": participant.id,
+                "user_id": participant.user_id,
+                "full_name": participant.full_name_snapshot,
+                "job_title": participant.job_title_snapshot,
+                "contribution": participant.contribution,
+            }
+            for participant in repair.participants
+        ],
         "attachment_ids": [attachment.id for attachment in repair.attachments],
         "responsible_user": {
             "user_id": repair.responsible_user.id if repair.responsible_user else None,
@@ -1552,8 +1677,9 @@ def make_repair_documents(
         "CONDITION_BEFORE": repair.condition_before or "",
         "DIAGNOSIS": repair.diagnosis or "",
         "WORK_PERFORMED": repair.work_performed or "",
-        "TEST_RESULT": repair.test_details or repair.functional_test_result or "",
+        "TEST_RESULT": _repair_test_summary(repair, language),
         "CONDITION_AFTER": repair.condition_after or repair.result or "",
+        "REPAIR_STATUS": repair.status,
         "LEFT_SIGNER_NAME": repair.responsible_user.full_name if repair.responsible_user else "",
         "LEFT_SIGNER_JOB_TITLE": repair.responsible_user.job_title if repair.responsible_user else "",
         "RIGHT_SIGNER_NAME": "",
@@ -1563,18 +1689,46 @@ def make_repair_documents(
         "SIGNATURE_STATUS": _signature_status(language, finalized_internal=True),
     }
     values.update(_preparer_values(db, created_by_id))
+    event_type_labels = {
+        "ACCEPTED": "Създаване",
+        "STATUS_CHANGE": "Промяна на статус",
+        "PARTS": "Използвани части",
+        "DIAGNOSIS": "Диагностика",
+        "WORK": "Извършена работа",
+        "TEST": "Тест",
+        "COMPLETED": "Приключване",
+    }
     event_rows = [["Дата", "Тип", "Описание"]] + [
-        [event.created_at.strftime("%d.%m.%Y %H:%M"), event.event_type, event.description]
+        [
+            event.created_at.strftime("%d.%m.%Y %H:%M"),
+            event_type_labels.get(event.event_type, event.event_type.replace("_", " ").title()),
+            event.description,
+        ]
         for event in repair.events
     ]
     part_rows = [["Поз.", "Номер", "Описание", "Количество"]] + [
-        ["", part.part_number or "", part.description, f"{part.quantity:g} {part.unit or ''}".strip()]
-        for part in repair.parts_used
+        [str(index), part.part_number or "", part.description, f"{part.quantity:g} {part.unit or ''}".strip()]
+        for index, part in enumerate(repair.parts_used, start=1)
     ]
+    participant_rows = [["Три имена", "Длъжност", "Участие"]] + (
+        [
+            [
+                participant.full_name_snapshot,
+                participant.job_title_snapshot or "",
+                participant.contribution or "",
+            ]
+            for participant in repair.participants
+        ]
+        or [["Няма допълнителни участници", "", ""]]
+    )
     docx = render_docx(
         template,
         values,
-        {"REPAIR_EVENTS": event_rows, "PARTS_USED": part_rows},
+        {
+            "REPAIR_EVENTS": event_rows,
+            "PARTS_USED": part_rows,
+            "REPAIR_PARTICIPANTS": participant_rows,
+        },
     )
     pdf = convert_docx_to_pdf(docx) or build_repair_protocol_pdf(repair, language)
     _register_official_version(
@@ -1734,7 +1888,7 @@ def make_part_request_documents(
     }
     values.update(_preparer_values(db, created_by_id))
     line_rows = [["Поз.", "PART №", "Описание", "Количество", "Източник"]] + [
-        [line.position or "", line.part_number or "", line.description, f"{line.quantity:g} {line.unit or ''}".strip(), f"{line.source_document or ''} / {line.source_page or ''}".strip(" /")]
+        [line.position or "", line.part_number or "", _part_request_line_description(line, language), f"{line.quantity:g} {line.unit or ''}".strip(), f"{line.source_document or ''} / {line.source_page or ''}".strip(" /")]
         for line in request.lines
     ]
     docx = render_docx(template, values, {"REQUEST_LINES": line_rows})

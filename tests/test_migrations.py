@@ -102,9 +102,11 @@ def test_legacy_sqlite_database_upgrades_without_changing_inventory(tmp_path: Pa
     assert "repair_id" in {
         column["name"] for column in inspector.get_columns("part_requests")
     }
-    assert {"alternative_part_numbers", "replacement_part_ids"}.issubset(
-        {column["name"] for column in inspector.get_columns("part_catalog")}
-    )
+    assert {
+        "alternative_part_numbers", "replacement_part_ids", "source_figure",
+        "diagram_page", "source_version", "source_document_sha256",
+        "verification_status", "replaced_by_part_number",
+    }.issubset({column["name"] for column in inspector.get_columns("part_catalog")})
     assert "confidence" in {
         column["name"] for column in inspector.get_columns("part_hotspots")
     }

@@ -330,8 +330,8 @@ class TransferPartyInput(BaseModel):
     first_name: str = Field(min_length=1, max_length=120)
     middle_name: str | None = Field(default=None, max_length=120)
     last_name: str = Field(min_length=1, max_length=120)
-    job_title: str = Field(min_length=2, max_length=255)
-    company_or_department: str = Field(min_length=1, max_length=255)
+    job_title: str | None = Field(default=None, max_length=255)
+    company_or_department: str | None = Field(default=None, max_length=255)
     is_foreign_person: bool = False
     name_exception_reason: str | None = Field(default=None, max_length=1000)
 
@@ -433,6 +433,22 @@ class TransferOut(BaseModel):
     machine: MachineOut
 
 
+class TransferChecklistItem(BaseModel):
+    code: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=160)
+    condition: str
+    note: str | None = None
+    length_m: float | None = Field(default=None, ge=0, le=10000)
+
+    @field_validator("condition")
+    @classmethod
+    def validate_condition(cls, value: str) -> str:
+        allowed = {"GOOD", "SATISFACTORY", "REPAIR", "FAULTY", "MISSING", "NA"}
+        if value not in allowed:
+            raise ValueError("Невалидна стойност за състояние на принадлежност.")
+        return value
+
+
 class BulkIssueRequest(BaseModel):
     machine_ids: list[int]
     document_language: LanguageCode = LanguageCode.BG
@@ -453,6 +469,7 @@ class BulkIssueRequest(BaseModel):
     guns: str | None = None
     accessories: str | None = None
     condition_text: str | None = None
+    checklist: list[TransferChecklistItem] = Field(default_factory=list)
     remarks: str | None = None
 
     @model_validator(mode="after")
@@ -498,6 +515,9 @@ class BulkIssueResponse(BaseModel):
     message: str
     batch_id: int
     batch_reference: str
+    batch_manifest_sha256: str | None = None
+    signing_document_id: int | None = None
+    signing_tasks: list[SigningTaskOut] = Field(default_factory=list)
     transfers: list[BulkIssueTransferOut]
     zip_download_endpoint: str
 
@@ -517,6 +537,7 @@ class BulkReturnItem(BaseModel):
     transfer_id: int
     machine_id: int
     condition_text: str = Field(min_length=1)
+    checklist: list[TransferChecklistItem] = Field(default_factory=list)
     result_text: str = Field(min_length=1)
     notes: str | None = None
     missing_equipment: str | None = None
@@ -564,6 +585,27 @@ class BulkReturnRequest(BaseModel):
         return self
 
 
+class CancelTransferBatchRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("Причината трябва да съдържа поне 3 знака.")
+        return normalized
+
+
+class CancelTransferBatchResponse(BaseModel):
+    batch_id: int
+    batch_reference: str
+    status: TransferBatchStatus
+    cancelled_transfers: int
+    invalidated_signing_sessions: int
+    message: str
+
+
 class BatchProgressOut(BaseModel):
     batch_id: int
     batch_reference: str
@@ -592,6 +634,11 @@ class BulkReturnItemOut(BaseModel):
 
 class BulkReturnResponse(BaseModel):
     message: str
+    batch_id: int
+    batch_reference: str
+    batch_manifest_sha256: str | None = None
+    signing_document_id: int | None = None
+    signing_tasks: list[SigningTaskOut] = Field(default_factory=list)
     returned: list[BulkReturnItemOut]
     batches: list[BatchProgressOut]
 
@@ -635,6 +682,9 @@ class BatchTransferOut(BaseModel):
 
 class BatchDetailsOut(BatchProgressOut):
     created_at: datetime
+    operation: str = "ISSUE"
+    batch_manifest_sha256: str | None = None
+    signing_document_id: int | None = None
     transfers: list[BatchTransferOut]
     zip_download_endpoint: str
 
@@ -650,7 +700,7 @@ class PartCatalogOut(BaseModel):
     position: str | None = None
     part_number: str
     description: str
-    quantity: int | None = None
+    quantity: float | None = None
     unit: str | None = None
     technical_specification: str | None = None
     compatible_models: str | None = None
@@ -668,6 +718,12 @@ class PartCatalogOut(BaseModel):
     is_active: bool = True
     source_document: str | None = None
     source_page: int | None = None
+    source_figure: str | None = None
+    diagram_page: int | None = None
+    source_version: str | None = None
+    source_document_sha256: str | None = None
+    verification_status: str = "UNVERIFIED"
+    replaced_by_part_number: str | None = None
     source_excerpt: str | None = None
     provenance_confidence: float | None = None
     is_verified: bool = False

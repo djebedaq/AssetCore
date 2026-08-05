@@ -30,6 +30,7 @@ from .migrations import run_migrations
 from .models import (
     AssetCategory,
     AuditLog,
+    DocumentType,
     GeneratedDocument,
     Location,
     Machine,
@@ -58,6 +59,8 @@ from .schemas import (
     BatchDetailsOut,
     BatchProgressOut,
     BatchSummaryOut,
+    CancelTransferBatchRequest,
+    CancelTransferBatchResponse,
     BulkIssueRequest,
     BulkIssueResponse,
     BulkReturnItem,
@@ -96,6 +99,7 @@ from .transfer_service import (
     batch_progress,
     bulk_issue,
     bulk_return,
+    cancel_pending_batch,
     get_protocol_document,
     list_batches,
 )
@@ -123,7 +127,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="AssetCore API",
-    version="1.3.0-rc.1-production-hardening",
+    version="1.3.0-rc.2",
     description=(
         "API за професионално индустриално управление на активи, защитени "
         "предавания, ремонти, документи и проследима история."
@@ -246,7 +250,7 @@ def health() -> dict[str, str]:
     return {
         "status": "ok",
         "service": "AssetCore",
-        "version": "1.3.0-rc.1-production-hardening",
+        "version": "1.3.0-rc.2",
     }
 
 
@@ -824,12 +828,28 @@ def create_part(
 def catalog(
     q: str = "",
     brand: str = "",
+    model: str = "",
+    assembly: str = "",
+    position: str = "",
+    manufacturer: str = "",
+    machine_id: int | None = None,
+    verified_only: bool = False,
     _: User = Depends(require_parts_viewer),
     db: Session = Depends(get_db),
 ) -> list[PartCatalog]:
     statement = select(PartCatalog)
     if brand:
         statement = statement.where(PartCatalog.brand == brand)
+    if model:
+        statement = statement.where(PartCatalog.model == model)
+    if assembly:
+        statement = statement.where(PartCatalog.assembly == assembly)
+    if position:
+        statement = statement.where(PartCatalog.position == position)
+    if manufacturer:
+        statement = statement.where(PartCatalog.manufacturer == manufacturer)
+    if verified_only:
+        statement = statement.where(PartCatalog.is_verified.is_(True))
     if q:
         statement = statement.where(
             or_(
@@ -844,11 +864,20 @@ def catalog(
                 PartCatalog.position.ilike(f"%{q}%"),
             )
         )
-    return db.scalars(
+    items = db.scalars(
         statement.order_by(
-            PartCatalog.brand, PartCatalog.assembly, PartCatalog.position
-        ).limit(500)
+            PartCatalog.brand, PartCatalog.model, PartCatalog.assembly, PartCatalog.position
+        ).limit(2000)
     ).all()
+    if machine_id is not None:
+        machine = db.get(Machine, machine_id)
+        if machine is None:
+            raise HTTPException(404, "Машината не е намерена")
+        items = [
+            item for item in items
+            if str(machine.inventory_number) in (item.compatible_machine_numbers or [])
+        ]
+    return items[:1000]
 
 
 @app.get("/api/transfers", response_model=list[TransferOut])
@@ -896,6 +925,19 @@ def bulk_return_endpoint(
 ) -> dict:
     try:
         return bulk_return(db, user, data)
+    except TransferServiceError as exc:
+        _raise_service_error(exc)
+
+
+@app.post("/api/transfer-batches/{batch_id}/cancel", response_model=CancelTransferBatchResponse)
+def cancel_transfer_batch_endpoint(
+    batch_id: int,
+    data: CancelTransferBatchRequest,
+    user: User = Depends(require_transfer_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    try:
+        return cancel_pending_batch(db, batch_id, user, data.reason, user.preferred_language)
     except TransferServiceError as exc:
         _raise_service_error(exc)
 
@@ -1075,12 +1117,34 @@ def batch_documents_zip(
     )
     if batch is None:
         raise HTTPException(404, "Партидата не е намерена")
-    generated = db.scalars(
-        select(GeneratedDocument).where(GeneratedDocument.batch_id == batch.id)
-    ).all()
-    if not batch.documents and not generated:
+    return_transfer_ids = []
+    if isinstance(batch.return_manifest, dict):
+        return_transfer_ids = [
+            int(item["transfer_id"])
+            for item in batch.return_manifest.get("machines", [])
+            if isinstance(item, dict) and item.get("transfer_id") is not None
+        ]
+    generated_query = select(GeneratedDocument).where(
+        GeneratedDocument.batch_id == batch.id
+    )
+    if return_transfer_ids:
+        generated_query = select(GeneratedDocument).where(
+            GeneratedDocument.transfer_id.in_(return_transfer_ids),
+            GeneratedDocument.document_type == DocumentType.TRANSFER_RETURN.value,
+        )
+    generated = db.scalars(generated_query).all()
+    if not batch.documents and not generated and not return_transfer_ids:
         raise HTTPException(404, "Партидата няма генерирани протоколи")
-    transfer_by_id = {item.id: item for item in batch.transfers}
+    transfers = list(batch.transfers)
+    if return_transfer_ids:
+        transfers = list(
+            db.scalars(
+                select(TransferProtocol).where(
+                    TransferProtocol.id.in_(return_transfer_ids)
+                )
+            )
+        )
+    transfer_by_id = {item.id: item for item in transfers}
     archive_entries: list[tuple[str, bytes]] = []
     for document in sorted(batch.documents, key=lambda item: item.filename):
         transfer = transfer_by_id.get(document.transfer_id)

@@ -50,6 +50,8 @@ export type SigningSummary = {
   document_number: string; document_type: string; document_version: number; document_status: string;
   document_sha256: string; participant: Record<string, unknown>; operation_role: string;
   machine?: { id: number; number: string; name: string; brand: string } | null;
+  machines?: Array<{ id: number; number: string; brand: string; model?: string | null; protocol_number: string }>;
+  batch_reference?: string | null; batch_manifest_sha256?: string | null;
   operation_description: string; operation_datetime: string;
   consent_notice: string; requires_confirmation: boolean
 }
@@ -122,6 +124,7 @@ export type TransferAvailability = {
 
 export type BulkIssueResult = {
   message: string; batch_id: number; batch_reference: string;
+  batch_manifest_sha256?: string | null; signing_document_id?: number | null; signing_tasks: SigningTask[];
   transfers: Array<{
     transfer_id: number; protocol_number: string; machine_id: number; machine_number: string;
     workflow_status: string; official_document_id: number; signing_tasks: SigningTask[];
@@ -135,8 +138,15 @@ export type BatchProgress = {
   returned_machines: number; still_issued_machines: number; awaiting_signature_machines: number; created_at?: string
 }
 
+export type CancelTransferBatchResponse = {
+  batch_id: number; batch_reference: string; status: string; cancelled_transfers: number;
+  invalidated_signing_sessions: number; message: string
+}
+
 export type BatchDetails = BatchProgress & {
-  created_at: string; zip_download_endpoint: string;
+  created_at: string; operation?: 'ISSUE' | 'RETURN' | string;
+  batch_manifest_sha256?: string | null; signing_document_id?: number | null;
+  zip_download_endpoint: string;
   transfers: Array<{
     transfer_id: number; machine_id: number; machine_number: string; machine_name: string; brand: string;
     pressure_bar: number; protocol_number: string; is_active: boolean; issue_status: string; return_status?: string | null; issued_at?: string | null;
@@ -146,7 +156,8 @@ export type BatchDetails = BatchProgress & {
 }
 
 export type BulkReturnResult = {
-  message: string;
+  message: string; batch_id: number; batch_reference: string;
+  batch_manifest_sha256?: string | null; signing_document_id?: number | null; signing_tasks: SigningTask[];
   returned: Array<{ transfer_id: number; machine_id: number; machine_number: string; new_status: string; returned_at?: string | null; workflow_status: string; official_document_id: number; signing_tasks: SigningTask[]; documents: ProtocolDocument[] }>;
   batches: BatchProgress[]
 }
@@ -165,7 +176,7 @@ export type AssetCategory = {
 }
 
 export type StoredAttachment = {
-  id: number; filename: string; media_type: string; sha256: string; created_at: string;
+  id: number; filename: string; media_type: string; sha256: string; created_at: string; request_line_id?: number | null;
   description?: string | null; caption?: string | null; kind?: string | null; stage?: string | null;
   download_endpoint: string
 }
@@ -209,6 +220,11 @@ export type RepairPartUsed = {
   created_by_id: number; created_at: string
 }
 
+export type RepairParticipant = {
+  id: number; repair_id: number; user_id?: number | null; full_name: string;
+  job_title?: string | null; contribution?: string | null; created_by_id: number; created_at: string
+}
+
 export type RepairCase = {
   id: number; repair_reference?: string | null; machine_id: number; machine_number: string; machine_name: string;
   reported_problem: string; diagnosis?: string | null; work_performed?: string | null; result?: string | null;
@@ -217,7 +233,9 @@ export type RepairCase = {
   required_work?: string | null; removed_parts_text?: string | null; cleaning_required: boolean; cleaning_completed_at?: string | null;
   inspection_completed_at?: string | null; test_required: boolean; test_passed?: boolean | null;
   test_details?: string | null; test_method?: string | null; test_pressure_bar?: number | null; leaks_detected?: boolean | null;
-  electrical_test_result?: string | null; functional_test_result?: string | null; responsible_user_id?: number | null; accepted_by_id?: number | null;
+  electrical_test_result?: string | null; functional_test_result?: string | null; responsible_user_id?: number | null;
+  responsible_user?: { id: number; full_name: string; job_title?: string | null } | null; participants: RepairParticipant[];
+  document_generation_warning?: { code: string; message: string; document_type?: string; language?: string } | null; accepted_by_id?: number | null;
   approved_by_id?: number | null; approved_at?: string | null; target_date?: string | null;
   opened_at: string; started_at?: string | null; closed_at?: string | null; events: RepairEvent[]; parts_used: RepairPartUsed[];
   attachments: StoredAttachment[];
@@ -227,7 +245,10 @@ export type RepairCase = {
 export type MultiPartRequestLine = {
   id: number; request_id: number; catalog_part_id?: number | null; position?: string | null;
   part_number?: string | null; description: string; quantity: number; unit?: string | null;
-  reason?: string | null; source_document?: string | null; source_page?: number | null; delivered_quantity: number
+  reason?: string | null; source_document?: string | null; source_page?: number | null; delivered_quantity: number;
+  is_unknown_part?: boolean; assembly?: string | null; note?: string | null;
+  linked_catalog_part_id?: number | null; linked_part_number?: string | null; linked_part_description?: string | null;
+  linked_by_id?: number | null; linked_at?: string | null; link_note?: string | null
 }
 
 export type MultiPartRequest = {
@@ -253,7 +274,9 @@ export type CatalogPartEnhanced = {
   compatible_machine_numbers?: string[] | null; technical_notes?: string | null; supplier?: string | null;
   supplier_code?: string | null; estimated_price?: number | null; currency?: string | null; lead_time_days?: number | null;
   revision?: string | null; is_active?: boolean;
-  source_document?: string | null; source_page?: number | null; source_excerpt?: string | null;
+  source_document?: string | null; source_page?: number | null; source_figure?: string | null; diagram_page?: number | null;
+  source_version?: string | null; source_document_sha256?: string | null; verification_status?: string | null;
+  replaced_by_part_number?: string | null; source_excerpt?: string | null;
   provenance_confidence?: number | null; is_verified: boolean; verified_at?: string | null
 }
 
@@ -272,8 +295,8 @@ export type TechnicalLibraryDocument = {
   id: number; brand: string; model?: string | null; category: string; title: string; document_type: string;
   language?: string | null; revision?: string | null; sha256?: string | null; created_at?: string | null;
   source_label?: string | null; document_date?: string | null; tags?: string[] | null; page_count?: number | null;
-  notes?: string | null; linked_machine_numbers?: string[] | null;
-  download_endpoint: string; revisions: Array<{ id: number; version: number; revision_label?: string | null;
+  notes?: string | null; linked_machine_numbers?: string[] | null; source_key?: string | null;
+  download_endpoint: string; page_preview_endpoint?: string | null; revisions: Array<{ id: number; version: number; revision_label?: string | null;
     filename: string; sha256: string; change_note?: string | null; created_at: string; download_endpoint: string }>
 }
 

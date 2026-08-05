@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
@@ -41,13 +42,24 @@ def _safe_test_url(variable: str) -> str:
     return value
 
 
+def _alembic_config() -> Config:
+    config = Config(str(BACKEND / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND / "alembic"))
+    return config
+
+
+def _expected_head() -> str:
+    head = ScriptDirectory.from_config(_alembic_config()).get_current_head()
+    if not head:
+        raise RuntimeError("Alembic does not expose a single current head revision.")
+    return head
+
+
 def _upgrade(url: str) -> None:
     previous = settings.database_url
     try:
         settings.database_url = url
-        config = Config(str(BACKEND / "alembic.ini"))
-        config.set_main_option("script_location", str(BACKEND / "alembic"))
-        command.upgrade(config, "head")
+        command.upgrade(_alembic_config(), "head")
     finally:
         settings.database_url = previous
 
@@ -140,7 +152,7 @@ def main() -> None:
         with Session(restore_engine) as db:
             restored_inventory = sorted(db.scalars(select(Machine.inventory_number)))
             revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-            if restored_inventory != expected_inventory or revision != "20260801_0006":
+            if restored_inventory != expected_inventory or revision != _expected_head():
                 raise RuntimeError("The restored PostgreSQL database differs from the source QA database.")
     finally:
         restore_engine.dispose()

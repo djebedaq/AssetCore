@@ -21,7 +21,7 @@ LABELS = {
     "bg": {
         "issue": "ПРОТОКОЛ ПРЕДАВАНЕ НА МИЕЩА ТЕХНИКА",
         "return": "ПРОТОКОЛ ПРИЕМАНЕ НА МИЕЩА ТЕХНИКА СЛЕД ИЗПОЛЗВАНЕ",
-        "repair": "ПРОТОКОЛ ПРЕДИ / СЛЕД РЕМОНТ",
+        "repair": "ВЪТРЕШЕН ПРОТОКОЛ ЗА ИЗВЪРШЕН РЕМОНТ",
         "parts": "ТЕХНИЧЕСКА СПЕЦИФИКАЦИЯ ЗА ДОСТАВКА НА РЕЗЕРВНИ ЧАСТИ",
         "date": "Дата", "number": "Документ №", "machine": "Машина",
         "brand": "Марка", "model": "Модел", "inventory": "Инвентарен №",
@@ -29,49 +29,49 @@ LABELS = {
         "condition": "Състояние", "usage": "Използване / местоназначение",
         "remarks": "Забележки", "component": "Елемент", "result": "Резултат",
         "preparer": "Съставил", "job": "Длъжност", "signature": "Подпис",
-        "status": "Статус на подписите", "handover": "Предал", "acceptance": "Приел",
+        "status": "Статус на подписите", "document_status": "Статус на документа", "handover": "Предал", "acceptance": "Приел",
         "returned": "Върнал", "return_acceptance": "Приел връщането",
         "problem": "Регистриран проблем", "diagnosis": "Диагноза",
         "work": "Извършена работа", "test": "Резултат от теста",
         "before": "Състояние преди", "after": "Състояние след",
         "requester": "Заявител", "decision": "Решение",
-        "repairer": "Извършил ремонта",
+        "repairer": "Извършил ремонта", "participants": "Допълнителни участници", "repair_status": "Статус",
     },
     "en": {
         "issue": "HIGH-PRESSURE WASHING EQUIPMENT ISSUE PROTOCOL",
         "return": "HIGH-PRESSURE WASHING EQUIPMENT RETURN PROTOCOL",
-        "repair": "BEFORE / AFTER REPAIR PROTOCOL",
+        "repair": "INTERNAL COMPLETED REPAIR PROTOCOL",
         "parts": "TECHNICAL SPECIFICATION FOR SPARE-PARTS SUPPLY",
         "date": "Date", "number": "Document No.", "machine": "Machine",
         "brand": "Brand", "model": "Model", "inventory": "Inventory No.",
         "serial": "Serial No.", "pressure": "Pressure", "batch": "Batch",
         "condition": "Condition", "usage": "Use / destination", "remarks": "Remarks",
         "component": "Component", "result": "Result", "preparer": "Prepared by",
-        "job": "Job title", "signature": "Signature", "status": "Signature status",
+        "job": "Job title", "signature": "Signature", "status": "Signature status", "document_status": "Document status",
         "handover": "Handed over by", "acceptance": "Accepted by",
         "returned": "Returned by", "return_acceptance": "Return accepted by",
         "problem": "Reported problem", "diagnosis": "Diagnosis", "work": "Work performed",
         "test": "Test result", "before": "Condition before", "after": "Condition after",
         "requester": "Requester", "decision": "Decision",
-        "repairer": "Repair performed by",
+        "repairer": "Repair performed by", "participants": "Additional participants", "repair_status": "Status",
     },
     "ru": {
         "issue": "ПРОТОКОЛ ВЫДАЧИ МОЕЧНОЙ ТЕХНИКИ",
         "return": "ПРОТОКОЛ ПРИЁМА МОЕЧНОЙ ТЕХНИКИ ПОСЛЕ ИСПОЛЬЗОВАНИЯ",
-        "repair": "ПРОТОКОЛ ДО / ПОСЛЕ РЕМОНТА",
+        "repair": "ВНУТРЕННИЙ ПРОТОКОЛ ВЫПОЛНЕННОГО РЕМОНТА",
         "parts": "ТЕХНИЧЕСКАЯ СПЕЦИФИКАЦИЯ НА ПОСТАВКУ ЗАПАСНЫХ ЧАСТЕЙ",
         "date": "Дата", "number": "Документ №", "machine": "Машина",
         "brand": "Марка", "model": "Модель", "inventory": "Инвентарный №",
         "serial": "Серийный №", "pressure": "Давление", "batch": "Партия",
         "condition": "Состояние", "usage": "Использование / назначение", "remarks": "Примечания",
         "component": "Элемент", "result": "Результат", "preparer": "Составил",
-        "job": "Должность", "signature": "Подпись", "status": "Статус подписей",
+        "job": "Должность", "signature": "Подпись", "status": "Статус подписей", "document_status": "Статус документа",
         "handover": "Передал", "acceptance": "Принял", "returned": "Вернул",
         "return_acceptance": "Принял возврат", "problem": "Заявленная проблема",
         "diagnosis": "Диагноз", "work": "Выполненные работы", "test": "Результат теста",
         "before": "Состояние до", "after": "Состояние после", "requester": "Заявитель",
         "decision": "Решение",
-        "repairer": "Выполнил ремонт",
+        "repairer": "Выполнил ремонт", "participants": "Дополнительные участники", "repair_status": "Статус",
     },
 }
 
@@ -171,7 +171,7 @@ def _repair_signature_table(doc: Document, language: str) -> None:
     table.cell(1, 0).text = "{{LEFT_SIGNER_NAME}}\n{{LEFT_SIGNER_JOB_TITLE}}"
     table.cell(2, 0).text = f'{t["signature"]}: {{{{LEFT_SIGNATURE}}}}'
     table.cell(0, 0).paragraphs[0].runs[0].bold = True
-    _label_row(doc, t["status"], "{{SIGNATURE_STATUS}}")
+    _label_row(doc, t["document_status"], "{{SIGNATURE_STATUS}}")
     doc.add_paragraph(
         f'{t["preparer"]}: {{{{PREPARER_NAME}}}} | '
         f'{t["job"]}: {{{{PREPARER_JOB_TITLE}}}}'
@@ -214,6 +214,8 @@ def build_repair(language: str) -> Document:
         _label_row(doc, label, placeholder)
     doc.add_paragraph("{{TABLE:REPAIR_EVENTS}}")
     doc.add_paragraph("{{TABLE:PARTS_USED}}")
+    doc.add_paragraph("{{TABLE:REPAIR_PARTICIPANTS}}")
+    _label_row(doc, t["repair_status"], "{{REPAIR_STATUS}}")
     _repair_signature_table(doc, language)
     return doc
 
@@ -238,7 +240,7 @@ def main() -> None:
         "part_request": build_parts,
     }
     for code, builder in builders.items():
-        version = 3 if code == "repair_protocol" else 2
+        version = 4 if code == "repair_protocol" else 2
         for language in LABELS:
             builder(language).save(OUTPUT / f"{code}-{language}-v{version}.docx")
 

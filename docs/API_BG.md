@@ -58,6 +58,8 @@
 | `POST` | `/api/part-requests/{id}/documents` | immutable Word/PDF версия на заявката |
 | `POST` | `/api/part-requests/{id}/attachments` | добавя хеширано приложение към заявката |
 | `GET` | `/api/part-request-attachments/{id}/download` | удостоверено изтегляне на приложение |
+| `POST` | `/api/part-requests/unknown` | заявка за част без потвърден part number със снимка |
+| `POST` | `/api/part-requests/{id}/lines/{line_id}/link-catalog-part` | административно свързване с потвърдена съвместима каталожна част |
 | `GET/POST` | `/api/catalog/parts` | проверим каталог с provenance |
 | `POST` | `/api/catalog/parts/{id}/verify` | човешко потвърждение на каталожна част |
 | `GET/POST` | `/api/catalog/parts/{id}/images` | списък/качване на проверено каталожно изображение |

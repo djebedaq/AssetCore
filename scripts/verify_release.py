@@ -35,6 +35,7 @@ from app.models import (  # noqa: E402
     DocumentTemplateVersion,
     InstallationOwnership,
     Machine,
+    PartCatalog,
     ProfileStatus,
     SignatureSlot,
     User,
@@ -114,7 +115,7 @@ def _verify_migrations(verification: Verification) -> None:
                     tables = set(inspect(connection).get_table_names())
                 verification.check(
                     "Alembic migrations достигат текущия head",
-                    revision == "20260801_0006"
+                    revision == "20260805_0014"
                     and {
                         "installation_ownership",
                         "software_licenses",
@@ -196,6 +197,18 @@ def run(output: Path) -> Verification:
             ),
         )
         verification.check("Audit таблицата е достъпна", (db.scalar(select(func.count(AuditLog.id))) or 0) >= 0)
+        catalog_count = db.scalar(select(func.count(PartCatalog.id))) or 0
+        verified_catalog_count = db.scalar(
+            select(func.count(PartCatalog.id)).where(
+                PartCatalog.is_verified.is_(True),
+                PartCatalog.verification_status == "VERIFIED_SOURCE_TABLE",
+            )
+        ) or 0
+        verification.check(
+            "Каталогът съдържа 774 проверени позиции от трите производителя",
+            catalog_count == 774 and verified_catalog_count == 774,
+            f"total={catalog_count}, verified={verified_catalog_count}",
+        )
         licence = evaluate_license(db)
         verification.check("License validation връща контролиран статус", licence.state in {"NOT_INSTALLED", "ACTIVE", "GRACE_PERIOD", "READ_ONLY", "INVALID", "NOT_YET_VALID"})
     engine.dispose()
