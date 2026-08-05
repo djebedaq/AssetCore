@@ -99,7 +99,9 @@ def test_issue_remains_pending_and_changes_machine_only_after_both_signatures(
         assert transfer.issue_status == "AWAITING_SIGNATURE"
         version = db.get(
             OfficialDocumentVersion,
-            db.get(OfficialDocument, item["official_document_id"]).current_version_id,
+            db.get(
+                OfficialDocument, issued.json()["signing_document_id"]
+            ).current_version_id,
         )
         expected_hash = version.signing_sha256
 
@@ -122,13 +124,20 @@ def test_issue_remains_pending_and_changes_machine_only_after_both_signatures(
 def test_signature_image_cannot_be_reused_for_another_document(
     client, auth_headers, machine_ids, issue_payload
 ):
-    issued = client.post(
+    first_issue = client.post(
         "/api/transfers/bulk-issue",
         headers=auth_headers,
-        json=issue_payload(machine_ids["4"], machine_ids["5"]),
+        json=issue_payload(machine_ids["4"]),
     )
-    assert issued.status_code == 201, issued.text
-    first, second = issued.json()["transfers"]
+    second_issue = client.post(
+        "/api/transfers/bulk-issue",
+        headers=auth_headers,
+        json=issue_payload(machine_ids["5"]),
+    )
+    assert first_issue.status_code == 201, first_issue.text
+    assert second_issue.status_code == 201, second_issue.text
+    first = first_issue.json()["transfers"][0]
+    second = second_issue.json()["transfers"][0]
     output = io.BytesIO()
     image = Image.new("RGB", (320, 120), "white")
     ImageDraw.Draw(image).line([(10, 70), (100, 20), (200, 80), (310, 30)], fill="black", width=5)

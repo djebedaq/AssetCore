@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from './api'
 import {
   BatchProgressCard,
+  CancelBatchModal,
   ConfirmationSummary,
   ConflictNotice,
   IssueModal,
@@ -39,10 +40,8 @@ describe('групови предавания', () => {
     await userEvent.type(screen.getByLabelText('Собствено име'), 'Иван')
     await userEvent.type(screen.getByLabelText('Бащино име'), 'Иванов')
     await userEvent.type(screen.getByLabelText('Фамилия'), 'Петров')
-    await userEvent.type(screen.getByLabelText('Длъжност'), 'Оператор')
-    await userEvent.type(screen.getByLabelText('Фирма или отдел'), 'Външно звено')
     await userEvent.click(screen.getByRole('button', { name: 'Преглед и потвърждение' }))
-    expect(screen.getByRole('heading', { name: 'Потвърждение на груповото издаване' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Потвърждение на издаването' })).toBeVisible()
     expect(screen.getByText(/№4/)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Потвърди издаването' })).toBeEnabled()
   })
@@ -95,4 +94,44 @@ describe('групови предавания', () => {
     expect(screen.getByText('№4, №5')).toBeVisible()
     expect(screen.getByText('Док 2')).toBeVisible()
   })
+
+  it('анулира незавършена операция само след въведена причина', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      batch_id: 11,
+      batch_reference: 'HPWJ-B-11',
+      status: 'CANCELLED',
+      cancelled_transfers: 3,
+      invalidated_signing_sessions: 2,
+      message: 'Незавършената операция е анулирана безопасно.',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const onCancelled = vi.fn()
+    render(<CancelBatchModal batch={{
+      batch_id: 11, batch_reference: 'HPWJ-B-11', operation: 'ISSUE',
+      awaiting_signature_machines: 3, total_machines: 3,
+    }} onClose={vi.fn()} onCancelled={onCancelled} />)
+
+    const confirm = screen.getByRole('button', { name: 'Потвърди анулирането' })
+    expect(confirm).toBeDisabled()
+    await userEvent.type(screen.getByLabelText('Причина за анулиране'), 'Получателят отказа подписване')
+    expect(confirm).toBeEnabled()
+    await userEvent.click(confirm)
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/transfer-batches/11/cancel', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ reason: 'Получателят отказа подписване' }),
+    })))
+    expect(await screen.findByText('Незавършената операция е анулирана безопасно.')).toBeVisible()
+    expect(screen.getByText('3')).toBeVisible()
+    expect(onCancelled).toHaveBeenCalledWith(expect.objectContaining({ status: 'CANCELLED' }))
+    fetchMock.mockRestore()
+  })
+
+  it('обяснява, че анулираното приемане запазва активното издаване', () => {
+    render(<CancelBatchModal batch={{
+      batch_id: 12, batch_reference: 'HPWJ-R-12', operation: 'RETURN',
+      awaiting_signature_machines: 2, total_machines: 2,
+    }} onClose={vi.fn()} onCancelled={vi.fn()} />)
+    expect(screen.getByText(/Първоначалното издаване остава валидно/)).toBeVisible()
+  })
+
 })

@@ -212,6 +212,29 @@ class RepairProtocolCorrection(BaseModel):
         return value.strip()
 
 
+class RepairParticipantCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: int | None = None
+    full_name: str | None = Field(default=None, min_length=3, max_length=255)
+    job_title: str | None = Field(default=None, max_length=255)
+    contribution: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("full_name", "job_title", "contribution")
+    @classmethod
+    def clean_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = " ".join(value.split())
+        return cleaned or None
+
+    @model_validator(mode="after")
+    def require_identity(self) -> "RepairParticipantCreate":
+        if self.user_id is None and not self.full_name:
+            raise ValueError("Изберете потребител или въведете трите имена на участника.")
+        return self
+
+
 class RepairEventCreate(BaseModel):
     event_type: RepairEventType
     description: str | None = None
@@ -295,6 +318,20 @@ class PartRequestLineCreate(BaseModel):
     reason: str | None = None
     source_document: str | None = Field(default=None, max_length=700)
     source_page: int | None = Field(default=None, ge=1)
+    is_unknown_part: bool = False
+    assembly: str | None = Field(default=None, max_length=255)
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_unknown_part(self) -> PartRequestLineCreate:
+        if self.is_unknown_part:
+            if self.catalog_part_id is not None or self.part_number:
+                raise ValueError(
+                    "Част без потвърден part number не може да съдържа каталожен идентификатор или part number."
+                )
+            if not (self.assembly or "").strip():
+                raise ValueError("За непозната част трябва да бъде посочен възел.")
+        return self
 
 
 class MultiPartRequestCreate(BaseModel):
@@ -368,6 +405,31 @@ class PartRequestDecision(BaseModel):
 class PartRequestDeliveryLine(BaseModel):
     line_id: int
     delivered_quantity: float = Field(ge=0)
+
+
+class UnknownPartRequestCreate(BaseModel):
+    machine_id: int
+    repair_id: int | None = None
+    assembly: str = Field(min_length=1, max_length=255)
+    description: str = Field(min_length=1, max_length=500)
+    quantity: float = Field(gt=0)
+    unit: str | None = Field(default=None, max_length=40)
+    note: str | None = None
+    priority: PartRequestPriority = PartRequestPriority.NORMAL
+    language: LanguageCode = LanguageCode.BG
+    department: str | None = Field(default=None, max_length=255)
+    photo: AttachmentCreate
+
+    @model_validator(mode="after")
+    def require_image(self) -> UnknownPartRequestCreate:
+        if self.photo.media_type not in {"image/jpeg", "image/png", "image/webp"}:
+            raise ValueError("Снимката на непознатата част трябва да бъде JPEG, PNG или WebP.")
+        return self
+
+
+class UnknownPartCatalogLink(BaseModel):
+    catalog_part_id: int
+    note: str | None = None
 
 
 class PartRequestFulfillmentUpdate(BaseModel):

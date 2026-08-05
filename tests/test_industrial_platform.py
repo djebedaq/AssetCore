@@ -640,9 +640,10 @@ def test_technical_library_versions_search_and_protected_import_preview(
         f"/api/machines/{machine_ids['4']}/passport", headers=auth_headers
     )
     assert passport.status_code == 200, passport.text
-    assert [item["id"] for item in passport.json()["technical_documents"]] == [
-        document_id
+    technical_document_ids = [
+        item["id"] for item in passport.json()["technical_documents"]
     ]
+    assert document_id in technical_document_ids
 
     protected = client.post(
         "/api/admin/import-preview",

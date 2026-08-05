@@ -1,0 +1,61 @@
+{
+  "catalog_version": "2026-08-05-v1",
+  "total_records": 774,
+  "verified_records": 774,
+  "by_brand": {
+    "CombiJet": 262,
+    "Falch": 495,
+    "HYDWIN (Fussen)": 17
+  },
+  "by_model": {
+    "FCE15/50": 17,
+    "JE60-500": 262,
+    "Wheel Jet 15-e": 266,
+    "Wheel Jet 30-e": 229
+  },
+  "by_source": {
+    "combijet/JE60-500_manual.pdf": 262,
+    "falch1000/E0112004-L-010-0307.pdf": 31,
+    "falch1000/E0113679-L-00.pdf": 44,
+    "falch1000/G412-L-00.pdf": 154,
+    "falch500/E0110045-L-00.pdf": 51,
+    "falch500/E1110066-L-02.pdf": 61,
+    "falch500/E1190100-L-00.pdf": 26,
+    "falch500/G393-L-00 (2).pdf": 128,
+    "hydwin/2. 1000h spare parts list for High presssure washer.pdf": 17
+  },
+  "by_assembly": {
+    "CombiJet": {
+      "Chassis": 23,
+      "Coupling": 6,
+      "Dry shut gun": 39,
+      "Electrical panel": 17,
+      "Frame": 15,
+      "Pressure regulating valve": 41,
+      "Pressure regulating valve fittings": 5,
+      "Pump installation and fittings": 24,
+      "Pump spare parts": 63,
+      "Rotating nozzle": 13,
+      "Water filtration system": 2,
+      "Wet sand-blasting accessory": 14
+    },
+    "Falch": {
+      "Liquid part FA 30.1-1000-16 PFS": 44,
+      "Machine assembly - Wheel Jet 15-e 500 bar": 128,
+      "Machine assembly - Wheel Jet 30-e 1000 bar": 154,
+      "Pump KS 20.1-20-500": 51,
+      "Pump drive FA 30.1-1000/2000": 31,
+      "Unloader valve RV-HF 30.2-500-E press control": 61,
+      "Valve 500 bar": 26
+    },
+    "HYDWIN (Fussen)": {
+      "1000h service spare-parts list": 17
+    }
+  },
+  "records_without_quantity": 4,
+  "records_with_replacement_number": 1,
+  "records_without_diagram_page": 17,
+  "source_count": 10,
+  "errors": [],
+  "valid": true
+}

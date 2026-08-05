@@ -23,6 +23,7 @@ from .models import (
     UserRole,
     utcnow,
 )
+from .catalog_import import import_verified_catalog
 from .security import hash_password
 from .settings import settings
 
@@ -217,7 +218,9 @@ def _seed_documents_and_catalog(db: Session) -> None:
         for path in sorted(p for p in root.rglob('*') if p.is_file()):
             rel = path.relative_to(root).as_posix()
             brand_folder = rel.split('/')[0].lower()
-            brand = {'falch500':'Falch 500 bar','falch1000':'Falch 1000 bar','hydwin':'HYDWIN (Fussen)','combijet':'CombiJet','protocols_hpwj':'HPWJ протоколи','parts_requests_hpwj':'HPWJ заявки'}.get(brand_folder, brand_folder)
+            brand = {'falch500':'Falch','falch1000':'Falch','hydwin':'HYDWIN (Fussen)','combijet':'CombiJet','protocols_hpwj':'HPWJ протоколи','parts_requests_hpwj':'HPWJ заявки'}.get(brand_folder, brand_folder)
+            model = {'falch500':'Wheel Jet 15-e','falch1000':'Wheel Jet 30-e','hydwin':'FCE15/50','combijet':'JE60-500'}.get(brand_folder)
+            linked_numbers = {'falch500':['9','10','11','12','13','14','15','16','19'],'falch1000':['7','17','18'],'hydwin':['20','21','22','23','24'],'combijet':['4','5']}.get(brand_folder)
             suffix = path.suffix.lower()
             if brand_folder == 'protocols_hpwj':
                 category = 'Реални протоколи преди/след ремонт'
@@ -228,7 +231,13 @@ def _seed_documents_and_catalog(db: Session) -> None:
             else:
                 category = 'Работен документ'
             if not db.scalar(select(TechnicalDocument).where(TechnicalDocument.file_path == rel)):
-                db.add(TechnicalDocument(brand=brand, category=category, title=path.name, file_path=rel))
+                db.add(TechnicalDocument(brand=brand, model=model, category=category, title=path.name, file_path=rel, linked_machine_numbers=linked_numbers))
+            else:
+                document = db.scalar(select(TechnicalDocument).where(TechnicalDocument.file_path == rel))
+                if document is not None:
+                    document.brand = brand
+                    document.model = model
+                    document.linked_machine_numbers = linked_numbers
     db.commit()
 
     for document in db.scalars(select(TechnicalDocument)).all():
@@ -258,32 +267,10 @@ def _seed_documents_and_catalog(db: Session) -> None:
             )
     db.commit()
 
-    verified_parts = [
-        ('CombiJet','JE60-500','Chassis','1','CJL30949','Complete stainless-steel frame',1,'combijet/JE60-500_manual.pdf',28),
-        ('CombiJet','JE60-500','Chassis','2','CJL30998','15 kW electric motor',1,'combijet/JE60-500_manual.pdf',28),
-        ('CombiJet','JE60-500','Chassis','13','CJL30988','HP pump 500 bar',1,'combijet/JE60-500_manual.pdf',28),
-        ('CombiJet','JE60-500','Chassis','14','CJL30377','Pressure regulating valve',1,'combijet/JE60-500_manual.pdf',28),
-        ('CombiJet','JE60-500','Chassis','21','CJL30037','Hose 500 bar, 20 m, 1/2 fittings',1,'combijet/JE60-500_manual.pdf',28),
-        ('CombiJet','JE60-500','Dry shut gun','*','CJL30904','Gun complete (positions 1-27)',1,'combijet/JE60-500_manual.pdf',44),
-        ('CombiJet','JE60-500','Dry shut gun','27','CJL34153','Lance 800 mm',1,'combijet/JE60-500_manual.pdf',44),
-        ('CombiJet','JE60-500','Dry shut gun','32','CJL30037','Hose 500 bar, 20 m, 1/2 fittings',1,'combijet/JE60-500_manual.pdf',44),
-        ('CombiJet','JE60-500','Pressure regulating valve fittings','1','CJL30377','Pressure regulating valve',1,'combijet/JE60-500_manual.pdf',38),
-        ('CombiJet','JE60-500','Pressure regulating valve fittings','2','CJNP0800000','Nipple 1/2 inch',2,'combijet/JE60-500_manual.pdf',38),
-    ]
-    for brand,model,assembly,pos,pn,desc,qty,src,page in verified_parts:
-        if not db.scalar(select(PartCatalog).where(PartCatalog.part_number==pn, PartCatalog.assembly==assembly, PartCatalog.position==pos)):
-            db.add(PartCatalog(brand=brand,model=model,assembly=assembly,position=pos,part_number=pn,description=desc,quantity=qty,source_document=src,source_page=page))
-    db.commit()
-
     admin = db.scalar(select(User).where(User.is_system_owner.is_(True)))
     if admin:
-        for part in db.scalars(select(PartCatalog)).all():
-            if part.source_document and part.source_page:
-                part.is_verified = True
-                part.provenance_confidence = 1.0
-                part.verified_by_id = admin.id
-                part.verified_at = part.verified_at or utcnow()
-    db.commit()
+        import_verified_catalog(db, admin)
+        db.commit()
 
 
 def _seed_document_templates(db: Session) -> None:
@@ -301,7 +288,7 @@ def _seed_document_templates(db: Session) -> None:
             "name_en": "High-pressure washing equipment issue protocol",
             "name_ru": "Протокол выдачи моечной техники высокого давления",
             "template_stem": "transfer_issue",
-            "template_version": 2,
+            "template_version": 3,
             "required_fields": ["MACHINE_NUMBER", "SERIAL_NUMBER", "CONDITION_TEXT"],
             "contract": {
                 "page": "A4 portrait",
@@ -318,7 +305,7 @@ def _seed_document_templates(db: Session) -> None:
             "name_en": "High-pressure washing equipment return protocol",
             "name_ru": "Протокол возврата моечной техники после использования",
             "template_stem": "transfer_return",
-            "template_version": 2,
+            "template_version": 3,
             "required_fields": ["MACHINE_NUMBER", "SERIAL_NUMBER", "CONDITION_TEXT"],
             "contract": {
                 "page": "A4 portrait",
@@ -331,12 +318,12 @@ def _seed_document_templates(db: Session) -> None:
         {
             "code": "HPWJ_REPAIR_PROTOCOL",
             "document_type": DocumentType.REPAIR_PROTOCOL.value,
-            "name_bg": "Протокол преди/след ремонт",
-            "name_en": "Before/after repair protocol",
-            "name_ru": "Протокол до/после ремонта",
+            "name_bg": "Вътрешен протокол за извършен ремонт",
+            "name_en": "Internal completed repair protocol",
+            "name_ru": "Внутренний протокол выполненного ремонта",
             "template_stem": "repair_protocol",
-            "template_version": 3,
-            "required_fields": ["MACHINE_NUMBER", "REPORTED_PROBLEM", "DIAGNOSIS", "WORK_PERFORMED"],
+            "template_version": 4,
+            "required_fields": ["MACHINE_NUMBER", "REPORTED_PROBLEM", "DIAGNOSIS", "WORK_PERFORMED", "TEST_RESULT", "REPAIR_STATUS"],
             "contract": {
                 "page": "A4 portrait",
                 "sections": ["machine_identity", "condition_before", "diagnosis", "repair_actions", "parts", "test", "condition_after", "repair_executor"],

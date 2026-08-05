@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from contextlib import nullcontext
 from dataclasses import dataclass
 from threading import RLock
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -23,6 +24,8 @@ from .document_generation import (
 )
 from .localization import status_label, translate
 from .models import (
+    DocumentParticipant,
+    DocumentSignature,
     DocumentType,
     GeneratedDocument,
     Location,
@@ -32,6 +35,8 @@ from .models import (
     OfficialDocumentStatus,
     OfficialDocumentVersion,
     ProtocolDocument,
+    SignatureSession,
+    DocumentParticipant,
     TransferBatch,
     TransferBatchStatus,
     TransferOperationStatus,
@@ -39,11 +44,13 @@ from .models import (
     User,
     utcnow,
 )
-from .schemas import BulkIssueRequest, BulkReturnRequest
+from .schemas import BulkIssueRequest, BulkReturnRequest, TransferPartyInput
+from .signature_rendering import finalize_signed_files
 from .transfer_signing import (
     TransferSigningConfigurationError,
     create_external_party,
-    prepare_transfer_signing,
+    prepare_issue_batch_signing,
+    prepare_return_batch_signing,
 )
 from .workflow import add_machine_event
 
@@ -297,6 +304,7 @@ def _issue_result(
     batch: TransferBatch,
     language: str,
     signing: dict[int, dict[str, Any]] | None = None,
+    batch_signing_tasks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     signing = signing or {}
     transfers = []
@@ -331,6 +339,9 @@ def _issue_result(
         "message": translate("issue.awaiting_signature", language),
         "batch_id": batch.id,
         "batch_reference": batch.batch_reference,
+        "batch_manifest_sha256": batch.issue_manifest_sha256,
+        "signing_document_id": batch.issue_signing_document_id,
+        "signing_tasks": batch_signing_tasks or [],
         "transfers": transfers,
         "zip_download_endpoint": f"/api/transfer-batches/{batch.id}/documents.zip",
     }
@@ -419,14 +430,15 @@ def _bulk_issue_impl(
                     else None
                 ),
                 accepted_by=recipient_name,
-                accepted_by_job_title=recipient.job_title,
-                accepted_by_company=recipient.company_or_department,
+                accepted_by_job_title=None,
+                accepted_by_company=None,
                 equipment=data.equipment,
                 hoses=data.hoses,
                 nozzles=data.nozzles,
                 guns=data.guns,
                 accessories=data.accessories,
                 condition_text=data.condition_text,
+                issue_checklist=[item.model_dump() for item in data.checklist],
                 remarks=data.remarks,
                 previous_status=previous_status,
                 previous_location_id=previous_location_id,
@@ -444,18 +456,19 @@ def _bulk_issue_impl(
             )
             db.add_all(documents)
             db.flush()
-            official_document, signing_tasks = prepare_transfer_signing(
-                db,
-                document_number=transfer.protocol_number,
-                document_type=DocumentType.TRANSFER_ISSUE.value,
-                actor=user,
-                external_signer=external_signer,
-                external_slot_code="ACCEPTANCE",
-                internal_slot_code="HANDOVER",
+            official_document = db.scalar(
+                select(OfficialDocument).where(
+                    OfficialDocument.transfer_id == transfer.id,
+                    OfficialDocument.document_type == DocumentType.TRANSFER_ISSUE.value,
+                )
             )
+            if official_document is None:
+                raise TransferSigningConfigurationError(
+                    f"Липсва официален протокол за машина №{machine.inventory_number}."
+                )
             signing_by_transfer[transfer.id] = {
                 "official_document_id": official_document.id,
-                "signing_tasks": signing_tasks,
+                "signing_tasks": [],
             }
             document_ids.extend(document.id for document in documents)
             transfers.append(transfer)
@@ -507,12 +520,27 @@ def _bulk_issue_impl(
                     "nozzles": data.nozzles,
                     "guns": data.guns,
                     "accessories": data.accessories,
+                    "checklist": [item.model_dump() for item in data.checklist],
                     "protocol_document_ids": [document.id for document in documents],
                     "official_document_id": official_document.id,
                     "workflow_status": transfer.issue_status,
                 },
                 batch.batch_reference,
             )
+
+        batch_signing_document, batch_signing_tasks = prepare_issue_batch_signing(
+            db,
+            batch=batch,
+            transfers=transfers,
+            actor=user,
+            external_signer=external_signer,
+            language=data.document_language.value,
+        )
+        # Backward-compatible placement for older clients and tests. New clients
+        # consume the top-level signing_tasks field and therefore show exactly
+        # two signing steps for the whole batch.
+        if transfers:
+            signing_by_transfer[transfers[0].id]["signing_tasks"] = batch_signing_tasks
 
         add_audit_log(
             db,
@@ -529,6 +557,8 @@ def _bulk_issue_impl(
                 "new_status": "UNCHANGED_UNTIL_SIGNATURES",
                 "transfer_ids": [transfer.id for transfer in transfers],
                 "protocol_document_ids": document_ids,
+                "batch_signing_document_id": batch_signing_document.id,
+                "batch_manifest_sha256": batch.issue_manifest_sha256,
             },
             batch.batch_reference,
         )
@@ -544,7 +574,9 @@ def _bulk_issue_impl(
             .where(TransferBatch.id == batch.id)
         )
         assert loaded is not None
-        return _issue_result(loaded, language, signing_by_transfer)
+        return _issue_result(
+            loaded, language, signing_by_transfer, batch_signing_tasks
+        )
     except TransferServiceError as exc:
         db.rollback()
         _record_rejection(
@@ -667,14 +699,27 @@ def bulk_issue(
 
 
 def _batch_progress(db: Session, batch: TransferBatch) -> dict[str, Any]:
-    total = db.scalar(
+    direct_total = db.scalar(
         select(func.count(TransferProtocol.id)).where(
             TransferProtocol.batch_id == batch.id
         )
     ) or 0
+    manifest_ids: list[int] = []
+    if direct_total == 0 and isinstance(batch.return_manifest, dict):
+        manifest_ids = [
+            int(item["transfer_id"])
+            for item in batch.return_manifest.get("machines", [])
+            if isinstance(item, dict) and item.get("transfer_id") is not None
+        ]
+    scope = (
+        TransferProtocol.id.in_(manifest_ids)
+        if manifest_ids
+        else TransferProtocol.batch_id == batch.id
+    )
+    total = len(manifest_ids) if manifest_ids else direct_total
     still_issued = db.scalar(
         select(func.count(TransferProtocol.id)).where(
-            TransferProtocol.batch_id == batch.id,
+            scope,
             TransferProtocol.is_active.is_(True),
             TransferProtocol.issue_status
             == TransferOperationStatus.COMPLETED.value,
@@ -682,14 +727,14 @@ def _batch_progress(db: Session, batch: TransferBatch) -> dict[str, Any]:
     ) or 0
     returned = db.scalar(
         select(func.count(TransferProtocol.id)).where(
-            TransferProtocol.batch_id == batch.id,
+            scope,
             TransferProtocol.return_status
             == TransferOperationStatus.COMPLETED.value,
         )
     ) or 0
     awaiting_signature = db.scalar(
         select(func.count(TransferProtocol.id)).where(
-            TransferProtocol.batch_id == batch.id,
+            scope,
             (
                 (TransferProtocol.issue_status == TransferOperationStatus.AWAITING_SIGNATURE.value)
                 | (TransferProtocol.return_status == TransferOperationStatus.AWAITING_SIGNATURE.value)
@@ -720,6 +765,489 @@ def _set_batch_status(db: Session, batch: TransferBatch) -> dict[str, Any]:
     return progress
 
 
+def _canonical_json(value: object) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+
+
+def _finalize_signed_issue_batch(
+    db: Session,
+    document: OfficialDocument,
+    version: OfficialDocumentVersion,
+    actor: User,
+) -> None:
+    batch = db.scalar(
+        _for_update(
+            db,
+            select(TransferBatch)
+            .options(
+                selectinload(TransferBatch.transfers)
+                .selectinload(TransferProtocol.machine)
+            )
+            .where(TransferBatch.id == document.batch_id),
+        )
+    )
+    if batch is None or batch.issue_signing_document_id != document.id:
+        raise TransferServiceError(
+            409,
+            "batch_signing_act_invalid",
+            "Подписващият акт не съответства на transfer batch-а.",
+            {"official_document_id": document.id, "batch_id": document.batch_id},
+        )
+    snapshot = version.snapshot or {}
+    manifest = snapshot.get("batch_signing")
+    manifest_sha256 = snapshot.get("batch_manifest_sha256")
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("operation") != "ISSUE"
+        or manifest.get("batch_id") != batch.id
+        or manifest_sha256 != batch.issue_manifest_sha256
+        or hashlib.sha256(_canonical_json(manifest)).hexdigest() != manifest_sha256
+    ):
+        raise TransferServiceError(
+            409,
+            "batch_manifest_invalid",
+            "Batch manifest-ът е променен или не съответства на операцията.",
+            {"batch_id": batch.id},
+        )
+
+    source_participants = list(
+        db.scalars(
+            select(DocumentParticipant)
+            .where(DocumentParticipant.document_version_id == version.id)
+            .order_by(DocumentParticipant.id)
+        )
+    )
+    source_signatures = {
+        item.participant_id: item
+        for item in db.scalars(
+            select(DocumentSignature).where(
+                DocumentSignature.document_version_id == version.id,
+                DocumentSignature.confirmed_at.is_not(None),
+            )
+        )
+    }
+    if not source_participants or any(
+        participant.id not in source_signatures for participant in source_participants
+    ):
+        raise TransferServiceError(
+            409,
+            "batch_signatures_incomplete",
+            "Batch операцията няма всички потвърдени подписи.",
+            {"batch_id": batch.id},
+        )
+
+    manifest_by_transfer = {
+        int(item["transfer_id"]): item for item in manifest.get("machines", [])
+    }
+    if set(manifest_by_transfer) != {transfer.id for transfer in batch.transfers}:
+        raise TransferServiceError(
+            409,
+            "batch_manifest_transfer_mismatch",
+            "Списъкът с машини в подписващия акт не съответства на batch-а.",
+            {"batch_id": batch.id},
+        )
+
+    finalized_document_ids: list[int] = []
+    for transfer in sorted(batch.transfers, key=lambda item: item.id):
+        manifest_item = manifest_by_transfer[transfer.id]
+        target_document = db.get(
+            OfficialDocument, int(manifest_item["official_document_id"])
+        )
+        if (
+            target_document is None
+            or target_document.transfer_id != transfer.id
+            or target_document.document_type != DocumentType.TRANSFER_ISSUE.value
+        ):
+            raise TransferServiceError(
+                409,
+                "batch_protocol_document_mismatch",
+                "Протокол от batch manifest-а не съответства на машината.",
+                {"transfer_id": transfer.id},
+            )
+        target_version = db.get(
+            OfficialDocumentVersion, target_document.current_version_id
+        )
+        if target_version is None:
+            raise TransferServiceError(
+                409,
+                "batch_protocol_version_missing",
+                "Липсва неизменяемата версия на протокол от batch-а.",
+                {"transfer_id": transfer.id},
+            )
+        if (
+            target_version.id != int(manifest_item["official_document_version_id"])
+            or target_version.signing_sha256
+            != manifest_item["official_document_signing_sha256"]
+        ):
+            raise TransferServiceError(
+                409,
+                "batch_protocol_hash_mismatch",
+                "Версия или hash на протокол от batch-а е променен.",
+                {"transfer_id": transfer.id},
+            )
+        if target_version.status == OfficialDocumentStatus.SIGNED.value:
+            finalized_document_ids.append(target_document.id)
+            continue
+        existing_participants = list(
+            db.scalars(
+                select(DocumentParticipant).where(
+                    DocumentParticipant.document_version_id == target_version.id
+                )
+            )
+        )
+        if existing_participants:
+            raise TransferServiceError(
+                409,
+                "batch_protocol_has_individual_signers",
+                "Протоколът вече съдържа отделни подписващи и не може да бъде batch-подписан.",
+                {"transfer_id": transfer.id},
+            )
+
+        projected_participants: list[DocumentParticipant] = []
+        for source_participant in source_participants:
+            source_signature = source_signatures[source_participant.id]
+            identity_snapshot = dict(source_participant.identity_snapshot)
+            identity_snapshot["batch_signing_act"] = {
+                "official_document_id": document.id,
+                "batch_id": batch.id,
+                "batch_reference": batch.batch_reference,
+                "manifest_sha256": manifest_sha256,
+                "source_signature_id": source_signature.id,
+            }
+            participant = DocumentParticipant(
+                document_version_id=target_version.id,
+                slot_code=source_participant.slot_code,
+                participant_kind=source_participant.participant_kind,
+                user_id=source_participant.user_id,
+                external_signer_id=source_participant.external_signer_id,
+                operation_role=source_participant.operation_role,
+                identity_snapshot=identity_snapshot,
+                identity_snapshot_sha256=hashlib.sha256(
+                    _canonical_json(identity_snapshot)
+                ).hexdigest(),
+            )
+            db.add(participant)
+            db.flush()
+            projection_binding = {
+                "source_signature_sha256": source_signature.signature_sha256,
+                "source_signature_id": source_signature.id,
+                "target_document_sha256": target_version.signing_sha256
+                or target_version.snapshot_sha256,
+                "batch_manifest_sha256": manifest_sha256,
+                "participant_snapshot_sha256": participant.identity_snapshot_sha256,
+            }
+            db.add(
+                DocumentSignature(
+                    participant_id=participant.id,
+                    document_version_id=target_version.id,
+                    signature_kind="BATCH_PROJECTION",
+                    consent_text=source_signature.consent_text,
+                    strokes_encrypted=source_signature.strokes_encrypted,
+                    image_encrypted=source_signature.image_encrypted,
+                    canvas_width=source_signature.canvas_width,
+                    canvas_height=source_signature.canvas_height,
+                    stroke_count=source_signature.stroke_count,
+                    point_count=source_signature.point_count,
+                    document_sha256=target_version.signing_sha256
+                    or target_version.snapshot_sha256,
+                    image_sha256=source_signature.image_sha256,
+                    signature_sha256=hashlib.sha256(
+                        _canonical_json(projection_binding)
+                    ).hexdigest(),
+                    source_signature_id=source_signature.id,
+                    batch_manifest_sha256=manifest_sha256,
+                    signed_at=source_signature.signed_at,
+                    confirmed_at=source_signature.confirmed_at,
+                )
+            )
+            projected_participants.append(participant)
+        db.flush()
+        target_version.status = OfficialDocumentStatus.SIGNED.value
+        target_version.finalized_at = version.finalized_at or utcnow()
+        finalize_signed_files(db, target_version, projected_participants)
+        finalize_signed_transfer_workflow(
+            db, target_document, target_version, actor
+        )
+        finalized_document_ids.append(target_document.id)
+
+    batch.issue_signing_status = TransferOperationStatus.COMPLETED.value
+    batch.updated_at = version.finalized_at or utcnow()
+    add_audit_log(
+        db,
+        actor,
+        "transfer_batch",
+        batch.id,
+        "Batch издаването е приключено с един подписващ акт",
+        {
+            "batch_reference": batch.batch_reference,
+            "batch_signing_document_id": document.id,
+            "batch_manifest_sha256": manifest_sha256,
+            "transfer_ids": sorted(manifest_by_transfer),
+            "official_document_ids": finalized_document_ids,
+            "signature_ids": [
+                source_signatures[item.id].id for item in source_participants
+            ],
+        },
+        batch.batch_reference,
+    )
+
+
+def _finalize_signed_return_batch(
+    db: Session,
+    document: OfficialDocument,
+    version: OfficialDocumentVersion,
+    actor: User,
+) -> None:
+    batch = db.scalar(
+        _for_update(
+            db,
+            select(TransferBatch).where(TransferBatch.id == document.batch_id),
+        )
+    )
+    if batch is None or batch.return_signing_document_id != document.id:
+        raise TransferServiceError(
+            409,
+            "return_batch_signing_act_invalid",
+            "Подписващият акт не съответства на batch операцията по приемане.",
+            {"official_document_id": document.id, "batch_id": document.batch_id},
+        )
+    snapshot = version.snapshot or {}
+    manifest = snapshot.get("batch_signing")
+    manifest_sha256 = snapshot.get("batch_manifest_sha256")
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("operation") != "RETURN"
+        or manifest.get("batch_id") != batch.id
+        or manifest_sha256 != batch.return_manifest_sha256
+        or hashlib.sha256(_canonical_json(manifest)).hexdigest() != manifest_sha256
+    ):
+        raise TransferServiceError(
+            409,
+            "return_batch_manifest_invalid",
+            "Batch manifest-ът за приемане е променен или не съответства на операцията.",
+            {"batch_id": batch.id},
+        )
+
+    source_participants = list(
+        db.scalars(
+            select(DocumentParticipant)
+            .where(DocumentParticipant.document_version_id == version.id)
+            .order_by(DocumentParticipant.id)
+        )
+    )
+    source_signatures = {
+        item.participant_id: item
+        for item in db.scalars(
+            select(DocumentSignature).where(
+                DocumentSignature.document_version_id == version.id,
+                DocumentSignature.confirmed_at.is_not(None),
+            )
+        )
+    }
+    if not source_participants or any(
+        participant.id not in source_signatures for participant in source_participants
+    ):
+        raise TransferServiceError(
+            409,
+            "return_batch_signatures_incomplete",
+            "Batch приемането няма всички потвърдени подписи.",
+            {"batch_id": batch.id},
+        )
+
+    manifest_items = manifest.get("machines", [])
+    if not isinstance(manifest_items, list) or not manifest_items:
+        raise TransferServiceError(
+            409,
+            "return_batch_manifest_empty",
+            "Batch manifest-ът за приемане не съдържа машини.",
+            {"batch_id": batch.id},
+        )
+    manifest_by_transfer = {
+        int(item["transfer_id"]): item
+        for item in manifest_items
+        if isinstance(item, dict) and item.get("transfer_id") is not None
+    }
+    transfers = list(
+        db.scalars(
+            _for_update(
+                db,
+                select(TransferProtocol)
+                .options(joinedload(TransferProtocol.machine))
+                .where(TransferProtocol.id.in_(manifest_by_transfer))
+                .order_by(TransferProtocol.id),
+            )
+        ).unique()
+    )
+    if set(manifest_by_transfer) != {transfer.id for transfer in transfers}:
+        raise TransferServiceError(
+            409,
+            "return_batch_manifest_transfer_mismatch",
+            "Списъкът с машини в подписващия акт за приемане не съответства на активните предавания.",
+            {"batch_id": batch.id},
+        )
+
+    finalized_document_ids: list[int] = []
+    for transfer in transfers:
+        manifest_item = manifest_by_transfer[transfer.id]
+        if transfer.return_status not in {
+            TransferOperationStatus.AWAITING_SIGNATURE.value,
+            TransferOperationStatus.COMPLETED.value,
+        }:
+            raise TransferServiceError(
+                409,
+                "return_batch_transfer_not_pending",
+                "Една от машините вече не е в допустим статус за batch приемане.",
+                {"transfer_id": transfer.id},
+            )
+        target_document = db.get(
+            OfficialDocument, int(manifest_item["official_document_id"])
+        )
+        if (
+            target_document is None
+            or target_document.transfer_id != transfer.id
+            or target_document.document_type != DocumentType.TRANSFER_RETURN.value
+        ):
+            raise TransferServiceError(
+                409,
+                "return_batch_protocol_document_mismatch",
+                "Протокол от return manifest-а не съответства на машината.",
+                {"transfer_id": transfer.id},
+            )
+        target_version = db.get(
+            OfficialDocumentVersion, target_document.current_version_id
+        )
+        if target_version is None:
+            raise TransferServiceError(
+                409,
+                "return_batch_protocol_version_missing",
+                "Липсва неизменяемата версия на протокол за приемане.",
+                {"transfer_id": transfer.id},
+            )
+        if (
+            target_version.id != int(manifest_item["official_document_version_id"])
+            or target_version.signing_sha256
+            != manifest_item["official_document_signing_sha256"]
+        ):
+            raise TransferServiceError(
+                409,
+                "return_batch_protocol_hash_mismatch",
+                "Версия или hash на протокол за приемане е променен.",
+                {"transfer_id": transfer.id},
+            )
+        if target_version.status == OfficialDocumentStatus.SIGNED.value:
+            finalized_document_ids.append(target_document.id)
+            continue
+        existing_participants = list(
+            db.scalars(
+                select(DocumentParticipant).where(
+                    DocumentParticipant.document_version_id == target_version.id
+                )
+            )
+        )
+        if existing_participants:
+            raise TransferServiceError(
+                409,
+                "return_batch_protocol_has_individual_signers",
+                "Протоколът вече съдържа отделни подписващи и не може да бъде batch-подписан.",
+                {"transfer_id": transfer.id},
+            )
+
+        projected_participants: list[DocumentParticipant] = []
+        for source_participant in source_participants:
+            source_signature = source_signatures[source_participant.id]
+            identity_snapshot = dict(source_participant.identity_snapshot)
+            identity_snapshot["batch_signing_act"] = {
+                "official_document_id": document.id,
+                "batch_id": batch.id,
+                "batch_reference": batch.batch_reference,
+                "manifest_sha256": manifest_sha256,
+                "source_signature_id": source_signature.id,
+            }
+            participant = DocumentParticipant(
+                document_version_id=target_version.id,
+                slot_code=source_participant.slot_code,
+                participant_kind=source_participant.participant_kind,
+                user_id=source_participant.user_id,
+                external_signer_id=source_participant.external_signer_id,
+                operation_role=source_participant.operation_role,
+                identity_snapshot=identity_snapshot,
+                identity_snapshot_sha256=hashlib.sha256(
+                    _canonical_json(identity_snapshot)
+                ).hexdigest(),
+            )
+            db.add(participant)
+            db.flush()
+            projection_binding = {
+                "source_signature_sha256": source_signature.signature_sha256,
+                "source_signature_id": source_signature.id,
+                "target_document_sha256": target_version.signing_sha256
+                or target_version.snapshot_sha256,
+                "batch_manifest_sha256": manifest_sha256,
+                "participant_snapshot_sha256": participant.identity_snapshot_sha256,
+            }
+            db.add(
+                DocumentSignature(
+                    participant_id=participant.id,
+                    document_version_id=target_version.id,
+                    signature_kind="BATCH_PROJECTION",
+                    consent_text=source_signature.consent_text,
+                    strokes_encrypted=source_signature.strokes_encrypted,
+                    image_encrypted=source_signature.image_encrypted,
+                    canvas_width=source_signature.canvas_width,
+                    canvas_height=source_signature.canvas_height,
+                    stroke_count=source_signature.stroke_count,
+                    point_count=source_signature.point_count,
+                    document_sha256=target_version.signing_sha256
+                    or target_version.snapshot_sha256,
+                    image_sha256=source_signature.image_sha256,
+                    signature_sha256=hashlib.sha256(
+                        _canonical_json(projection_binding)
+                    ).hexdigest(),
+                    source_signature_id=source_signature.id,
+                    batch_manifest_sha256=manifest_sha256,
+                    signed_at=source_signature.signed_at,
+                    confirmed_at=source_signature.confirmed_at,
+                )
+            )
+            projected_participants.append(participant)
+        db.flush()
+        target_version.status = OfficialDocumentStatus.SIGNED.value
+        target_version.finalized_at = version.finalized_at or utcnow()
+        finalize_signed_files(db, target_version, projected_participants)
+        finalize_signed_transfer_workflow(
+            db, target_document, target_version, actor
+        )
+        finalized_document_ids.append(target_document.id)
+
+    batch.return_signing_status = TransferOperationStatus.COMPLETED.value
+    batch.status = TransferBatchStatus.RETURNED.value
+    batch.updated_at = version.finalized_at or utcnow()
+    add_audit_log(
+        db,
+        actor,
+        "transfer_batch",
+        batch.id,
+        "Batch приемането е приключено с един подписващ акт",
+        {
+            "batch_reference": batch.batch_reference,
+            "batch_signing_document_id": document.id,
+            "batch_manifest_sha256": manifest_sha256,
+            "transfer_ids": sorted(manifest_by_transfer),
+            "official_document_ids": finalized_document_ids,
+            "signature_ids": [
+                source_signatures[item.id].id for item in source_participants
+            ],
+        },
+        batch.batch_reference,
+    )
+
+
 def finalize_signed_transfer_workflow(
     db: Session,
     document: OfficialDocument,
@@ -737,6 +1265,19 @@ def finalize_signed_transfer_workflow(
             409,
             "signatures_incomplete",
             "Операцията не може да приключи преди всички задължителни подписи.",
+            {"official_document_id": document.id},
+        )
+    if document.transfer_id is None and document.batch_id is not None:
+        if document.document_type == DocumentType.TRANSFER_ISSUE.value:
+            _finalize_signed_issue_batch(db, document, version, actor)
+            return
+        if document.document_type == DocumentType.TRANSFER_RETURN.value:
+            _finalize_signed_return_batch(db, document, version, actor)
+            return
+        raise TransferServiceError(
+            409,
+            "unsupported_batch_signing_operation",
+            "Този тип batch подписване не се поддържа.",
             {"official_document_id": document.id},
         )
     transfer_statement = select(TransferProtocol).where(
@@ -1072,18 +1613,6 @@ def _bulk_return_impl(
                         ),
                     }
                 )
-            elif item.returned_person is None:
-                conflicts.append(
-                    {
-                        "machine_id": machine.id,
-                        "machine_number": machine.inventory_number,
-                        "transfer_id": transfer.id,
-                        "protocol_number": transfer.protocol_number,
-                        "message": translate(
-                            "return.returner_identity_required", language
-                        ),
-                    }
-                )
         if conflicts:
             raise TransferServiceError(
                 409,
@@ -1092,7 +1621,48 @@ def _bulk_return_impl(
                 {"conflicts": conflicts},
             )
 
+        recipients = {
+            (transfer_by_id[item.transfer_id].accepted_by or "").strip()
+            for item in data.items
+        }
+        if len(recipients) != 1 or not next(iter(recipients), ""):
+            raise TransferServiceError(
+                409,
+                "return_mixed_recipients",
+                "В една операция могат да се приемат само машини, издадени на един и същ човек.",
+                {"recipients": sorted(recipients)},
+            )
+
         now = utcnow()
+        returned_name = next(iter(recipients)).strip()
+        name_parts = returned_name.split()
+        if len(name_parts) < 3:
+            raise TransferServiceError(
+                409,
+                "returner_snapshot_invalid",
+                "Запазените имена на получателя са непълни и операцията не може да бъде приключена.",
+                {"transfer_ids": transfer_ids},
+            )
+        returned_person = TransferPartyInput(
+            first_name=name_parts[0],
+            middle_name=" ".join(name_parts[1:-1]),
+            last_name=name_parts[-1],
+        )
+        external_signer = create_external_party(
+            db, returned_person, user, "RETURNED_BY"
+        )
+        return_operation_batch = TransferBatch(
+            batch_reference=(
+                f"RET-{now:%Y%m%d%H%M%S}-{uuid4().hex[:8].upper()}"
+            ),
+            status=TransferBatchStatus.ACTIVE.value,
+            created_by_id=user.id,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(return_operation_batch)
+        db.flush()
+
         returned_results: list[dict[str, Any]] = []
         affected_batches: dict[int, TransferBatch] = {}
         for item in data.items:
@@ -1100,24 +1670,11 @@ def _bulk_return_impl(
             machine = machine_by_id[item.machine_id]
             previous_status = machine.status
             previous_location_id = machine.location_id
-            returned_person = item.returned_person
-            assert returned_person is not None
-            returned_name = " ".join(
-                value
-                for value in (
-                    returned_person.first_name,
-                    returned_person.middle_name,
-                    returned_person.last_name,
-                )
-                if value
-            )
-            external_signer = create_external_party(
-                db, returned_person, user, "RETURNED_BY"
-            )
             transfer.return_status = TransferOperationStatus.AWAITING_SIGNATURE.value
             transfer.return_requested_at = now
             transfer.returned_at = None
             transfer.return_condition_text = item.condition_text
+            transfer.return_checklist = [entry.model_dump() for entry in item.checklist]
             transfer.return_result_text = item.result_text
             transfer.return_notes = item.notes
             transfer.return_missing_equipment = item.missing_equipment
@@ -1127,8 +1684,8 @@ def _bulk_return_impl(
             transfer.return_inspection_required = item.inspection_required
             transfer.return_repair_required = item.repair_required
             transfer.returned_by_name = returned_name
-            transfer.returned_by_job_title = returned_person.job_title
-            transfer.returned_by_company = returned_person.company_or_department
+            transfer.returned_by_job_title = None
+            transfer.returned_by_company = None
             transfer.return_accepted_by = user.full_name
             transfer.return_accepted_job_title = user.job_title
             transfer.return_accepted_department = (
@@ -1163,15 +1720,7 @@ def _bulk_return_impl(
                 raise TransferSigningConfigurationError(
                     "Официалният документ за връщането не е намерен."
                 )
-            official_document, signing_tasks = prepare_transfer_signing(
-                db,
-                document_number=official_document.document_number,
-                document_type=DocumentType.TRANSFER_RETURN.value,
-                actor=user,
-                external_signer=external_signer,
-                external_slot_code="RETURNED_BY",
-                internal_slot_code="ACCEPTED_RETURN",
-            )
+            signing_tasks: list[dict[str, Any]] = []
             add_machine_event(
                 db,
                 machine,
@@ -1258,11 +1807,48 @@ def _bulk_return_impl(
                 }
             )
 
+        return_signing_document, return_signing_tasks = prepare_return_batch_signing(
+            db,
+            batch=return_operation_batch,
+            transfers=[transfer_by_id[item.transfer_id] for item in data.items],
+            actor=user,
+            external_signer=external_signer,
+            language=data.document_language.value,
+        )
+        # Backward-compatible placement for clients that still read signing tasks
+        # from the first returned item. New clients consume the top-level tasks.
+        if returned_results:
+            returned_results[0]["signing_tasks"] = return_signing_tasks
+
+        add_audit_log(
+            db,
+            user,
+            "transfer_batch",
+            return_operation_batch.id,
+            "Batch приемане – очаква подписи",
+            {
+                "returner": returned_name,
+                "transfer_ids": transfer_ids,
+                "machine_numbers": [
+                    machine_by_id[item.machine_id].inventory_number
+                    for item in data.items
+                ],
+                "batch_signing_document_id": return_signing_document.id,
+                "batch_manifest_sha256": return_operation_batch.return_manifest_sha256,
+                "source_issue_batch_ids": sorted(affected_batches),
+            },
+            return_operation_batch.batch_reference,
+        )
         db.flush()
         progresses = [_batch_progress(db, batch) for batch in affected_batches.values()]
         db.commit()
         return {
             "message": translate("return.awaiting_signature", language),
+            "batch_id": return_operation_batch.id,
+            "batch_reference": return_operation_batch.batch_reference,
+            "batch_manifest_sha256": return_operation_batch.return_manifest_sha256,
+            "signing_document_id": return_signing_document.id,
+            "signing_tasks": return_signing_tasks,
             "returned": returned_results,
             "batches": sorted(progresses, key=lambda item: item["batch_id"]),
         }
@@ -1382,10 +1968,35 @@ def batch_details(
             translate("batch.not_found", language),
             {"batch_id": batch_id},
         )
+    detail_transfers = list(batch.transfers)
+    if not detail_transfers and isinstance(batch.return_manifest, dict):
+        manifest_transfer_ids = [
+            int(item["transfer_id"])
+            for item in batch.return_manifest.get("machines", [])
+            if isinstance(item, dict) and item.get("transfer_id") is not None
+        ]
+        if manifest_transfer_ids:
+            detail_transfers = list(
+                db.scalars(
+                    select(TransferProtocol)
+                    .options(
+                        selectinload(TransferProtocol.machine).selectinload(Machine.location),
+                        selectinload(TransferProtocol.documents),
+                    )
+                    .where(TransferProtocol.id.in_(manifest_transfer_ids))
+                ).unique()
+            )
     progress = _batch_progress(db, batch)
     return {
         **progress,
         "created_at": batch.created_at,
+        "operation": (batch.return_manifest or {}).get("operation")
+        if isinstance(batch.return_manifest, dict)
+        else "ISSUE",
+        "batch_manifest_sha256": batch.return_manifest_sha256
+        or batch.issue_manifest_sha256,
+        "signing_document_id": batch.return_signing_document_id
+        or batch.issue_signing_document_id,
         "transfers": [
             {
                 "transfer_id": transfer.id,
@@ -1418,7 +2029,7 @@ def batch_details(
                     )
                 ],
             }
-            for transfer in sorted(batch.transfers, key=lambda item: item.id)
+            for transfer in sorted(detail_transfers, key=lambda item: item.id)
         ],
         "zip_download_endpoint": f"/api/transfer-batches/{batch.id}/documents.zip",
     }
@@ -1443,3 +2054,113 @@ def get_protocol_document(
             {"document_id": document_id},
         )
     return document
+
+
+def cancel_pending_batch(
+    db: Session, batch_id: int, actor: User, reason: str, language: str = "bg"
+) -> dict[str, Any]:
+    """Cancel only an unfinished signing workflow without changing completed movements."""
+    with _sqlite_guard(db):
+        batch = db.scalar(
+            _for_update(
+                db,
+                select(TransferBatch)
+                .options(selectinload(TransferBatch.transfers))
+                .where(TransferBatch.id == batch_id),
+            )
+        )
+        if batch is None:
+            raise TransferServiceError(404, "batch_not_found", "Операцията не е намерена.", {"batch_id": batch_id})
+        if batch.status == TransferBatchStatus.CANCELLED.value:
+            return {
+                "batch_id": batch.id, "batch_reference": batch.batch_reference,
+                "status": batch.status, "cancelled_transfers": 0,
+                "invalidated_signing_sessions": 0,
+                "message": "Операцията вече е анулирана.",
+            }
+
+        pending = [
+            t
+            for t in batch.transfers
+            if t.issue_status == TransferOperationStatus.AWAITING_SIGNATURE.value
+            or t.return_status == TransferOperationStatus.AWAITING_SIGNATURE.value
+        ]
+        if (
+            not pending
+            and batch.return_signing_status
+            == TransferOperationStatus.AWAITING_SIGNATURE.value
+            and isinstance(batch.return_manifest, dict)
+        ):
+            return_transfer_ids = [
+                int(item["transfer_id"])
+                for item in batch.return_manifest.get("machines", [])
+                if isinstance(item, dict) and item.get("transfer_id") is not None
+            ]
+            if return_transfer_ids:
+                pending = list(
+                    db.scalars(
+                        _for_update(
+                            db,
+                            select(TransferProtocol).where(
+                                TransferProtocol.id.in_(return_transfer_ids)
+                            ),
+                        )
+                    )
+                )
+        if not pending:
+            raise TransferServiceError(409, "batch_not_pending", "Само незавършена операция в статус „Очаква подпис“ може да бъде анулирана.", {"batch_id": batch.id})
+
+        transfer_ids = [t.id for t in pending]
+        document_filters = [OfficialDocument.transfer_id.in_(transfer_ids)]
+        if batch.issue_signing_document_id is not None:
+            document_filters.append(
+                OfficialDocument.id == batch.issue_signing_document_id
+            )
+        if batch.return_signing_document_id is not None:
+            document_filters.append(
+                OfficialDocument.id == batch.return_signing_document_id
+            )
+        documents = db.scalars(
+            select(OfficialDocument).where(or_(*document_filters))
+        ).all()
+        document_ids = [d.id for d in documents]
+        versions = db.scalars(select(OfficialDocumentVersion).where(OfficialDocumentVersion.document_id.in_(document_ids))).all() if document_ids else []
+        version_ids = [v.id for v in versions]
+        participant_ids = list(db.scalars(select(DocumentParticipant.id).where(DocumentParticipant.document_version_id.in_(version_ids))).all()) if version_ids else []
+        sessions = db.scalars(select(SignatureSession).where(SignatureSession.participant_id.in_(participant_ids), SignatureSession.consumed_at.is_(None), SignatureSession.rejected_at.is_(None))).all() if participant_ids else []
+        now = utcnow()
+        for session in sessions:
+            session.rejected_at = now
+        for version in versions:
+            if version.status not in {OfficialDocumentStatus.SIGNED.value, OfficialDocumentStatus.FINALIZED.value}:
+                version.status = OfficialDocumentStatus.CANCELLED.value
+                version.correction_reason = reason
+                version.finalized_at = now
+        for transfer in pending:
+            if transfer.issue_status == TransferOperationStatus.AWAITING_SIGNATURE.value:
+                transfer.issue_status = TransferOperationStatus.CANCELLED.value
+                transfer.is_active = False
+            if transfer.return_status == TransferOperationStatus.AWAITING_SIGNATURE.value:
+                transfer.return_status = TransferOperationStatus.CANCELLED.value
+                # Original active issue remains valid.
+                transfer.return_requested_at = None
+                transfer.return_checklist = None
+                transfer.return_condition_text = None
+                transfer.return_result_text = None
+        batch.status = TransferBatchStatus.CANCELLED.value
+        if batch.issue_signing_status == TransferOperationStatus.AWAITING_SIGNATURE.value:
+            batch.issue_signing_status = TransferOperationStatus.CANCELLED.value
+        if batch.return_signing_status == TransferOperationStatus.AWAITING_SIGNATURE.value:
+            batch.return_signing_status = TransferOperationStatus.CANCELLED.value
+        batch.cancelled_at = now
+        batch.cancelled_by_id = actor.id
+        batch.cancellation_reason = reason
+        batch.updated_at = now
+        add_audit_log(db, actor, "transfer_batch", batch.id, "Анулирана незавършена операция", {"batch_reference": batch.batch_reference, "reason": reason, "transfer_ids": transfer_ids, "invalidated_signing_sessions": len(sessions)})
+        db.commit()
+        return {
+            "batch_id": batch.id, "batch_reference": batch.batch_reference,
+            "status": batch.status, "cancelled_transfers": len(pending),
+            "invalidated_signing_sessions": len(sessions),
+            "message": "Незавършената операция е анулирана безопасно.",
+        }

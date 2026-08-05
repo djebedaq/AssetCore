@@ -51,8 +51,11 @@ from .industrial_schemas import (
     RepairEventCreate,
     RepairKitCreate,
     RepairPartCreate,
+    RepairParticipantCreate,
     RepairProtocolCorrection,
     TechnicalDocumentUpload,
+    UnknownPartCatalogLink,
+    UnknownPartRequestCreate,
     TemplateCreate,
     TemplateVersionCreate,
 )
@@ -90,6 +93,7 @@ from .models import (
     RepairKit,
     RepairKitComponent,
     RepairPart,
+    RepairParticipant,
     RepairStatus,
     TechnicalDocument,
     TechnicalDocumentRevision,
@@ -235,6 +239,7 @@ def _attachment_dict(
         "kind": getattr(item, "kind", None),
         "caption": getattr(item, "caption", None),
         "stage": getattr(item, "stage", None),
+        "request_line_id": getattr(item, "request_line_id", None),
         "download_endpoint": f"/{kind}-attachments/{item.id}/download",
     }
 
@@ -262,6 +267,19 @@ def _repair_part_dict(item: RepairPart) -> dict:
         "quantity": item.quantity,
         "unit": item.unit,
         "source": item.source,
+        "created_by_id": item.created_by_id,
+        "created_at": item.created_at,
+    }
+
+
+def _repair_participant_dict(item: RepairParticipant) -> dict:
+    return {
+        "id": item.id,
+        "repair_id": item.repair_id,
+        "user_id": item.user_id,
+        "full_name": item.full_name_snapshot,
+        "job_title": item.job_title_snapshot,
+        "contribution": item.contribution,
         "created_by_id": item.created_by_id,
         "created_at": item.created_at,
     }
@@ -299,6 +317,19 @@ def _repair_dict(repair: Repair) -> dict:
         "electrical_test_result": repair.electrical_test_result,
         "functional_test_result": repair.functional_test_result,
         "responsible_user_id": repair.responsible_user_id,
+        "responsible_user": (
+            {
+                "id": repair.responsible_user.id,
+                "full_name": repair.responsible_user.full_name,
+                "job_title": repair.responsible_user.job_title,
+            }
+            if repair.responsible_user
+            else None
+        ),
+        "participants": [
+            _repair_participant_dict(item)
+            for item in sorted(repair.participants, key=lambda value: (value.created_at, value.id))
+        ],
         "accepted_by_id": repair.accepted_by_id,
         "approved_by_id": repair.approved_by_id,
         "approved_at": repair.approved_at,
@@ -336,8 +367,10 @@ def _load_repair(db: Session, repair_id: int, *, lock: bool = False) -> Repair:
         select(Repair)
         .options(
             joinedload(Repair.machine),
+            joinedload(Repair.responsible_user),
             selectinload(Repair.events),
             selectinload(Repair.parts_used),
+            selectinload(Repair.participants),
             selectinload(Repair.attachments),
             selectinload(Repair.generated_documents),
         )
@@ -389,6 +422,15 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
                 "source_document": line.source_document,
                 "source_page": line.source_page,
                 "delivered_quantity": line.delivered_quantity,
+                "is_unknown_part": line.is_unknown_part,
+                "assembly": line.assembly,
+                "note": line.note,
+                "linked_catalog_part_id": line.linked_catalog_part_id,
+                "linked_part_number": line.linked_catalog_part.part_number if line.linked_catalog_part else None,
+                "linked_part_description": line.linked_catalog_part.description if line.linked_catalog_part else None,
+                "linked_by_id": line.linked_by_id,
+                "linked_at": line.linked_at,
+                "link_note": line.link_note,
             }
             for line in item.lines
         ],
@@ -1129,8 +1171,10 @@ def list_repair_cases(
         select(Repair)
         .options(
             joinedload(Repair.machine),
+            joinedload(Repair.responsible_user),
             selectinload(Repair.events),
             selectinload(Repair.parts_used),
+            selectinload(Repair.participants),
             selectinload(Repair.attachments),
             selectinload(Repair.generated_documents),
         )
@@ -1155,6 +1199,9 @@ def generate_repair_documents(
     user: User = Depends(require_document_generator),
     db: Session = Depends(get_db),
 ) -> dict:
+    # Internal repair protocols are controlled Bulgarian documents regardless of UI locale.
+    requested_language = language
+    language = "bg"
     repair = _load_repair(db, repair_id)
     existing_documents = list(
         db.scalars(
@@ -1169,6 +1216,8 @@ def generate_repair_documents(
     if existing_documents:
         return {
             "document_number": existing_documents[0].document_number,
+            "language": "bg",
+            "requested_language": requested_language,
             "documents": [
                 {
                     "id": document.id,
@@ -1209,7 +1258,8 @@ def generate_repair_documents(
         "Генериран ремонтен протокол",
         {
             "repair_reference": repair.repair_reference,
-            "language": language,
+            "language": "bg",
+            "requested_language": requested_language,
             "generated_document_ids": [document.id for document in documents],
             "document_number": documents[0].document_number,
         },
@@ -1218,6 +1268,8 @@ def generate_repair_documents(
     _commit(db)
     return {
         "document_number": documents[0].document_number,
+        "language": "bg",
+        "requested_language": requested_language,
         "documents": [
             {
                 "id": document.id,
@@ -1246,7 +1298,7 @@ def correct_repair_protocol(
         )
     try:
         documents, official, version = make_repair_correction(
-            db, repair, user.id, payload.reason, payload.language.value
+            db, repair, user.id, payload.reason, "bg"
         )
     except ConfirmedTemplateUnavailableError as exc:
         raise business_conflict(
@@ -1357,7 +1409,7 @@ def create_repair_case(
         previous_status=previous_status, new_status=machine.status,
         details={"repair_id": repair.id},
     )
-    add_audit_log(db, user, "repair", repair.id, "Приета машина за преглед/ремонт", {"repair_reference": repair.repair_reference, "machine_number": machine.inventory_number, "previous_status": previous_status, "new_status": machine.status})
+    add_audit_log(db, user, "repair", repair.id, "Създаден вътрешен ремонт", {"repair_reference": repair.repair_reference, "machine_number": machine.inventory_number, "previous_status": previous_status, "new_status": machine.status})
     _commit(db)
     return _repair_dict(_load_repair(db, repair.id))
 
@@ -1374,6 +1426,18 @@ def update_repair_case(
     repair = _load_repair(db, repair_id, lock=True)
     previous_status = repair.status
     previous_machine_status = repair.machine.status
+    if previous_status == RepairStatus.COMPLETED.value:
+        changed_fields = payload.model_dump(
+            exclude_unset=True,
+            exclude={"status", "inspection_complete", "cleaning_complete"},
+        )
+        requested_status = payload.status.value if payload.status is not None else None
+        if changed_fields or (requested_status not in {None, RepairStatus.COMPLETED.value}):
+            raise business_conflict(
+                "completed_repair_is_locked",
+                "Приключеният ремонт е заключен. Използвайте корекция на протокола.",
+            )
+        return _repair_dict(repair)
     data = payload.model_dump(exclude_unset=True, exclude={"status", "inspection_complete", "cleaning_complete"})
     for key, value in data.items():
         setattr(repair, key, value)
@@ -1387,8 +1451,9 @@ def update_repair_case(
         if next_status == RepairStatus.COMPLETED.value:
             ensure_repair_can_complete(repair)
             repair.closed_at = utcnow()
-            repair.responsible_user_id = user.id
-            repair.responsible_user = user
+            if repair.responsible_user_id is None:
+                repair.responsible_user_id = user.id
+                repair.responsible_user = user
         if next_status == RepairStatus.REPAIRING.value and repair.started_at is None:
             repair.started_at = utcnow()
         repair.status = next_status
@@ -1406,39 +1471,48 @@ def update_repair_case(
     )
     db.add(event)
     generated_on_completion: list[GeneratedDocument] = []
+    document_generation_warning: dict | None = None
     if (
         payload.status == RepairStatus.COMPLETED
         and previous_status != RepairStatus.COMPLETED.value
     ):
         db.flush()
-        db.expire(repair, ["events", "parts_used", "attachments"])
+        db.expire(repair, ["events", "parts_used", "participants", "attachments"])
         try:
-            generated_on_completion = make_repair_documents(
-                db, repair, user.id, user.preferred_language
-            )
+            with db.begin_nested():
+                generated_on_completion = make_repair_documents(
+                    db, repair, user.id, "bg"
+                )
+                db.add_all(generated_on_completion)
+                db.flush()
         except ConfirmedTemplateUnavailableError as exc:
-            raise business_conflict(
-                "document_template_unavailable",
-                exc.message,
-                document_type=exc.document_type,
-                requested_language=exc.language,
-                fallback_language="bg",
-            ) from exc
+            generated_on_completion = []
+            document_generation_warning = {
+                "code": "document_template_unavailable",
+                "message": exc.message,
+                "document_type": exc.document_type,
+                "language": "bg",
+            }
         except TemplateValidationError as exc:
-            raise business_conflict(
-                "document_generation_validation_failed", str(exc)
-            ) from exc
-        db.add_all(generated_on_completion)
-        db.flush()
+            generated_on_completion = []
+            document_generation_warning = {
+                "code": "document_generation_validation_failed",
+                "message": str(exc),
+                "document_type": "REPAIR_PROTOCOL",
+                "language": "bg",
+            }
     if previous_machine_status != repair.machine.status:
         add_machine_event(
             db, repair.machine, user, "REPAIR_STATUS_CHANGED", reference=repair.repair_reference,
             previous_status=previous_machine_status, new_status=repair.machine.status,
             details={"repair_id": repair.id, "repair_status": repair.status},
         )
-    add_audit_log(db, user, "repair", repair.id, "Обновена ремонтна карта", {"repair_reference": repair.repair_reference, "previous_status": previous_status, "new_status": repair.status, "machine_previous_status": previous_machine_status, "machine_new_status": repair.machine.status, "completed_by_user_id": user.id if generated_on_completion else None, "generated_document_ids": [item.id for item in generated_on_completion]})
+    add_audit_log(db, user, "repair", repair.id, "Обновена ремонтна карта", {"repair_reference": repair.repair_reference, "previous_status": previous_status, "new_status": repair.status, "machine_previous_status": previous_machine_status, "machine_new_status": repair.machine.status, "completed_by_user_id": user.id if payload.status == RepairStatus.COMPLETED else None, "generated_document_ids": [item.id for item in generated_on_completion], "document_generation_warning": document_generation_warning})
     _commit(db)
-    return _repair_dict(_load_repair(db, repair.id))
+    result = _repair_dict(_load_repair(db, repair.id))
+    if document_generation_warning:
+        result["document_generation_warning"] = document_generation_warning
+    return result
 
 
 @router.post("/repair-cases/{repair_id}/events", status_code=201)
@@ -1480,13 +1554,85 @@ def add_repair_event(
     if payload.next_status == RepairStatus.COMPLETED:
         db.expire(repair, ["events", "parts_used", "attachments"])
         generated_on_completion = make_repair_documents(
-            db, repair, user.id, user.preferred_language
+            db, repair, user.id, "bg"
         )
         db.add_all(generated_on_completion)
         db.flush()
     add_audit_log(db, user, "repair_event", event.id, "Добавено събитие към ремонта", {"repair_reference": repair.repair_reference, "event_type": event.event_type, "previous_status": previous, "new_status": repair.status, "completed_by_user_id": user.id if generated_on_completion else None, "generated_document_ids": [item.id for item in generated_on_completion]})
     _commit(db)
     return {"id": event.id, "event_type": event.event_type, "status_before": event.status_before, "status_after": event.status_after, "description": event.description, "structured_data": event.structured_data, "user_id": event.user_id, "created_at": event.created_at}
+
+
+@router.post("/repair-cases/{repair_id}/participants", status_code=201)
+def add_repair_participant(
+    repair_id: int,
+    payload: RepairParticipantCreate,
+    user: User = Depends(require_repair_operator),
+    db: Session = Depends(get_db),
+) -> dict:
+    repair = _load_repair(db, repair_id, lock=True)
+    if repair.status == RepairStatus.COMPLETED.value:
+        raise business_conflict(
+            "completed_repair_is_locked",
+            "Не могат да се добавят участници към приключен ремонт.",
+        )
+    linked_user = db.get(User, payload.user_id) if payload.user_id is not None else None
+    if payload.user_id is not None and (linked_user is None or not linked_user.is_active):
+        raise HTTPException(404, "Потребителят не е намерен или не е активен.")
+    full_name = linked_user.full_name if linked_user else (payload.full_name or "")
+    job_title = linked_user.job_title if linked_user else payload.job_title
+    normalized = " ".join(full_name.casefold().split())
+    if any(" ".join(item.full_name_snapshot.casefold().split()) == normalized for item in repair.participants):
+        raise business_conflict(
+            "repair_participant_already_exists",
+            "Този участник вече е добавен към ремонта.",
+        )
+    participant = RepairParticipant(
+        repair_id=repair.id,
+        user_id=linked_user.id if linked_user else None,
+        full_name_snapshot=full_name,
+        job_title_snapshot=job_title,
+        contribution=payload.contribution,
+        created_by_id=user.id,
+    )
+    db.add(participant)
+    db.flush()
+    add_audit_log(
+        db, user, "repair_participant", participant.id,
+        "Добавен участник във вътрешен ремонт",
+        {"repair_id": repair.id, "repair_reference": repair.repair_reference, "full_name": full_name},
+        repair.repair_reference,
+    )
+    _commit(db)
+    return _repair_participant_dict(participant)
+
+
+@router.delete("/repair-cases/{repair_id}/participants/{participant_id}", status_code=204)
+def remove_repair_participant(
+    repair_id: int,
+    participant_id: int,
+    user: User = Depends(require_repair_operator),
+    db: Session = Depends(get_db),
+) -> Response:
+    repair = _load_repair(db, repair_id, lock=True)
+    if repair.status == RepairStatus.COMPLETED.value:
+        raise business_conflict(
+            "completed_repair_is_locked",
+            "Не могат да се премахват участници от приключен ремонт.",
+        )
+    participant = db.get(RepairParticipant, participant_id)
+    if participant is None or participant.repair_id != repair.id:
+        raise HTTPException(404, "Участникът не е намерен.")
+    snapshot = _repair_participant_dict(participant)
+    db.delete(participant)
+    add_audit_log(
+        db, user, "repair_participant", participant_id,
+        "Премахнат участник от вътрешен ремонт",
+        {"repair_id": repair.id, "participant": snapshot},
+        repair.repair_reference,
+    )
+    _commit(db)
+    return Response(status_code=204)
 
 
 @router.post("/repair-cases/{repair_id}/parts", status_code=201, response_model=None)
@@ -1568,7 +1714,7 @@ def list_multi_part_requests(
 ) -> list[dict]:
     requests = db.scalars(
         select(PartRequest)
-        .options(joinedload(PartRequest.machine), joinedload(PartRequest.repair), selectinload(PartRequest.lines), selectinload(PartRequest.approvals), selectinload(PartRequest.attachments))
+        .options(joinedload(PartRequest.machine), joinedload(PartRequest.repair), selectinload(PartRequest.lines).selectinload(PartRequestLine.linked_catalog_part), selectinload(PartRequest.approvals), selectinload(PartRequest.attachments))
         .order_by(PartRequest.created_at.desc())
     ).all()
     documents = db.scalars(select(GeneratedDocument).where(GeneratedDocument.part_request_id.in_([item.id for item in requests]))) .all() if requests else []
@@ -1597,6 +1743,12 @@ def create_multi_part_request(
             "Избраните машина и ремонт не съответстват.",
             repair_id=repair.id,
             machine_id=machine.id,
+        )
+    unknown_lines = [line for line in payload.lines if line.is_unknown_part]
+    if unknown_lines and machine is None:
+        raise business_conflict(
+            "unknown_part_machine_required",
+            "За част без потвърден part number трябва да бъде избрана конкретна машина.",
         )
     catalog_ids = {line.catalog_part_id for line in payload.lines if line.catalog_part_id is not None}
     catalog_parts: dict[int, PartCatalog] = {}
@@ -1697,9 +1849,206 @@ def create_multi_part_request(
         db.add(PartRequestLine(request_id=request_item.id, **values))
     add_audit_log(db, user, "part_request", request_item.id, "Създадена многоредова заявка за части", {"request_reference": request_item.request_reference, "machine_number": machine.inventory_number if machine else None, "repair_id": payload.repair_id, "repair_reference": repair.repair_reference if repair else None, "repair_kit_id": payload.repair_kit_id, "line_count": len(payload.lines), "catalog_part_ids": sorted(catalog_ids), "priority": request_item.priority})
     _commit(db)
-    item = db.scalar(select(PartRequest).options(joinedload(PartRequest.machine), joinedload(PartRequest.repair), selectinload(PartRequest.lines), selectinload(PartRequest.approvals), selectinload(PartRequest.attachments)).where(PartRequest.id == request_item.id))
+    item = db.scalar(select(PartRequest).options(joinedload(PartRequest.machine), joinedload(PartRequest.repair), selectinload(PartRequest.lines).selectinload(PartRequestLine.linked_catalog_part), selectinload(PartRequest.approvals), selectinload(PartRequest.attachments)).where(PartRequest.id == request_item.id))
     assert item is not None
     return _part_request_dict(item, [])
+
+
+@router.post("/part-requests/unknown", status_code=201)
+def create_unknown_part_request(
+    payload: UnknownPartRequestCreate,
+    user: User = Depends(require_parts_operator),
+    db: Session = Depends(get_db),
+) -> dict:
+    machine = db.get(Machine, payload.machine_id)
+    if machine is None:
+        raise HTTPException(404, "Машината не е намерена.")
+    repair = db.get(Repair, payload.repair_id) if payload.repair_id is not None else None
+    if payload.repair_id is not None and repair is None:
+        raise HTTPException(404, "Ремонтът не е намерен.")
+    if repair is not None and repair.machine_id != machine.id:
+        raise business_conflict(
+            "unknown_part_repair_machine_mismatch",
+            "Избраните машина и ремонт не съответстват.",
+            repair_id=repair.id,
+            machine_id=machine.id,
+        )
+    filename, content = _decode_file(payload.photo)
+    if payload.photo.media_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "unknown_part_photo_required",
+                "message": "За непознатата част трябва да бъде приложена снимка във формат JPEG, PNG или WebP.",
+            },
+        )
+    request_item = PartRequest(
+        machine_id=machine.id,
+        repair_id=repair.id if repair else None,
+        part_name="Част без потвърден part number",
+        part_number=None,
+        quantity=max(1, int(payload.quantity)),
+        reason=payload.note,
+        department=payload.department,
+        priority=payload.priority.value,
+        status=PartRequestStatus.DRAFT.value,
+        language=payload.language.value,
+        requested_by_id=user.id,
+    )
+    db.add(request_item)
+    db.flush()
+    request_item.request_reference = f"PR-{request_item.created_at:%Y}-{request_item.id:06d}"
+    line = PartRequestLine(
+        request_id=request_item.id,
+        catalog_part_id=None,
+        position=None,
+        part_number=None,
+        description=payload.description.strip(),
+        quantity=payload.quantity,
+        unit=payload.unit,
+        reason=payload.note,
+        is_unknown_part=True,
+        assembly=payload.assembly.strip(),
+        note=payload.note,
+    )
+    db.add(line)
+    db.flush()
+    attachment = PartRequestAttachment(
+        request_id=request_item.id,
+        request_line_id=line.id,
+        filename=filename,
+        media_type=payload.photo.media_type,
+        content=content,
+        sha256=hashlib.sha256(content).hexdigest(),
+        description="Снимка на част без потвърден part number",
+        created_by_id=user.id,
+    )
+    db.add(attachment)
+    db.flush()
+    add_audit_log(
+        db, user, "part_request", request_item.id,
+        "Създадена заявка за част без потвърден part number",
+        {
+            "request_reference": request_item.request_reference,
+            "machine_number": machine.inventory_number,
+            "repair_id": repair.id if repair else None,
+            "line_id": line.id,
+            "assembly": line.assembly,
+            "quantity": line.quantity,
+            "photo_sha256": attachment.sha256,
+            "catalog_inserted": False,
+        },
+        request_item.request_reference,
+    )
+    _commit(db)
+    item = db.scalar(
+        select(PartRequest)
+        .options(
+            joinedload(PartRequest.machine),
+            joinedload(PartRequest.repair),
+            selectinload(PartRequest.lines).selectinload(PartRequestLine.linked_catalog_part),
+            selectinload(PartRequest.approvals),
+            selectinload(PartRequest.attachments),
+        )
+        .where(PartRequest.id == request_item.id)
+    )
+    assert item is not None
+    return _part_request_dict(item, [])
+
+
+@router.post("/part-requests/{request_id}/lines/{line_id}/link-catalog-part")
+def link_unknown_part_to_catalog(
+    request_id: int,
+    line_id: int,
+    payload: UnknownPartCatalogLink,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    request_item = db.scalar(
+        select(PartRequest)
+        .options(
+            joinedload(PartRequest.machine),
+            joinedload(PartRequest.repair),
+            selectinload(PartRequest.lines).selectinload(PartRequestLine.linked_catalog_part),
+            selectinload(PartRequest.approvals),
+            selectinload(PartRequest.attachments),
+        )
+        .where(PartRequest.id == request_id)
+    )
+    if request_item is None:
+        raise HTTPException(404, "Заявката не е намерена.")
+    line = next((value for value in request_item.lines if value.id == line_id), None)
+    if line is None:
+        raise HTTPException(404, "Редът на заявката не е намерен.")
+    if not line.is_unknown_part:
+        raise business_conflict(
+            "part_request_line_is_not_unknown",
+            "Само част без потвърден part number може да бъде свързана по този начин.",
+            line_id=line.id,
+        )
+    part = db.get(PartCatalog, payload.catalog_part_id)
+    if part is None:
+        raise HTTPException(404, "Каталожната част не е намерена.")
+    if not part.is_verified or not str(part.verification_status or "").startswith("VERIFIED") or not part.is_active:
+        raise business_conflict(
+            "catalog_part_not_verified_for_link",
+            "Непозната част може да бъде свързана само с активна и потвърдена каталожна част.",
+            catalog_part_id=part.id,
+            part_number=part.part_number,
+        )
+    if request_item.machine is not None:
+        compatible_numbers = {str(value) for value in (part.compatible_machine_numbers or [])}
+        if str(request_item.machine.inventory_number) not in compatible_numbers:
+            raise business_conflict(
+                "catalog_part_not_compatible_with_machine",
+                "Избраната каталожна част не е потвърдена като съвместима с машината от заявката.",
+                machine_number=request_item.machine.inventory_number,
+                catalog_part_id=part.id,
+            )
+    if line.linked_catalog_part_id == part.id:
+        return _part_request_dict(request_item, [])
+    if line.linked_catalog_part_id is not None:
+        raise business_conflict(
+            "unknown_part_already_linked",
+            "Тази непозната част вече е свързана с каталожна част.",
+            line_id=line.id,
+            linked_catalog_part_id=line.linked_catalog_part_id,
+        )
+    line.linked_catalog_part_id = part.id
+    line.linked_by_id = user.id
+    line.linked_at = utcnow()
+    line.link_note = payload.note
+    add_audit_log(
+        db, user, "part_request_line", line.id,
+        "Част без потвърден part number е свързана с потвърдена каталожна част",
+        {
+            "request_reference": request_item.request_reference,
+            "machine_number": request_item.machine.inventory_number if request_item.machine else None,
+            "original_description": line.description,
+            "assembly": line.assembly,
+            "catalog_part_id": part.id,
+            "part_number": part.part_number,
+            "source_document": part.source_document,
+            "source_page": part.source_page,
+            "note": payload.note,
+        },
+        request_item.request_reference,
+    )
+    _commit(db)
+    db.refresh(line)
+    refreshed = db.scalar(
+        select(PartRequest)
+        .options(
+            joinedload(PartRequest.machine),
+            joinedload(PartRequest.repair),
+            selectinload(PartRequest.lines).selectinload(PartRequestLine.linked_catalog_part),
+            selectinload(PartRequest.approvals),
+            selectinload(PartRequest.attachments),
+        )
+        .where(PartRequest.id == request_id)
+    )
+    assert refreshed is not None
+    return _part_request_dict(refreshed, [])
 
 
 @router.post("/part-requests/{request_id}/attachments", status_code=201)
@@ -2448,7 +2797,7 @@ def technical_library(
             )
 
         documents = [document for document in documents if matches(document)]
-    return [{"id": item.id, "brand": item.brand, "model": item.model, "category": item.category, "title": item.title, "document_type": item.document_type, "language": item.language, "revision": item.revision, "source_label": item.source_label, "document_date": item.document_date, "tags": item.tags, "page_count": item.page_count, "notes": item.notes, "linked_machine_numbers": item.linked_machine_numbers, "sha256": item.sha256, "created_at": item.created_at, "download_endpoint": f"/technical-library/{item.id}/download", "revisions": [{"id": revision.id, "version": revision.version, "revision_label": revision.revision_label, "filename": revision.filename, "sha256": revision.sha256, "change_note": revision.change_note, "created_at": revision.created_at, "download_endpoint": f"/technical-library/revisions/{revision.id}/download"} for revision in sorted(item.revisions, key=lambda value: value.version, reverse=True)]} for item in documents]
+    return [{"id": item.id, "brand": item.brand, "model": item.model, "category": item.category, "title": item.title, "document_type": item.document_type, "language": item.language, "revision": item.revision, "source_label": item.source_label, "document_date": item.document_date, "tags": item.tags, "page_count": item.page_count, "notes": item.notes, "linked_machine_numbers": item.linked_machine_numbers, "sha256": item.sha256, "created_at": item.created_at, "source_key": item.file_path, "download_endpoint": f"/technical-library/{item.id}/download", "page_preview_endpoint": f"/technical-library/{item.id}/pages/{{page_number}}/preview", "revisions": [{"id": revision.id, "version": revision.version, "revision_label": revision.revision_label, "filename": revision.filename, "sha256": revision.sha256, "change_note": revision.change_note, "created_at": revision.created_at, "download_endpoint": f"/technical-library/revisions/{revision.id}/download"} for revision in sorted(item.revisions, key=lambda value: value.version, reverse=True)]} for item in documents]
 
 
 def _validate_document_machine_links(db: Session, numbers: list[str] | None) -> None:
@@ -2514,6 +2863,60 @@ def upload_technical_revision(
     return {"id": revision.id, "document_id": document.id, "version": version, "sha256": digest, "download_endpoint": f"/technical-library/revisions/{revision.id}/download"}
 
 
+
+def _technical_document_content(item: TechnicalDocument) -> tuple[bytes, str, str]:
+    """Return controlled technical-document bytes without exposing filesystem paths."""
+    if item.uploaded_content is not None:
+        return (
+            item.uploaded_content,
+            item.media_type or mimetypes.guess_type(item.uploaded_filename or "")[0] or "application/octet-stream",
+            item.uploaded_filename or item.title or "document",
+        )
+    root = Path(__file__).resolve().parents[1] / "resources" / "technical_docs"
+    path = (root / item.file_path).resolve()
+    if root.resolve() not in path.parents or not path.is_file():
+        raise HTTPException(404, "Файлът не е намерен.")
+    return (
+        path.read_bytes(),
+        mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+        path.name,
+    )
+
+
+def _render_pdf_page_png(content: bytes, page_number: int, scale: float) -> tuple[bytes, int]:
+    try:
+        import fitz  # PyMuPDF, imported lazily to keep normal API startup lightweight.
+    except ImportError as exc:  # pragma: no cover - deployment dependency guard
+        raise HTTPException(503, detail={
+            "code": "pdf_preview_unavailable",
+            "message": "PDF визуализацията не е налична на сървъра.",
+        }) from exc
+    try:
+        document = fitz.open(stream=content, filetype="pdf")
+    except Exception as exc:
+        raise HTTPException(422, detail={
+            "code": "technical_document_not_pdf",
+            "message": "Избраният документ не може да бъде визуализиран като PDF.",
+        }) from exc
+    try:
+        if page_number < 1 or page_number > document.page_count:
+            raise HTTPException(404, detail={
+                "code": "technical_document_page_not_found",
+                "message": "Страницата не е намерена в техническия документ.",
+                "page_count": document.page_count,
+            })
+        page = document.load_page(page_number - 1)
+        width = max(1.0, float(page.rect.width) * scale)
+        height = max(1.0, float(page.rect.height) * scale)
+        max_pixels = 20_000_000
+        if width * height > max_pixels:
+            scale *= (max_pixels / (width * height)) ** 0.5
+        matrix = fitz.Matrix(scale, scale)
+        pixmap = page.get_pixmap(matrix=matrix, alpha=False, colorspace=fitz.csRGB)
+        return pixmap.tobytes("png"), document.page_count
+    finally:
+        document.close()
+
 @router.get("/technical-library/{document_id}/download")
 def download_technical_document(
     document_id: int,
@@ -2523,14 +2926,44 @@ def download_technical_document(
     item = db.get(TechnicalDocument, document_id)
     if item is None:
         raise HTTPException(404, "Техническият документ не е намерен.")
-    if item.uploaded_content is not None:
-        return Response(item.uploaded_content, media_type=item.media_type or "application/octet-stream", headers={"Content-Disposition": f'attachment; filename="{item.uploaded_filename or "document"}"', "X-Content-Type-Options": "nosniff"})
-    root = Path(__file__).resolve().parents[1] / "resources" / "technical_docs"
-    path = (root / item.file_path).resolve()
-    if root.resolve() not in path.parents or not path.is_file():
-        raise HTTPException(404, "Файлът не е намерен.")
-    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-    return Response(path.read_bytes(), media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{path.name}"', "X-Content-Type-Options": "nosniff"})
+    content, media_type, filename = _technical_document_content(item)
+    return Response(content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"', "X-Content-Type-Options": "nosniff"})
+
+
+@router.get("/technical-library/{document_id}/pages/{page_number}/preview")
+def preview_technical_document_page(
+    document_id: int,
+    page_number: int,
+    scale: float = Query(default=1.75, ge=0.75, le=3.0),
+    _: User = Depends(require_document_viewer),
+    db: Session = Depends(get_db),
+) -> Response:
+    item = db.get(TechnicalDocument, document_id)
+    if item is None:
+        raise HTTPException(404, "Техническият документ не е намерен.")
+    content, media_type, _ = _technical_document_content(item)
+    if media_type != "application/pdf" and not (item.uploaded_filename or item.file_path or "").lower().endswith(".pdf"):
+        raise HTTPException(422, detail={
+            "code": "technical_document_not_pdf",
+            "message": "Визуализация по страници се поддържа само за PDF документи.",
+        })
+    rendered, page_count = _render_pdf_page_png(content, page_number, scale)
+    source_sha = item.sha256 or hashlib.sha256(content).hexdigest()
+    preview_etag = hashlib.sha256(
+        f"{source_sha}:{page_number}:{scale:.2f}".encode("utf-8")
+    ).hexdigest()
+    return Response(
+        rendered,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'inline; filename="technical-document-{document_id}-page-{page_number}.png"',
+            "Cache-Control": "private, max-age=3600",
+            "ETag": preview_etag,
+            "X-Document-SHA256": source_sha,
+            "X-Document-Page-Count": str(page_count),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/technical-library/revisions/{revision_id}/download")

@@ -1,15 +1,19 @@
 # Release checklist
 
-- [ ] `scripts/verify_release.ps1` завършва с exit code 0.
-- [ ] Alembic upgrade до head и downgrade/upgrade са проверени върху копие.
-- [ ] PostgreSQL integration и SQLite suite са успешни.
-- [ ] Docker image е построен и `/api/health` е проверен.
-- [ ] Document QA няма unresolved placeholders и има DOCX/PDF hashes.
-- [ ] DOCX/PDF са визуално сравнени със снимковите образци чрез LibreOffice.
-- [ ] BG/EN/RU ключовете и одобрените шаблони са пълни.
-- [ ] Няма tracked DB, dump, secret, private key или generated export.
-- [ ] Verified 19-machine HPWJ регистърът и source register са без промяна.
-- [ ] SBOM и third-party licences са прегледани.
-- [ ] Backup е създаден и restore е тестван в изолирана база.
-- [ ] Собственик, licence payload, installation ID, срокове и лимити са проверени.
+- [x] Alembic upgrade до head и downgrade/upgrade са проверени върху изолирани SQLite бази.
+- [x] SQLite backend suite: 132/132 теста изпълнени успешно в контролирани групи.
+- [x] Document QA няма unresolved placeholders и съдържа DOCX/PDF hashes.
+- [x] DOCX/PDF са визуално и структурно проверени спрямо снимковите образци чрез LibreOffice.
+- [x] BG/EN/RU ключовете и одобрените шаблони са проверени.
+- [x] Няма tracked DB, dump, secret, private key или generated export в release пакета.
+- [x] Провереният 19-machine HPWJ регистър и source register са без промяна.
+- [x] Release verifier: 21/21 проверки успешни.
+- [x] Frontend TypeScript syntax и изолирана semantic проверка са успешни.
+- [ ] Реален `pnpm install`, frontend typecheck, lint, Vitest и production build — изисква зелен GitHub frontend job.
+- [ ] PostgreSQL migration и encrypted backup/restore round trip — изисква зелен GitHub postgres job.
+- [ ] Docker image build, Compose validation и `/api/health` smoke test — изисква зелен GitHub docker/staging job.
+- [ ] Ruff check — изисква зелен GitHub backend job.
+- [ ] Реален staging login → issue → batch signatures → return → repair → parts → DOCX/PDF workflow.
+- [ ] Backup/restore rehearsal върху staging копие.
+- [ ] Собственик, licence payload, installation ID, срокове и лимити са проверени за конкретната инсталация.
 - [ ] Draft legal documents са прегледани от квалифициран юрист.

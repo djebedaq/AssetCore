@@ -1377,7 +1377,56 @@ def signing_summary(token: str, db: Session = Depends(get_db)) -> dict:
     operation_description = operation_labels.get(document.document_type, {}).get(
         version.language, document.document_type
     )
-    return {"document_number": document.document_number, "document_type": document.document_type, "document_version": version.version, "document_status": version.status, "document_sha256": version.signing_sha256 or version.snapshot_sha256, "machine": {"id": machine.id, "number": machine.inventory_number, "name": machine.name, "brand": machine.brand} if machine else None, "operation_description": operation_description, "operation_datetime": version.created_at, "participant": participant.identity_snapshot, "operation_role": participant.operation_role, "consent_notice": _signature_consent(version.language), "requires_confirmation": True}
+    batch_signing = (version.snapshot or {}).get("batch_signing") or {}
+    batch_machines = [
+        {
+            "id": item.get("machine_id"),
+            "number": item.get("machine_number"),
+            "brand": item.get("brand"),
+            "model": item.get("model"),
+            "protocol_number": item.get("protocol_number"),
+        }
+        for item in batch_signing.get("machines", [])
+        if isinstance(item, dict)
+    ]
+    if batch_machines:
+        batch_labels = {
+            DocumentType.TRANSFER_ISSUE.value: {
+                "bg": "Издаване / предаване на избраните машини",
+                "en": "Issue / handover of the selected machines",
+                "ru": "Выдача / передача выбранных машин",
+            },
+            DocumentType.TRANSFER_RETURN.value: {
+                "bg": "Връщане / приемане на избраните машини",
+                "en": "Return / acceptance of the selected machines",
+                "ru": "Возврат / приём выбранных машин",
+            },
+        }
+        operation_description = batch_labels.get(document.document_type, {}).get(
+            version.language, operation_description
+        )
+    return {
+        "document_number": document.document_number,
+        "document_type": document.document_type,
+        "document_version": version.version,
+        "document_status": version.status,
+        "document_sha256": version.signing_sha256 or version.snapshot_sha256,
+        "machine": {
+            "id": machine.id,
+            "number": machine.inventory_number,
+            "name": machine.name,
+            "brand": machine.brand,
+        } if machine else None,
+        "machines": batch_machines,
+        "batch_reference": batch_signing.get("batch_reference"),
+        "batch_manifest_sha256": (version.snapshot or {}).get("batch_manifest_sha256"),
+        "operation_description": operation_description,
+        "operation_datetime": version.created_at,
+        "participant": participant.identity_snapshot,
+        "operation_role": participant.operation_role,
+        "consent_notice": _signature_consent(version.language),
+        "requires_confirmation": True,
+    }
 
 
 @router.post("/signing/{token}", status_code=201)

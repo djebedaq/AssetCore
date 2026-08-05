@@ -357,6 +357,7 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
   const [busy, setBusy] = useState(false)
   const [catalog, setCatalog] = useState<CatalogPartEnhanced[]>([])
   const [partDraft, setPartDraft] = useState({ catalog_part_id: '', quantity: 1 })
+  const [participantDraft, setParticipantDraft] = useState({ full_name: '', job_title: '', contribution: '' })
   const fileRef = useRef<HTMLInputElement>(null)
   const load = () => Promise.all([api<RepairCase>(`/repair-cases/${repairId}`), api<CatalogPartEnhanced[]>('/catalog/parts')]).then(([data, partItems]) => { setRepair(data); setCatalog(partItems.filter((item) => item.is_verified)); setForm({ diagnosis: data.diagnosis || '', required_work: data.required_work || '', removed_parts_text: data.removed_parts_text || '', work_performed: data.work_performed || '', result: data.result || '', condition_after: data.condition_after || '', test_method: data.test_method || '', test_pressure_bar: data.test_pressure_bar != null ? String(data.test_pressure_bar) : '', leaks_detected: data.leaks_detected == null ? '' : data.leaks_detected ? 'yes' : 'no', electrical_test_result: data.electrical_test_result || '', functional_test_result: data.functional_test_result || '', test_details: data.test_details || '', test_passed: data.test_passed == null ? '' : data.test_passed ? 'yes' : 'no' }); setError('') }).catch((caught) => setError(friendlyError(caught, t('repairCase.loadError'))))
   useEffect(() => { void load() }, [repairId])
@@ -367,7 +368,11 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
     const payload: Record<string, unknown> = { ...form, test_pressure_bar: form.test_pressure_bar ? Number(form.test_pressure_bar) : null, leaks_detected: form.leaks_detected ? form.leaks_detected === 'yes' : null, test_passed: form.test_passed ? form.test_passed === 'yes' : null, status: nextStatus }
     if (nextStatus === 'DIAGNOSIS') payload.inspection_complete = true
     if (nextStatus === 'TESTING' && repair.cleaning_required) payload.cleaning_complete = true
-    try { await api(`/repair-cases/${repair.id}`, { method: 'PATCH', body: JSON.stringify(payload) }); await load(); onChanged() } catch (caught) { setError(friendlyError(caught, t('repairCase.transitionError'))) } finally { setBusy(false) }
+    try {
+      const updated = await api<RepairCase>(`/repair-cases/${repair.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+      if (updated.document_generation_warning) setError(t('repairCase.documentWarning', { message: updated.document_generation_warning.message }))
+      await load(); onChanged()
+    } catch (caught) { setError(friendlyError(caught, t('repairCase.transitionError'))) } finally { setBusy(false) }
   }
   async function upload(file?: File) {
     if (!file || !repair) return
@@ -375,8 +380,7 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
   }
   async function generate() {
     if (!repair) return
-    if (!window.confirm(t('documents.confirmLanguage', { language: t(`language.${locale}` as TranslationKey) }))) return
-    try { await api(`/repair-cases/${repair.id}/documents?language=${locale}`, { method: 'POST' }); await load(); onChanged() } catch (caught) { setError(friendlyError(caught, t('repairCase.documentError'))) }
+    try { await api(`/repair-cases/${repair.id}/documents`, { method: 'POST' }); await load(); onChanged() } catch (caught) { setError(friendlyError(caught, t('repairCase.documentError'))) }
   }
   async function addPart(event: FormEvent) {
     event.preventDefault()
@@ -390,14 +394,29 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
       onChanged()
     } catch (caught) { setError(friendlyError(caught, t('repairCase.partError'))) }
   }
+  async function addParticipant(event: FormEvent) {
+    event.preventDefault()
+    if (!repair || !participantDraft.full_name.trim()) return
+    try {
+      await api(`/repair-cases/${repair.id}/participants`, { method: 'POST', body: JSON.stringify(participantDraft) })
+      setParticipantDraft({ full_name: '', job_title: '', contribution: '' })
+      await load(); onChanged()
+    } catch (caught) { setError(friendlyError(caught, t('repairCase.participantError'))) }
+  }
+  async function removeParticipant(id: number) {
+    if (!repair) return
+    try { await api(`/repair-cases/${repair.id}/participants/${id}`, { method: 'DELETE' }); await load(); onChanged() }
+    catch (caught) { setError(friendlyError(caught, t('repairCase.participantError'))) }
+  }
   return <Modal title={repair?.repair_reference || t('common.loading')} onClose={onClose} wide>{error && <div className="error">{error}</div>}{!repair ? <div className="loading">{t('common.loading')}</div> : <>
     <div className="workflow-strip">{['ACCEPTED', 'DIAGNOSIS', 'WAITING_APPROVAL', 'WAITING_PARTS', 'REPAIRING', 'TESTING', 'COMPLETED'].map((status) => <span className={repair.status === status ? 'active' : ''} key={status}>{statusText(t, status, 'repair')}</span>)}</div>
     <div className="repair-workspace-grid"><section><h4>{repair.machine_name} · №{repair.machine_number}</h4><p><b>{t('repairs.problem')}</b> {repair.reported_problem}</p><p><b>{t('repairCase.conditionBefore')}</b> {repair.condition_before || t('common.noValue')}</p>
       <div className="form-grid"><label className="wide">{t('repairs.diagnosisField')}<textarea value={form.diagnosis} onChange={(event) => setForm({ ...form, diagnosis: event.target.value })} /></label><label className="wide">{t('repairCase.requiredWork')}<textarea value={form.required_work} onChange={(event) => setForm({ ...form, required_work: event.target.value })} /></label><label className="wide">{t('repairCase.removedParts')}<textarea value={form.removed_parts_text} onChange={(event) => setForm({ ...form, removed_parts_text: event.target.value })} /></label><label className="wide">{t('repairs.workField')}<textarea value={form.work_performed} onChange={(event) => setForm({ ...form, work_performed: event.target.value })} /></label><label>{t('repairCase.testPassed')}<select value={form.test_passed} onChange={(event) => setForm({ ...form, test_passed: event.target.value })}><option value="">{t('common.notSpecified')}</option><option value="no">{t('common.no')}</option><option value="yes">{t('common.yes')}</option></select></label><label>{t('repairCase.testMethod')}<input value={form.test_method} onChange={(event) => setForm({ ...form, test_method: event.target.value })} /></label><label>{t('repairCase.testPressure')}<input type="number" min="0" max="10000" value={form.test_pressure_bar} onChange={(event) => setForm({ ...form, test_pressure_bar: event.target.value })} /></label><label>{t('repairCase.leaksDetected')}<select value={form.leaks_detected} onChange={(event) => setForm({ ...form, leaks_detected: event.target.value })}><option value="">{t('common.notSpecified')}</option><option value="no">{t('common.no')}</option><option value="yes">{t('common.yes')}</option></select></label><label>{t('repairCase.electricalTest')}<input value={form.electrical_test_result} onChange={(event) => setForm({ ...form, electrical_test_result: event.target.value })} /></label><label>{t('repairCase.functionalTest')}<input value={form.functional_test_result} onChange={(event) => setForm({ ...form, functional_test_result: event.target.value })} /></label><label className="wide">{t('repairs.testResult')}<textarea value={form.test_details} onChange={(event) => setForm({ ...form, test_details: event.target.value })} /></label><label className="wide">{t('repairCase.conditionAfter')}<textarea value={form.condition_after} onChange={(event) => setForm({ ...form, condition_after: event.target.value })} /></label><label className="wide">{t('repairCase.result')}<textarea value={form.result} onChange={(event) => setForm({ ...form, result: event.target.value })} /></label></div>
       <section className="repair-parts"><h4>{t('repairCase.partsUsed')}</h4><div className="request-line-list">{repair.parts_used.map((part) => <div key={part.id}><span><b>{part.part_number || t('common.noValue')}</b><small>{part.description}{part.source ? ` · ${part.source}` : ''}</small></span><em>{part.quantity} {part.unit}</em></div>)}{!repair.parts_used.length && <div className="empty-state">{t('repairCase.noParts')}</div>}</div>{hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <form className="repair-part-form" onSubmit={addPart}><label>{t('repairCase.catalogPart')}<select required value={partDraft.catalog_part_id} onChange={(event) => setPartDraft({ ...partDraft, catalog_part_id: event.target.value })}><option value="">{t('common.notSpecified')}</option>{catalog.map((part) => <option value={part.id} key={part.id}>{part.part_number} · {part.description}</option>)}</select></label><label>{t('common.quantity')}<input required min="0.01" step="0.01" type="number" value={partDraft.quantity} onChange={(event) => setPartDraft({ ...partDraft, quantity: Number(event.target.value) })} /></label><button className="secondary" disabled={!partDraft.catalog_part_id || partDraft.quantity <= 0}><Plus size={15} />{t('repairCase.addPart')}</button></form>}</section>
+      <section className="repair-parts"><h4>{t('repairCase.participants')}</h4><div className="request-line-list">{repair.participants.map((participant) => <div key={participant.id}><span><b>{participant.full_name}</b><small>{[participant.job_title, participant.contribution].filter(Boolean).join(' · ')}</small></span>{hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <button className="link" type="button" onClick={() => void removeParticipant(participant.id)}>{t('common.remove')}</button>}</div>)}{!repair.participants.length && <div className="empty-state">{t('repairCase.noParticipants')}</div>}</div>{hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <form className="repair-part-form repair-participant-form" onSubmit={addParticipant}><label>{t('repairCase.participantName')}<input required value={participantDraft.full_name} onChange={(event) => setParticipantDraft({ ...participantDraft, full_name: event.target.value })} /></label><label>{t('repairCase.participantJobTitle')}<input value={participantDraft.job_title} onChange={(event) => setParticipantDraft({ ...participantDraft, job_title: event.target.value })} /></label><label>{t('repairCase.participantContribution')}<input value={participantDraft.contribution} onChange={(event) => setParticipantDraft({ ...participantDraft, contribution: event.target.value })} /></label><button className="secondary" disabled={!participantDraft.full_name.trim()}><Plus size={15} />{t('repairCase.addParticipant')}</button></form>}</section>
       {hasPermission('repairs.edit') && <div className="actions workflow-actions">{repairTransitions[repair.status]?.map((next) => <button disabled={busy} className={next === 'COMPLETED' ? 'primary' : 'secondary'} key={next} onClick={() => void transition(next)}>{statusText(t, next, 'repair')}<ChevronRight size={15} /></button>)}</div>}
     </section><aside><h4>{t('repairCase.timeline')}</h4><div className="timeline compact-timeline">{repair.events.map((event) => <div key={event.id}><i /><span><b>{translatedCode(t, event.event_type, EVENT_KEYS)}</b>{event.description && ['NOTE', 'REPAIR_ACTION', 'DIAGNOSIS', 'TEST', 'PARTS'].includes(event.event_type) && <em>{event.description}</em>}<small>{date(event.created_at)} · {statusText(t, event.status_after || repair.status, 'repair')}</small></span></div>)}</div></aside></div>
-    <div className="toolbar"><div><h4>{t('passport.attachments')}</h4></div>{hasPermission('repairs.edit') && <><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.docx" onChange={(event) => void upload(event.target.files?.[0])} /><button className="secondary" onClick={() => fileRef.current?.click()}><Upload size={16} />{t('passport.addFile')}</button><button className="primary" onClick={() => void generate()}><FileText size={16} />{t('repairCase.generateProtocol')} ({t(`language.${locale}` as TranslationKey)})</button></>}</div><AttachmentList items={repair.attachments} />
+    <div className="toolbar"><div><h4>{t('passport.attachments')}</h4></div>{hasPermission('repairs.edit') && <><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.docx" onChange={(event) => void upload(event.target.files?.[0])} /><button className="secondary" onClick={() => fileRef.current?.click()}><Upload size={16} />{t('passport.addFile')}</button>{repair.status === 'COMPLETED' && <button className="primary" onClick={() => void generate()}><FileText size={16} />{t('repairCase.generateProtocolBg')}</button>}</>}</div><AttachmentList items={repair.attachments} />
     <div className="document-list">{repair.generated_documents.map((document) => <div key={document.id}><span><b>{document.document_number}</b><small>{translatedCode(t, document.document_type, DOCUMENT_KEYS)} · {date(document.created_at)}</small></span><DocumentButtons path={document.download_endpoint} filename={document.filename} format={document.format} /></div>)}</div>
   </>}</Modal>
 }
@@ -414,7 +433,7 @@ export function IndustrialRepairs() {
   return <><div className="toolbar"><div><h3>{t('repairs.title')}</h3><p className="muted">{t('repairCase.workflowHint')}</p></div>{hasPermission('repairs.create') && <button className="primary" onClick={() => setCreate(true)}><Plus size={18} />{t('repairs.new')}</button>}</div>{error && <div className="error">{error}</div>}<div className="cards-list">{items.map((repair) => <button className="repair-card repair-card-button" key={repair.id} onClick={() => setSelected(repair.id)}><div><span className="badge">{statusText(t, repair.status, 'repair')}</span><h3>{repair.machine_name} · {repair.repair_reference}</h3><p><b>{t('repairs.problem')}</b> {repair.reported_problem}</p><div className="workflow-checks"><span className={repair.inspection_completed_at ? 'done' : ''}>{t('repairCase.inspection')}</span><span className={repair.cleaning_completed_at || !repair.cleaning_required ? 'done' : ''}>{t('status.cleaning')}</span><span className={repair.test_passed ? 'done' : ''}>{t('status.testing')}</span></div></div><div className="repair-side"><small>{date(repair.opened_at)}</small><ChevronRight /></div></button>)}{!items.length && <div className="empty-state">{t('repairs.empty')}</div>}</div>{create && <RepairCreateModal machines={machines} onClose={() => setCreate(false)} onSaved={() => { setCreate(false); void load() }} />}{selected && <RepairWorkspace repairId={selected} onClose={() => setSelected(null)} onChanged={() => void load()} />}</>
 }
 
-type RequestDraftLine = { catalog_part_id?: number; position: string; part_number: string; description: string; quantity: number; unit: string; source_document?: string; source_page?: number }
+type RequestDraftLine = { catalog_part_id?: number; position: string; part_number: string; description: string; quantity: number; unit: string; source_document?: string; source_page?: number; is_unknown_part?: boolean; assembly?: string; note?: string }
 
 function PartRequestCreateModal({ machines, repairs, catalog, onClose, onSaved }: { machines: Machine[]; repairs: RepairCase[]; catalog: CatalogPartEnhanced[]; onClose: () => void; onSaved: () => void }) {
   const { locale, t } = useI18n()
@@ -448,6 +467,72 @@ function PartRequestCreateModal({ machines, repairs, catalog, onClose, onSaved }
   </Modal>
 }
 
+function UnknownPartRequestModal({ machines, repairs, onClose, onSaved }: { machines: Machine[]; repairs: RepairCase[]; onClose: () => void; onSaved: () => void }) {
+  const { locale, t } = useI18n()
+  const [machineId, setMachineId] = useState<number | ''>('')
+  const [repairId, setRepairId] = useState<number | ''>('')
+  const [assembly, setAssembly] = useState('')
+  const [description, setDescription] = useState('')
+  const [quantity, setQuantity] = useState(1)
+  const [unit, setUnit] = useState('')
+  const [note, setNote] = useState('')
+  const [priority, setPriority] = useState('NORMAL')
+  const [photo, setPhoto] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [step, setStep] = useState<'edit' | 'confirm' | 'done'>('edit')
+  const [reference, setReference] = useState('')
+  const [error, setError] = useState('')
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
+  function choosePhoto(file?: File) {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setPreviewUrl('')
+    if (!file) { setPhoto(null); return }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError(t('unknownPart.photoFormatError'))
+      setPhoto(null)
+      return
+    }
+    setError('')
+    setPhoto(file)
+    setPreviewUrl(URL.createObjectURL(file))
+  }
+  async function submit() {
+    if (!photo || !machineId) return
+    try {
+      const created = await api<MultiPartRequest>('/part-requests/unknown', {
+        method: 'POST',
+        body: JSON.stringify({ machine_id: machineId, repair_id: repairId || null, assembly, description, quantity, unit: unit || null, note: note || null, priority, language: locale, photo: await filePayload(photo) }),
+      })
+      await api(`/part-requests/${created.id}/submit`, { method: 'POST' })
+      setReference(created.request_reference)
+      setStep('done')
+      onSaved()
+    } catch (caught) { setError(friendlyError(caught, t('unknownPart.saveError'))) }
+  }
+  const invalid = !machineId || !assembly.trim() || !description.trim() || quantity <= 0 || !photo
+  return <Modal title={t('unknownPart.new')} onClose={onClose} wide>{error && <div className="error">{error}</div>}{step === 'edit' && <>
+    <div className="unknown-part-banner"><b>{t('unknownPart.label')}</b><span>{t('unknownPart.catalogWarning')}</span></div>
+    <div className="form-grid"><label>{t('parts.machine')}<select required value={machineId} onChange={(event) => { setMachineId(event.target.value ? Number(event.target.value) : ''); setRepairId('') }}><option value="">{t('unknownPart.chooseMachine')}</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}</option>)}</select></label><label>{t('requests.linkedRepair')}<select value={repairId} onChange={(event) => setRepairId(event.target.value ? Number(event.target.value) : '')}><option value="">{t('common.notSpecified')}</option>{repairs.filter((repair) => !machineId || repair.machine_id === machineId).map((repair) => <option value={repair.id} key={repair.id}>{repair.repair_reference} · №{repair.machine_number}</option>)}</select></label><label>{t('unknownPart.assembly')}<input required value={assembly} onChange={(event) => setAssembly(event.target.value)} /></label><label>{t('parts.priority')}<select value={priority} onChange={(event) => setPriority(event.target.value)}>{['LOW', 'NORMAL', 'URGENT'].map((value) => <option value={value} key={value}>{statusText(t, value, 'part')}</option>)}</select></label><label className="wide">{t('unknownPart.description')}<textarea required value={description} onChange={(event) => setDescription(event.target.value)} /></label><label>{t('common.quantity')}<input type="number" min="0.01" step="0.01" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label><label>{t('requests.unit')}<input value={unit} onChange={(event) => setUnit(event.target.value)} /></label><label className="wide">{t('unknownPart.note')}<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label><label className="wide unknown-part-photo-field">{t('unknownPart.photo')}<input required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} />{previewUrl && <img src={previewUrl} alt={t('unknownPart.photoPreview')} />}</label></div>
+    <div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" disabled={invalid} onClick={() => setStep('confirm')}>{t('bulk.reviewConfirm')}</button></div>
+  </>}{step === 'confirm' && <><div className="confirmation-summary"><h4>{t('requests.confirm')}</h4><div className="summary-line"><b>{t('unknownPart.label')}</b><span>{assembly} · {description}</span><em>{quantity} {unit}</em></div>{photo && <p>{t('unknownPart.photo')}: {photo.name}</p>}<p>{t('unknownPart.confirmWarning')}</p></div><div className="actions"><button className="secondary" onClick={() => setStep('edit')}>{t('common.back')}</button><button className="primary" onClick={() => void submit()}>{t('requests.submit')}</button></div></>}{step === 'done' && <div className="operation-result" role="status"><CheckCircle2 size={36} /><h4>{t('unknownPart.created')}</h4><p>{reference}</p><button className="primary" onClick={onClose}>{t('common.done')}</button></div>}</Modal>
+}
+
+function UnknownPartLinkModal({ request, line, catalog, onClose, onSaved }: { request: MultiPartRequest; line: MultiPartRequest['lines'][number]; catalog: CatalogPartEnhanced[]; onClose: () => void; onSaved: () => void }) {
+  const { t } = useI18n()
+  const compatible = catalog.filter((part) => part.is_verified && part.is_active !== false && (!request.machine_number || (part.compatible_machine_numbers || []).map(String).includes(String(request.machine_number))))
+  const [catalogPartId, setCatalogPartId] = useState<number | ''>('')
+  const [note, setNote] = useState('')
+  const [error, setError] = useState('')
+  async function submit() {
+    if (!catalogPartId) return
+    try {
+      await api(`/part-requests/${request.id}/lines/${line.id}/link-catalog-part`, { method: 'POST', body: JSON.stringify({ catalog_part_id: catalogPartId, note: note || null }) })
+      onSaved()
+    } catch (caught) { setError(friendlyError(caught, t('unknownPart.linkError'))) }
+  }
+  return <Modal title={t('unknownPart.linkTitle')} onClose={onClose} wide>{error && <div className="error">{error}</div>}<div className="unknown-part-banner"><b>{t('unknownPart.label')}</b><span>{line.assembly} · {line.description}</span></div><div className="form-grid"><label className="wide">{t('unknownPart.verifiedCatalogPart')}<select value={catalogPartId} onChange={(event) => setCatalogPartId(event.target.value ? Number(event.target.value) : '')}><option value="">{t('unknownPart.chooseVerifiedPart')}</option>{compatible.map((part) => <option value={part.id} key={part.id}>{part.part_number} · {part.description}</option>)}</select></label><label className="wide">{t('unknownPart.linkNote')}<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label></div>{!compatible.length && <div className="error">{t('unknownPart.noCompatibleVerifiedParts')}</div>}<div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" disabled={!catalogPartId} onClick={() => void submit()}>{t('unknownPart.linkAction')}</button></div></Modal>
+}
+
 function PartRequestFulfillmentModal({ request, onClose, onSaved }: { request: MultiPartRequest; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
   const statuses = request.status === 'APPROVED'
@@ -477,6 +562,8 @@ export function IndustrialPartRequests() {
   const [repairs, setRepairs] = useState<RepairCase[]>([])
   const [create, setCreate] = useState(false)
   const [fulfillment, setFulfillment] = useState<MultiPartRequest | null>(null)
+  const [unknownCreate, setUnknownCreate] = useState(false)
+  const [unknownLink, setUnknownLink] = useState<{ request: MultiPartRequest; line: MultiPartRequest['lines'][number] } | null>(null)
   const [error, setError] = useState('')
   const load = () => Promise.all([api<MultiPartRequest[]>('/part-requests/multi'), api<Machine[]>('/machines'), api<CatalogPartEnhanced[]>('/catalog/parts'), api<RepairCase[]>('/repair-cases')]).then(([requestItems, machineItems, catalogItems, repairItems]) => { setItems(requestItems); setMachines(machineItems); setCatalog(catalogItems); setRepairs(repairItems); setError('') }).catch((caught) => setError(friendlyError(caught, t('requests.loadError'))))
   useEffect(() => { void load() }, [])
@@ -495,7 +582,7 @@ export function IndustrialPartRequests() {
       await load()
     } catch (caught) { setError(friendlyError(caught, t('requests.attachmentError'))) }
   }
-  return <><div className="toolbar"><div><h3>{t('parts.title')}</h3><p className="muted">{t('requests.subtitle')}</p></div>{hasPermission('requests.create') && <button className="primary" onClick={() => setCreate(true)}><Plus size={18} />{t('requests.new')}</button>}</div>{error && <div className="error">{error}</div>}<div className="cards-list">{items.map((request) => <article className="panel request-card" key={request.id}><div className="request-card-head"><div><span className="badge">{statusText(t, request.status, 'part')}</span><h3>{request.request_reference}</h3><small>{date(request.created_at)} · {request.machine_number ? t('passport.title', { number: request.machine_number }) : t('parts.general')}</small>{request.repair_reference && <small>{t('requests.linkedRepair')}: {request.repair_reference}</small>}{request.department && <small>{t('requests.department')}: {request.department}</small>}{request.supplier && <small>{t('catalog.supplier')}: {request.supplier}</small>}</div><b>{statusText(t, request.priority, 'part')}</b></div><div className="request-line-list">{request.lines.map((line) => <div key={line.id}><span><b>{line.part_number || t('common.noValue')}</b><small>{line.description}</small></span><em>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${line.delivered_quantity} / ` : ''}{line.quantity} {line.unit}</em></div>)}</div>{request.attachments.length > 0 && <details><summary>{t('requests.attachments')} ({request.attachments.length})</summary><AttachmentList items={request.attachments} /></details>}<div className="request-actions">{request.status === 'WAITING_APPROVAL' && hasPermission('requests.approve') && <><button className="primary" onClick={() => void decide(request.id, 'APPROVED')}><CheckCircle2 size={16} />{t('requests.approve')}</button><button className="secondary" onClick={() => void decide(request.id, 'REJECTED')}>{t('requests.reject')}</button></>}{['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.create') && <button className="secondary" onClick={() => setFulfillment(request)}><PackageCheck size={16} />{t('requests.updateFulfillment')}</button>}{hasPermission('requests.create') && <label className="secondary compact file-button"><Upload size={15} />{t('requests.addAttachment')}<input hidden type="file" accept="application/pdf,.docx,.xlsx,image/png,image/jpeg,image/webp" onChange={(event) => { void attach(request, event.target.files?.[0]); event.currentTarget.value = '' }} /></label>}{request.status !== 'DRAFT' && hasPermission('requests.create') && <button className="secondary" onClick={() => void generate(request)}><FilePlus2 size={16} />{t('requests.generate')} ({t(`language.${request.language}` as TranslationKey)})</button>}{request.documents.map((document) => <DocumentButtons key={document.id} path={document.download_endpoint} filename={document.filename} format={document.format} />)}</div></article>)}{!items.length && <div className="empty-state">{t('parts.empty')}</div>}</div>{create && <PartRequestCreateModal machines={machines} repairs={repairs} catalog={catalog} onClose={() => setCreate(false)} onSaved={() => { setCreate(false); void load() }} />}{fulfillment && <PartRequestFulfillmentModal request={fulfillment} onClose={() => setFulfillment(null)} onSaved={() => { setFulfillment(null); void load() }} />}</>
+  return <><div className="toolbar"><div><h3>{t('parts.title')}</h3><p className="muted">{t('requests.subtitle')}</p></div><div className="toolbar-actions">{hasPermission('requests.create') && <button className="secondary" onClick={() => setUnknownCreate(true)}><ImagePlus size={18} />{t('unknownPart.new')}</button>}{hasPermission('requests.create') && <button className="primary" onClick={() => setCreate(true)}><Plus size={18} />{t('requests.new')}</button>}</div></div>{error && <div className="error">{error}</div>}<div className="cards-list">{items.map((request) => <article className="panel request-card" key={request.id}><div className="request-card-head"><div><span className="badge">{statusText(t, request.status, 'part')}</span><h3>{request.request_reference}</h3><small>{date(request.created_at)} · {request.machine_number ? t('passport.title', { number: request.machine_number }) : t('parts.general')}</small>{request.repair_reference && <small>{t('requests.linkedRepair')}: {request.repair_reference}</small>}{request.department && <small>{t('requests.department')}: {request.department}</small>}{request.supplier && <small>{t('catalog.supplier')}: {request.supplier}</small>}</div><b>{statusText(t, request.priority, 'part')}</b></div><div className="request-line-list">{request.lines.map((line) => <div className={line.is_unknown_part ? 'unknown-part-request-line' : ''} key={line.id}><span><b>{line.is_unknown_part ? t('unknownPart.label') : line.part_number || t('common.noValue')}</b><small>{line.is_unknown_part && line.assembly ? `${t('unknownPart.assembly')}: ${line.assembly} · ` : ''}{line.description}</small>{line.linked_part_number && <small className="verified">{t('unknownPart.linkedTo')}: {line.linked_part_number} · {line.linked_part_description}</small>}</span><span className="request-line-side"><em>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${line.delivered_quantity} / ` : ''}{line.quantity} {line.unit}</em>{line.is_unknown_part && !line.linked_catalog_part_id && hasPermission('settings.manage') && <button className="secondary compact" onClick={() => setUnknownLink({ request, line })}><ShieldCheck size={14} />{t('unknownPart.linkAction')}</button>}</span></div>)}</div>{request.attachments.length > 0 && <details><summary>{t('requests.attachments')} ({request.attachments.length})</summary><AttachmentList items={request.attachments} /></details>}<div className="request-actions">{request.status === 'WAITING_APPROVAL' && hasPermission('requests.approve') && <><button className="primary" onClick={() => void decide(request.id, 'APPROVED')}><CheckCircle2 size={16} />{t('requests.approve')}</button><button className="secondary" onClick={() => void decide(request.id, 'REJECTED')}>{t('requests.reject')}</button></>}{['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.create') && <button className="secondary" onClick={() => setFulfillment(request)}><PackageCheck size={16} />{t('requests.updateFulfillment')}</button>}{hasPermission('requests.create') && <label className="secondary compact file-button"><Upload size={15} />{t('requests.addAttachment')}<input hidden type="file" accept="application/pdf,.docx,.xlsx,image/png,image/jpeg,image/webp" onChange={(event) => { void attach(request, event.target.files?.[0]); event.currentTarget.value = '' }} /></label>}{request.status !== 'DRAFT' && hasPermission('requests.create') && <button className="secondary" onClick={() => void generate(request)}><FilePlus2 size={16} />{t('requests.generate')} ({t(`language.${request.language}` as TranslationKey)})</button>}{request.documents.map((document) => <DocumentButtons key={document.id} path={document.download_endpoint} filename={document.filename} format={document.format} />)}</div></article>)}{!items.length && <div className="empty-state">{t('parts.empty')}</div>}</div>{create && <PartRequestCreateModal machines={machines} repairs={repairs} catalog={catalog} onClose={() => setCreate(false)} onSaved={() => { setCreate(false); void load() }} />}{unknownCreate && <UnknownPartRequestModal machines={machines} repairs={repairs} onClose={() => setUnknownCreate(false)} onSaved={() => void load()} />}{unknownLink && <UnknownPartLinkModal request={unknownLink.request} line={unknownLink.line} catalog={catalog} onClose={() => setUnknownLink(null)} onSaved={() => { setUnknownLink(null); void load() }} />}{fulfillment && <PartRequestFulfillmentModal request={fulfillment} onClose={() => setFulfillment(null)} onSaved={() => { setFulfillment(null); void load() }} />}</>
 }
 
 type QuickRequestLine = {
@@ -573,42 +660,246 @@ function RepairKitCreateModal({ parts, onClose, onSaved }: { parts: CatalogPartE
   return <Modal title={t('catalog.addKit')} onClose={onClose} wide><form className="form-grid" onSubmit={submit}><label>{t('admin.code')}<input required value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} /></label><label>{t('catalog.kitName')}<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>{t('machines.brand')}<input value={form.brand} onChange={(event) => setForm({ ...form, brand: event.target.value })} /></label><label>{t('machines.model')}<input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></label><label>{t('catalog.compatibility')}<input value={form.compatible_models} onChange={(event) => setForm({ ...form, compatible_models: event.target.value })} /></label><label>{t('catalog.revision')}<input value={form.revision} onChange={(event) => setForm({ ...form, revision: event.target.value })} /></label><label>{t('catalog.assembly')}<input value={form.assembly} onChange={(event) => setForm({ ...form, assembly: event.target.value })} /></label><label>{t('catalog.sourceDocument')}<input required value={form.source_document} onChange={(event) => setForm({ ...form, source_document: event.target.value })} /></label><label>{t('common.page')}<input required type="number" min="1" value={form.source_page} onChange={(event) => setForm({ ...form, source_page: event.target.value })} /></label><label>{t('catalog.confidence')}<input required type="number" min="0" max="1" step="0.01" value={form.confidence} onChange={(event) => setForm({ ...form, confidence: event.target.value })} /></label><label className="wide">{t('catalog.provenance')}<textarea required value={form.provenance} onChange={(event) => setForm({ ...form, provenance: event.target.value })} /></label><div className="wide request-lines"><div className="request-lines-head"><h4>{t('catalog.kitComponents')}</h4><button type="button" className="secondary compact" onClick={() => setComponents((current) => [...current, { part_id: '', quantity: 1, is_optional: false, note: '' }])}><Plus size={15} />{t('requests.addLine')}</button></div>{components.map((component, index) => <div className="request-line" key={index}><label>{t('repairCase.catalogPart')}<select required value={component.part_id} onChange={(event) => updateComponent(index, { part_id: event.target.value })}><option value="">{t('common.notSpecified')}</option>{parts.filter((part) => part.is_verified).map((part) => <option value={part.id} key={part.id}>{part.part_number} · {part.description}</option>)}</select></label><label>{t('common.quantity')}<input required type="number" min="0.01" step="0.01" value={component.quantity} onChange={(event) => updateComponent(index, { quantity: Number(event.target.value) })} /></label><label className="check-label"><input type="checkbox" checked={component.is_optional} onChange={(event) => updateComponent(index, { is_optional: event.target.checked })} />{t('catalog.optionalComponent')}</label><label>{t('common.notes')}<input value={component.note} onChange={(event) => updateComponent(index, { note: event.target.value })} /></label>{components.length > 1 && <button type="button" className="link remove-line" onClick={() => setComponents((current) => current.filter((_, itemIndex) => itemIndex !== index))}>{t('requests.removeLine')}</button>}</div>)}</div>{error && <div className="error wide">{error}</div>}<div className="actions wide"><button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" disabled={components.some((item) => !item.part_id || item.quantity <= 0)}>{t('common.save')}</button></div></form></Modal>
 }
 
+function CatalogAssemblyBrowser({
+  machine,
+  parts,
+  assembly,
+  onRequest,
+  onOpenHotspotEditor,
+}: {
+  machine: Machine
+  parts: CatalogPartEnhanced[]
+  assembly: string
+  onRequest: (part: CatalogPartEnhanced) => void
+  onOpenHotspotEditor: (part: CatalogPartEnhanced) => void
+}) {
+  const { t } = useI18n()
+  const assemblyParts = useMemo(
+    () => parts.filter((part) => part.assembly === assembly),
+    [parts, assembly],
+  )
+  const [selectedPartId, setSelectedPartId] = useState<number | null>(null)
+  const [documents, setDocuments] = useState<TechnicalLibraryDocument[]>([])
+  const [documentId, setDocumentId] = useState<number | ''>('')
+  const [pageNumber, setPageNumber] = useState(1)
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [hotspots, setHotspots] = useState<PartHotspot[]>([])
+  const [zoom, setZoom] = useState(100)
+  const [query, setQuery] = useState('')
+  const [error, setError] = useState('')
+  const [dragging, setDragging] = useState(false)
+  const dragState = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
+  const viewportRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const first = assemblyParts[0]?.id || null
+    setSelectedPartId((current) => assemblyParts.some((part) => part.id === current) ? current : first)
+    setQuery('')
+  }, [assembly, parts])
+  const selectedPart = assemblyParts.find((part) => part.id === selectedPartId) || assemblyParts[0]
+  const filteredParts = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase()
+    if (!normalized) return assemblyParts
+    return assemblyParts.filter((part) => `${part.position || ''} ${part.part_number} ${part.description} ${part.original_name || ''}`.toLocaleLowerCase().includes(normalized))
+  }, [assemblyParts, query])
+
+  useEffect(() => {
+    if (!selectedPart) return
+    let active = true
+    void api<TechnicalLibraryDocument[]>(`/technical-library?brand=${encodeURIComponent(selectedPart.brand)}${selectedPart.model ? `&model=${encodeURIComponent(selectedPart.model)}` : ''}`)
+      .then((items) => {
+        if (!active) return
+        setDocuments(items)
+        const sourceKey = selectedPart.source_document?.replace(/^technical_docs\//, '')
+        const filename = sourceKey?.split('/').pop()
+        const preferred = items.find((item) => item.source_key === sourceKey)
+          || items.find((item) => item.title === filename)
+          || items[0]
+        setDocumentId(preferred?.id || '')
+        setPageNumber(selectedPart.diagram_page || selectedPart.source_page || 1)
+      })
+      .catch((caught) => setError(friendlyError(caught, t('catalog.documentPreviewError'))))
+    return () => { active = false }
+  }, [selectedPart?.id])
+
+  useEffect(() => {
+    setPreviewUrl('')
+    if (!documentId) return
+    let active = true
+    let createdUrl = ''
+    void createApiObjectUrl(`/technical-library/${documentId}/pages/${pageNumber}/preview?scale=2`)
+      .then((result) => {
+        createdUrl = result.url
+        if (active) setPreviewUrl(result.url)
+      })
+      .catch((caught) => setError(friendlyError(caught, t('catalog.documentPreviewError'))))
+    return () => { active = false; if (createdUrl) URL.revokeObjectURL(createdUrl) }
+  }, [documentId, pageNumber])
+
+  useEffect(() => {
+    if (!documentId) { setHotspots([]); return }
+    void api<PartHotspot[]>(`/catalog/hotspots?technical_document_id=${documentId}&page_number=${pageNumber}`)
+      .then(setHotspots)
+      .catch((caught) => setError(friendlyError(caught, t('catalog.hotspotLoadError'))))
+  }, [documentId, pageNumber])
+
+  useEffect(() => {
+    const part = assemblyParts.find((item) => item.id === selectedPartId)
+    if (!part) return
+    const page = part.diagram_page || part.source_page || 1
+    setPageNumber(page)
+  }, [selectedPartId])
+
+  const verifiedHotspots = hotspots.filter((item) => item.is_verified)
+  const selectedHotspots = verifiedHotspots.filter((item) => item.part_id === selectedPart?.id)
+  const selectedDocument = documents.find((document) => document.id === documentId)
+  const diagramAvailable = Boolean(selectedPart?.diagram_page)
+
+  function startPan(event: React.PointerEvent<HTMLDivElement>) {
+    if (!viewportRef.current || event.button !== 0) return
+    dragState.current = { x: event.clientX, y: event.clientY, left: viewportRef.current.scrollLeft, top: viewportRef.current.scrollTop }
+    setDragging(true)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+  function movePan(event: React.PointerEvent<HTMLDivElement>) {
+    const origin = dragState.current
+    const viewport = viewportRef.current
+    if (!origin || !viewport) return
+    viewport.scrollLeft = origin.left - (event.clientX - origin.x)
+    viewport.scrollTop = origin.top - (event.clientY - origin.y)
+  }
+  function endPan(event: React.PointerEvent<HTMLDivElement>) {
+    dragState.current = null
+    setDragging(false)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+
+  if (!assemblyParts.length) return <div className="empty-state">{t('catalog.noCompatibleParts')}</div>
+  return <section className="visual-catalog-workspace" aria-label={t('catalog.visualWorkspace')}>
+    {error && <div className="error">{error}</div>}
+    <header className="visual-catalog-header">
+      <div><span className="badge">{t('catalog.selectedMachine')}</span><h3>{machine.name}</h3><p>{machine.brand} · {machine.model || t('common.noValue')} · {assembly}</p></div>
+      <div className="visual-catalog-source"><b>{selectedDocument?.title || selectedPart?.source_document || t('common.noValue')}</b><small>{t('common.page')} {pageNumber}{selectedPart?.source_figure ? ` · ${selectedPart.source_figure}` : ''}</small></div>
+    </header>
+    <div className="visual-catalog-grid">
+      <div className="visual-diagram-panel">
+        <div className="hotspot-tools">
+          <button className="secondary compact" aria-label={t('catalog.zoomOut')} disabled={zoom <= 75} onClick={() => setZoom((value) => Math.max(75, value - 25))}><ZoomOut size={16} /></button>
+          <span>{zoom}%</span>
+          <button className="secondary compact" aria-label={t('catalog.zoomIn')} disabled={zoom >= 250} onClick={() => setZoom((value) => Math.min(250, value + 25))}><ZoomIn size={16} /></button>
+          <button className="secondary compact" onClick={() => setZoom(100)}>{t('catalog.resetView')}</button>
+          <button className="secondary compact" onClick={() => void viewportRef.current?.requestFullscreen()}><Maximize2 size={16} />{t('catalog.fullscreen')}</button>
+        </div>
+        {!diagramAvailable && <div className="catalog-fallback-note"><b>{t('catalog.noVerifiedDiagram')}</b><span>{t('catalog.tableSelectionFallback')}</span></div>}
+        <div
+          className={`diagram-pan-viewport ${dragging ? 'dragging' : ''}`}
+          ref={viewportRef}
+          onPointerDown={startPan}
+          onPointerMove={movePan}
+          onPointerUp={endPan}
+          onPointerCancel={endPan}
+        >
+          <div className="diagram-scaled-canvas" style={{ width: `${zoom}%` }}>
+            {previewUrl ? <img draggable={false} src={previewUrl} alt={`${assembly} · ${t('common.page')} ${pageNumber}`} /> : <div className="diagram-loading">{t('common.loading')}</div>}
+            {verifiedHotspots.map((hotspot) => {
+              const mappedPart = assemblyParts.find((part) => part.id === hotspot.part_id)
+              if (!mappedPart) return null
+              const selected = mappedPart.id === selectedPart?.id
+              return <button
+                type="button"
+                key={hotspot.id}
+                className={`hotspot-marker verified-marker ${selected ? 'selected-marker' : ''}`}
+                style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%`, width: `${Math.max(hotspot.width, .025) * 100}%`, height: `${Math.max(hotspot.height, .025) * 100}%` }}
+                title={`${mappedPart.position || ''} · ${mappedPart.part_number} · ${mappedPart.description}`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => setSelectedPartId(mappedPart.id)}
+              >{hotspot.label || mappedPart.position || '•'}</button>
+            })}
+            {selectedPart && !selectedHotspots.length && <div className="selected-position-chip">{t('catalog.selectedPosition')}: <b>{selectedPart.position || t('common.noValue')}</b></div>}
+          </div>
+        </div>
+        <p className="diagram-pan-hint">{t('catalog.panHint')}</p>
+      </div>
+      <aside className="visual-part-details">
+        {selectedPart && <>
+          <span className="badge batch-complete">{selectedPart.is_verified ? t('catalog.verified') : t('catalog.unverified')}</span>
+          <h3>{selectedPart.position ? `${t('catalog.position')} ${selectedPart.position}` : selectedPart.part_number}</h3>
+          <code>{selectedPart.part_number}</code>
+          <p>{selectedPart.description}</p>
+          <dl className="detail-grid compact-details"><div><dt>{t('common.quantity')}</dt><dd>{selectedPart.quantity ?? t('common.noValue')} {selectedPart.unit || ''}</dd></div><div><dt>{t('catalog.compatibility')}</dt><dd>{selectedPart.compatible_models || selectedPart.model || t('common.noValue')}</dd></div><div><dt>{t('catalog.source')}</dt><dd>{selectedPart.source_document} · {t('common.page')} {selectedPart.source_page}</dd></div><div><dt>{t('catalog.verification')}</dt><dd>{selectedPart.verification_status || t('common.noValue')}</dd></div></dl>
+          <div className="actions vertical-actions">
+            {hasPermission('requests.create') && <button className="primary" onClick={() => onRequest(selectedPart)}><PackageCheck size={16} />{t('catalog.addToRequest')}</button>}
+            {hasPermission('parts.manage') && <button className="secondary" onClick={() => onOpenHotspotEditor(selectedPart)}>{t('catalog.manageVisualPositions')}</button>}
+          </div>
+        </>}
+      </aside>
+    </div>
+    <div className="visual-position-table">
+      <div className="searchbox"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('catalog.searchPositions')} /></div>
+      <div className="table-card"><table><thead><tr><th>{t('catalog.position')}</th><th>{t('common.partNumber')}</th><th>{t('catalog.description')}</th><th>{t('common.quantity')}</th><th>{t('catalog.source')}</th></tr></thead><tbody>{filteredParts.map((part) => <tr className={part.id === selectedPart?.id ? 'selected-catalog-row' : ''} key={part.id} onClick={() => setSelectedPartId(part.id)}><td><b>{part.position || t('common.noValue')}</b></td><td><code>{part.part_number}</code></td><td>{part.description}</td><td>{part.quantity ?? t('common.noValue')} {part.unit || ''}</td><td>{t('common.page')} {part.source_page}</td></tr>)}</tbody></table></div>
+    </div>
+  </section>
+}
+
 export function IndustrialCatalog({ defaultMachineId }: { defaultMachineId?: number } = {}) {
   const { t } = useI18n()
+  const [machines, setMachines] = useState<Machine[]>([])
+  const [selectedMachineId, setSelectedMachineId] = useState<number | ''>(defaultMachineId || '')
   const [parts, setParts] = useState<CatalogPartEnhanced[]>([])
   const [kits, setKits] = useState<RepairKit[]>([])
-  const [query, setQuery] = useState('')
+  const [assembly, setAssembly] = useState('')
   const [selected, setSelected] = useState<CatalogPartEnhanced | null>(null)
   const [requestPart, setRequestPart] = useState<CatalogPartEnhanced | null>(null)
   const [requestKit, setRequestKit] = useState<RepairKit | null>(null)
   const [createPart, setCreatePart] = useState(false)
   const [createKit, setCreateKit] = useState(false)
   const [error, setError] = useState('')
-  const load = () => Promise.all([api<CatalogPartEnhanced[]>('/catalog/parts'), api<RepairKit[]>('/repair-kits')]).then(([partItems, kitItems]) => { setParts(partItems); setKits(kitItems); setError('') }).catch((caught) => setError(friendlyError(caught, t('catalog.loadError'))))
-  useEffect(() => { void load() }, [])
-  const filtered = useMemo(() => parts.filter((part) => `${part.part_number} ${part.alternative_part_number || ''} ${(part.alternative_part_numbers || []).join(' ')} ${part.description} ${part.name_bg || ''} ${part.name_en || ''} ${part.name_ru || ''} ${part.original_name || ''} ${part.brand} ${part.model || ''} ${part.assembly || ''} ${part.position || ''}`.toLowerCase().includes(query.toLowerCase())), [parts, query])
-  async function verify(part: CatalogPartEnhanced) {
-    try { await api(`/catalog/parts/${part.id}/verify`, { method: 'POST' }); await load() } catch (caught) { setError(friendlyError(caught, t('catalog.verifyError'))) }
+  const selectedMachine = machines.find((machine) => machine.id === selectedMachineId)
+  useEffect(() => {
+    void Promise.all([api<Machine[]>('/machines'), api<RepairKit[]>('/repair-kits')])
+      .then(([machineItems, kitItems]) => { setMachines(machineItems); setKits(kitItems); setError('') })
+      .catch((caught) => setError(friendlyError(caught, t('catalog.loadError'))))
+  }, [])
+  useEffect(() => { if (defaultMachineId) setSelectedMachineId(defaultMachineId) }, [defaultMachineId])
+  const loadParts = () => {
+    if (!selectedMachineId) { setParts([]); setAssembly(''); return Promise.resolve() }
+    return api<CatalogPartEnhanced[]>(`/catalog/parts?verified_only=true&machine_id=${selectedMachineId}`)
+      .then((items) => {
+        setParts(items)
+        setAssembly((current) => current && items.some((item) => item.assembly === current)
+          ? current
+          : items.find((item) => item.assembly)?.assembly || '')
+        setError('')
+      })
+      .catch((caught) => setError(friendlyError(caught, t('catalog.loadError'))))
   }
+  useEffect(() => { setParts([]); setAssembly(''); void loadParts() }, [selectedMachineId])
+  const assemblies = useMemo(() => Array.from(new Set(parts.map((part) => part.assembly).filter((value): value is string => Boolean(value)))).sort(), [parts])
   async function approveKit(kit: RepairKit) {
     if (!window.confirm(t('catalog.approveKitConfirm'))) return
-    try { await api(`/repair-kits/${kit.id}/approve`, { method: 'POST' }); await load() } catch (caught) { setError(friendlyError(caught, t('catalog.approveKitError'))) }
+    try { await api(`/repair-kits/${kit.id}/approve`, { method: 'POST' }); const items = await api<RepairKit[]>('/repair-kits'); setKits(items) } catch (caught) { setError(friendlyError(caught, t('catalog.approveKitError'))) }
   }
   return <>
     <div className="toolbar">
-      <div><h3>{t('catalog.title')}</h3><p className="muted">{t('catalog.provenanceHint')}</p></div>
+      <div><h3>{t('catalog.title')}</h3><p className="muted">{t('catalog.machineFirstHint')}</p></div>
       {hasPermission('parts.manage') && <button className="primary" onClick={() => setCreatePart(true)}><Plus size={17} />{t('catalog.addPart')}</button>}
     </div>
-    <div className="filters"><div className="searchbox"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('catalog.searchPlaceholder')} /></div></div>
+    <div className="catalog-machine-selector panel">
+      <label>{t('catalog.chooseMachine')}<select value={selectedMachineId} onChange={(event) => setSelectedMachineId(event.target.value ? Number(event.target.value) : '')}><option value="">{t('catalog.chooseMachinePlaceholder')}</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name} · {machine.brand} {machine.model || ''}</option>)}</select></label>
+      {selectedMachine && <div className="selected-machine-summary"><b>{selectedMachine.name}</b><span>{selectedMachine.brand} · {selectedMachine.model || t('common.noValue')}</span><small>{t('machines.serialNumber')}: {selectedMachine.serial_number || t('common.noValue')}</small></div>}
+      {selectedMachineId && <label>{t('catalog.assembly')}<select value={assembly} onChange={(event) => setAssembly(event.target.value)}><option value="">{t('catalog.chooseAssembly')}</option>{assemblies.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>}
+    </div>
     {error && <div className="error">{error}</div>}
-    <div className="table-card"><table><thead><tr><th>{t('common.partNumber')}</th><th>{t('catalog.brandModel')}</th><th>{t('catalog.description')}</th><th>{t('catalog.source')}</th><th>{t('catalog.verification')}</th><th /></tr></thead><tbody>{filtered.map((part) => <tr key={part.id}><td><strong>{part.part_number}</strong><small>{[part.alternative_part_number, ...(part.alternative_part_numbers || [])].filter(Boolean).join(' · ')}</small></td><td>{part.brand}<small>{part.model} · {part.assembly}</small></td><td>{part.description}</td><td>{part.source_document ? `${part.source_document.split('/').pop()} · ${t('common.page')} ${part.source_page}` : t('common.noValue')}</td><td>{part.is_verified ? <span className="verified"><ShieldCheck size={15} />{t('catalog.verified')}</span> : <span className="unverified">{t('catalog.unverified')}</span>}</td><td><button className="link" onClick={() => setSelected(part)}>{t('catalog.visualPosition')}</button>{part.is_verified && hasPermission('requests.create') && <button className="link" onClick={() => setRequestPart(part)}>{t('catalog.addToRequest')}</button>}{!part.is_verified && hasPermission('parts.manage') && <button className="link" onClick={() => void verify(part)}>{t('catalog.verify')}</button>}</td></tr>)}</tbody></table></div>
+    {!selectedMachineId && <div className="empty-state visual-catalog-empty"><BookOpen size={34} /><h3>{t('catalog.chooseMachineTitle')}</h3><p>{t('catalog.chooseMachineExplanation')}</p></div>}
+    {selectedMachine && assembly && <CatalogAssemblyBrowser machine={selectedMachine} parts={parts} assembly={assembly} onRequest={setRequestPart} onOpenHotspotEditor={setSelected} />}
+    {selectedMachineId && !parts.length && <div className="empty-state">{t('catalog.noCompatibleParts')}</div>}
     <div className="toolbar section-heading"><div><h3>{t('catalog.kits')}</h3><p className="muted">{t('catalog.kitsHint')}</p></div>{hasPermission('parts.manage') && <button className="secondary" onClick={() => setCreateKit(true)}><Plus size={17} />{t('catalog.addKit')}</button>}</div>
-    <div className="cards-list">{kits.map((kit) => <article className="panel kit-card" key={kit.id}><div><span className={`badge ${kit.is_approved ? 'batch-complete' : 'batch-active'}`}>{kit.is_approved ? t('catalog.approvedKit') : t('catalog.pendingKit')}</span><h3>{kit.code} · {kit.name}</h3><p>{kit.brand} {kit.model} · {kit.compatible_models || t('common.noValue')} · {kit.assembly}</p><small>{kit.revision ? `${t('catalog.revision')}: ${kit.revision} · ` : ''}{kit.source_document} · {t('common.page')} {kit.source_page}{kit.confidence != null ? ` · ${t('catalog.confidence')}: ${Math.round(kit.confidence * 100)}%` : ''}</small></div><ul>{kit.components.map((component) => <li key={component.id}><b>{component.part_number}</b> {component.description} · {component.quantity}{component.is_optional ? ` · ${t('catalog.optionalComponent')}` : ''}{component.alternative_part_numbers?.length ? ` · ${t('catalog.alternativeNumbers')}: ${component.alternative_part_numbers.join(', ')}` : ''}</li>)}</ul><div className="actions">{kit.is_approved && hasPermission('requests.create') && <button className="primary" onClick={() => setRequestKit(kit)}>{t('catalog.addKitToRequest')}</button>}{!kit.is_approved && hasPermission('parts.manage') && <button className="secondary" onClick={() => void approveKit(kit)}>{t('catalog.approveKit')}</button>}</div></article>)}{!kits.length && <div className="empty-state">{t('catalog.noKits')}</div>}</div>
+    <div className="cards-list">{kits.map((kit) => <article className="panel kit-card" key={kit.id}><div><span className={`badge ${kit.is_approved ? 'batch-complete' : 'batch-active'}`}>{kit.is_approved ? t('catalog.approvedKit') : t('catalog.pendingKit')}</span><h3>{kit.code} · {kit.name}</h3><p>{kit.brand} {kit.model} · {kit.compatible_models || t('common.noValue')} · {kit.assembly}</p><small>{kit.revision ? `${t('catalog.revision')}: ${kit.revision} · ` : ''}{kit.source_document} · {t('common.page')} {kit.source_page}{kit.confidence != null ? ` · ${t('catalog.confidence')}: ${Math.round(kit.confidence * 100)}%` : ''}</small></div><ul>{kit.components.map((component) => <li key={component.id}><b>{component.part_number}</b> {component.description} · {component.quantity}{component.is_optional ? ` · ${t('catalog.optionalComponent')}` : ''}</li>)}</ul><div className="actions">{kit.is_approved && hasPermission('requests.create') && <button className="primary" onClick={() => setRequestKit(kit)}>{t('catalog.addKitToRequest')}</button>}{!kit.is_approved && hasPermission('parts.manage') && <button className="secondary" onClick={() => void approveKit(kit)}>{t('catalog.approveKit')}</button>}</div></article>)}{!kits.length && <div className="empty-state">{t('catalog.noKits')}</div>}</div>
     {selected && <PartHotspotViewer part={selected} allParts={parts} onRequest={(requestedPart) => { setSelected(null); setRequestPart(requestedPart) }} onClose={() => setSelected(null)} />}
-    {requestPart && <QuickPartRequestModal part={requestPart} defaultMachineId={defaultMachineId} onClose={() => setRequestPart(null)} />}
-    {requestKit && <QuickPartRequestModal kit={requestKit} defaultMachineId={defaultMachineId} onClose={() => setRequestKit(null)} />}
-    {createPart && <CatalogPartCreateModal parts={parts} onClose={() => setCreatePart(false)} onSaved={() => { setCreatePart(false); void load() }} />}
-    {createKit && <RepairKitCreateModal parts={parts} onClose={() => setCreateKit(false)} onSaved={() => { setCreateKit(false); void load() }} />}
+    {requestPart && <QuickPartRequestModal part={requestPart} defaultMachineId={selectedMachineId || defaultMachineId} onClose={() => setRequestPart(null)} />}
+    {requestKit && <QuickPartRequestModal kit={requestKit} defaultMachineId={selectedMachineId || defaultMachineId} onClose={() => setRequestKit(null)} />}
+    {createPart && <CatalogPartCreateModal parts={parts} onClose={() => setCreatePart(false)} onSaved={() => { setCreatePart(false); void loadParts() }} />}
+    {createKit && <RepairKitCreateModal parts={parts} onClose={() => setCreateKit(false)} onSaved={() => { setCreateKit(false); void api<RepairKit[]>('/repair-kits').then(setKits) }} />}
   </>
 }
 
@@ -634,7 +925,7 @@ function PartHotspotViewer({ part, allParts, onRequest, onClose }: { part: Catal
   const [documents, setDocuments] = useState<TechnicalLibraryDocument[]>([])
   const [images, setImages] = useState<CatalogPartImage[]>([])
   const [documentId, setDocumentId] = useState<number | ''>('')
-  const [pageNumber, setPageNumber] = useState(part.source_page || 1)
+  const [pageNumber, setPageNumber] = useState(part.diagram_page || part.source_page || 1)
   const [source, setSource] = useState('')
   const [confidence, setConfidence] = useState('')
   const [objectUrl, setObjectUrl] = useState('')
@@ -669,12 +960,12 @@ function PartHotspotViewer({ part, allParts, onRequest, onClose }: { part: Catal
     if (!documentId) return
     let active = true
     let createdUrl = ''
-    void createApiObjectUrl(`/technical-library/${documentId}/download`).then((result) => {
+    void createApiObjectUrl(`/technical-library/${documentId}/pages/${pageNumber}/preview?scale=2`).then((result) => {
       createdUrl = result.url
       if (active) { setObjectUrl(result.url); setMediaType(result.mediaType) }
     }).catch((caught) => setError(friendlyError(caught, t('catalog.documentPreviewError'))))
     return () => { active = false; if (createdUrl) URL.revokeObjectURL(createdUrl) }
-  }, [documentId])
+  }, [documentId, pageNumber])
 
   const visibleHotspots = hotspots.filter((item) => item.technical_document_id === documentId && item.page_number === pageNumber)
   async function addMarker(event: React.MouseEvent<HTMLDivElement>) {
@@ -717,7 +1008,7 @@ function PartHotspotViewer({ part, allParts, onRequest, onClose }: { part: Catal
       {hasPermission('parts.manage') && <div className="catalog-image-upload"><label>{t('catalog.addImage')}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setImageFile(event.target.files?.[0] || null)} /></label><button className="secondary" disabled={!imageFile || uploadingImage} onClick={() => void uploadImage()}><ImagePlus size={16} />{uploadingImage ? t('common.loading') : t('common.upload')}</button></div>}
       {part.is_verified && hasPermission('requests.create') && <button className="primary" onClick={() => onRequest(part)}><PackageCheck size={16} />{t('catalog.addToRequest')}</button>}
       <div className="hotspot-list"><h4>{t('catalog.positionsOnPage')}</h4>{visibleHotspots.map((item) => { const mappedPart = allParts.find((candidate) => candidate.id === item.part_id); return <div key={item.id}><span><b>{item.label || mappedPart?.part_number || t('common.noValue')}</b><small>{mappedPart?.description || t('common.noValue')}{item.confidence != null ? ` · ${t('catalog.confidence')}: ${Math.round(item.confidence * 100)}%` : ''}</small><small>{item.provenance || t('catalog.unverified')}</small></span>{item.is_verified ? <ShieldCheck size={17} /> : hasPermission('parts.manage') && <button className="link" onClick={() => void verifyHotspot(item.id)}>{t('catalog.verify')}</button>}</div> })}{!visibleHotspots.length && <small>{t('catalog.noPositions')}</small>}</div>
-    </aside><div className="hotspot-viewer"><div className="hotspot-tools"><button className="secondary compact" aria-label={t('catalog.zoomOut')} disabled={zoom <= 75} onClick={() => setZoom((value) => Math.max(75, value - 25))}><ZoomOut size={16} /></button><span>{zoom}%</span><button className="secondary compact" aria-label={t('catalog.zoomIn')} disabled={zoom >= 200} onClick={() => setZoom((value) => Math.min(200, value + 25))}><ZoomIn size={16} /></button><button className="secondary compact" onClick={() => void viewerRef.current?.requestFullscreen()}><Maximize2 size={16} />{t('catalog.fullscreen')}</button></div><div className="hotspot-scroll" ref={viewerRef}><div className={`hotspot-canvas ${marking ? 'marking' : ''}`} style={{ width: `${zoom}%`, minHeight: `${Math.round(620 * zoom / 100)}px` }} onClick={(event) => void addMarker(event)}>{objectUrl && mediaType.includes('pdf') && <object data={`${objectUrl}#page=${pageNumber}&view=FitH`} type="application/pdf"><p>{t('catalog.previewUnsupported')}</p></object>}{objectUrl && mediaType.startsWith('image/') && <img src={objectUrl} alt={part.description} />}{objectUrl && !mediaType.includes('pdf') && !mediaType.startsWith('image/') && <div className="empty-state">{t('catalog.previewUnsupported')}</div>}{visibleHotspots.map((item) => { const mappedPart = allParts.find((candidate) => candidate.id === item.part_id); return <button type="button" onClick={(event) => { event.stopPropagation(); if (item.is_verified && mappedPart && hasPermission('requests.create')) onRequest(mappedPart) }} key={item.id} title={mappedPart ? `${mappedPart.part_number} · ${mappedPart.description}` : item.label || t('common.noValue')} className={item.is_verified ? 'hotspot-marker verified-marker' : 'hotspot-marker'} style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${Math.max(item.width, .025) * 100}%`, height: `${Math.max(item.height, .025) * 100}%` }}>{item.label || mappedPart?.position || '•'}</button> })}</div></div></div></div>
+    </aside><div className="hotspot-viewer"><div className="hotspot-tools"><button className="secondary compact" aria-label={t('catalog.zoomOut')} disabled={zoom <= 75} onClick={() => setZoom((value) => Math.max(75, value - 25))}><ZoomOut size={16} /></button><span>{zoom}%</span><button className="secondary compact" aria-label={t('catalog.zoomIn')} disabled={zoom >= 200} onClick={() => setZoom((value) => Math.min(200, value + 25))}><ZoomIn size={16} /></button><button className="secondary compact" onClick={() => void viewerRef.current?.requestFullscreen()}><Maximize2 size={16} />{t('catalog.fullscreen')}</button></div><div className="hotspot-scroll" ref={viewerRef}><div className={`hotspot-canvas ${marking ? 'marking' : ''}`} style={{ width: `${zoom}%` }} onClick={(event) => void addMarker(event)}>{!objectUrl && <div className="diagram-loading">{t('common.loading')}</div>}{objectUrl && mediaType.startsWith('image/') && <img src={objectUrl} alt={`${part.description} · ${t('common.page')} ${pageNumber}`} />}{objectUrl && !mediaType.startsWith('image/') && <div className="empty-state">{t('catalog.previewUnsupported')}</div>}{visibleHotspots.map((item) => { const mappedPart = allParts.find((candidate) => candidate.id === item.part_id); return <button type="button" onClick={(event) => { event.stopPropagation(); if (item.is_verified && mappedPart && hasPermission('requests.create')) onRequest(mappedPart) }} key={item.id} title={mappedPart ? `${mappedPart.part_number} · ${mappedPart.description}` : item.label || t('common.noValue')} className={item.is_verified ? 'hotspot-marker verified-marker' : 'hotspot-marker'} style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${Math.max(item.width, .025) * 100}%`, height: `${Math.max(item.height, .025) * 100}%` }}>{item.label || mappedPart?.position || '•'}</button> })}</div></div></div></div>
   </Modal>
 }
 

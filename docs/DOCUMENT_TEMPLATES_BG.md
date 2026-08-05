@@ -6,7 +6,7 @@
 
 ## Генериране
 
-- Issue/return: A4 portrait, тройна фирмена идентичност, protocol title, машинен snapshot, точно десет checklist реда, общо състояние, предназначение, бележки, подписи и batch trace.
+- Issue/return: A4 portrait по реалния снимков образец, тройна фирмена шапка KRZ/ODESSOS/RINA, protocol title, машинен snapshot, точно десет checklist реда, общо състояние, предназначение, бележки, подписи в оригиналните клетки и batch trace. При нормално съдържание DOCX/PDF са една страница; отделна страница за потвърдени подписи не се добавя.
 - Repair: фирмен header, before/problem/diagnosis/work/event/part/test/after секции и автоматично записан извършил ремонта; няма handover/acceptance позиции; снимки само ако са качени към ремонта.
 - Parts request: компактна technical-specification форма, машинен block само при linked asset, четири колони за записаните редове, provenance, request/date/requester/decision.
 - Condition клетките не се попълват автоматично. `READY`, използвани части, получател, местоположение и подписи не се измислят.
@@ -15,7 +15,7 @@
 
 ## Управление на версии
 
-Seed-ът регистрира BG/EN/RU машинно използваеми DOCX v2 шаблони с отделен човешки текст, SHA-256 и validation report. Снимките и историческите документи са provenance reference, не executable template и не нов бизнес факт.
+Seed-ът регистрира BG/EN/RU машинно използваеми transfer DOCX v3 шаблони и останалите контролирани шаблони с отделен човешки текст, SHA-256 и validation report. Снимките и историческите документи са provenance reference, не executable template и не нов бизнес факт.
 
 Нова версия се качва през Administration като DOCX и съдържа език, начало/край на валидност, задължителни полета, правило за номерация, отдел, layout contract и описание на промяната. Server-ът изчислява SHA-256 и проверява четим DOCX ZIP, `TEMPLATE_LANGUAGE`, `DOCUMENT_NUMBER`, `SIGNATURE_STATUS`, съставител, required fields и забраната за `reference_only`. Issue/return/part-request шаблоните изискват двете си подписни позиции; вътрешният repair v3 изисква само позицията за извършилия ремонта. Невалиден файл остава `FAILED` и не може да бъде публикуван.
 
@@ -37,3 +37,8 @@ backend/.venv/Scripts/python.exe backend/scripts/document_qa.py <output-director
 - parts-request DOCX: `3ba8e43102ae044b02b6aa7a4cd3b06ff00bce444a56fc8da6ba737c42bbc7a7`.
 
 Рендерирайте всеки PDF до PNG и проверете всички страници за clipping, overlap, повредена кирилица, разкъсани таблици и неочаквана pagination. DOCX трябва да се рендерира с Word/LibreOffice. Ако headless renderer липсва или блокира, package-level проверката е валиден fallback, но DOCX визуалното рендериране се отчита честно като непотвърдено.
+
+
+## Transfer шаблони v3
+
+Шаблоните се възпроизвеждат с `python scripts/generate_transfer_templates.py`. Те съдържат скрити машинни маркери за двете подписни позиции. При финализиране маркерите се заменят с криптографски обвързаните графични подписи в същите клетки. Ако DOCX→PDF конверсията е налична, PDF се създава от подписания DOCX; fallback-ът поставя подписите върху първата страница и не създава annex.

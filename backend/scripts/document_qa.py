@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
 import secrets
@@ -102,7 +103,7 @@ def _docx_audit(path: Path) -> dict:
 
 def _pdf_audit(path: Path) -> dict:
     content = path.read_bytes()
-    page_count = len(re.findall(rb"/Type\s*/Page\b", content))
+    page_count = len(PdfReader(io.BytesIO(content)).pages)
     media_boxes = [
         [float(value) for value in match]
         for match in re.findall(
@@ -174,6 +175,24 @@ def generate(output: Path) -> dict:
             previous_status=machine.status,
             previous_location_id=machine.location_id,
             issue_location_id=machine.location_id,
+            handed_over_by=user.full_name,
+            handed_over_job_title=user.job_title,
+            accepted_by="Иван Петров Иванов",
+            condition_text="Добро",
+            location_text="Сух док - QA проверка",
+            remarks="Комплектна и подготвена за работа.",
+            issue_checklist=[
+                {"code": "PUMP", "label": "Помпа", "condition": "GOOD"},
+                {"code": "SUPPLY_HOSE", "label": "Шланг захранващ", "condition": "GOOD", "length_m": 25},
+                {"code": "HP_HOSE", "label": "Шланг изходящ ВН", "condition": "GOOD", "length_m": 40},
+                {"code": "GUN", "label": "Пистолет", "condition": "GOOD"},
+                {"code": "NOZZLE", "label": "Дюза метла / ротационна", "condition": "NA"},
+                {"code": "TIPS", "label": "Накрайници", "condition": "GOOD"},
+                {"code": "CABLE", "label": "Кабел", "condition": "GOOD", "length_m": 30},
+                {"code": "PLUG", "label": "Куплунг / Еврощек", "condition": "GOOD"},
+                {"code": "CHASSIS", "label": "Ходова част", "condition": "GOOD"},
+                {"code": "BODY", "label": "Корпус", "condition": "GOOD"},
+            ],
         )
         db.add(transfer)
         db.flush()
@@ -249,9 +268,13 @@ def generate(output: Path) -> dict:
         issue_documents = make_protocol_documents(db, transfer, batch, user.id, "bg")
         transfer.is_active = False
         transfer.returned_at = now
-        transfer.return_condition_text = "QA състояние при връщане"
-        transfer.return_result_text = "QA резултат от връщането"
+        transfer.returned_by_name = "Иван Петров Иванов"
+        transfer.return_accepted_by = user.full_name
+        transfer.return_accepted_job_title = user.job_title
+        transfer.return_condition_text = "Добро"
+        transfer.return_result_text = "Приета след проверка"
         transfer.return_notes = "QA бележка"
+        transfer.return_checklist = list(transfer.issue_checklist or [])
         return_documents = make_return_documents(db, transfer, batch, user.id, "bg")
         repair_documents = make_repair_documents(db, repair, user.id, "bg")
         request_documents = make_part_request_documents(db, request, user.id, "bg")
@@ -327,6 +350,20 @@ def generate(output: Path) -> dict:
         )
         and "ОКОНЧАТЕЛЕН ВЪТРЕШЕН ПРОТОКОЛ"
         in results["repair"]["docx"]["text"],
+        "transfer_protocols_single_page": all(
+            results[name]["pdf"]["pages"] == 1 for name in ("issue", "return")
+        ),
+        "transfer_protocol_header_media_present": all(
+            len(results[name]["docx"]["media"]) >= 3 for name in ("issue", "return")
+        ),
+        "transfer_protocol_original_rows_present": all(
+            all(label in results[name]["docx"]["text"] for label in (
+                "Помпа", "Шланг захранващ", "Шланг изходящ ВН",
+                "Пистолет", "Дюза метла / ротационна", "Накрайници",
+                "Кабел", "Куплунг / Еврощек", "Ходова част", "Корпус",
+            ))
+            for name in ("issue", "return")
+        ),
         "repair_is_internal_only": all(
             "ОКОНЧАТЕЛЕН ВЪТРЕШЕН ПРОТОКОЛ" in results["repair"][format_name]["text"]
             and "Одобрил" not in results["repair"][format_name]["text"]
