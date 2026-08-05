@@ -72,6 +72,7 @@ describe('групови предавания', () => {
     const result: BulkIssueResult = {
       message: 'Успешно', batch_id: 1, batch_reference: 'HPWJ-B-1',
       zip_download_endpoint: '/batch.zip',
+      signing_tasks: [],
       transfers: [{
         transfer_id: 10, protocol_number: 'HPWJ-10', machine_id: 1, machine_number: '4',
         workflow_status: 'COMPLETED', official_document_id: 20, signing_tasks: [],

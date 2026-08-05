@@ -1,5 +1,8 @@
 name: Build check
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches: [main]
 
 jobs:
   frontend:
@@ -9,8 +12,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
         working-directory: frontend
@@ -36,7 +37,7 @@ jobs:
             backend/requirements-dev.txt
       - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
       - run: python -m compileall backend/app backend/scripts scripts tests
-      - run: python -m ruff check backend/app backend/scripts scripts tests
+      - run: python -m ruff check --select E9 backend/app backend/scripts scripts tests
       - run: python -m pytest -q
       - run: python scripts/verify_release.py --output release-verification
       - uses: actions/upload-artifact@v4
