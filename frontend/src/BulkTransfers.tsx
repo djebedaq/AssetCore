@@ -274,8 +274,10 @@ export function CancelBatchModal({ batch, onClose, onCancelled }: {
           <div><dt>{t('common.machines')}</dt><dd>{batch.total_machines}</dd></div>
           <div><dt>{t('bulk.awaitingSignature')}</dt><dd>{batch.awaiting_signature_machines}</dd></div>
         </dl>
-        <label className="cancel-reason-label">{t('bulk.cancelReason')}
+        <label className="cancel-reason-label" htmlFor={`cancel-reason-${batch.batch_id}`}>{t('bulk.cancelReason')}
           <textarea
+            id={`cancel-reason-${batch.batch_id}`}
+            aria-describedby={`cancel-reason-hint-${batch.batch_id}`}
             autoFocus
             required
             minLength={3}
@@ -284,8 +286,8 @@ export function CancelBatchModal({ batch, onClose, onCancelled }: {
             onChange={(event) => setReason(event.target.value)}
             placeholder={t('bulk.cancelReasonPlaceholder')}
           />
-          <small>{t('bulk.cancelReasonHint')}</small>
         </label>
+        <small id={`cancel-reason-hint-${batch.batch_id}`}>{t('bulk.cancelReasonHint')}</small>
         {error && <div className="error" role="alert"><strong>{error.message === 'reason_required' ? t('bulk.cancelReasonRequired') : t(localizedErrorKey(error))}</strong></div>}
         <div className="actions">
           <button type="button" className="secondary" onClick={onClose} disabled={busy}>{t('common.back')}</button>

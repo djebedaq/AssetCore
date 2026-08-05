@@ -1,15 +1,12 @@
-ASSETCORE v12 — CI HOTFIX
+AssetCore v12 — pnpm test hotfix
 
-1. Отвори локалната папка на repository-то през GitHub Desktop: Repository -> Show in Explorer.
-2. Увери се, че избраният branch е assetcore-v12-final.
-3. Копирай папките .github и frontend от този hotfix върху съществуващите папки в repository-то.
-4. Потвърди замяната на двата файла.
-5. В GitHub Desktop направи commit с име: Fix GitHub Actions checks
-6. Натисни Push origin.
-7. Изчакай новите проверки в Pull Request №10. Не натискай Merge, докато всички проверки не са зелени.
+Замени папката frontend от този hotfix върху папката на repository-то.
+Променят се само:
+- frontend/src/BulkTransfers.tsx
+- frontend/src/IndustrialPlatform.test.tsx
+- frontend/src/i18n.test.tsx
 
-Промени:
-- премахва двойното стартиране на проверки за push към feature branch и pull_request;
-- поправя pnpm стартирането в GitHub Actions;
-- поправя липсващото signing_tasks поле във frontend теста;
-- временно проверява с Ruff само критични Python синтактични грешки, докато import-order забележките бъдат почистени отделно.
+Поправки:
+1. Достъпно и еднозначно label свързване за причината при анулиране.
+2. Тестът на визуалния каталог използва актуалния machine-filtered API endpoint и пълен verified part fixture.
+3. i18n тестът очаква задължителния бутон „Издай“, а не стария текст „Групово издаване“.

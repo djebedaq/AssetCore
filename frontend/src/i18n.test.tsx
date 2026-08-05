@@ -28,7 +28,7 @@ describe('многоезична архитектура', () => {
   it('използва български fallback при невалидно запазено предпочитание', () => {
     localStorage.setItem(LANGUAGE_STORAGE_KEY, 'de')
     expect(getStoredLocale()).toBe('bg')
-    expect(translate('bg', 'bulk.issue')).toBe('Групово издаване')
+    expect(translate('bg', 'bulk.issue')).toBe('Издай')
   })
 
   it('превключва езика и запазва избора локално', async () => {
