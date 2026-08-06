@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from contextlib import nullcontext
 from dataclasses import dataclass
 from threading import RLock
@@ -55,6 +56,7 @@ from .transfer_signing import (
 from .workflow import add_machine_event
 
 _sqlite_transfer_lock = RLock()
+logger = logging.getLogger("uvicorn.error")
 
 
 def _sqlite_guard(db: Session):
@@ -159,6 +161,33 @@ def _availability_message(
     )
 
 
+
+
+def _return_stage_label(stage: str) -> str:
+    code, _, suffix = stage.partition(":")
+    labels = {
+        "load_machines": "зареждане на машините",
+        "load_transfers": "зареждане на активните издавания",
+        "validate_return_locations": "проверка на местоположението",
+        "validate_return_conflicts": "проверка за конфликт на операцията",
+        "validate_return_recipient_snapshot": "проверка на получателя",
+        "create_returner_identity": "създаване на самоличност за подпис",
+        "create_return_operation_batch": "създаване на операцията по приемане",
+        "prepare_return_protocols": "подготовка на протоколите",
+        "generate_return_documents": "генериране на DOCX/PDF протокола",
+        "load_return_official_document": "регистриране на официалния протокол",
+        "record_return_history": "записване на историята",
+        "prepare_return_batch_signing": "подготовка на подписите",
+        "record_return_batch_audit": "записване на одитната следа",
+        "flush_return_transaction": "проверка на записите в базата",
+        "calculate_return_batch_progress": "изчисляване на състоянието на партидата",
+        "commit_return_transaction": "окончателно записване на операцията",
+    }
+    label = labels.get(code, code)
+    if suffix.startswith("machine_"):
+        label += f" за машина №{suffix.removeprefix('machine_')}"
+    return label
+
 def _record_rejection(
     db: Session,
     user: User,
@@ -166,19 +195,23 @@ def _record_rejection(
     machine_ids: list[int],
     reason: str,
     conflicts: list[dict[str, Any]] | None = None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> None:
+    details: dict[str, Any] = {
+        "заявени_machine_ids": machine_ids,
+        "резултат": "отказано",
+        "причина": reason,
+        "конфликти": conflicts or [],
+    }
+    if diagnostics:
+        details["диагностика"] = diagnostics
     add_audit_log(
         db,
         user,
         "transfer_operation",
         None,
         action,
-        {
-            "заявени_machine_ids": machine_ids,
-            "резултат": "отказано",
-            "причина": reason,
-            "конфликти": conflicts or [],
-        },
+        details,
     )
     db.commit()
 
@@ -1520,6 +1553,8 @@ def _bulk_return_impl(
     machine_ids = [item.machine_id for item in data.items]
     transfer_ids = [item.transfer_id for item in data.items]
     language = user.preferred_language
+    diagnostic_id = f"RET-{uuid4().hex[:12].upper()}"
+    stage = "load_machines"
     try:
         machine_statement = (
             select(Machine)
@@ -1537,6 +1572,7 @@ def _bulk_return_impl(
                 {"missing_machine_ids": missing_machine_ids},
             )
 
+        stage = "load_transfers"
         transfer_statement = (
             select(TransferProtocol)
             .options(joinedload(TransferProtocol.batch))
@@ -1554,12 +1590,14 @@ def _bulk_return_impl(
                 {"missing_transfer_ids": missing_transfer_ids},
             )
 
+        stage = "validate_return_locations"
         _validate_location_ids(
             db,
             {item.location_id for item in data.items if item.location_id is not None},
             language,
         )
 
+        stage = "validate_return_conflicts"
         conflicts: list[dict[str, Any]] = []
         for item in data.items:
             transfer = transfer_by_id[item.transfer_id]
@@ -1621,6 +1659,7 @@ def _bulk_return_impl(
                 {"conflicts": conflicts},
             )
 
+        stage = "validate_return_recipient_snapshot"
         recipients = {
             (transfer_by_id[item.transfer_id].accepted_by or "").strip()
             for item in data.items
@@ -1643,6 +1682,7 @@ def _bulk_return_impl(
                 "Запазените имена на получателя са непълни и операцията не може да бъде приключена.",
                 {"transfer_ids": transfer_ids},
             )
+        stage = "create_returner_identity"
         returned_person = TransferPartyInput(
             first_name=name_parts[0],
             middle_name=" ".join(name_parts[1:-1]),
@@ -1651,6 +1691,7 @@ def _bulk_return_impl(
         external_signer = create_external_party(
             db, returned_person, user, "RETURNED_BY"
         )
+        stage = "create_return_operation_batch"
         return_operation_batch = TransferBatch(
             batch_reference=(
                 f"RET-{now:%Y%m%d%H%M%S}-{uuid4().hex[:8].upper()}"
@@ -1663,6 +1704,7 @@ def _bulk_return_impl(
         db.add(return_operation_batch)
         db.flush()
 
+        stage = "prepare_return_protocols"
         returned_results: list[dict[str, Any]] = []
         affected_batches: dict[int, TransferBatch] = {}
         for item in data.items:
@@ -1698,6 +1740,7 @@ def _bulk_return_impl(
             if transfer.batch is not None:
                 affected_batches[transfer.batch.id] = transfer.batch
             transfer.machine = machine
+            stage = f"generate_return_documents:machine_{machine.inventory_number}"
             return_documents = make_return_documents(
                 db,
                 transfer,
@@ -1707,6 +1750,7 @@ def _bulk_return_impl(
             )
             db.add_all(return_documents)
             db.flush()
+            stage = f"load_return_official_document:machine_{machine.inventory_number}"
             official_document = db.scalar(
                 select(OfficialDocument)
                 .where(
@@ -1721,6 +1765,7 @@ def _bulk_return_impl(
                     "Официалният документ за връщането не е намерен."
                 )
             signing_tasks: list[dict[str, Any]] = []
+            stage = f"record_return_history:machine_{machine.inventory_number}"
             add_machine_event(
                 db,
                 machine,
@@ -1807,6 +1852,7 @@ def _bulk_return_impl(
                 }
             )
 
+        stage = "prepare_return_batch_signing"
         return_signing_document, return_signing_tasks = prepare_return_batch_signing(
             db,
             batch=return_operation_batch,
@@ -1820,6 +1866,7 @@ def _bulk_return_impl(
         if returned_results:
             returned_results[0]["signing_tasks"] = return_signing_tasks
 
+        stage = "record_return_batch_audit"
         add_audit_log(
             db,
             user,
@@ -1839,8 +1886,11 @@ def _bulk_return_impl(
             },
             return_operation_batch.batch_reference,
         )
+        stage = "flush_return_transaction"
         db.flush()
+        stage = "calculate_return_batch_progress"
         progresses = [_batch_progress(db, batch) for batch in affected_batches.values()]
+        stage = "commit_return_transaction"
         db.commit()
         return {
             "message": translate("return.awaiting_signature", language),
@@ -1911,19 +1961,53 @@ def _bulk_return_impl(
             str(exc),
             {},
         ) from exc
-    except Exception:
+    except Exception as exc:
+        exception_type = type(exc).__name__
+        logger.exception(
+            "AssetCore bulk return failed diagnostic_id=%s stage=%s "
+            "user_id=%s machine_ids=%s transfer_ids=%s exception_type=%s",
+            diagnostic_id,
+            stage,
+            user.id,
+            machine_ids,
+            transfer_ids,
+            exception_type,
+        )
         db.rollback()
+        stage_label = _return_stage_label(stage)
+        safe_message = (
+            "Приемането не можа да бъде завършено при "
+            f"{stage_label}. Диагностичен код: {diagnostic_id}."
+        )
+        diagnostics = {
+            "diagnostic_id": diagnostic_id,
+            "stage": stage,
+            "stage_label": stage_label,
+            "exception_type": exception_type,
+            "transfer_ids": transfer_ids,
+        }
         try:
             _record_rejection(
                 db,
                 user,
                 "Неуспешно групово връщане",
                 machine_ids,
-                "Операцията е върната изцяло поради вътрешна грешка.",
+                safe_message,
+                diagnostics=diagnostics,
             )
         except Exception:
+            logger.exception(
+                "AssetCore failed to persist bulk return diagnostic "
+                "diagnostic_id=%s",
+                diagnostic_id,
+            )
             db.rollback()
-        raise
+        raise TransferServiceError(
+            500,
+            "bulk_return_internal_error",
+            safe_message,
+            diagnostics,
+        ) from exc
 
 
 def bulk_return(

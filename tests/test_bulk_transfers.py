@@ -508,3 +508,53 @@ def test_duplicate_selection_returns_structured_bulgarian_validation_error(
     detail = response.json()["detail"]
     assert detail["code"] == "validation_error"
     assert "повече от веднъж" in detail["message"]
+
+
+def test_unexpected_return_failure_reports_diagnostic_id_and_stage(
+    client,
+    auth_headers,
+    machine_ids,
+    issue_payload,
+    session_factory,
+    monkeypatch,
+):
+    created = issue(client, auth_headers, issue_payload(machine_ids["4"])).json()
+
+    def fail_return_documents(*args, **kwargs):
+        raise RuntimeError("forced diagnostic failure")
+
+    monkeypatch.setattr(
+        "app.transfer_service.make_return_documents",
+        fail_return_documents,
+    )
+    response = perform_return(
+        client,
+        auth_headers,
+        return_payload(*created["transfers"]),
+        sign=False,
+    )
+
+    assert response.status_code == 500, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "bulk_return_internal_error"
+    assert detail["diagnostic_id"].startswith("RET-")
+    assert detail["stage"] == "generate_return_documents:machine_4"
+    assert detail["exception_type"] == "RuntimeError"
+    assert detail["diagnostic_id"] in detail["message"]
+
+    with session_factory() as session:
+        transfer = session.get(
+            TransferProtocol,
+            created["transfers"][0]["transfer_id"],
+        )
+        assert transfer.is_active is True
+        assert transfer.return_status != "AWAITING_SIGNATURE"
+        audit = session.scalar(
+            select(AuditLog)
+            .where(AuditLog.action == "Неуспешно групово връщане")
+            .order_by(AuditLog.id.desc())
+        )
+        assert audit is not None
+        audit_details = json.loads(audit.details or "{}")
+        assert audit_details["диагностика"]["diagnostic_id"] == detail["diagnostic_id"]
+        assert audit_details["диагностика"]["stage"] == detail["stage"]

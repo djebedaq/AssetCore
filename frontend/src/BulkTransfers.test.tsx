@@ -57,6 +57,19 @@ describe('групови предавания', () => {
     expect(screen.queryByText(/issue_conflict/)).not.toBeInTheDocument()
   })
 
+  it('показва диагностичния код и точния етап при вътрешна грешка', () => {
+    const error = new ApiError(500, {
+      code: 'bulk_return_internal_error',
+      message: 'Приемането не можа да бъде завършено. Диагностичен код: RET-ABC123.',
+      diagnostic_id: 'RET-ABC123',
+      stage: 'prepare_return_batch_signing',
+    })
+    render(<ConflictNotice error={error} />)
+    expect(screen.getByRole('alert')).toHaveTextContent('Приемането не можа да бъде завършено.')
+    expect(screen.getByRole('alert')).toHaveTextContent('RET-ABC123')
+    expect(screen.getByRole('alert')).toHaveTextContent('prepare_return_batch_signing')
+  })
+
   it('показва частично върната партида и оставащи машини', () => {
     render(<BatchProgressCard batch={{
       batch_id: 1, batch_reference: 'HPWJ-B-1', status: 'PARTIALLY_RETURNED',
