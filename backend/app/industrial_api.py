@@ -1458,7 +1458,15 @@ def update_repair_case(
             repair.started_at = utcnow()
         repair.status = next_status
         machine_status = REPAIR_TO_MACHINE_STATUS[next_status]
-        ensure_machine_transition(repair.machine.status, machine_status)
+        try:
+            ensure_machine_transition(repair.machine.status, machine_status)
+        except HTTPException as exc:
+            # Older repair records can contain a machine status that no longer
+            # matches the active repair stage. For this exact active repair,
+            # safely reconcile only among repair-controlled statuses.
+            repair_controlled = set(REPAIR_TO_MACHINE_STATUS.values())
+            if repair.machine.status not in repair_controlled or machine_status not in repair_controlled:
+                raise exc
         repair.machine.status = machine_status
     event = RepairEvent(
         repair_id=repair.id,
@@ -1596,7 +1604,14 @@ def add_repair_participant(
         created_by_id=user.id,
     )
     db.add(participant)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise business_conflict(
+            "repair_participant_storage_error",
+            "Участникът не може да бъде записан. Проверете дали вече не е добавен и опитайте отново.",
+        ) from exc
     add_audit_log(
         db, user, "repair_participant", participant.id,
         "Добавен участник във вътрешен ремонт",

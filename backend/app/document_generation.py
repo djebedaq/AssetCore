@@ -258,6 +258,19 @@ TEXT = {
     },
 }
 
+CHECKLIST_CODES = [
+    "pump",
+    "supply_hose",
+    "hp_hose",
+    "gun",
+    "nozzle",
+    "tips",
+    "cable",
+    "plug",
+    "chassis",
+    "body",
+]
+
 CHECKLIST = {
     "bg": [
         "Помпа",
@@ -484,9 +497,11 @@ def _checklist_rows(transfer: TransferProtocol, operation: str, language: str) -
     }[language]
     if not stored:
         return [(component, "") for component in CHECKLIST[language]]
+    label_by_code = dict(zip(CHECKLIST_CODES, CHECKLIST[language], strict=True))
     rows = []
     for item in stored:
-        label = str(item.get("label") or item.get("code") or "")
+        code = str(item.get("code") or "")
+        label = label_by_code.get(code) or str(item.get("label") or code)
         value = condition_labels.get(str(item.get("condition") or ""), str(item.get("condition") or ""))
         if item.get("length_m") is not None:
             value += f" · {item['length_m']} m"

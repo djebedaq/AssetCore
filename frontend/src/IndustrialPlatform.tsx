@@ -359,7 +359,13 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
   const [partDraft, setPartDraft] = useState({ catalog_part_id: '', quantity: 1 })
   const [participantDraft, setParticipantDraft] = useState({ full_name: '', job_title: '', contribution: '' })
   const fileRef = useRef<HTMLInputElement>(null)
-  const load = () => Promise.all([api<RepairCase>(`/repair-cases/${repairId}`), api<CatalogPartEnhanced[]>('/catalog/parts')]).then(([data, partItems]) => { setRepair(data); setCatalog(partItems.filter((item) => item.is_verified)); setForm({ diagnosis: data.diagnosis || '', required_work: data.required_work || '', removed_parts_text: data.removed_parts_text || '', work_performed: data.work_performed || '', result: data.result || '', condition_after: data.condition_after || '', test_method: data.test_method || '', test_pressure_bar: data.test_pressure_bar != null ? String(data.test_pressure_bar) : '', leaks_detected: data.leaks_detected == null ? '' : data.leaks_detected ? 'yes' : 'no', electrical_test_result: data.electrical_test_result || '', functional_test_result: data.functional_test_result || '', test_details: data.test_details || '', test_passed: data.test_passed == null ? '' : data.test_passed ? 'yes' : 'no' }); setError('') }).catch((caught) => setError(friendlyError(caught, t('repairCase.loadError'))))
+  const load = () => api<RepairCase>(`/repair-cases/${repairId}`).then(async (data) => {
+    const partItems = await api<CatalogPartEnhanced[]>(`/catalog/parts?verified_only=true&machine_id=${data.machine_id}`)
+    setRepair(data)
+    setCatalog(partItems)
+    setForm({ diagnosis: data.diagnosis || '', required_work: data.required_work || '', removed_parts_text: data.removed_parts_text || '', work_performed: data.work_performed || '', result: data.result || '', condition_after: data.condition_after || '', test_method: data.test_method || '', test_pressure_bar: data.test_pressure_bar != null ? String(data.test_pressure_bar) : '', leaks_detected: data.leaks_detected == null ? '' : data.leaks_detected ? 'yes' : 'no', electrical_test_result: data.electrical_test_result || '', functional_test_result: data.functional_test_result || '', test_details: data.test_details || '', test_passed: data.test_passed == null ? '' : data.test_passed ? 'yes' : 'no' })
+    setError('')
+  }).catch((caught) => setError(friendlyError(caught, t('repairCase.loadError'))))
   useEffect(() => { void load() }, [repairId])
   async function transition(nextStatus: string) {
     if (!repair) return
@@ -398,7 +404,14 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
     event.preventDefault()
     if (!repair || !participantDraft.full_name.trim()) return
     try {
-      await api(`/repair-cases/${repair.id}/participants`, { method: 'POST', body: JSON.stringify(participantDraft) })
+      await api(`/repair-cases/${repair.id}/participants`, {
+        method: 'POST',
+        body: JSON.stringify({
+          full_name: participantDraft.full_name.trim(),
+          job_title: participantDraft.job_title.trim() || null,
+          contribution: participantDraft.contribution.trim() || null,
+        }),
+      })
       setParticipantDraft({ full_name: '', job_title: '', contribution: '' })
       await load(); onChanged()
     } catch (caught) { setError(friendlyError(caught, t('repairCase.participantError'))) }
@@ -836,7 +849,14 @@ function CatalogAssemblyBrowser({
     </div>
     <div className="visual-position-table">
       <div className="searchbox"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('catalog.searchPositions')} /></div>
-      <div className="table-card"><table><thead><tr><th>{t('catalog.position')}</th><th>{t('common.partNumber')}</th><th>{t('catalog.description')}</th><th>{t('common.quantity')}</th><th>{t('catalog.source')}</th></tr></thead><tbody>{filteredParts.map((part) => <tr className={part.id === selectedPart?.id ? 'selected-catalog-row' : ''} key={part.id} onClick={() => setSelectedPartId(part.id)}><td><b>{part.position || t('common.noValue')}</b></td><td><code>{part.part_number}</code></td><td>{part.description}</td><td>{part.quantity ?? t('common.noValue')} {part.unit || ''}</td><td>{t('common.page')} {part.source_page}</td></tr>)}</tbody></table></div>
+      <div className="table-card"><table><thead><tr><th>{t('catalog.position')}</th><th>{t('common.partNumber')}</th><th>{t('catalog.description')}</th><th>{t('common.quantity')}</th><th>{t('catalog.source')}</th></tr></thead><tbody>{filteredParts.map((part) => <tr
+        className={part.id === selectedPart?.id ? 'selected-catalog-row' : ''}
+        key={part.id}
+        tabIndex={0}
+        aria-selected={part.id === selectedPart?.id}
+        onClick={() => setSelectedPartId(part.id)}
+        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedPartId(part.id) } }}
+      ><td><button type="button" className="link catalog-position-button" onClick={(event) => { event.stopPropagation(); setSelectedPartId(part.id) }}><b>{part.position || t('common.noValue')}</b></button></td><td><code>{part.part_number}</code></td><td>{part.description}</td><td>{part.quantity ?? t('common.noValue')} {part.unit || ''}</td><td>{t('common.page')} {part.source_page}</td></tr>)}</tbody></table></div>
     </div>
   </section>
 }

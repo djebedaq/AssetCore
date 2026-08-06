@@ -435,7 +435,9 @@ class TransferOut(BaseModel):
 
 class TransferChecklistItem(BaseModel):
     code: str = Field(min_length=1, max_length=80)
-    label: str = Field(min_length=1, max_length=160)
+    # The UI sends the stable code. Labels are rendered canonically by the server
+    # in the selected document language; legacy clients may still send a label.
+    label: str | None = Field(default=None, max_length=160)
     condition: str
     note: str | None = None
     length_m: float | None = Field(default=None, ge=0, le=10000)
