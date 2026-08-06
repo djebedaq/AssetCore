@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
 
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
+from alembic.script import ScriptDirectory  # noqa: E402
 from app.database import Base  # noqa: E402
 from app.licensing import evaluate_license  # noqa: E402
 from app.main import health  # noqa: E402
@@ -105,6 +106,7 @@ def _verify_migrations(verification: Verification) -> None:
             os.environ["DATABASE_URL"] = database_url
             config = Config(str(BACKEND / "alembic.ini"))
             config.set_main_option("script_location", str(BACKEND / "alembic"))
+            expected_head = ScriptDirectory.from_config(config).get_current_head()
             command.upgrade(config, "head")
             migration_engine = create_engine(database_url)
             try:
@@ -115,7 +117,7 @@ def _verify_migrations(verification: Verification) -> None:
                     tables = set(inspect(connection).get_table_names())
                 verification.check(
                     "Alembic migrations достигат текущия head",
-                    revision == "20260805_0014"
+                    revision == expected_head
                     and {
                         "installation_ownership",
                         "software_licenses",
