@@ -154,9 +154,23 @@ export function ConflictNotice({ error }: { error: Error | null }) {
   const conflicts = error instanceof ApiError && Array.isArray(error.data.conflicts)
     ? error.data.conflicts as Array<Record<string, unknown>>
     : []
+  const diagnosticId = error instanceof ApiError && typeof error.data.diagnostic_id === 'string'
+    ? error.data.diagnostic_id
+    : null
+  const diagnosticStage = error instanceof ApiError && typeof error.data.stage_label === 'string'
+    ? error.data.stage_label
+    : error instanceof ApiError && typeof error.data.stage === 'string'
+      ? error.data.stage
+      : null
+  const serverMessage = error instanceof ApiError
+    && error.code === 'bulk_return_internal_error'
+    && typeof error.data.message === 'string'
+      ? error.data.message
+      : null
   return (
     <div className="conflict-notice" role="alert">
-      <strong>{t(localizedErrorKey(error))}</strong>
+      <strong>{serverMessage || t(localizedErrorKey(error))}</strong>
+      {diagnosticId && <p><b>Диагностичен код:</b> <code>{diagnosticId}</code>{diagnosticStage ? <> · <b>Етап:</b> {diagnosticStage}</> : null}</p>}
       {conflicts.length > 0 && (
         <ul>
           {conflicts.map((conflict, index) => (
