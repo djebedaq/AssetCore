@@ -1,20 +1,19 @@
-ASSETCORE v12 — DIRECT TEST HOTFIX
+ASSETCORE v12.1 — LIVE BUGFIX
 
-ВАЖНО: Този ZIP няма външна обвиваща папка. След разархивиране ще видиш директно папка "frontend".
+1. В GitHub Desktop избери branch main и натисни Fetch origin / Pull origin.
+2. Създай нов branch: assetcore-v12-1-live-bugfix.
+3. Repository -> Show in Explorer.
+4. Копирай съдържанието на този hotfix директно в корена на repository-то.
+5. Потвърди Replace the files in the destination.
+6. Commit: Fix live transfer repair and catalog regressions
+7. Push origin и отвори Pull Request към main.
+8. Изчакай всички GitHub проверки да станат зелени.
+9. Merge и в Render: Manual Deploy -> Clear build cache & deploy.
 
-1. В GitHub Desktop избери branch: assetcore-v12-final.
-2. Repository -> Show in Explorer.
-3. Копирай папката "frontend" от този hotfix директно в корена на repository-то.
-4. Избери Replace the files in the destination.
-5. В GitHub Desktop трябва да се покажат ТОЧНО тези 3 променени файла:
-   - frontend/src/BulkTransfers.tsx
-   - frontend/src/IndustrialPlatform.test.tsx
-   - frontend/src/i18n.test.tsx
-6. Ако тези 3 файла не се показват, НЕ прави commit — копирано е на грешно място.
-7. Commit message: Fix remaining frontend tests
-8. Push origin.
-
-Проверки в самите файлове:
-- BulkTransfers.tsx съдържа htmlFor={`cancel-reason-${batch.batch_id}`} и textarea id.
-- i18n.test.tsx очаква translate('bg', 'bulk.issue') да е 'Издай'.
-- IndustrialPlatform.test.tsx mock-ва /api/catalog/parts?verified_only=true&machine_id= и verified part с assembly.
+Поправя:
+- приемане на машини с checklist без клиентски label;
+- смесени части в ремонтната карта;
+- явен избор и маркиране на позиция в каталога;
+- legacy несъответствие между ремонтен и машинен статус;
+- запис на допълнителни участници;
+- idempotent migration 20260805_0015.
