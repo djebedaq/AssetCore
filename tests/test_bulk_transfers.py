@@ -489,6 +489,21 @@ def test_postgres_return_lock_query_does_not_lock_nullable_outer_join():
     assert "LEFT OUTER JOIN transfer_batches" not in sql
 
 
+
+
+def test_postgres_return_finalize_lock_query_does_not_outer_join_machine():
+    statement = transfer_service._return_finalize_transfer_statement([11]).with_for_update()
+    sql = str(
+        statement.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+    assert "FROM transfer_protocols" in sql
+    assert "FOR UPDATE" in sql
+    assert "JOIN machines" not in sql
+    assert "LEFT OUTER JOIN machines" not in sql
+
 def test_new_transfer_operations_require_authentication_and_transfer_permission(
     client, viewer_headers, machine_ids, issue_payload
 ):
