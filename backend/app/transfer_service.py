@@ -1547,6 +1547,21 @@ def finalize_signed_transfer_workflow(
             )
 
 
+def _return_transfer_statement(transfer_ids: list[int]):
+    """Load return targets without joining the nullable batch into FOR UPDATE.
+
+    PostgreSQL rejects ``FOR UPDATE`` when it is applied to the nullable side of
+    an outer join. ``selectinload`` keeps the lock query limited to
+    ``transfer_protocols`` and loads the batch relationship in a separate query.
+    """
+    return (
+        select(TransferProtocol)
+        .options(selectinload(TransferProtocol.batch))
+        .where(TransferProtocol.id.in_(transfer_ids))
+        .order_by(TransferProtocol.id)
+    )
+
+
 def _bulk_return_impl(
     db: Session, user: User, data: BulkReturnRequest
 ) -> dict[str, Any]:
@@ -1573,12 +1588,7 @@ def _bulk_return_impl(
             )
 
         stage = "load_transfers"
-        transfer_statement = (
-            select(TransferProtocol)
-            .options(joinedload(TransferProtocol.batch))
-            .where(TransferProtocol.id.in_(transfer_ids))
-            .order_by(TransferProtocol.id)
-        )
+        transfer_statement = _return_transfer_statement(transfer_ids)
         transfers = db.scalars(_for_update(db, transfer_statement)).unique().all()
         transfer_by_id = {transfer.id: transfer for transfer in transfers}
         missing_transfer_ids = sorted(set(transfer_ids) - set(transfer_by_id))

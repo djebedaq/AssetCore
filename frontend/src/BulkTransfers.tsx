@@ -170,7 +170,7 @@ export function ConflictNotice({ error }: { error: Error | null }) {
   return (
     <div className="conflict-notice" role="alert">
       <strong>{serverMessage || t(localizedErrorKey(error))}</strong>
-      {diagnosticId && <p><b>Диагностичен код:</b> <code>{diagnosticId}</code>{diagnosticStage ? <> · <b>Етап:</b> {diagnosticStage}</> : null}</p>}
+      {diagnosticId && <p><b>{t('bulk.diagnosticCode')}:</b> <code>{diagnosticId}</code>{diagnosticStage ? <> · <b>{t('bulk.diagnosticStage')}:</b> {diagnosticStage}</> : null}</p>}
       {conflicts.length > 0 && (
         <ul>
           {conflicts.map((conflict, index) => (

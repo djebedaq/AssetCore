@@ -1,3 +1,16 @@
-Копирай папката tests в корена на repository-то и замени файла tests/test_final_release_infrastructure.py.
-Промяната актуализира очаквания Alembic head от 20260805_0014 на 20260805_0015.
-Commit message: Fix backend migration head test
+AssetCore v12.3.1 — CI + PostgreSQL return fix
+
+Този hotfix комбинира:
+1) PostgreSQL поправката за bulk return row locking.
+2) Поправка на backend CI теста, който отказва hardcoded кирилица в React компонентите.
+
+Копирай директно в корена на repository-то и замени файловете.
+
+Трябва да се променят:
+- backend/app/transfer_service.py
+- frontend/src/BulkTransfers.tsx
+- frontend/src/i18n.tsx
+- tests/test_bulk_transfers.py
+
+Commit message:
+Fix PostgreSQL return locking and CI localization
