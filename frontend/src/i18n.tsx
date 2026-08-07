@@ -317,6 +317,8 @@ export const bg = {
   'bulk.cancelIssueComplete': 'Машините са освободени и могат да бъдат издадени в нова операция.',
   'bulk.cancelReturnComplete': 'Активното издаване е запазено и машините продължават да се водят издадени.',
   'bulk.cancelError': 'Операцията не можа да бъде анулирана.',
+  'bulk.diagnosticCode': 'Диагностичен код',
+  'bulk.diagnosticStage': 'Етап',
   'errors.generic': 'Операцията не може да бъде завършена. Опитайте отново.',
   'errors.validation': 'Проверете попълнените полета.',
   'errors.issueConflict': 'Една или повече машини не могат да бъдат издадени.',
@@ -823,6 +825,8 @@ export const en: Catalog = Object.fromEntries(
 
 Object.assign(en, {
   'common.remove': 'Remove',
+  'bulk.diagnosticCode': 'Diagnostic code',
+  'bulk.diagnosticStage': 'Stage',
   'catalog.machineFirstHint': 'Choose a specific machine, then an assembly and a position from the official diagram or table.',
   'catalog.chooseMachine': 'Choose machine', 'catalog.chooseMachinePlaceholder': 'Choose a machine from the register…',
   'catalog.chooseAssembly': 'Choose assembly…', 'catalog.chooseMachineTitle': 'Start by choosing a machine',
@@ -1095,6 +1099,8 @@ export const ru: Catalog = Object.fromEntries(
 
 Object.assign(ru, {
   'common.remove': 'Удалить',
+  'bulk.diagnosticCode': 'Диагностический код',
+  'bulk.diagnosticStage': 'Этап',
   'bulk.batchReference': 'Партия',
   'bulk.cancelPendingAction': 'Отменить операцию', 'bulk.cancelPendingTitle': 'Отмена незавершённой операции',
   'bulk.cancelPendingWarning': 'Это действие прекращает только незавершённый процесс подписания.',

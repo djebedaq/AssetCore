@@ -7,6 +7,8 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
+import app.transfer_service as transfer_service
+
 from app.models import (
     AuditLog,
     Machine,
@@ -471,6 +473,20 @@ def test_active_transfer_index_compiles_for_postgresql():
     ddl = str(CreateIndex(index).compile(dialect=postgresql.dialect()))
     assert "UNIQUE INDEX" in ddl
     assert "WHERE is_active IS TRUE" in ddl
+
+
+
+def test_postgres_return_lock_query_does_not_lock_nullable_outer_join():
+    statement = transfer_service._return_transfer_statement([11]).with_for_update()
+    sql = str(
+        statement.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+    assert "FROM transfer_protocols" in sql
+    assert "FOR UPDATE" in sql
+    assert "LEFT OUTER JOIN transfer_batches" not in sql
 
 
 def test_new_transfer_operations_require_authentication_and_transfer_permission(
