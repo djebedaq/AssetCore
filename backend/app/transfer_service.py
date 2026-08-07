@@ -1031,6 +1031,22 @@ def _finalize_signed_issue_batch(
     )
 
 
+def _return_finalize_transfer_statement(transfer_ids: list[int]):
+    """Lock return transfers without outer-joining machines.
+
+    The second confirmed signature finalizes the whole return batch. PostgreSQL
+    rejects ``FOR UPDATE`` when SQLAlchemy's ``joinedload`` adds the machine as
+    the nullable side of an outer join. Load machines separately so the lock is
+    applied only to ``transfer_protocols``.
+    """
+    return (
+        select(TransferProtocol)
+        .options(selectinload(TransferProtocol.machine))
+        .where(TransferProtocol.id.in_(transfer_ids))
+        .order_by(TransferProtocol.id)
+    )
+
+
 def _finalize_signed_return_batch(
     db: Session,
     document: OfficialDocument,
@@ -1110,10 +1126,7 @@ def _finalize_signed_return_batch(
         db.scalars(
             _for_update(
                 db,
-                select(TransferProtocol)
-                .options(joinedload(TransferProtocol.machine))
-                .where(TransferProtocol.id.in_(manifest_by_transfer))
-                .order_by(TransferProtocol.id),
+                _return_finalize_transfer_statement(list(manifest_by_transfer)),
             )
         ).unique()
     )

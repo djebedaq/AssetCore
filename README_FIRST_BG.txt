@@ -1,16 +1,19 @@
-AssetCore v12.3.1 — CI + PostgreSQL return fix
+AssetCore v12.4 — поправка на втория подпис при приемане
 
-Този hotfix комбинира:
-1) PostgreSQL поправката за bulk return row locking.
-2) Поправка на backend CI теста, който отказва hardcoded кирилица в React компонентите.
+Проблем:
+При потвърждаване на втория подпис за приемане PostgreSQL отказва заключващата заявка,
+защото return batch финализаторът комбинира FOR UPDATE с joinedload(machine), което
+създава LEFT OUTER JOIN към machines.
 
-Копирай директно в корена на repository-то и замени файловете.
+Поправка:
+Машината се зарежда с selectinload в отделна заявка. FOR UPDATE остава само върху
+transfer_protocols; при реалното финализиране машината се заключва отделно.
 
-Трябва да се променят:
+Копирай папките backend и tests в корена на repository-то и замени файловете.
+
+Очаквани променени файлове:
 - backend/app/transfer_service.py
-- frontend/src/BulkTransfers.tsx
-- frontend/src/i18n.tsx
 - tests/test_bulk_transfers.py
 
 Commit message:
-Fix PostgreSQL return locking and CI localization
+Fix second signature PostgreSQL return finalization
