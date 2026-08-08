@@ -73,4 +73,8 @@
 
 .batch-card .batch-awaiting{display:block;margin-top:7px;color:#8a5b00}
 
+.return-outcome{display:flex;gap:10px;border:1px solid #dce5ec;border-radius:11px;padding:10px 12px}.return-outcome legend{padding:0 5px;font-weight:800;color:#425168}.return-outcome label{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;flex:1;border:1px solid #cbd7e0;border-radius:9px;background:#fff;cursor:pointer}.return-outcome label:has(input:checked){border-color:#173e63;background:#eef5fa;color:#173e63;font-weight:800}.return-outcome input{width:18px;height:18px;accent-color:#173e63}.transfer-document-group{display:grid;gap:5px;min-width:170px}.transfer-document-group>span{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:13px;color:#536174}
+
+@media(max-width:760px){.return-outcome{flex-direction:column}.batch-details>div{grid-template-columns:1fr}.transfer-document-group{grid-column:1/-1}.transfer-document-group .link{min-height:42px;min-width:70px}}
+
 .repair-participant-form{grid-template-columns:1.3fr 1fr 1.4fr auto}.repair-participant-form label{min-width:0}@media(max-width:760px){.repair-participant-form{grid-template-columns:1fr}.repair-participant-form button{width:100%;justify-content:center}}

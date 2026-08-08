@@ -8,7 +8,9 @@ Generic Render URLs с `postgresql://` или legacy `postgres://` се норм
 
 ## Миграция
 
-Текущият `head` е `20260801_0006`: добавя двуфазните `AWAITING_SIGNATURE` transfer операции, immutable signing hash, защита от повторен PNG подпис, snapshot полета за външните участници и връзка към точната template версия. Repair signature slots се деактивират, без да се изтрива историческа конфигурация. `20260801_0005` преди него добавя профилите, owner designation, лицензите и основата на official document/signature модела. Нито една миграция не допълва имена, длъжности или business history чрез догадки.
+Текущият `head` е `20260808_0016`. Той добавя проследимите връзки от автоматично създаден ремонт към return transfer/document/batch, гарантира активния проверен справочен запис `Цех` и нормализира само текущия машинен статус: активно предаване → `ISSUED`, иначе незавършен ремонт → `REPAIR`, иначе `READY`. Audit, document, transfer и repair snapshot историята не се преписва. Downgrade премахва новите връзки, но умишлено не измисля предишни оперативни статуси.
+
+`20260801_0006` добавя двуфазните `AWAITING_SIGNATURE` transfer операции, immutable signing hash, защита от повторен PNG подпис, snapshot полета за външните участници и връзка към точната template версия. Repair signature slots се деактивират, без да се изтрива историческа конфигурация. `20260801_0005` преди него добавя профилите, owner designation, лицензите и основата на official document/signature модела. Нито една миграция не допълва имена, длъжности или business history чрез догадки.
 
 Production Docker image включва LibreOffice Writer за PDF от exact filled DOCX source, DejaVu fonts и PostgreSQL client за backup/restore. След deploy проверете `/api/health`, Alembic head, owner designation, licence status и restore в отделна база. Вижте `BACKUP_RESTORE_BG.md` и `RELEASE_CHECKLIST_BG.md`.
 

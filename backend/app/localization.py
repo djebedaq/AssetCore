@@ -137,6 +137,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Asset No. {number} cannot be issued with status “{status}”. It must first be marked “{ready}”.",
         "ru": "Оборудование №{number} нельзя выдать со статусом «{status}». Сначала установите статус «{ready}».",
     },
+    "issue.active_repair": {
+        "bg": "Машина №{number} е в ремонт.",
+        "en": "Asset No. {number} is under repair.",
+        "ru": "Оборудование №{number} находится в ремонте.",
+    },
+    "issue.inactive_machine": {
+        "bg": "Машина №{number} е деактивирана и не може да бъде издадена.",
+        "en": "Asset No. {number} is inactive and cannot be issued.",
+        "ru": "Оборудование №{number} деактивировано и не может быть выдано.",
+    },
     "issue.machines_not_found": {
         "bg": "Една или повече избрани машини не са намерени.",
         "en": "One or more selected assets were not found.",
@@ -158,14 +168,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ru": "Выдача подготовлена и ожидает обязательных подписей.",
     },
     "issue.recipient_identity_required": {
-        "bg": "Въведете три имена, длъжност и фирма или отдел на приемащия.",
-        "en": "Enter the recipient's full three-part name, job title, and company or department.",
-        "ru": "Укажите три имени, должность и компанию или отдел получателя.",
+        "bg": "Въведете трите имена на приемащия или документирано изключение за чуждестранно лице.",
+        "en": "Enter the recipient's three-part name or a documented foreign-person exception.",
+        "ru": "Укажите три имени получателя или документированное исключение для иностранного лица.",
     },
     "locations.not_found": {
         "bg": "Едно или повече избрани местоположения не са намерени.",
         "en": "One or more selected locations were not found.",
         "ru": "Одно или несколько выбранных местоположений не найдены.",
+    },
+    "locations.unavailable": {
+        "bg": "Едно или повече избрани местоположения не съществуват или не са активни.",
+        "en": "One or more selected locations do not exist or are inactive.",
+        "ru": "Одно или несколько выбранных местоположений не существуют или неактивны.",
     },
     "return.machines_not_found": {
         "bg": "Една или повече машини за връщане не са намерени.",
@@ -206,6 +221,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "bg": "Връщането вече е подготвено и очаква подписи.",
         "en": "The return is already prepared and awaiting signatures.",
         "ru": "Возврат уже подготовлен и ожидает подписей.",
+    },
+    "return.workshop_location_missing": {
+        "bg": "Липсва активно местоположение „Цех“. Връщането не може да бъде записано, докато конфигурацията не бъде коригирана.",
+        "en": "The active location ‘Цех’ is missing. The return cannot be recorded until the configuration is corrected.",
+        "ru": "Активное местоположение «Цех» отсутствует. Возврат нельзя записать до исправления конфигурации.",
     },
     "return.returner_identity_required": {
         "bg": "Въведете три имена, длъжност и фирма или отдел на връщащия.",

@@ -532,7 +532,7 @@ def test_mechanic_operational_workflows_and_director_request_approval(
                     "notes": "",
                     "returned_by": "",
                     "accepted_by": "",
-                    "next_status": "INSPECTION",
+                    "next_status": "READY",
                     "returned_person": {
                         "first_name": "Тестов",
                         "middle_name": "Външен",

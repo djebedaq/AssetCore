@@ -3,9 +3,6 @@ from __future__ import annotations
 import base64
 import io
 
-from PIL import Image
-from sqlalchemy import func, select
-
 from app.models import (
     DocumentSignature,
     Machine,
@@ -13,6 +10,8 @@ from app.models import (
     TransferBatch,
     TransferProtocol,
 )
+from PIL import Image
+from sqlalchemy import func, select
 
 
 def _sign(client, task: dict, variant: int) -> None:

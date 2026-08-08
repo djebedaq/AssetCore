@@ -4,14 +4,16 @@ import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from './api'
 import {
   BatchProgressCard,
+  BatchDetailsPanel,
   CancelBatchModal,
   ConfirmationSummary,
   ConflictNotice,
   IssueModal,
   IssueResult,
   IssueSelectionList,
+  ReturnModal,
 } from './BulkTransfers'
-import type { BulkIssueResult, TransferAvailability } from './types'
+import type { BatchDetails, BulkIssueResult, TransferAvailability } from './types'
 
 const available: TransferAvailability = {
   machine_id: 1, machine_number: '4', brand: 'CombiJet', pressure_bar: 500,
@@ -34,12 +36,15 @@ describe('групови предавания', () => {
   })
 
   it('изисква confirmation стъпка и запазва избора', async () => {
-    render(<IssueModal items={[available]} locations={[]} onClose={vi.fn()} onComplete={vi.fn()} />)
+    render(<IssueModal items={[available]} locations={[{ id: 1, name: 'Цех', is_active: true }]} onClose={vi.fn()} onComplete={vi.fn()} />)
     await userEvent.click(screen.getByLabelText('Машина №4'))
     expect(screen.getByText('Избрани машини: 1')).toBeVisible()
     await userEvent.type(screen.getByLabelText('Собствено име'), 'Иван')
     await userEvent.type(screen.getByLabelText('Бащино име'), 'Иванов')
     await userEvent.type(screen.getByLabelText('Фамилия'), 'Петров')
+    await userEvent.selectOptions(screen.getByLabelText('Системно местоположение'), '1')
+    await userEvent.type(screen.getByLabelText('Ще се използва за'), 'Проверена производствена задача')
+    await userEvent.type(screen.getByLabelText('Състояние при издаване'), 'Изправна')
     await userEvent.click(screen.getByRole('button', { name: 'Преглед и потвърждение' }))
     expect(screen.getByRole('heading', { name: 'Потвърждение на издаването' })).toBeVisible()
     expect(screen.getByText(/№4/)).toBeVisible()
@@ -75,9 +80,39 @@ describe('групови предавания', () => {
       batch_id: 1, batch_reference: 'HPWJ-B-1', status: 'PARTIALLY_RETURNED',
       total_machines: 3, returned_machines: 1, still_issued_machines: 2,
       awaiting_signature_machines: 0,
+      machine_numbers: ['4', '7', '10'],
     }} />)
     expect(screen.getByText('Частично върната партида')).toBeVisible()
     expect(screen.getByText(/Все още издадени: 2/)).toBeVisible()
+    expect(screen.getByRole('heading', { name: '№4, №7, №10' })).toBeVisible()
+  })
+
+  it('предлага само Готова или За ремонт при връщане', async () => {
+    render(<ReturnModal items={[unavailable]} onClose={vi.fn()} onComplete={vi.fn()} />)
+    await userEvent.click(screen.getByLabelText('Връщане на машина №7'))
+    expect(screen.getByRole('radio', { name: 'Готова' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'За ремонт' })).toBeVisible()
+    expect(screen.queryByText('Следващ етап')).not.toBeInTheDocument()
+  })
+
+  it('разделя издаващия и връщащия протокол без фиктивен документ', () => {
+    const details: BatchDetails = {
+      batch_id: 1, batch_reference: 'HPWJ-B-1', status: 'ACTIVE', total_machines: 1,
+      returned_machines: 0, still_issued_machines: 1, awaiting_signature_machines: 0,
+      machine_numbers: ['4'], created_at: '2026-08-08T10:00:00Z', operation: 'ISSUE',
+      zip_download_endpoint: '/zip',
+      transfers: [{
+        transfer_id: 1, machine_id: 1, machine_number: '4', machine_name: 'HPWJ №4', brand: 'CombiJet',
+        pressure_bar: 500, protocol_number: 'HPWJ-1', is_active: true, issue_status: 'COMPLETED',
+        return_status: null, current_status: 'ISSUED', documents: [],
+        issue_documents: [{ id: 1, format: 'docx', filename: 'issue.docx', download_endpoint: '/issue' }],
+        return_documents: [],
+      }],
+    }
+    render(<BatchDetailsPanel details={details} onDownload={vi.fn()} />)
+    expect(screen.getByText('Протокол за издаване')).toBeVisible()
+    expect(screen.getByText('Протокол за връщане')).toBeVisible()
+    expect(screen.getByText('Машината все още не е приета')).toBeVisible()
   })
 
   it('показва всички индивидуални протоколи и ZIP резултата', async () => {

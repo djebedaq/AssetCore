@@ -8,15 +8,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PIL import Image, ImageDraw
-from pypdf import PdfReader
-
 from app.signature_rendering import (
     LEFT_SIGNATURE_MARKER,
     RIGHT_SIGNATURE_MARKER,
     finalize_signed_files_from_rows,
 )
 from app.template_engine import convert_docx_to_pdf, render_docx, validate_template
+from PIL import Image, ImageDraw
+from pypdf import PdfReader
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "backend" / "resources" / "templates"

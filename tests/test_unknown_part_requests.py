@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import base64
 
+from app.models import AuditLog, PartCatalog, PartRequestAttachment, PartRequestLine
 from sqlalchemy import func, select
-
-from app.models import AuditLog, PartCatalog, PartRequest, PartRequestAttachment, PartRequestLine
 
 
 def _png_payload() -> str:

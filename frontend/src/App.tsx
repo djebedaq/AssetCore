@@ -124,14 +124,7 @@ type AuditEntry = {
 const MACHINE_STATUS_CODES = [
   'READY',
   'ISSUED',
-  'IN_USE',
-  'RETURNED',
-  'INSPECTION',
-  'CLEANING',
   'REPAIR',
-  'WAITING_APPROVAL',
-  'WAITING_PARTS',
-  'TESTING',
 ]
 
 const REPAIR_STATUS_CODES = [

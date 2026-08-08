@@ -455,22 +455,9 @@ class BulkIssueRequest(BaseModel):
     machine_ids: list[int]
     document_language: LanguageCode = LanguageCode.BG
     recipient: TransferPartyInput | None = None
-    company_unit: str | None = None
-    department: str | None = None
-    vessel: str | None = None
-    dock: str | None = None
-    pier: str | None = None
-    work_area: str | None = None
-    location_text: str | None = None
-    location_id: int | None = None
-    handed_over_by: str | None = None
-    accepted_by: str | None = None
-    equipment: str | None = None
-    hoses: str | None = None
-    nozzles: str | None = None
-    guns: str | None = None
-    accessories: str | None = None
-    condition_text: str | None = None
+    usage_text: str = Field(min_length=1, max_length=1000)
+    location_id: int
+    condition_text: str = Field(min_length=1)
     checklist: list[TransferChecklistItem] = Field(default_factory=list)
     remarks: str | None = None
 
@@ -524,15 +511,7 @@ class BulkIssueResponse(BaseModel):
     zip_download_endpoint: str
 
 
-RETURN_WORKFLOW_STATUSES = {
-    MachineStatus.RETURNED,
-    MachineStatus.INSPECTION,
-    MachineStatus.CLEANING,
-    MachineStatus.REPAIR,
-    MachineStatus.WAITING_APPROVAL,
-    MachineStatus.WAITING_PARTS,
-    MachineStatus.TESTING,
-}
+RETURN_WORKFLOW_STATUSES = {MachineStatus.READY, MachineStatus.REPAIR}
 
 
 class BulkReturnItem(BaseModel):
@@ -545,27 +524,14 @@ class BulkReturnItem(BaseModel):
     missing_equipment: str | None = None
     damage: str | None = None
     contamination: str | None = None
-    cleaning_required: bool = False
-    inspection_required: bool = True
-    repair_required: bool = False
-    returned_by: str | None = None
-    accepted_by: str | None = None
-    returned_person: TransferPartyInput | None = None
-    location_id: int | None = None
-    next_status: MachineStatus = MachineStatus.INSPECTION
-
-    @field_validator("next_status", mode="before")
-    @classmethod
-    def accept_legacy_next_status(cls, value):
-        return LEGACY_MACHINE_STATUS_CODES.get(value, value)
+    next_status: MachineStatus
 
     @field_validator("next_status")
     @classmethod
     def validate_next_status(cls, value: MachineStatus) -> MachineStatus:
         if value not in RETURN_WORKFLOW_STATUSES:
             raise ValueError(
-                "След връщане машината трябва да премине към преглед, "
-                "почистване, ремонт или тестване, а не директно към готовност."
+                "След приемане машината трябва да бъде означена като готова или насочена за ремонт."
             )
         return value
 
@@ -616,6 +582,7 @@ class BatchProgressOut(BaseModel):
     returned_machines: int
     still_issued_machines: int
     awaiting_signature_machines: int = 0
+    machine_numbers: list[str] = Field(default_factory=list)
 
 
 class BatchSummaryOut(BatchProgressOut):
@@ -680,6 +647,8 @@ class BatchTransferOut(BaseModel):
     current_status: MachineStatus | str
     location: str | None = None
     documents: list[ProtocolDocumentOut]
+    issue_documents: list[ProtocolDocumentOut] = Field(default_factory=list)
+    return_documents: list[ProtocolDocumentOut] = Field(default_factory=list)
 
 
 class BatchDetailsOut(BatchProgressOut):

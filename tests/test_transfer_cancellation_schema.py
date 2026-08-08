@@ -1,7 +1,7 @@
 import pytest
-from pydantic import ValidationError
 from app.models import TransferBatchStatus
 from app.schemas import CancelTransferBatchRequest
+from pydantic import ValidationError
 
 
 def test_cancel_reason_is_required():

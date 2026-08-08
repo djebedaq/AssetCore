@@ -135,7 +135,8 @@ export type BulkIssueResult = {
 
 export type BatchProgress = {
   batch_id: number; batch_reference: string; status: string; total_machines: number;
-  returned_machines: number; still_issued_machines: number; awaiting_signature_machines: number; created_at?: string
+  returned_machines: number; still_issued_machines: number; awaiting_signature_machines: number;
+  machine_numbers: string[]; created_at?: string
 }
 
 export type CancelTransferBatchResponse = {
@@ -151,7 +152,7 @@ export type BatchDetails = BatchProgress & {
     transfer_id: number; machine_id: number; machine_number: string; machine_name: string; brand: string;
     pressure_bar: number; protocol_number: string; is_active: boolean; issue_status: string; return_status?: string | null; issued_at?: string | null;
     returned_at?: string | null; current_status: string; location?: string | null;
-    documents: ProtocolDocument[]
+    documents: ProtocolDocument[]; issue_documents: ProtocolDocument[]; return_documents: ProtocolDocument[]
   }>
 }
 

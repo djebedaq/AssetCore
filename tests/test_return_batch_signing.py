@@ -3,15 +3,14 @@ from __future__ import annotations
 import base64
 import io
 
-from PIL import Image
-from sqlalchemy import func, select
-
 from app.models import (
     DocumentSignature,
     Machine,
     TransferBatch,
     TransferProtocol,
 )
+from PIL import Image
+from sqlalchemy import func, select
 
 
 def _sign(client, task: dict, variant: int) -> None:
@@ -68,7 +67,7 @@ def test_return_batch_uses_two_signatures_across_different_issue_batches(
                     "machine_id": item["machine_id"],
                     "condition_text": "Проверено състояние при приемане",
                     "result_text": "Насочена към преглед",
-                    "next_status": "INSPECTION",
+                    "next_status": "READY",
                 }
                 for item in issued_items
             ]
@@ -131,7 +130,7 @@ def test_return_batch_uses_two_signatures_across_different_issue_batches(
                     Machine.id.in_([item["machine_id"] for item in issued_items])
                 )
             ).all()
-        ) == {"INSPECTION"}
+        ) == {"READY"}
         projections = db.scalar(
             select(func.count(DocumentSignature.id)).where(
                 DocumentSignature.source_signature_id.is_not(None),
@@ -181,7 +180,7 @@ def test_pending_return_batch_can_be_cancelled_without_closing_issue(
                     "machine_id": transfer["machine_id"],
                     "condition_text": "Състояние за отменена операция",
                     "result_text": "Предстои повторно приемане",
-                    "next_status": "INSPECTION",
+                    "next_status": "READY",
                 }
             ]
         },
@@ -219,7 +218,7 @@ def test_pending_return_batch_can_be_cancelled_without_closing_issue(
                     "machine_id": transfer["machine_id"],
                     "condition_text": "Повторно проверено състояние",
                     "result_text": "Насочена към преглед",
-                    "next_status": "INSPECTION",
+                    "next_status": "READY",
                 }
             ]
         },
@@ -260,7 +259,7 @@ def test_return_batch_rejects_machines_issued_to_different_people(
                     "machine_id": item["machine_id"],
                     "condition_text": "Проверено състояние",
                     "result_text": "Насочена към преглед",
-                    "next_status": "INSPECTION",
+                    "next_status": "READY",
                 }
                 for item in issued_items
             ]

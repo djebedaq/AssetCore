@@ -26,50 +26,26 @@ const CHECKLIST_ITEMS: ChecklistItem[] = [
 const LENGTH_CODES = new Set(['supply_hose', 'hp_hose', 'cable'])
 
 type IssueForm = {
-  document_language: 'bg' | 'en' | 'ru'
-  company_unit: string
-  department: string
-  vessel: string
-  dock: string
-  pier: string
-  work_area: string
-  location_text: string
+  usage_text: string
   location_id: string
   recipient_first_name: string
   recipient_middle_name: string
   recipient_last_name: string
   recipient_is_foreign_person: boolean
   recipient_name_exception_reason: string
-  equipment: string
-  hoses: string
-  nozzles: string
-  guns: string
-  accessories: string
   condition_text: string
   remarks: string
   checklist: ChecklistItem[]
 }
 
 const EMPTY_ISSUE_FORM: IssueForm = {
-  document_language: 'bg',
-  company_unit: '',
-  department: '',
-  vessel: '',
-  dock: '',
-  pier: '',
-  work_area: '',
-  location_text: '',
+  usage_text: '',
   location_id: '',
   recipient_first_name: '',
   recipient_middle_name: '',
   recipient_last_name: '',
   recipient_is_foreign_person: false,
   recipient_name_exception_reason: '',
-  equipment: '',
-  hoses: '',
-  nozzles: '',
-  guns: '',
-  accessories: '',
   condition_text: '',
   remarks: '',
   checklist: CHECKLIST_ITEMS.map((item) => ({ ...item })),
@@ -84,23 +60,9 @@ type ReturnDraft = {
   missing_equipment: string
   damage: string
   contamination: string
-  cleaning_required: boolean
-  inspection_required: boolean
-  repair_required: boolean
-  location_id: string
-  next_status: string
+  next_status: 'READY' | 'REPAIR'
   checklist: ChecklistItem[]
 }
-
-const RETURN_STATUS_CODES = [
-  'RETURNED',
-  'INSPECTION',
-  'CLEANING',
-  'REPAIR',
-  'WAITING_APPROVAL',
-  'WAITING_PARTS',
-  'TESTING',
-]
 
 function canOperateTransfers(): boolean {
   return hasPermission('transfers.create', 'transfers.return')
@@ -394,8 +356,17 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
       setError(new Error('selection_required'))
       return
     }
-    if (!form.recipient_first_name.trim() || !form.recipient_middle_name.trim() || !form.recipient_last_name.trim()) {
+    const foreignExceptionInvalid = form.recipient_is_foreign_person
+      && !form.recipient_middle_name.trim()
+      && form.recipient_name_exception_reason.trim().length < 10
+    if (!form.recipient_first_name.trim() || !form.recipient_last_name.trim()
+      || (!form.recipient_is_foreign_person && !form.recipient_middle_name.trim())
+      || foreignExceptionInvalid) {
       setError(new Error('recipient_required'))
+      return
+    }
+    if (!form.location_id || !form.usage_text.trim() || !form.condition_text.trim()) {
+      setError(new Error('issue_fields_required'))
       return
     }
     setError(null)
@@ -409,12 +380,14 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
       const {
         recipient_first_name, recipient_middle_name, recipient_last_name,
         recipient_is_foreign_person, recipient_name_exception_reason,
-        ...operationFields
       } = form
       const payload = {
         machine_ids: [...selected],
-        ...Object.fromEntries(Object.entries(operationFields).map(([key, value]) => [key, value || null])),
-        location_id: form.location_id ? Number(form.location_id) : null,
+        document_language: 'bg',
+        usage_text: form.usage_text.trim(),
+        location_id: Number(form.location_id),
+        condition_text: form.condition_text.trim(),
+        remarks: form.remarks.trim() || null,
         checklist: form.checklist.map((item) => ({ ...item, length_m: item.length_m === '' ? null : Number(item.length_m), note: item.note || null })),
         recipient: {
           first_name: recipient_first_name,
@@ -465,8 +438,8 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
 
   return (
     <ModalShell title={t('bulk.issue')} onClose={onClose} wide>
-      {error?.message === 'selection_required' || error?.message === 'recipient_required' || error?.message === 'signature_cancelled'
-        ? <div className="conflict-notice" role="alert"><strong>{error.message === 'selection_required' ? t('bulk.selectAvailableError') : error.message === 'recipient_required' ? t('bulk.recipientRequired') : t('bulk.signatureCancelled')}</strong></div>
+      {error?.message === 'selection_required' || error?.message === 'recipient_required' || error?.message === 'issue_fields_required' || error?.message === 'signature_cancelled'
+        ? <div className="conflict-notice" role="alert"><strong>{error.message === 'selection_required' ? t('bulk.selectAvailableError') : error.message === 'recipient_required' ? t('bulk.recipientRequired') : error.message === 'issue_fields_required' ? t('bulk.issueFieldsRequired') : t('bulk.signatureCancelled')}</strong></div>
         : <ConflictNotice error={error} />}
       {step === 'select' && (
         <>
@@ -476,15 +449,8 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
           </div>
           <IssueSelectionList items={filtered} selected={selected} onToggle={toggle} />
           <div className="form-grid bulk-fields">
-            <label>{t('bulk.documentLanguage')}<select value={form.document_language} onChange={(event) => setField('document_language', event.target.value as IssueForm['document_language'])}><option value="bg">{t('language.bg')}</option><option value="en">{t('language.en')}</option><option value="ru">{t('language.ru')}</option></select></label>
-            <label>{t('bulk.companyUnit')}<input value={form.company_unit} onChange={(event) => setField('company_unit', event.target.value)} /></label>
-            <label>{t('bulk.department')}<input value={form.department} onChange={(event) => setField('department', event.target.value)} /></label>
-            <label>{t('bulk.vessel')}<input value={form.vessel} onChange={(event) => setField('vessel', event.target.value)} /></label>
-            <label>{t('bulk.dock')}<input value={form.dock} onChange={(event) => setField('dock', event.target.value)} /></label>
-            <label>{t('bulk.pier')}<input value={form.pier} onChange={(event) => setField('pier', event.target.value)} /></label>
-            <label>{t('bulk.workArea')}<input value={form.work_area} onChange={(event) => setField('work_area', event.target.value)} /></label>
-            <label>{t('bulk.describedLocation')}<input value={form.location_text} onChange={(event) => setField('location_text', event.target.value)} /></label>
-            <label>{t('bulk.systemLocation')}<select value={form.location_id} onChange={(event) => setField('location_id', event.target.value)}><option value="">{t('common.noChange')}</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
+            <label>{t('bulk.systemLocation')}<select required value={form.location_id} onChange={(event) => setField('location_id', event.target.value)}><option value="">{t('bulk.selectLocation')}</option>{locations.filter((location) => location.is_active).map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
+            <label className="wide">{t('bulk.usageText')}<textarea required value={form.usage_text} onChange={(event) => setField('usage_text', event.target.value)} placeholder={t('bulk.usageExample')} /></label>
             <fieldset className="wide party-fields"><legend>{t('bulk.recipient')}</legend><div className="form-grid three-columns">
               <label>{t('profile.firstName')}<input required value={form.recipient_first_name} onChange={(event) => setField('recipient_first_name', event.target.value)} /></label>
               <label>{t('profile.middleName')}<input required={!form.recipient_is_foreign_person} value={form.recipient_middle_name} onChange={(event) => setField('recipient_middle_name', event.target.value)} /></label>
@@ -492,13 +458,8 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
               <label className="checkbox-row"><input type="checkbox" checked={form.recipient_is_foreign_person} onChange={(event) => setField('recipient_is_foreign_person', event.target.checked)} />{t('bulk.foreignPerson')}</label>
               {form.recipient_is_foreign_person && <label className="wide">{t('profile.exceptionReason')}<textarea required minLength={10} value={form.recipient_name_exception_reason} onChange={(event) => setField('recipient_name_exception_reason', event.target.value)} /></label>}
             </div></fieldset>
-            <label className="wide">{t('bulk.equipment')}<textarea value={form.equipment} onChange={(event) => setField('equipment', event.target.value)} /></label>
-            <label>{t('bulk.hoses')}<textarea value={form.hoses} onChange={(event) => setField('hoses', event.target.value)} /></label>
-            <label>{t('bulk.nozzles')}<textarea value={form.nozzles} onChange={(event) => setField('nozzles', event.target.value)} /></label>
-            <label>{t('bulk.guns')}<textarea value={form.guns} onChange={(event) => setField('guns', event.target.value)} /></label>
-            <label>{t('bulk.accessories')}<textarea value={form.accessories} onChange={(event) => setField('accessories', event.target.value)} /></label>
             <ConditionChecklist items={form.checklist} onChange={(checklist) => setField('checklist', checklist)} />
-            <label className="wide">{t('bulk.issueCondition')}<textarea value={form.condition_text} onChange={(event) => setField('condition_text', event.target.value)} /></label>
+            <label className="wide">{t('bulk.issueCondition')}<textarea required value={form.condition_text} onChange={(event) => setField('condition_text', event.target.value)} /></label>
             <label className="wide">{t('common.notes')}<textarea value={form.remarks} onChange={(event) => setField('remarks', event.target.value)} /></label>
           </div>
           <div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" onClick={continueToConfirm} disabled={!selected.size}>{t('bulk.reviewConfirm')}</button></div>
@@ -507,12 +468,9 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
       {step === 'confirm' && (
         <>
           <ConfirmationSummary title={t('bulk.issueConfirmTitle')} machineNumbers={selectedItems.map((item) => item.machine_number)} rows={[
-            [t('bulk.documentLanguage'), t(`language.${form.document_language}` as TranslationKey)],
-            [t('bulk.companyUnit'), form.company_unit], [t('bulk.department'), form.department], [t('bulk.vessel'), form.vessel],
-            [t('bulk.dock'), form.dock], [t('bulk.pier'), form.pier], [t('bulk.workArea'), form.work_area], [t('common.location'), form.location_text],
+            [t('common.location'), locations.find((location) => String(location.id) === form.location_id)?.name || ''],
+            [t('bulk.usageText'), form.usage_text],
             [t('bulk.recipient'), [form.recipient_first_name, form.recipient_middle_name, form.recipient_last_name].filter(Boolean).join(' ')],
-            [t('bulk.equipment'), form.equipment],
-            [t('bulk.hoses'), form.hoses], [t('bulk.nozzles'), form.nozzles], [t('bulk.guns'), form.guns], [t('bulk.accessories'), form.accessories],
             [t('bulk.issueCondition'), form.condition_text], [t('common.notes'), form.remarks],
           ]} />
           <p className="confirmation-warning">{t('bulk.atomicWarning')}</p>
@@ -526,9 +484,8 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
   )
 }
 
-function ReturnModal({ items, locations, onClose, onComplete }: {
+export function ReturnModal({ items, onClose, onComplete }: {
   items: TransferAvailability[]
-  locations: Location[]
   onClose: () => void
   onComplete: () => void
 }) {
@@ -536,7 +493,6 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
   const activeItems = items.filter((item) => item.returnable)
   const [drafts, setDrafts] = useState<Record<number, ReturnDraft>>({})
   const [query, setQuery] = useState('')
-  const [documentLanguage, setDocumentLanguage] = useState<'bg' | 'en' | 'ru'>('bg')
   const [step, setStep] = useState<'edit' | 'confirm' | 'sign' | 'result'>('edit')
   const [result, setResult] = useState<BulkReturnResult | null>(null)
   const [signingTasks, setSigningTasks] = useState<SigningTask[]>([])
@@ -562,11 +518,7 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
       missing_equipment: '',
       damage: '',
       contamination: '',
-      cleaning_required: false,
-      inspection_required: true,
-      repair_required: false,
-      location_id: '',
-      next_status: 'INSPECTION',
+      next_status: 'READY',
       checklist: CHECKLIST_ITEMS.map((entry) => ({ ...entry })),
     }
     return next
@@ -596,11 +548,10 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
     setError(null)
     try {
       const payload = {
-        document_language: documentLanguage,
+        document_language: 'bg',
         items: Object.values(drafts).map((draft) => ({
           ...draft,
           checklist: draft.checklist.map((entry) => ({ ...entry, length_m: entry.length_m === '' ? null : Number(entry.length_m), note: entry.note || null })),
-          location_id: draft.location_id ? Number(draft.location_id) : null,
         })),
       }
       const completed = await api<BulkReturnResult>('/transfers/bulk-return', { method: 'POST', body: JSON.stringify(payload) })
@@ -658,7 +609,6 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
             <div><b>{t('bulk.selectedCount', { count: selectedItems.length })}</b><small>{t('bulk.mixedReturnHint')}</small></div>
             <div className="search small-search"><Search size={17} /><input aria-label={t('bulk.returnSearch')} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('bulk.returnSearchPlaceholder')} /></div>
           </div>
-          <div className="form-grid bulk-fields"><label>{t('bulk.documentLanguage')}<select value={documentLanguage} onChange={(event) => setDocumentLanguage(event.target.value as 'bg' | 'en' | 'ru')}><option value="bg">{t('language.bg')}</option><option value="en">{t('language.en')}</option><option value="ru">{t('language.ru')}</option></select></label></div>
           {!filtered.length && <div className="empty-state">{t('bulk.noActiveTransfers')}</div>}
           <div className="return-list">
             {filtered.map((item) => (
@@ -670,8 +620,7 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
                 </label>
                 {drafts[item.machine_id] && (
                   <div className="form-grid return-fields">
-                    <label>{t('bulk.nextStage')}<select value={drafts[item.machine_id].next_status} onChange={(event) => update(item.machine_id, 'next_status', event.target.value)}>{RETURN_STATUS_CODES.map((status) => <option value={status} key={status}>{statusText(t, status)}</option>)}</select></label>
-                    <label>{t('common.location')}<select value={drafts[item.machine_id].location_id} onChange={(event) => update(item.machine_id, 'location_id', event.target.value)}><option value="">{t('common.noChange')}</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
+                    <fieldset className="wide return-outcome"><legend>{t('bulk.afterReturn')}</legend><label><input type="radio" name={`return-outcome-${item.machine_id}`} value="READY" checked={drafts[item.machine_id].next_status === 'READY'} onChange={() => update(item.machine_id, 'next_status', 'READY')} />{t('bulk.outcomeReady')}</label><label><input type="radio" name={`return-outcome-${item.machine_id}`} value="REPAIR" checked={drafts[item.machine_id].next_status === 'REPAIR'} onChange={() => update(item.machine_id, 'next_status', 'REPAIR')} />{t('bulk.outcomeRepair')}</label></fieldset>
                     <div className="wide immutable-recipient"><b>{t('bulk.returnedBy')}:</b> {item.current_recipient_or_location || t('common.noValue')}</div>
                     <ConditionChecklist items={drafts[item.machine_id].checklist} onChange={(checklist) => update(item.machine_id, 'checklist', checklist)} />
                     <label className="wide">{t('bulk.returnCondition')}<textarea required value={drafts[item.machine_id].condition_text} onChange={(event) => update(item.machine_id, 'condition_text', event.target.value)} /></label>
@@ -679,9 +628,6 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
                     <label className="wide">{t('bulk.missingEquipment')}<textarea value={drafts[item.machine_id].missing_equipment} onChange={(event) => update(item.machine_id, 'missing_equipment', event.target.value)} /></label>
                     <label>{t('bulk.damage')}<textarea value={drafts[item.machine_id].damage} onChange={(event) => update(item.machine_id, 'damage', event.target.value)} /></label>
                     <label>{t('bulk.contamination')}<textarea value={drafts[item.machine_id].contamination} onChange={(event) => update(item.machine_id, 'contamination', event.target.value)} /></label>
-                    <label className="checkbox-row"><input type="checkbox" checked={drafts[item.machine_id].cleaning_required} onChange={(event) => update(item.machine_id, 'cleaning_required', event.target.checked)} />{t('bulk.cleaningRequired')}</label>
-                    <label className="checkbox-row"><input type="checkbox" checked={drafts[item.machine_id].inspection_required} onChange={(event) => update(item.machine_id, 'inspection_required', event.target.checked)} />{t('bulk.inspectionRequired')}</label>
-                    <label className="checkbox-row"><input type="checkbox" checked={drafts[item.machine_id].repair_required} onChange={(event) => update(item.machine_id, 'repair_required', event.target.checked)} />{t('bulk.repairRequired')}</label>
                     <label className="wide">{t('common.notes')}<textarea value={drafts[item.machine_id].notes} onChange={(event) => update(item.machine_id, 'notes', event.target.value)} /></label>
                   </div>
                 )}
@@ -693,24 +639,18 @@ function ReturnModal({ items, locations, onClose, onComplete }: {
       )}
       {step === 'confirm' && (
         <>
-          <ConfirmationSummary title={t('bulk.returnConfirmTitle')} machineNumbers={selectedItems.map((item) => item.machine_number)} rows={[[t('bulk.documentLanguage'), t(`language.${documentLanguage}` as TranslationKey)]]} />
+          <ConfirmationSummary title={t('bulk.returnConfirmTitle')} machineNumbers={selectedItems.map((item) => item.machine_number)} rows={[]} />
           <div className="return-confirm-list">{selectedItems.map((item) => {
             const draft = drafts[item.machine_id]
-            const requirements = [
-              draft.cleaning_required ? t('bulk.cleaningRequired') : '',
-              draft.inspection_required ? t('bulk.inspectionRequired') : '',
-              draft.repair_required ? t('bulk.repairRequired') : '',
-            ].filter(Boolean).join(' · ')
             return <div key={item.machine_id}>
               <b>{t('bulk.returnLine', { number: item.machine_number, status: statusText(t, draft.next_status) })}</b>
               <span>{draft.condition_text}</span><span>{draft.result_text}</span>
               {draft.missing_equipment && <span>{t('bulk.missingEquipment')}: {draft.missing_equipment}</span>}
               {draft.damage && <span>{t('bulk.damage')}: {draft.damage}</span>}
               {draft.contamination && <span>{t('bulk.contamination')}: {draft.contamination}</span>}
-              {requirements && <span>{requirements}</span>}
             </div>
           })}</div>
-          <p className="confirmation-warning">{t('bulk.noAutoReady')}</p>
+          <p className="confirmation-warning">{t('bulk.returnOutcomeWarning')}</p>
           <div className="actions"><button className="secondary" onClick={() => setStep('edit')} disabled={busy}>{t('common.back')}</button><button className="primary" onClick={submit} disabled={busy}>{busy ? t('bulk.returning') : t('bulk.confirmReturn')}</button></div>
         </>
       )}
@@ -734,14 +674,14 @@ export function BatchProgressCard({ batch, onOpen, onCancel }: { batch: BatchPro
   const returnedPercent = batch.total_machines ? Math.round((batch.returned_machines / batch.total_machines) * 100) : 0
   return (
     <article className="batch-card">
-      <div><span className={`badge ${batch.still_issued_machines ? 'batch-active' : 'batch-complete'}`}>{statusText(t, batch.status, 'batch')}</span><h4>{batch.batch_reference}</h4>{batch.created_at && <small>{date(batch.created_at)}</small>}{batch.awaiting_signature_machines > 0 && <small className="muted batch-awaiting">{t('bulk.awaitingSignatureCount', { count: batch.awaiting_signature_machines })}</small>}</div>
+      <div><span className={`badge ${batch.still_issued_machines ? 'batch-active' : 'batch-complete'}`}>{statusText(t, batch.status, 'batch')}</span><h4>{batch.machine_numbers.map((number) => `№${number}`).join(', ')}</h4><small>{t('bulk.technicalReference')}: {batch.batch_reference}</small>{batch.created_at && <small>{date(batch.created_at)}</small>}{batch.awaiting_signature_machines > 0 && <small className="muted batch-awaiting">{t('bulk.awaitingSignatureCount', { count: batch.awaiting_signature_machines })}</small>}</div>
       <div className="batch-progress"><span style={{ width: `${returnedPercent}%` }} /><small>{t('bulk.returnedProgress', { returned: batch.returned_machines, issued: batch.still_issued_machines, total: batch.total_machines })}</small></div>
       <div className="batch-card-actions">{batch.awaiting_signature_machines > 0 && onCancel && <button className="danger compact" onClick={() => onCancel(batch)}><Ban size={15} />{t('bulk.cancelPendingAction')}</button>}{onOpen && <button className="secondary compact" onClick={() => onOpen(batch)}>{t('common.details')}</button>}</div>
     </article>
   )
 }
 
-function BatchDetailsPanel({ details, onDownload, onCancel }: { details: BatchDetails; onDownload: (path: string, filename: string) => void; onCancel?: (details: BatchDetails) => void }) {
+export function BatchDetailsPanel({ details, onDownload, onCancel }: { details: BatchDetails; onDownload: (path: string, filename: string) => void; onCancel?: (details: BatchDetails) => void }) {
   const { t } = useI18n()
   const hasFinalDocuments = details.transfers.some((transfer) => transfer.issue_status === 'COMPLETED' || transfer.return_status === 'COMPLETED')
   return (
@@ -751,7 +691,8 @@ function BatchDetailsPanel({ details, onDownload, onCancel }: { details: BatchDe
         <div key={transfer.transfer_id}>
           <span><b>{t('bulk.batchMachine', { number: transfer.machine_number })}</b><small>{transfer.brand} · {transfer.protocol_number}</small></span>
           <span className={`availability-pill ${transfer.is_active ? 'blocked' : 'available'}`}>{transfer.issue_status === 'AWAITING_SIGNATURE' || transfer.return_status === 'AWAITING_SIGNATURE' ? t('bulk.awaitingSignature') : transfer.is_active ? t('transfers.stillIssued') : t('transfers.returned')}</span>
-          <span>{transfer.issue_status === 'COMPLETED' && transfer.documents.map((document: ProtocolDocument) => <button className="link" key={document.id} onClick={() => onDownload(document.download_endpoint, document.filename)}>{document.format.toUpperCase()}</button>)}</span>
+          <section className="transfer-document-group"><b>{t('bulk.issueProtocol')}</b><span>{transfer.issue_status === 'COMPLETED' ? transfer.issue_documents.map((document: ProtocolDocument) => <button className="link" key={document.id} onClick={() => onDownload(document.download_endpoint, document.filename)}>{document.format.toUpperCase()}</button>) : t('bulk.awaitingSignature')}</span></section>
+          <section className="transfer-document-group"><b>{t('bulk.returnProtocol')}</b><span>{transfer.return_status === 'COMPLETED' ? transfer.return_documents.map((document: ProtocolDocument) => <button className="link" key={document.id} onClick={() => onDownload(document.download_endpoint, document.filename)}>{document.format.toUpperCase()}</button>) : t('bulk.returnNotCompleted')}</span></section>
         </div>
       ))}
     </div>
@@ -844,7 +785,7 @@ export default function BulkTransfers({ onChanged }: BulkTransfersProps) {
             : <div className="empty-state">{t('bulk.noBatches')}</div>}
       </div>
       {mode === 'issue' && <IssueModal items={availabilityItems} locations={locations} onClose={() => setMode(null)} onComplete={completed} />}
-      {mode === 'return' && <ReturnModal items={availabilityItems} locations={locations} onClose={() => setMode(null)} onComplete={completed} />}
+      {mode === 'return' && <ReturnModal items={availabilityItems} onClose={() => setMode(null)} onComplete={completed} />}
       {cancelBatch && <CancelBatchModal batch={cancelBatch} onClose={() => setCancelBatch(null)} onCancelled={cancelled} />}
     </section>
   )
