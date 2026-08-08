@@ -17,9 +17,12 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from .audit import add_audit_log
 from .database import SessionLocal, get_db
 from .document_generation import (
+    ConfirmedTemplateUnavailableError,
+    TemplateValidationError,
     build_daily_report_pdf,
     build_protocol_docx,
     build_protocol_pdf,
+    make_repair_documents,
     safe_filename,
 )
 from .hardening_api import router as hardening_router
@@ -42,6 +45,7 @@ from .models import (
     PartRequest,
     PartRequestLine,
     PartRequestStatus,
+    ProtocolDocument,
     Repair,
     RepairEvent,
     RepairEventType,
@@ -59,13 +63,13 @@ from .schemas import (
     BatchDetailsOut,
     BatchProgressOut,
     BatchSummaryOut,
-    CancelTransferBatchRequest,
-    CancelTransferBatchResponse,
     BulkIssueRequest,
     BulkIssueResponse,
     BulkReturnItem,
     BulkReturnRequest,
     BulkReturnResponse,
+    CancelTransferBatchRequest,
+    CancelTransferBatchResponse,
     LanguagePreferenceUpdate,
     LocationOut,
     LoginRequest,
@@ -318,17 +322,8 @@ def dashboard(
     return {
         "total_machines": total,
         "ready": by_status.get(MachineStatus.READY.value, 0),
-        "in_repair": sum(
-            by_status.get(value, 0)
-            for value in [
-                MachineStatus.REPAIR.value,
-                MachineStatus.INSPECTION.value,
-                MachineStatus.WAITING_PARTS.value,
-                MachineStatus.TESTING.value,
-            ]
-        ),
-        "in_use": by_status.get(MachineStatus.IN_USE.value, 0)
-        + by_status.get(MachineStatus.ISSUED.value, 0),
+        "in_repair": by_status.get(MachineStatus.REPAIR.value, 0),
+        "in_use": by_status.get(MachineStatus.ISSUED.value, 0),
         "open_repairs": db.scalar(
             select(func.count(Repair.id)).where(Repair.closed_at.is_(None))
         )
@@ -473,27 +468,28 @@ def update_machine(
     active = _active_transfer(db, machine_id)
     if "status" in changes:
         requested_status = changes["status"]
-        issued_statuses = {MachineStatus.ISSUED.value, MachineStatus.IN_USE.value}
-        if active and requested_status not in issued_statuses:
+        open_repair = db.scalar(
+            select(Repair.id).where(
+                Repair.machine_id == machine_id,
+                Repair.status != RepairStatus.COMPLETED.value,
+            )
+        )
+        authoritative_status = (
+            MachineStatus.ISSUED.value
+            if active
+            else MachineStatus.REPAIR.value
+            if open_repair is not None
+            else MachineStatus.READY.value
+        )
+        if requested_status != authoritative_status:
             raise HTTPException(
                 409,
                 detail={
-                    "code": "active_transfer_status_conflict",
+                    "code": "authoritative_machine_status_conflict",
                     "message": (
                         f"Статусът на машина №{item.inventory_number} не може да бъде "
-                        f"сменен на „{requested_status}“, докато протокол "
-                        f"{active.protocol_number} е активен."
-                    ),
-                },
-            )
-        if not active and requested_status in issued_statuses:
-            raise HTTPException(
-                409,
-                detail={
-                    "code": "missing_active_transfer",
-                    "message": (
-                        "Статус „Издадена“ или „В употреба“ се задава само чрез "
-                        "защитена операция по издаване."
+                        f"сменен на „{requested_status}“. Текущите предавания и "
+                        f"ремонтни карти изискват статус „{authoritative_status}“."
                     ),
                 },
             )
@@ -606,7 +602,7 @@ def create_repair(
             },
         )
     previous_status = item.status
-    ensure_machine_transition(previous_status, MachineStatus.INSPECTION.value)
+    ensure_machine_transition(previous_status, MachineStatus.REPAIR.value)
     repair = Repair(
         machine_id=item.id,
         reported_problem=data.reported_problem,
@@ -620,7 +616,7 @@ def create_repair(
     db.add(repair)
     db.flush()
     repair.repair_reference = f"REP-{repair.opened_at:%Y}-{repair.id:06d}"
-    item.status = MachineStatus.INSPECTION.value
+    item.status = MachineStatus.REPAIR.value
     db.add(
         RepairEvent(
             repair_id=repair.id,
@@ -671,7 +667,10 @@ def update_repair(
 ) -> Repair:
     if data.close or data.status == RepairStatus.COMPLETED:
         ensure_permission(user, Permission.REPAIRS_COMPLETE)
-    repair = db.get(Repair, repair_id)
+    repair_statement = select(Repair).where(Repair.id == repair_id)
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        repair_statement = repair_statement.with_for_update()
+    repair = db.scalar(repair_statement)
     if not repair:
         raise HTTPException(404, "Ремонтът не е намерен")
     changes = data.model_dump(
@@ -720,6 +719,51 @@ def update_repair(
             user_id=user.id,
         )
     )
+    generated_on_completion: list[GeneratedDocument] = []
+    if (
+        previous_status != RepairStatus.COMPLETED.value
+        and repair.status == RepairStatus.COMPLETED.value
+    ):
+        repair.responsible_user_id = user.id
+        db.flush()
+        db.expire(repair, ["events", "parts_used", "participants", "attachments"])
+        try:
+            generated_on_completion = make_repair_documents(
+                db, repair, user.id, "bg"
+            )
+            db.add_all(generated_on_completion)
+            db.flush()
+        except ConfirmedTemplateUnavailableError as exc:
+            db.rollback()
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "repair_protocol_template_unavailable",
+                    "message": exc.message,
+                    "document_type": exc.document_type,
+                    "language": "bg",
+                },
+            ) from exc
+        except TemplateValidationError as exc:
+            db.rollback()
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "repair_protocol_generation_failed",
+                    "message": "Ремонтът не е приключен, защото задължителният протокол не може да бъде генериран.",
+                    "document_type": "REPAIR_PROTOCOL",
+                    "language": "bg",
+                },
+            ) from exc
+        except Exception as exc:
+            db.rollback()
+            raise HTTPException(
+                500,
+                detail={
+                    "code": "repair_protocol_generation_failed",
+                    "message": "Ремонтът не е приключен поради грешка при генериране на задължителния протокол.",
+                },
+            ) from exc
     if previous_machine_status != repair.machine.status:
         add_machine_event(
             db,
@@ -743,6 +787,9 @@ def update_repair(
             "previous_machine_status": previous_machine_status,
             "new_machine_status": repair.machine.status,
             "changed_fields": sorted(data.model_fields_set),
+            "generated_document_ids": [
+                document.id for document in generated_on_completion
+            ],
         },
     )
     db.commit()
@@ -950,27 +997,24 @@ def create_transfer(
 ) -> TransferProtocol:
     try:
         if data.protocol_type == "Предаване":
+            if data.location_id is None or not (data.location_text or "").strip() or not (
+                data.condition_text or ""
+            ).strip():
+                raise HTTPException(
+                    422,
+                    detail={
+                        "code": "simplified_issue_fields_required",
+                        "message": "За издаване са задължителни местоположение, предназначение и състояние при издаване.",
+                    },
+                )
             result = bulk_issue(
                 db,
                 user,
                 BulkIssueRequest(
                     machine_ids=[data.machine_id],
                     recipient=data.recipient,
-                    company_unit=data.company_unit,
-                    department=data.department,
-                    vessel=data.vessel,
-                    dock=data.dock,
-                    pier=data.pier,
-                    work_area=data.work_area,
-                    location_text=data.location_text,
+                    usage_text=data.location_text,
                     location_id=data.location_id,
-                    handed_over_by=data.handed_over_by,
-                    accepted_by=data.accepted_by,
-                    equipment=data.equipment,
-                    hoses=data.hoses,
-                    nozzles=data.nozzles,
-                    guns=data.guns,
-                    accessories=data.accessories,
                     condition_text=data.condition_text,
                     remarks=data.remarks,
                 ),
@@ -1007,11 +1051,7 @@ def create_transfer(
                             machine_id=data.machine_id,
                             condition_text=data.condition_text,
                             result_text=data.remarks,
-                            returned_by=data.handed_over_by,
-                            accepted_by=data.accepted_by,
-                            returned_person=data.returned_person,
-                            location_id=data.location_id,
-                            next_status=MachineStatus.INSPECTION,
+                            next_status=MachineStatus.REPAIR,
                         )
                     ]
                 ),
@@ -1133,7 +1173,16 @@ def batch_documents_zip(
             GeneratedDocument.document_type == DocumentType.TRANSFER_RETURN.value,
         )
     generated = db.scalars(generated_query).all()
-    if not batch.documents and not generated and not return_transfer_ids:
+    issue_documents = list(batch.documents)
+    if return_transfer_ids:
+        issue_documents = list(
+            db.scalars(
+                select(ProtocolDocument).where(
+                    ProtocolDocument.transfer_id.in_(return_transfer_ids)
+                )
+            ).all()
+        )
+    if not issue_documents and not generated and not return_transfer_ids:
         raise HTTPException(404, "Партидата няма генерирани протоколи")
     transfers = list(batch.transfers)
     if return_transfer_ids:
@@ -1146,7 +1195,7 @@ def batch_documents_zip(
         )
     transfer_by_id = {item.id: item for item in transfers}
     archive_entries: list[tuple[str, bytes]] = []
-    for document in sorted(batch.documents, key=lambda item: item.filename):
+    for document in sorted(issue_documents, key=lambda item: item.filename):
         transfer = transfer_by_id.get(document.transfer_id)
         if transfer is not None and transfer.issue_status == "COMPLETED":
             archive_entries.append((safe_filename(document.filename), document.content))

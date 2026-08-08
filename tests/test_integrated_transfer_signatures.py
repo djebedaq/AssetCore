@@ -168,7 +168,7 @@ def test_return_remains_pending_until_return_and_acceptance_signatures(
                 "machine_id": transfer["machine_id"],
                 "condition_text": "Тестово състояние при връщане",
                 "result_text": "Насочена към преглед",
-                "next_status": "INSPECTION",
+                "next_status": "READY",
                 "returned_person": _returned_person(),
             }]
         },
@@ -188,7 +188,7 @@ def test_return_remains_pending_until_return_and_acceptance_signatures(
     with session_factory() as db:
         machine = db.get(Machine, machine_ids["4"])
         active = db.get(TransferProtocol, transfer["transfer_id"])
-        assert machine.status == "INSPECTION"
+        assert machine.status == "READY"
         assert active.is_active is False
         assert active.return_status == "COMPLETED"
 

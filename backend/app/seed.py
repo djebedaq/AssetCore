@@ -13,7 +13,6 @@ from .models import (
     Location,
     Machine,
     MachineStatus,
-    PartCatalog,
     TechnicalDocument,
     TechnicalDocumentRevision,
     InstallationOwnership,
@@ -151,6 +150,8 @@ def _seed_verified_registry(db: Session) -> None:
     for name in LOCATIONS:
         if name not in existing_locations:
             db.add(Location(name=name))
+        elif name == "Цех" and not existing_locations[name].is_active:
+            existing_locations[name].is_active = True
     db.commit()
 
     default_signature_slots = (

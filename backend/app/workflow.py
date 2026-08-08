@@ -10,52 +10,13 @@ from .models import Machine, MachineEvent, MachineStatus, Repair, RepairStatus, 
 MACHINE_STATUS_TRANSITIONS: dict[str, set[str]] = {
     MachineStatus.READY.value: {
         MachineStatus.ISSUED.value,
-        MachineStatus.INSPECTION.value,
         MachineStatus.REPAIR.value,
     },
     MachineStatus.ISSUED.value: {
-        MachineStatus.IN_USE.value,
-        MachineStatus.RETURNED.value,
-        MachineStatus.INSPECTION.value,
-        MachineStatus.CLEANING.value,
-        MachineStatus.REPAIR.value,
-    },
-    MachineStatus.IN_USE.value: {
-        MachineStatus.RETURNED.value,
-        MachineStatus.INSPECTION.value,
-        MachineStatus.CLEANING.value,
-        MachineStatus.REPAIR.value,
-    },
-    MachineStatus.RETURNED.value: {
-        MachineStatus.INSPECTION.value,
-        MachineStatus.CLEANING.value,
-        MachineStatus.REPAIR.value,
-    },
-    MachineStatus.INSPECTION.value: {
-        MachineStatus.CLEANING.value,
-        MachineStatus.REPAIR.value,
-        MachineStatus.WAITING_APPROVAL.value,
-        MachineStatus.TESTING.value,
-    },
-    MachineStatus.CLEANING.value: {
-        MachineStatus.INSPECTION.value,
-        MachineStatus.REPAIR.value,
-        MachineStatus.TESTING.value,
-    },
-    MachineStatus.REPAIR.value: {
-        MachineStatus.WAITING_APPROVAL.value,
-        MachineStatus.WAITING_PARTS.value,
-        MachineStatus.TESTING.value,
-    },
-    MachineStatus.WAITING_APPROVAL.value: {
-        MachineStatus.REPAIR.value,
-        MachineStatus.WAITING_PARTS.value,
-    },
-    MachineStatus.WAITING_PARTS.value: {MachineStatus.REPAIR.value},
-    MachineStatus.TESTING.value: {
         MachineStatus.READY.value,
         MachineStatus.REPAIR.value,
     },
+    MachineStatus.REPAIR.value: {MachineStatus.READY.value},
 }
 
 REPAIR_STATUS_TRANSITIONS: dict[str, set[str]] = {
@@ -82,12 +43,12 @@ REPAIR_STATUS_TRANSITIONS: dict[str, set[str]] = {
 }
 
 REPAIR_TO_MACHINE_STATUS = {
-    RepairStatus.ACCEPTED.value: MachineStatus.INSPECTION.value,
-    RepairStatus.DIAGNOSIS.value: MachineStatus.INSPECTION.value,
-    RepairStatus.WAITING_APPROVAL.value: MachineStatus.WAITING_APPROVAL.value,
-    RepairStatus.WAITING_PARTS.value: MachineStatus.WAITING_PARTS.value,
+    RepairStatus.ACCEPTED.value: MachineStatus.REPAIR.value,
+    RepairStatus.DIAGNOSIS.value: MachineStatus.REPAIR.value,
+    RepairStatus.WAITING_APPROVAL.value: MachineStatus.REPAIR.value,
+    RepairStatus.WAITING_PARTS.value: MachineStatus.REPAIR.value,
     RepairStatus.REPAIRING.value: MachineStatus.REPAIR.value,
-    RepairStatus.TESTING.value: MachineStatus.TESTING.value,
+    RepairStatus.TESTING.value: MachineStatus.REPAIR.value,
     RepairStatus.COMPLETED.value: MachineStatus.READY.value,
 }
 

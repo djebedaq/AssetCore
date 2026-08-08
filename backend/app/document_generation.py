@@ -48,6 +48,7 @@ from .models import (
     OfficialDocumentStatus,
     OfficialDocumentVersion,
     PartRequest,
+    PartRequestLine,
     ProtocolDocument,
     Repair,
     TransferBatch,

@@ -145,59 +145,57 @@ Password policy: минимум 10 знака, поне една малка и �
 ```json
 {
   "machine_ids": ["<machine-id-1>", "<machine-id-2>"],
-  "company_unit": "<звено>",
-  "department": "<отдел>",
-  "vessel": "<обект>",
-  "dock": "<док>",
-  "pier": "<кей>",
-  "work_area": "<работна зона>",
-  "location_text": "<място на работа>",
   "location_id": "<location-id>",
-  "handed_over_by": "<предал>",
-  "accepted_by": "<приел>",
-  "equipment": "<комплектовка>",
-  "hoses": "<шлангове>",
-  "nozzles": "<дюзи>",
-  "guns": "<пистолети>",
-  "accessories": "<принадлежности>",
-  "condition_text": "<състояние>",
+  "usage_text": "<потвърдено-предназначение>",
+  "condition_text": "<състояние-при-издаване>",
+  "recipient": {
+    "first_name": "<собствено-име>",
+    "middle_name": "<бащино-име>",
+    "last_name": "<фамилия>",
+    "is_foreign_person": false,
+    "name_exception_reason": null
+  },
+  "checklist": [
+    {"code": "<код>", "condition": "GOOD", "note": null, "length_m": null}
+  ],
+  "document_language": "bg",
   "remarks": "<бележки>"
 }
 ```
 
-Празен списък или повторен identifier връща HTTP 422. Липсваща машина връща 404. Активно предаване, неготов статус или concurrent uniqueness конфликт връща HTTP 409. Всички машини се заключват и валидират преди запис; при проблем не се създават партида, предавания или документи.
-
-Успешният отговор съдържа `batch_id`, `batch_reference`, `transfers[]` с `transfer_id`, `protocol_number`, `machine_number`, индивидуални документи и `zip_download_endpoint`.
+Старите свободни полета за фирма, отдел, кораб, док, кей, работна зона, комплектовка, шлангове, дюзи, пистолети и принадлежности не са част от активния bulk договор. `usage_text` се подава към съществуващото поле „Оборудването ще се използва за:“ в одобрения шаблон; generator/layout/template bytes не се променят. За HPWJ операции backend генерира официалния документ на `bg`, независимо от клиентска езикова настройка.
 
 ## Групово връщане
 
-Всеки `items[]` запис съдържа едновременно `transfer_id` и `machine_id`. Тази двойка предотвратява връщане през грешна история.
-
 ```json
 {
+  "document_language": "bg",
   "items": [
     {
       "transfer_id": "<active-transfer-id>",
-      "machine_id": "<matching-machine-id>",
-      "condition_text": "<състояние при връщане>",
-      "result_text": "<резултат от приемането>",
-      "notes": "<индивидуални бележки>",
-      "missing_equipment": "<липсващо оборудване>",
-      "damage": "<повреди>",
-      "contamination": "<замърсяване>",
-      "cleaning_required": true,
-      "inspection_required": true,
-      "repair_required": false,
-      "returned_by": "<върнал>",
-      "accepted_by": "<приел>",
-      "location_id": "<location-id>",
-      "next_status": "INSPECTION"
+      "machine_id": "<machine-id>",
+      "condition_text": "<състояние-при-приемане>",
+      "result_text": "<резултат-от-прегледа>",
+      "checklist": [],
+      "missing_equipment": null,
+      "damage": null,
+      "contamination": null,
+      "notes": null,
+      "next_status": "READY"
     }
   ]
 }
 ```
 
-Допустимите следващи етапи са техническите кодове `RETURNED`, `INSPECTION`, `CLEANING`, `REPAIR`, `WAITING_APPROVAL`, `WAITING_PARTS` и `TESTING`. Директно `READY` не се приема. Българските legacy стойности остават входно съвместими, но новите интеграции трябва да използват кодовете. Една заявка е атомарна, но може умишлено да съдържа само част от машините в партидата; останалите индивидуални предавания остават активни.
+`next_status` е само `READY` или `REPAIR`. Клиентът не подава return location; backend разрешава активния справочен запис с име `Цех` вътре в транзакцията. При `REPAIR` след финалните подписи се създава точно една ремонтна карта, свързана с transfer/document/return batch. Повторно връщане, грешен transfer, липсващ `Цех` или дублирана ремонтна връзка връщат HTTP 409 и не оставят частични промени.
+
+`BatchProgressOut` включва `machine_numbers`. `BatchTransferOut` включва `issue_documents` и `return_documents`; до успешно приемане `return_documents` е празен масив. ZIP за return operation batch включва наличните финални issue и return DOCX/PDF файлове.
+
+Основни transfer грешки: `issue_conflict`, `return_conflict`, `workshop_location_missing`, `return_repair_already_exists`, `machine_has_open_repair`, `repair_protocol_template_unavailable` и `repair_protocol_generation_failed`. Всички имат структуриран `code` и безопасно човешко съобщение.
+
+Празен списък или повторен identifier връща HTTP 422. Липсваща машина връща 404. Активно предаване, неготов статус или concurrent uniqueness конфликт връща HTTP 409. Всички машини се заключват и валидират преди запис; при проблем не се създават партида, предавания или документи.
+
+Успешният отговор съдържа `batch_id`, `batch_reference`, `transfers[]` с `transfer_id`, `protocol_number`, `machine_number`, индивидуални документи и `zip_download_endpoint`.
 
 ## Шаблони и официални документи
 

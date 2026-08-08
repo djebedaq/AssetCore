@@ -196,14 +196,7 @@ def test_backend_catalogs_have_exact_language_parity_and_stable_status_codes():
     assert {status.value for status in MachineStatus} == {
         "READY",
         "ISSUED",
-        "IN_USE",
-        "RETURNED",
-        "INSPECTION",
-        "CLEANING",
         "REPAIR",
-        "WAITING_APPROVAL",
-        "WAITING_PARTS",
-        "TESTING",
     }
 
 

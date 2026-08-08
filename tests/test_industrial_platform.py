@@ -538,7 +538,7 @@ def test_return_generates_individual_protocols_and_batch_zip(
                     "machine_id": first["machine_id"],
                     "condition_text": "test-only return condition",
                     "result_text": "test-only return result",
-                    "next_status": "INSPECTION",
+                    "next_status": "READY",
                     "returned_person": {
                         "first_name": "Тестов",
                         "middle_name": "Външен",
@@ -872,7 +872,7 @@ def test_legacy_routes_cannot_bypass_repair_and_request_workflows(
         machine = session.get(Machine, machine_ids["4"])
         request = session.get(PartRequest, draft.json()["id"])
         assert repair_row.repair_reference.startswith("REP-")
-        assert machine.status == "INSPECTION"
+        assert machine.status == "REPAIR"
         assert request.request_reference.startswith("PR-")
         assert session.scalar(
             select(func.count(PartRequestLine.id)).where(
@@ -1019,7 +1019,7 @@ def test_repair_kit_requires_verified_parts_and_expands_authoritatively(
         assert session.get(RepairKit, kit.json()["id"]).is_approved is True
 
 
-def test_confirmed_english_document_language_issues_atomically(
+def test_hpwj_issue_documents_are_always_bulgarian_and_atomic(
     client, auth_headers, machine_ids, issue_payload, session_factory, finalize_signatures
 ):
     payload = issue_payload(machine_ids["4"])
@@ -1029,7 +1029,7 @@ def test_confirmed_english_document_language_issues_atomically(
     )
     assert response.status_code == 201, response.text
     finalize_signatures(client, response)
-    assert response.json()["transfers"][0]["documents"][0]["language"] == "en"
+    assert response.json()["transfers"][0]["documents"][0]["language"] == "bg"
     with session_factory() as session:
         assert session.scalar(select(func.count(TransferProtocol.id))) == 1
         assert session.get(Machine, machine_ids["4"]).status == "ISSUED"

@@ -86,20 +86,14 @@ def issue_payload():
     def make(*machine_ids: int) -> dict:
         return {
             "machine_ids": list(machine_ids),
-            "company_unit": "",
-            "vessel": "",
-            "location_text": "",
-            "handed_over_by": "",
-            "accepted_by": "",
-            "equipment": "",
-            "condition_text": "",
+            "usage_text": "Проверена тестова производствена задача",
+            "location_id": 1,
+            "condition_text": "Изправна при издаване",
             "remarks": "",
             "recipient": {
                 "first_name": "Тестов",
                 "middle_name": "Външен",
                 "last_name": "Получател",
-                "job_title": "Тестова длъжност",
-                "company_or_department": "Тестово звено",
             },
         }
 

@@ -103,6 +103,11 @@ def test_legacy_sqlite_database_upgrades_without_changing_inventory(tmp_path: Pa
         column["name"] for column in inspector.get_columns("part_requests")
     }
     assert {
+        "source_return_transfer_id",
+        "source_return_document_id",
+        "source_return_batch_id",
+    }.issubset({column["name"] for column in inspector.get_columns("repairs")})
+    assert {
         "alternative_part_numbers", "replacement_part_ids", "source_figure",
         "diagram_page", "source_version", "source_document_sha256",
         "verification_status", "replaced_by_part_number",
@@ -127,6 +132,9 @@ def test_legacy_sqlite_database_upgrades_without_changing_inventory(tmp_path: Pa
             "SELECT inventory_number, serial_number, status FROM machines WHERE id=1"
         ).one()
         assert row == ("7", "G41200143", "READY")
+        assert upgraded.exec_driver_sql(
+            "SELECT is_active FROM locations WHERE name = 'Цех'"
+        ).scalar_one() in (1, True)
         roles = dict(
             upgraded.exec_driver_sql("SELECT email, role FROM users ORDER BY id").all()
         )

@@ -4,9 +4,8 @@ import hashlib
 from collections import Counter
 from pathlib import Path
 
-from sqlalchemy import select
-
 from app.models import Machine, PartCatalog, TechnicalDocument
+from sqlalchemy import select
 
 
 def test_verified_catalog_is_imported_with_exact_source_traceability(session_factory):

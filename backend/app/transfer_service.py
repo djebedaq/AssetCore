@@ -36,8 +36,10 @@ from .models import (
     OfficialDocumentStatus,
     OfficialDocumentVersion,
     ProtocolDocument,
+    Repair,
+    RepairEvent,
+    RepairStatus,
     SignatureSession,
-    DocumentParticipant,
     TransferBatch,
     TransferBatchStatus,
     TransferOperationStatus,
@@ -103,7 +105,10 @@ def _recipient_or_location(transfer: TransferProtocol) -> str | None:
 
 
 def _conflict_item(
-    machine: Machine, transfer: TransferProtocol | None, language: str = "bg"
+    machine: Machine,
+    transfer: TransferProtocol | None,
+    language: str = "bg",
+    repair: Repair | None = None,
 ) -> dict[str, Any]:
     return {
         "machine_id": machine.id,
@@ -121,12 +126,21 @@ def _conflict_item(
         "current_recipient_or_location": _recipient_or_location(transfer)
         if transfer
         else (machine.location.name if machine.location else None),
+        "active_repair_id": repair.id if repair else None,
+        "repair_reference": repair.repair_reference if repair else None,
     }
 
 
 def _availability_message(
-    machine: Machine, transfer: TransferProtocol | None, language: str = "bg"
+    machine: Machine,
+    transfer: TransferProtocol | None,
+    language: str = "bg",
+    repair: Repair | None = None,
 ) -> str:
+    if not machine.is_active:
+        return translate(
+            "issue.inactive_machine", language, number=machine.inventory_number
+        )
     if transfer:
         details = [
             translate("issue.active", language, number=machine.inventory_number),
@@ -152,6 +166,10 @@ def _availability_message(
                 translate("issue.recipient", language, recipient=recipient)
             )
         return " ".join(details)
+    if repair is not None:
+        return translate(
+            "issue.active_repair", language, number=machine.inventory_number
+        )
     return translate(
         "issue.not_ready",
         language,
@@ -168,7 +186,7 @@ def _return_stage_label(stage: str) -> str:
     labels = {
         "load_machines": "зареждане на машините",
         "load_transfers": "зареждане на активните издавания",
-        "validate_return_locations": "проверка на местоположението",
+        "resolve_workshop_location": "зареждане на местоположението „Цех“",
         "validate_return_conflicts": "проверка за конфликт на операцията",
         "validate_return_recipient_snapshot": "проверка на получателя",
         "create_returner_identity": "създаване на самоличност за подпис",
@@ -233,6 +251,25 @@ def _active_transfers_for_machines(
     }
 
 
+def _open_repairs_for_machines(
+    db: Session, machine_ids: list[int], *, lock: bool = False
+) -> dict[int, Repair]:
+    statement = (
+        select(Repair)
+        .where(
+            Repair.machine_id.in_(machine_ids),
+            Repair.status != RepairStatus.COMPLETED.value,
+        )
+        .order_by(Repair.id)
+    )
+    if lock:
+        statement = _for_update(db, statement)
+    result: dict[int, Repair] = {}
+    for repair in db.scalars(statement).all():
+        result.setdefault(repair.machine_id, repair)
+    return result
+
+
 def availability(db: Session, language: str = "bg") -> list[dict[str, Any]]:
     machines = db.scalars(
         select(Machine)
@@ -240,10 +277,19 @@ def availability(db: Session, language: str = "bg") -> list[dict[str, Any]]:
         .order_by(Machine.pressure_bar.desc(), Machine.inventory_number)
     ).all()
     active = _active_transfers_for_machines(db, [machine.id for machine in machines])
+    open_repairs = _open_repairs_for_machines(
+        db, [machine.id for machine in machines]
+    )
     result: list[dict[str, Any]] = []
     for machine in machines:
         transfer = active.get(machine.id)
-        is_available = transfer is None and machine.status == MachineStatus.READY.value
+        repair = open_repairs.get(machine.id)
+        is_available = (
+            machine.is_active
+            and transfer is None
+            and repair is None
+            and machine.status == MachineStatus.READY.value
+        )
         is_returnable = bool(
             transfer
             and transfer.issue_status == TransferOperationStatus.COMPLETED.value
@@ -266,7 +312,7 @@ def availability(db: Session, language: str = "bg") -> list[dict[str, Any]]:
                 ),
                 "unavailable_reason": None
                 if is_available
-                else _availability_message(machine, transfer, language),
+                else _availability_message(machine, transfer, language, repair),
                 "active_transfer_id": transfer.id if transfer else None,
                 "protocol_number": transfer.protocol_number if transfer else None,
                 "batch_reference": transfer.batch_reference if transfer else None,
@@ -307,28 +353,43 @@ def _validate_location_ids(
 ) -> None:
     if not location_ids:
         return
-    found = set(
-        db.scalars(select(Location.id).where(Location.id.in_(location_ids))).all()
+    available = set(
+        db.scalars(
+            select(Location.id).where(
+                Location.id.in_(location_ids), Location.is_active.is_(True)
+            )
+        ).all()
     )
-    missing = sorted(location_ids - found)
-    if missing:
+    unavailable = sorted(location_ids - available)
+    if unavailable:
         raise TransferServiceError(
-            404,
-            "locations_not_found",
-            translate("locations.not_found", language),
-            {"missing_location_ids": missing},
+            409,
+            "locations_unavailable",
+            translate("locations.unavailable", language),
+            {"unavailable_location_ids": unavailable},
         )
 
 
 def _issue_conflicts(
-    machines: list[Machine], active: dict[int, TransferProtocol], language: str
+    machines: list[Machine],
+    active: dict[int, TransferProtocol],
+    open_repairs: dict[int, Repair],
+    language: str,
 ) -> list[dict[str, Any]]:
     conflicts = []
     for machine in machines:
         transfer = active.get(machine.id)
-        if transfer is not None or machine.status != MachineStatus.READY.value:
-            item = _conflict_item(machine, transfer, language)
-            item["message"] = _availability_message(machine, transfer, language)
+        repair = open_repairs.get(machine.id)
+        if (
+            transfer is not None
+            or repair is not None
+            or not machine.is_active
+            or machine.status != MachineStatus.READY.value
+        ):
+            item = _conflict_item(machine, transfer, language, repair)
+            item["message"] = _availability_message(
+                machine, transfer, language, repair
+            )
             conflicts.append(item)
     return conflicts
 
@@ -394,12 +455,13 @@ def _bulk_issue_impl(
                 {},
             )
         machines, active = _load_issue_machines(db, machine_ids, language)
+        open_repairs = _open_repairs_for_machines(db, machine_ids, lock=True)
         _validate_location_ids(
             db,
             {data.location_id} if data.location_id is not None else set(),
             language,
         )
-        conflicts = _issue_conflicts(machines, active, language)
+        conflicts = _issue_conflicts(machines, active, open_repairs, language)
         if conflicts:
             raise TransferServiceError(
                 409,
@@ -448,13 +510,7 @@ def _bulk_issue_impl(
                 protocol_number=f"TEMP-{uuid4().hex}",
                 is_active=True,
                 issue_status=TransferOperationStatus.AWAITING_SIGNATURE.value,
-                company_unit=data.company_unit,
-                department=data.department,
-                vessel=data.vessel,
-                dock=data.dock,
-                pier=data.pier,
-                work_area=data.work_area,
-                location_text=data.location_text,
+                location_text=data.usage_text,
                 handed_over_by=user.full_name,
                 handed_over_job_title=user.job_title,
                 handed_over_department=(
@@ -465,11 +521,6 @@ def _bulk_issue_impl(
                 accepted_by=recipient_name,
                 accepted_by_job_title=None,
                 accepted_by_company=None,
-                equipment=data.equipment,
-                hoses=data.hoses,
-                nozzles=data.nozzles,
-                guns=data.guns,
-                accessories=data.accessories,
                 condition_text=data.condition_text,
                 issue_checklist=[item.model_dump() for item in data.checklist],
                 remarks=data.remarks,
@@ -485,7 +536,7 @@ def _bulk_issue_impl(
             transfer.protocol_number = f"HPWJ-{now:%Y%m%d}-{transfer.id:06d}"
             transfer.machine = machine
             documents = make_protocol_documents(
-                db, transfer, batch, user.id, data.document_language.value
+                db, transfer, batch, user.id, "bg"
             )
             db.add_all(documents)
             db.flush()
@@ -518,12 +569,7 @@ def _bulk_issue_impl(
                 details={
                     "batch_reference": batch.batch_reference,
                     "transfer_id": transfer.id,
-                    "company_unit": data.company_unit,
-                    "department": data.department,
-                    "vessel": data.vessel,
-                    "dock": data.dock,
-                    "pier": data.pier,
-                    "work_area": data.work_area,
+                    "usage_text": data.usage_text,
                     "protocol_document_ids": [document.id for document in documents],
                 },
             )
@@ -542,17 +588,7 @@ def _bulk_issue_impl(
                     "batch_reference": batch.batch_reference,
                     "transfer_id": transfer.id,
                     "protocol_number": transfer.protocol_number,
-                    "company_unit": data.company_unit,
-                    "department": data.department,
-                    "vessel": data.vessel,
-                    "dock": data.dock,
-                    "pier": data.pier,
-                    "work_area": data.work_area,
-                    "equipment": data.equipment,
-                    "hoses": data.hoses,
-                    "nozzles": data.nozzles,
-                    "guns": data.guns,
-                    "accessories": data.accessories,
+                    "usage_text": data.usage_text,
                     "checklist": [item.model_dump() for item in data.checklist],
                     "protocol_document_ids": [document.id for document in documents],
                     "official_document_id": official_document.id,
@@ -567,7 +603,7 @@ def _bulk_issue_impl(
             transfers=transfers,
             actor=user,
             external_signer=external_signer,
-            language=data.document_language.value,
+            language="bg",
         )
         # Backward-compatible placement for older clients and tests. New clients
         # consume the top-level signing_tasks field and therefore show exactly
@@ -774,6 +810,21 @@ def _batch_progress(db: Session, batch: TransferBatch) -> dict[str, Any]:
             ),
         )
     ) or 0
+    if manifest_ids and isinstance(batch.return_manifest, dict):
+        machine_numbers = [
+            str(item["machine_number"])
+            for item in batch.return_manifest.get("machines", [])
+            if isinstance(item, dict) and item.get("machine_number") is not None
+        ]
+    else:
+        machine_numbers = list(
+            db.scalars(
+                select(Machine.inventory_number)
+                .join(TransferProtocol, TransferProtocol.machine_id == Machine.id)
+                .where(TransferProtocol.batch_id == batch.id)
+                .order_by(TransferProtocol.id)
+            ).all()
+        )
     return {
         "batch_id": batch.id,
         "batch_reference": batch.batch_reference,
@@ -782,6 +833,7 @@ def _batch_progress(db: Session, batch: TransferBatch) -> dict[str, Any]:
         "returned_machines": returned,
         "still_issued_machines": still_issued,
         "awaiting_signature_machines": awaiting_signature,
+        "machine_numbers": machine_numbers,
     }
 
 
@@ -1267,7 +1319,11 @@ def _finalize_signed_return_batch(
         target_version.finalized_at = version.finalized_at or utcnow()
         finalize_signed_files(db, target_version, projected_participants)
         finalize_signed_transfer_workflow(
-            db, target_document, target_version, actor
+            db,
+            target_document,
+            target_version,
+            actor,
+            return_operation_batch_id=batch.id,
         )
         finalized_document_ids.append(target_document.id)
 
@@ -1299,6 +1355,8 @@ def finalize_signed_transfer_workflow(
     document: OfficialDocument,
     version: OfficialDocumentVersion,
     actor: User,
+    *,
+    return_operation_batch_id: int | None = None,
 ) -> None:
     """Apply the machine movement only after the bound version is fully signed."""
     if document.document_type not in {
@@ -1461,7 +1519,7 @@ def finalize_signed_transfer_workflow(
         transfer.return_status = TransferOperationStatus.COMPLETED.value
         transfer.returned_at = now
         transfer.returned_by_id = actor.id
-        machine.status = transfer.return_next_status or MachineStatus.INSPECTION.value
+        machine.status = transfer.return_next_status or MachineStatus.REPAIR.value
         if transfer.return_location_id is not None:
             machine.location_id = transfer.return_location_id
         machine.updated_at = now
@@ -1501,6 +1559,90 @@ def finalize_signed_transfer_workflow(
                 generated.content = content
                 generated.sha256 = hashlib.sha256(content).hexdigest()
             generated_ids.append(generated.id)
+        repair_id: int | None = None
+        if machine.status == MachineStatus.REPAIR.value:
+            existing_repair = db.scalar(
+                select(Repair).where(
+                    Repair.source_return_transfer_id == transfer.id
+                )
+            )
+            if existing_repair is not None:
+                raise TransferServiceError(
+                    409,
+                    "return_repair_already_exists",
+                    "За това връщане вече има създадена ремонтна карта.",
+                    {
+                        "transfer_id": transfer.id,
+                        "repair_id": existing_repair.id,
+                    },
+                )
+            other_open_repair = db.scalar(
+                _for_update(
+                    db,
+                    select(Repair).where(
+                        Repair.machine_id == machine.id,
+                        Repair.status != RepairStatus.COMPLETED.value,
+                    ),
+                )
+            )
+            if other_open_repair is not None:
+                raise TransferServiceError(
+                    409,
+                    "machine_has_open_repair",
+                    f"Машина №{machine.inventory_number} вече има активна ремонтна карта.",
+                    {
+                        "machine_id": machine.id,
+                        "repair_id": other_open_repair.id,
+                    },
+                )
+            reported_problem = (
+                (transfer.return_damage or "").strip()
+                or (transfer.return_result_text or "").strip()
+            )
+            repair = Repair(
+                machine_id=machine.id,
+                source_return_transfer_id=transfer.id,
+                source_return_document_id=document.id,
+                source_return_batch_id=return_operation_batch_id,
+                reported_problem=reported_problem,
+                condition_before=transfer.return_condition_text,
+                reported_by_name=transfer.returned_by_name,
+                symptoms=transfer.return_damage,
+                required_work=transfer.return_result_text,
+                cleaning_required=bool(
+                    (transfer.return_contamination or "").strip()
+                ),
+                test_required=True,
+                accepted_by_id=actor.id,
+                status=RepairStatus.ACCEPTED.value,
+                opened_at=now,
+                repair_reference=f"TEMP-{uuid4().hex}",
+            )
+            db.add(repair)
+            db.flush()
+            repair.repair_reference = f"REP-{now:%Y}-{repair.id:06d}"
+            repair_event = RepairEvent(
+                repair_id=repair.id,
+                event_type="RETURN_DIRECTED_TO_REPAIR",
+                status_before=None,
+                status_after=RepairStatus.ACCEPTED.value,
+                description="Машината е насочена за ремонт при приемането.",
+                structured_data={
+                    "transfer_id": transfer.id,
+                    "return_document_id": document.id,
+                    "return_operation_batch_id": return_operation_batch_id,
+                    "condition": transfer.return_condition_text,
+                    "result": transfer.return_result_text,
+                    "missing_equipment": transfer.return_missing_equipment,
+                    "damage": transfer.return_damage,
+                    "contamination": transfer.return_contamination,
+                    "notes": transfer.return_notes,
+                    "checklist": transfer.return_checklist or [],
+                },
+                user_id=actor.id,
+            )
+            db.add(repair_event)
+            repair_id = repair.id
         add_machine_event(
             db,
             machine,
@@ -1518,6 +1660,7 @@ def finalize_signed_transfer_workflow(
                 "document_version": version.version,
                 "signing_sha256": version.signing_sha256,
                 "generated_document_ids": generated_ids,
+                "repair_id": repair_id,
             },
         )
         add_audit_log(
@@ -1537,6 +1680,7 @@ def finalize_signed_transfer_workflow(
                 "document_version": version.version,
                 "signing_sha256": version.signing_sha256,
                 "generated_document_ids": generated_ids,
+                "repair_id": repair_id,
                 "condition": transfer.return_condition_text,
                 "result": transfer.return_result_text,
                 "notes": transfer.return_notes,
@@ -1613,12 +1757,22 @@ def _bulk_return_impl(
                 {"missing_transfer_ids": missing_transfer_ids},
             )
 
-        stage = "validate_return_locations"
-        _validate_location_ids(
-            db,
-            {item.location_id for item in data.items if item.location_id is not None},
-            language,
+        stage = "resolve_workshop_location"
+        workshop = db.scalar(
+            _for_update(
+                db,
+                select(Location).where(
+                    Location.name == "Цех", Location.is_active.is_(True)
+                ),
+            )
         )
+        if workshop is None:
+            raise TransferServiceError(
+                409,
+                "workshop_location_missing",
+                translate("return.workshop_location_missing", language),
+                {},
+            )
 
         stage = "validate_return_conflicts"
         conflicts: list[dict[str, Any]] = []
@@ -1745,9 +1899,11 @@ def _bulk_return_impl(
             transfer.return_missing_equipment = item.missing_equipment
             transfer.return_damage = item.damage
             transfer.return_contamination = item.contamination
-            transfer.return_cleaning_required = item.cleaning_required
-            transfer.return_inspection_required = item.inspection_required
-            transfer.return_repair_required = item.repair_required
+            transfer.return_cleaning_required = False
+            transfer.return_inspection_required = True
+            transfer.return_repair_required = (
+                item.next_status == MachineStatus.REPAIR
+            )
             transfer.returned_by_name = returned_name
             transfer.returned_by_job_title = None
             transfer.returned_by_company = None
@@ -1756,7 +1912,7 @@ def _bulk_return_impl(
             transfer.return_accepted_department = (
                 user.profile_department.name_bg if user.profile_department else None
             )
-            transfer.return_location_id = item.location_id
+            transfer.return_location_id = workshop.id
             transfer.return_next_status = item.next_status.value
             transfer.return_previous_status = previous_status
             transfer.return_previous_location_id = previous_location_id
@@ -1769,7 +1925,7 @@ def _bulk_return_impl(
                 transfer,
                 transfer.batch,
                 user.id,
-                data.document_language.value,
+                "bg",
             )
             db.add_all(return_documents)
             db.flush()
@@ -1807,9 +1963,7 @@ def _bulk_return_impl(
                     "missing_equipment": item.missing_equipment,
                     "damage": item.damage,
                     "contamination": item.contamination,
-                    "cleaning_required": item.cleaning_required,
-                    "inspection_required": item.inspection_required,
-                    "repair_required": item.repair_required,
+                    "next_status": item.next_status.value,
                     "generated_document_ids": [
                         document.id for document in return_documents
                     ],
@@ -1836,9 +1990,8 @@ def _bulk_return_impl(
                     "missing_equipment": item.missing_equipment,
                     "damage": item.damage,
                     "contamination": item.contamination,
-                    "cleaning_required": item.cleaning_required,
-                    "inspection_required": item.inspection_required,
-                    "repair_required": item.repair_required,
+                    "next_status": item.next_status.value,
+                    "workshop_location_id": workshop.id,
                     "returned_by": returned_name,
                     "accepted_by": user.full_name,
                     "workflow_status": transfer.return_status,
@@ -1882,7 +2035,7 @@ def _bulk_return_impl(
             transfers=[transfer_by_id[item.transfer_id] for item in data.items],
             actor=user,
             external_signer=external_signer,
-            language=data.document_language.value,
+            language="bg",
         )
         # Backward-compatible placement for clients that still read signing tasks
         # from the first returned item. New clients consume the top-level tasks.
@@ -2094,6 +2247,56 @@ def batch_details(
                 ).unique()
             )
     progress = _batch_progress(db, batch)
+    detail_transfer_ids = [transfer.id for transfer in detail_transfers]
+    return_documents_by_transfer: dict[int, list[GeneratedDocument]] = {}
+    if detail_transfer_ids:
+        for generated in db.scalars(
+            select(GeneratedDocument)
+            .where(
+                GeneratedDocument.transfer_id.in_(detail_transfer_ids),
+                GeneratedDocument.document_type
+                == DocumentType.TRANSFER_RETURN.value,
+            )
+            .order_by(GeneratedDocument.id)
+        ).all():
+            if generated.transfer_id is not None:
+                return_documents_by_transfer.setdefault(
+                    generated.transfer_id, []
+                ).append(generated)
+
+    def issue_document_payload(transfer: TransferProtocol) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": document.id,
+                "document_number": document.document_number,
+                "language": document.language,
+                "format": document.format,
+                "filename": document.filename,
+                "download_endpoint": f"/api/protocol-documents/{document.id}/download",
+            }
+            for document in sorted(
+                transfer.documents, key=lambda item: item.format
+            )
+        ]
+
+    def return_document_payload(transfer: TransferProtocol) -> list[dict[str, Any]]:
+        if transfer.return_status != TransferOperationStatus.COMPLETED.value:
+            return []
+        return [
+            {
+                "id": document.id,
+                "document_number": document.document_number,
+                "language": document.language,
+                "format": document.format,
+                "filename": document.filename,
+                "download_endpoint": f"/api/generated-documents/{document.id}/download",
+            }
+            for document in sorted(
+                return_documents_by_transfer.get(transfer.id, []),
+                key=lambda item: item.format,
+            )
+        ]
+
     return {
         **progress,
         "created_at": batch.created_at,
@@ -2122,19 +2325,9 @@ def batch_details(
                 "location": transfer.machine.location.name
                 if transfer.machine.location
                 else None,
-                "documents": [
-                    {
-                        "id": document.id,
-                        "document_number": document.document_number,
-                        "language": document.language,
-                        "format": document.format,
-                        "filename": document.filename,
-                        "download_endpoint": f"/api/protocol-documents/{document.id}/download",
-                    }
-                    for document in sorted(
-                        transfer.documents, key=lambda item: item.format
-                    )
-                ],
+                "documents": issue_document_payload(transfer),
+                "issue_documents": issue_document_payload(transfer),
+                "return_documents": return_document_payload(transfer),
             }
             for transfer in sorted(detail_transfers, key=lambda item: item.id)
         ],

@@ -8,7 +8,6 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 import app.transfer_service as transfer_service
-
 from app.models import (
     AuditLog,
     Machine,
@@ -89,16 +88,7 @@ def return_payload(*transfers: dict) -> dict:
                 "condition_text": f"Състояние за тест №{transfer['machine_number']}",
                 "result_text": "Насочена към преглед",
                 "notes": "",
-                "returned_by": "",
-                "accepted_by": "",
-                "returned_person": {
-                    "first_name": "Тестов",
-                    "middle_name": "Външен",
-                    "last_name": "Връщащ",
-                    "job_title": "Тестова длъжност",
-                    "company_or_department": "Тестово звено",
-                },
-                "next_status": "INSPECTION",
+                "next_status": "READY",
             }
             for transfer in transfers
         ]
@@ -109,18 +99,7 @@ def test_issue_one_available_machine_successfully(
     client, auth_headers, machine_ids, issue_payload, session_factory
 ):
     payload = issue_payload(machine_ids["4"])
-    payload.update(
-        {
-            "department": "Тестов отдел",
-            "dock": "Тестов док",
-            "pier": "Тестов кей",
-            "work_area": "Тестова работна зона",
-            "hoses": "Тестово описание на шлангове",
-            "nozzles": "Тестово описание на дюзи",
-            "guns": "Тестово описание на пистолети",
-            "accessories": "Тестово описание на принадлежности",
-        }
-    )
+    payload["usage_text"] = "Работа по проверена производствена задача"
     response = issue(client, auth_headers, payload)
     assert response.status_code == 201, response.text
     body = response.json()
@@ -129,14 +108,11 @@ def test_issue_one_available_machine_successfully(
     assert len(body["transfers"][0]["documents"]) == 2
     with session_factory() as session:
         transfer = session.scalar(select(TransferProtocol))
-        assert transfer.department == "Тестов отдел"
-        assert transfer.dock == "Тестов док"
-        assert transfer.hoses == "Тестово описание на шлангове"
+        assert transfer.location_text == "Работа по проверена производствена задача"
         document = session.scalar(
             select(ProtocolDocument).where(ProtocolDocument.format == "docx")
         )
-        assert document.snapshot["department"] == "Тестов отдел"
-        assert document.snapshot["accessories"] == "Тестово описание на принадлежности"
+        assert document.snapshot["location_text"] == "Работа по проверена производствена задача"
 
 
 def test_reject_already_issued_machine_with_structured_bulgarian_conflict(
@@ -241,9 +217,7 @@ def test_full_batch_return_closes_every_individual_transfer(
             "missing_equipment": "Тестова липса",
             "damage": "Тестова повреда",
             "contamination": "Тестово замърсяване",
-            "cleaning_required": True,
-            "inspection_required": True,
-            "repair_required": True,
+            "next_status": "REPAIR",
         }
     )
     response = perform_return(client, auth_headers, payload)
@@ -279,7 +253,7 @@ def test_partial_batch_return_keeps_remaining_machine_issued(
     assert progress["returned_machines"] == 1
     assert progress["still_issued_machines"] == 2
     with session_factory() as session:
-        assert session.get(Machine, created["transfers"][0]["machine_id"]).status == "INSPECTION"
+        assert session.get(Machine, created["transfers"][0]["machine_id"]).status == "READY"
         assert session.get(Machine, created["transfers"][1]["machine_id"]).status == "ISSUED"
 
 

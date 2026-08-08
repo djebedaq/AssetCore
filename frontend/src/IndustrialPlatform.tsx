@@ -325,7 +325,7 @@ const repairTransitions: Record<string, string[]> = {
 
 function RepairCreateModal({ machines, onClose, onSaved }: { machines: Machine[]; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
-  const eligible = machines.filter((machine) => !['ISSUED', 'IN_USE'].includes(machine.status))
+  const eligible = machines.filter((machine) => machine.status === 'READY')
   const [form, setForm] = useState({ machine_id: eligible[0]?.id || 0, reported_problem: '', reported_by_name: '', symptoms: '', required_work: '', condition_before: '', repair_type: '', severity: '', cleaning_required: false, test_required: true })
   const [error, setError] = useState('')
   async function submit(event: FormEvent) {

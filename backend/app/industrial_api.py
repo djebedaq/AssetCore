@@ -54,10 +54,10 @@ from .industrial_schemas import (
     RepairParticipantCreate,
     RepairProtocolCorrection,
     TechnicalDocumentUpload,
-    UnknownPartCatalogLink,
-    UnknownPartRequestCreate,
     TemplateCreate,
     TemplateVersionCreate,
+    UnknownPartCatalogLink,
+    UnknownPartRequestCreate,
 )
 from .models import (
     ApprovalDecision,
@@ -290,6 +290,9 @@ def _repair_dict(repair: Repair) -> dict:
         "id": repair.id,
         "repair_reference": repair.repair_reference,
         "machine_id": repair.machine_id,
+        "source_return_transfer_id": repair.source_return_transfer_id,
+        "source_return_document_id": repair.source_return_document_id,
+        "source_return_batch_id": repair.source_return_batch_id,
         "machine_number": repair.machine.inventory_number,
         "machine_name": repair.machine.name,
         "reported_problem": repair.reported_problem,
@@ -1374,7 +1377,7 @@ def create_repair_case(
             machine_number=machine.inventory_number,
         )
     previous_status = machine.status
-    ensure_machine_transition(previous_status, MachineStatus.INSPECTION.value)
+    ensure_machine_transition(previous_status, MachineStatus.REPAIR.value)
     repair = Repair(
         machine_id=machine.id,
         reported_problem=payload.reported_problem,
@@ -1395,7 +1398,7 @@ def create_repair_case(
     db.add(repair)
     db.flush()
     repair.repair_reference = f"REP-{repair.opened_at:%Y}-{repair.id:06d}"
-    machine.status = MachineStatus.INSPECTION.value
+    machine.status = MachineStatus.REPAIR.value
     event = RepairEvent(
         repair_id=repair.id,
         event_type=RepairEventType.ACCEPTED.value,
@@ -1479,7 +1482,6 @@ def update_repair_case(
     )
     db.add(event)
     generated_on_completion: list[GeneratedDocument] = []
-    document_generation_warning: dict | None = None
     if (
         payload.status == RepairStatus.COMPLETED
         and previous_status != RepairStatus.COMPLETED.value
@@ -1487,40 +1489,45 @@ def update_repair_case(
         db.flush()
         db.expire(repair, ["events", "parts_used", "participants", "attachments"])
         try:
-            with db.begin_nested():
-                generated_on_completion = make_repair_documents(
-                    db, repair, user.id, "bg"
-                )
-                db.add_all(generated_on_completion)
-                db.flush()
+            generated_on_completion = make_repair_documents(
+                db, repair, user.id, "bg"
+            )
+            db.add_all(generated_on_completion)
+            db.flush()
         except ConfirmedTemplateUnavailableError as exc:
-            generated_on_completion = []
-            document_generation_warning = {
-                "code": "document_template_unavailable",
-                "message": exc.message,
-                "document_type": exc.document_type,
-                "language": "bg",
-            }
+            db.rollback()
+            raise business_conflict(
+                "repair_protocol_template_unavailable",
+                exc.message,
+                document_type=exc.document_type,
+                language="bg",
+            ) from exc
         except TemplateValidationError as exc:
-            generated_on_completion = []
-            document_generation_warning = {
-                "code": "document_generation_validation_failed",
-                "message": str(exc),
-                "document_type": "REPAIR_PROTOCOL",
-                "language": "bg",
-            }
+            db.rollback()
+            raise business_conflict(
+                "repair_protocol_generation_failed",
+                "Ремонтът не е приключен, защото задължителният протокол не може да бъде генериран.",
+                document_type="REPAIR_PROTOCOL",
+                language="bg",
+            ) from exc
+        except Exception as exc:
+            db.rollback()
+            raise HTTPException(
+                500,
+                detail={
+                    "code": "repair_protocol_generation_failed",
+                    "message": "Ремонтът не е приключен поради грешка при генериране на задължителния протокол.",
+                },
+            ) from exc
     if previous_machine_status != repair.machine.status:
         add_machine_event(
             db, repair.machine, user, "REPAIR_STATUS_CHANGED", reference=repair.repair_reference,
             previous_status=previous_machine_status, new_status=repair.machine.status,
             details={"repair_id": repair.id, "repair_status": repair.status},
         )
-    add_audit_log(db, user, "repair", repair.id, "Обновена ремонтна карта", {"repair_reference": repair.repair_reference, "previous_status": previous_status, "new_status": repair.status, "machine_previous_status": previous_machine_status, "machine_new_status": repair.machine.status, "completed_by_user_id": user.id if payload.status == RepairStatus.COMPLETED else None, "generated_document_ids": [item.id for item in generated_on_completion], "document_generation_warning": document_generation_warning})
+    add_audit_log(db, user, "repair", repair.id, "Обновена ремонтна карта", {"repair_reference": repair.repair_reference, "previous_status": previous_status, "new_status": repair.status, "machine_previous_status": previous_machine_status, "machine_new_status": repair.machine.status, "completed_by_user_id": user.id if payload.status == RepairStatus.COMPLETED else None, "generated_document_ids": [item.id for item in generated_on_completion]})
     _commit(db)
-    result = _repair_dict(_load_repair(db, repair.id))
-    if document_generation_warning:
-        result["document_generation_warning"] = document_generation_warning
-    return result
+    return _repair_dict(_load_repair(db, repair.id))
 
 
 @router.post("/repair-cases/{repair_id}/events", status_code=201)
@@ -1561,11 +1568,37 @@ def add_repair_event(
     db.flush()
     if payload.next_status == RepairStatus.COMPLETED:
         db.expire(repair, ["events", "parts_used", "attachments"])
-        generated_on_completion = make_repair_documents(
-            db, repair, user.id, "bg"
-        )
-        db.add_all(generated_on_completion)
-        db.flush()
+        try:
+            generated_on_completion = make_repair_documents(
+                db, repair, user.id, "bg"
+            )
+            db.add_all(generated_on_completion)
+            db.flush()
+        except ConfirmedTemplateUnavailableError as exc:
+            db.rollback()
+            raise business_conflict(
+                "repair_protocol_template_unavailable",
+                exc.message,
+                document_type=exc.document_type,
+                language="bg",
+            ) from exc
+        except TemplateValidationError as exc:
+            db.rollback()
+            raise business_conflict(
+                "repair_protocol_generation_failed",
+                "Ремонтът не е приключен, защото задължителният протокол не може да бъде генериран.",
+                document_type="REPAIR_PROTOCOL",
+                language="bg",
+            ) from exc
+        except Exception as exc:
+            db.rollback()
+            raise HTTPException(
+                500,
+                detail={
+                    "code": "repair_protocol_generation_failed",
+                    "message": "Ремонтът не е приключен поради грешка при генериране на задължителния протокол.",
+                },
+            ) from exc
     add_audit_log(db, user, "repair_event", event.id, "Добавено събитие към ремонта", {"repair_reference": repair.repair_reference, "event_type": event.event_type, "previous_status": previous, "new_status": repair.status, "completed_by_user_id": user.id if generated_on_completion else None, "generated_document_ids": [item.id for item in generated_on_completion]})
     _commit(db)
     return {"id": event.id, "event_type": event.event_type, "status_before": event.status_before, "status_after": event.status_after, "description": event.description, "structured_data": event.structured_data, "user_id": event.user_id, "created_at": event.created_at}

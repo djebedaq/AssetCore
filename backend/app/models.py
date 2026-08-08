@@ -31,14 +31,7 @@ def utcnow() -> datetime:
 class MachineStatus(str, Enum):
     READY = "READY"
     ISSUED = "ISSUED"
-    IN_USE = "IN_USE"
-    RETURNED = "RETURNED"
-    INSPECTION = "INSPECTION"
-    CLEANING = "CLEANING"
     REPAIR = "REPAIR"
-    WAITING_APPROVAL = "WAITING_APPROVAL"
-    WAITING_PARTS = "WAITING_PARTS"
-    TESTING = "TESTING"
 
 
 class TransferBatchStatus(str, Enum):
@@ -324,6 +317,15 @@ class Repair(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     machine_id: Mapped[int] = mapped_column(ForeignKey("machines.id"), index=True)
+    source_return_transfer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transfer_protocols.id"), nullable=True, unique=True, index=True
+    )
+    source_return_document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("official_documents.id"), nullable=True, index=True
+    )
+    source_return_batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transfer_batches.id"), nullable=True, index=True
+    )
     reported_problem: Mapped[str] = mapped_column(Text)
     diagnosis: Mapped[str | None] = mapped_column(Text, nullable=True)
     work_performed: Mapped[str | None] = mapped_column(Text, nullable=True)

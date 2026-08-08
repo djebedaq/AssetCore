@@ -3,10 +3,14 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+from app.models import (
+    DocumentTemplate,
+    DocumentTemplateVersion,
+    GeneratedDocument,
+    Repair,
+)
 from docx import Document
 from sqlalchemy import select
-
-from app.models import DocumentTemplate, DocumentTemplateVersion, GeneratedDocument, Repair, RepairParticipant
 
 
 def _advance_to_completed(client, headers, repair_id: int):
@@ -67,7 +71,7 @@ def test_internal_repair_protocol_is_bg_contains_participants_and_is_idempotent(
         assert len(list(db.scalars(select(GeneratedDocument).where(GeneratedDocument.repair_id == repair_id)))) == 2
 
 
-def test_missing_bg_template_does_not_rollback_completed_repair(client, auth_headers, machine_ids, session_factory):
+def test_missing_bg_template_rolls_back_completed_repair(client, auth_headers, machine_ids, session_factory):
     created = client.post(
         "/api/repair-cases", headers=auth_headers,
         json={"machine_id": machine_ids["5"], "reported_problem": "Повреден клапан"},
@@ -91,15 +95,51 @@ def test_missing_bg_template_does_not_rollback_completed_repair(client, auth_hea
         f"/api/repair-cases/{repair_id}", headers=auth_headers,
         json={"status": "COMPLETED", "test_passed": True, "work_performed": "Клапанът е сменен", "result": "Ремонтът е извършен", "test_details": "Успешен тест"},
     )
-    assert completed.status_code == 200, completed.text
+    assert completed.status_code == 409, completed.text
     body = completed.json()
-    assert body["status"] == "COMPLETED"
-    assert body["document_generation_warning"]["code"] == "document_template_unavailable"
+    assert body["detail"]["code"] == "repair_protocol_template_unavailable"
     with session_factory() as db:
         repair = db.get(Repair, repair_id)
-        assert repair.status == "COMPLETED"
-        assert repair.machine.status == "READY"
+        assert repair.status == "TESTING"
+        assert repair.machine.status == "REPAIR"
         assert not list(db.scalars(select(GeneratedDocument).where(GeneratedDocument.repair_id == repair_id)))
+
+
+def test_compatibility_repair_close_generates_required_protocol_atomically(
+    client, auth_headers, machine_ids, session_factory
+):
+    created = client.post(
+        "/api/repair-cases",
+        headers=auth_headers,
+        json={"machine_id": machine_ids["7"], "reported_problem": "Проверка на съвместимия маршрут"},
+    )
+    assert created.status_code == 201, created.text
+    repair_id = created.json()["id"]
+    for payload in [
+        {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Извършена диагностика"},
+        {"status": "REPAIRING", "work_performed": "Извършена ремонтна операция", "result": "Възстановена работа"},
+        {"status": "TESTING", "test_passed": True, "test_details": "Успешен функционален тест"},
+    ]:
+        response = client.patch(
+            f"/api/repair-cases/{repair_id}", headers=auth_headers, json=payload
+        )
+        assert response.status_code == 200, response.text
+
+    completed = client.patch(
+        f"/api/repairs/{repair_id}", headers=auth_headers, json={"close": True}
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "COMPLETED"
+    assert completed.json()["machine"]["status"] == "READY"
+    with session_factory() as db:
+        documents = list(
+            db.scalars(
+                select(GeneratedDocument).where(
+                    GeneratedDocument.repair_id == repair_id
+                )
+            )
+        )
+        assert {document.format for document in documents} == {"docx", "pdf"}
 
 
 def test_repair_participant_cannot_change_after_completion(client, auth_headers, machine_ids):
@@ -114,8 +154,8 @@ def test_repair_participant_cannot_change_after_completion(client, auth_headers,
 
 
 def test_repair_frontend_contract_is_internal_and_bulgarian():
-    source = (Path(__file__).resolve().parents[1] / "frontend" / "src" / "IndustrialPlatform.tsx").read_text()
-    translations = (Path(__file__).resolve().parents[1] / "frontend" / "src" / "i18n.tsx").read_text()
+    source = (Path(__file__).resolve().parents[1] / "frontend" / "src" / "IndustrialPlatform.tsx").read_text(encoding="utf-8")
+    translations = (Path(__file__).resolve().parents[1] / "frontend" / "src" / "i18n.tsx").read_text(encoding="utf-8")
     assert "/documents?language=${locale}" not in source
     assert "repairCase.generateProtocolBg" in source
     assert "repairCase.participants" in source

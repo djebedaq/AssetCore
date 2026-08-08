@@ -14,7 +14,7 @@ def test_bulk_return_item_accepts_frontend_checklist_contract():
         machine_id=1,
         condition_text="Добро",
         result_text="Приета",
-        next_status=MachineStatus.INSPECTION,
+        next_status=MachineStatus.READY,
         checklist=[{"code": "pump", "condition": "GOOD", "note": None, "length_m": None}],
     )
     assert item.checklist[0].code == "pump"
