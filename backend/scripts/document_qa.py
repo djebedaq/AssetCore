@@ -202,6 +202,9 @@ def generate(output: Path) -> dict:
             repair_reference="QA-ONLY-REPAIR",
             reported_problem="QA тестов запис за проверка на оформлението",
             diagnosis="QA тестова диагностика",
+            required_work="QA тестова необходима работа",
+            required_parts_text="QA тестова бележка за нужни части",
+            removed_parts_text="QA тестов демонтаж и подготовка",
             work_performed="QA тестово описание на извършена работа",
             result="QA тестов резултат",
             condition_before="QA тестово състояние преди ремонта",
@@ -209,11 +212,15 @@ def generate(output: Path) -> dict:
             inspection_completed_at=now,
             test_passed=True,
             test_details="QA тестът е отчетен като успешен само в изолираната проверка",
+            diagnosis_minutes=30,
+            repair_minutes=75,
+            testing_minutes=20,
             status=RepairStatus.COMPLETED.value,
             responsible_user_id=user.id,
             accepted_by_id=user.id,
             approved_by_id=user.id,
             approved_at=now,
+            started_at=now,
             closed_at=now,
         )
         db.add(repair)
@@ -364,11 +371,19 @@ def generate(output: Path) -> dict:
             ))
             for name in ("issue", "return")
         ),
-        "repair_is_internal_only": all(
-            "ОКОНЧАТЕЛЕН ВЪТРЕШЕН ПРОТОКОЛ" in results["repair"][format_name]["text"]
-            and "Одобрил" not in results["repair"][format_name]["text"]
+        "repair_content_sections_present": all(
+            all(
+                label in results["repair"][format_name]["text"]
+                for label in (
+                    "ПРОТОКОЛ ЗА ПРИЕМАНЕ НА ОБОРУДВАНЕ ЗА РЕМОНТ",
+                    "ПРОТОКОЛ ЗА ИЗВЪРШЕН РЕМОНТ",
+                    "Реално време",
+                )
+            )
             for format_name in ("docx", "pdf")
         ),
+        "repair_pdf_has_three_pages": results["repair"]["pdf"]["pages"] == 3,
+        "repair_header_media_present": len(results["repair"]["docx"]["media"]) >= 3,
     }
     (output / "qa-manifest.json").write_text(
         json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"

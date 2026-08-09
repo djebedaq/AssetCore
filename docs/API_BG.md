@@ -49,6 +49,10 @@
 | `POST` | `/api/machines/{machine_id}/attachments` | качва проверен файл със SHA-256 |
 | `GET/POST` | `/api/repair-cases` | списък и приемане за преглед/ремонт |
 | `PATCH` | `/api/repair-cases/{repair_id}` | валидиран ремонтен преход и completion gates |
+| `POST` | `/api/repair-cases/{repair_id}/events` | проследимо събитие и разрешен stage transition |
+| `POST/DELETE` | `/api/repair-cases/{repair_id}/participants...` | участници с DB защита срещу duplicate |
+| `POST` | `/api/repair-cases/{repair_id}/parts` | използвана verified catalog част/проследим ред |
+| `POST` | `/api/repair-cases/{repair_id}/attachments` | хеширано приложение към текущия ремонт |
 | `POST` | `/api/repair-cases/{repair_id}/documents` | индивидуален ремонтен DOCX/PDF |
 | `POST` | `/api/repair-cases/{repair_id}/documents/corrections` | нова заключена repair версия с задължително основание |
 | `GET/POST` | `/api/part-requests/multi` | многоредови заявки за части |
@@ -254,7 +258,16 @@ backdoor. Всички успешни и отхвърлени опити се о
 
 ## Ремонтни преходи и completion gate
 
-Допустимата последователност е `ACCEPTED → DIAGNOSIS → WAITING_APPROVAL / WAITING_PARTS / REPAIRING → TESTING → COMPLETED`. `COMPLETED` изисква преглед, изпълнено задължително почистване, описание на работата, успешен задължителен тест и резултат. Невалиден преход или липсваща стъпка връща HTTP 409 със стабилен `code` и Bulgarian `message`.
+Допустимата последователност е `ACCEPTED → DIAGNOSIS → WAITING_APPROVAL / WAITING_PARTS / REPAIRING → TESTING → COMPLETED`. `WAITING_APPROVAL` и `WAITING_PARTS` са optional branches. `PATCH` записва подадените полета и по желание `status`; важните изисквания се оценяват в същата транзакция след row lock на PostgreSQL.
+
+- към `DIAGNOSIS`: `reported_problem` и `condition_before`;
+- към `WAITING_*`/`REPAIRING`: `diagnosis`, `required_work`, `diagnosis_minutes`;
+- към `TESTING`: `work_performed`, `repair_minutes` и завършено изискано почистване;
+- към `COMPLETED`: успешен задължителен тест, `test_details`, `result`, `condition_after`, `testing_minutes` и всички completion gates.
+
+Невалиден преход или липсваща стъпка връща HTTP 409 с `detail.code=repair_stage_requirements_missing` или конкретен completion code и човешки `detail.message` на български. Отказът не оставя променени полета, статус или документ. Успешният `COMPLETED` записва DOCX/PDF, approver, repair/machine events, `machine.status=READY` и активното местоположение `Цех` в една транзакция.
+
+`POST /participants` приема `user_id` или `full_name`, `job_title` и `contribution`. Нормализираният identity key е уникален в рамките на ремонта; повторение и едновременен double submit връщат HTTP 409 с `repair_participant_already_exists`. `POST /parts` разрешава verified catalog reference и пази каталожния номер, количество, мярка и provenance snapshot. След `COMPLETED` participant/part/attachment mutations са заключени.
 
 ## Файлове и версии
 

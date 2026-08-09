@@ -271,6 +271,9 @@ class RepairUpdate(BaseModel):
     diagnosis: str | None = None
     work_performed: str | None = None
     result: str | None = None
+    diagnosis_minutes: int | None = Field(default=None, ge=0, le=100000)
+    repair_minutes: int | None = Field(default=None, ge=0, le=100000)
+    testing_minutes: int | None = Field(default=None, ge=0, le=100000)
     status: RepairStatus | None = None
     close: bool = False
 

@@ -117,6 +117,7 @@ from .workflow import (
     business_conflict,
     ensure_machine_transition,
     ensure_repair_can_complete,
+    ensure_repair_stage_requirements,
     ensure_repair_transition,
 )
 
@@ -307,7 +308,19 @@ def _repair_dict(repair: Repair) -> dict:
         "reported_by_name": repair.reported_by_name,
         "symptoms": repair.symptoms,
         "required_work": repair.required_work,
+        "required_parts_text": repair.required_parts_text,
         "removed_parts_text": repair.removed_parts_text,
+        "diagnosis_minutes": repair.diagnosis_minutes,
+        "repair_minutes": repair.repair_minutes,
+        "testing_minutes": repair.testing_minutes,
+        "total_work_minutes": sum(
+            value or 0
+            for value in (
+                repair.diagnosis_minutes,
+                repair.repair_minutes,
+                repair.testing_minutes,
+            )
+        ),
         "cleaning_required": repair.cleaning_required,
         "cleaning_completed_at": repair.cleaning_completed_at,
         "inspection_completed_at": repair.inspection_completed_at,
@@ -334,7 +347,25 @@ def _repair_dict(repair: Repair) -> dict:
             for item in sorted(repair.participants, key=lambda value: (value.created_at, value.id))
         ],
         "accepted_by_id": repair.accepted_by_id,
+        "accepted_by": (
+            {
+                "id": repair.accepted_by.id,
+                "full_name": repair.accepted_by.full_name,
+                "job_title": repair.accepted_by.job_title,
+            }
+            if repair.accepted_by
+            else None
+        ),
         "approved_by_id": repair.approved_by_id,
+        "approved_by": (
+            {
+                "id": repair.approved_by.id,
+                "full_name": repair.approved_by.full_name,
+                "job_title": repair.approved_by.job_title,
+            }
+            if repair.approved_by
+            else None
+        ),
         "approved_at": repair.approved_at,
         "target_date": repair.target_date,
         "opened_at": repair.opened_at,
@@ -369,8 +400,10 @@ def _load_repair(db: Session, repair_id: int, *, lock: bool = False) -> Repair:
     statement = (
         select(Repair)
         .options(
-            joinedload(Repair.machine),
-            joinedload(Repair.responsible_user),
+            selectinload(Repair.machine),
+            selectinload(Repair.responsible_user),
+            selectinload(Repair.accepted_by),
+            selectinload(Repair.approved_by),
             selectinload(Repair.events),
             selectinload(Repair.parts_used),
             selectinload(Repair.participants),
@@ -1205,7 +1238,7 @@ def generate_repair_documents(
     # Internal repair protocols are controlled Bulgarian documents regardless of UI locale.
     requested_language = language
     language = "bg"
-    repair = _load_repair(db, repair_id)
+    repair = _load_repair(db, repair_id, lock=True)
     existing_documents = list(
         db.scalars(
             select(GeneratedDocument)
@@ -1417,6 +1450,106 @@ def create_repair_case(
     return _repair_dict(_load_repair(db, repair.id))
 
 
+_REPAIR_TRANSITION_EVENTS = {
+    RepairStatus.DIAGNOSIS.value: RepairEventType.DIAGNOSIS.value,
+    RepairStatus.WAITING_APPROVAL.value: RepairEventType.APPROVAL.value,
+    RepairStatus.WAITING_PARTS.value: RepairEventType.PARTS.value,
+    RepairStatus.REPAIRING.value: RepairEventType.REPAIR_ACTION.value,
+    RepairStatus.TESTING.value: RepairEventType.TEST.value,
+    RepairStatus.COMPLETED.value: RepairEventType.COMPLETED.value,
+}
+
+
+def _active_workshop(db: Session) -> Location:
+    statement = select(Location).where(
+        Location.name == "Цех",
+        Location.is_active.is_(True),
+    )
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        statement = statement.with_for_update()
+    workshop = db.scalar(statement)
+    if workshop is None:
+        raise business_conflict(
+            "active_workshop_location_missing",
+            "Ремонтът не може да бъде завършен, защото няма активно местоположение „Цех“.",
+        )
+    return workshop
+
+
+def _apply_repair_transition(
+    db: Session,
+    repair: Repair,
+    next_status: str,
+    user: User,
+) -> tuple[str, int | None]:
+    ensure_repair_transition(repair.status, next_status)
+    ensure_repair_stage_requirements(repair, next_status)
+    previous_location_id = repair.machine.location_id
+    if next_status == RepairStatus.COMPLETED.value:
+        ensure_repair_can_complete(repair)
+        workshop = _active_workshop(db)
+        now = utcnow()
+        repair.closed_at = now
+        repair.approved_by_id = user.id
+        repair.approved_by = user
+        repair.approved_at = now
+        repair.machine.location_id = workshop.id
+    if next_status == RepairStatus.REPAIRING.value and repair.started_at is None:
+        repair.started_at = utcnow()
+    repair.status = next_status
+    machine_status = REPAIR_TO_MACHINE_STATUS[next_status]
+    try:
+        ensure_machine_transition(repair.machine.status, machine_status)
+    except HTTPException as exc:
+        repair_controlled = set(REPAIR_TO_MACHINE_STATUS.values())
+        if (
+            repair.machine.status not in repair_controlled
+            or machine_status not in repair_controlled
+        ):
+            raise exc
+    repair.machine.status = machine_status
+    return _REPAIR_TRANSITION_EVENTS[next_status], previous_location_id
+
+
+def _generate_completion_documents(
+    db: Session,
+    repair: Repair,
+    user: User,
+) -> list[GeneratedDocument]:
+    db.flush()
+    db.expire(repair, ["events", "parts_used", "participants", "attachments"])
+    try:
+        documents = make_repair_documents(db, repair, user.id, "bg")
+        db.add_all(documents)
+        db.flush()
+        return documents
+    except ConfirmedTemplateUnavailableError as exc:
+        db.rollback()
+        raise business_conflict(
+            "repair_protocol_template_unavailable",
+            exc.message,
+            document_type=exc.document_type,
+            language="bg",
+        ) from exc
+    except TemplateValidationError as exc:
+        db.rollback()
+        raise business_conflict(
+            "repair_protocol_generation_failed",
+            "Ремонтът не е приключен, защото задължителният протокол не може да бъде генериран.",
+            document_type="REPAIR_PROTOCOL",
+            language="bg",
+        ) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            500,
+            detail={
+                "code": "repair_protocol_generation_failed",
+                "message": "Ремонтът не е приключен поради грешка при генериране на задължителния протокол.",
+            },
+        ) from exc
+
+
 @router.patch("/repair-cases/{repair_id}")
 def update_repair_case(
     repair_id: int,
@@ -1448,82 +1581,57 @@ def update_repair_case(
         repair.inspection_completed_at = utcnow()
     if payload.cleaning_complete and repair.cleaning_completed_at is None:
         repair.cleaning_completed_at = utcnow()
-    if payload.status is not None:
-        next_status = payload.status.value
-        ensure_repair_transition(repair.status, next_status)
-        if next_status == RepairStatus.COMPLETED.value:
-            ensure_repair_can_complete(repair)
-            repair.closed_at = utcnow()
-            if repair.responsible_user_id is None:
-                repair.responsible_user_id = user.id
-                repair.responsible_user = user
-        if next_status == RepairStatus.REPAIRING.value and repair.started_at is None:
-            repair.started_at = utcnow()
-        repair.status = next_status
-        machine_status = REPAIR_TO_MACHINE_STATUS[next_status]
-        try:
-            ensure_machine_transition(repair.machine.status, machine_status)
-        except HTTPException as exc:
-            # Older repair records can contain a machine status that no longer
-            # matches the active repair stage. For this exact active repair,
-            # safely reconcile only among repair-controlled statuses.
-            repair_controlled = set(REPAIR_TO_MACHINE_STATUS.values())
-            if repair.machine.status not in repair_controlled or machine_status not in repair_controlled:
-                raise exc
-        repair.machine.status = machine_status
+    transition_event_type: str | None = None
+    previous_location_id = repair.machine.location_id
+    if payload.status is not None and payload.status.value != repair.status:
+        transition_event_type, previous_location_id = _apply_repair_transition(
+            db, repair, payload.status.value, user
+        )
     event = RepairEvent(
         repair_id=repair.id,
-        event_type=RepairEventType.STATUS_CHANGE.value if previous_status != repair.status else RepairEventType.NOTE.value,
+        event_type=transition_event_type or RepairEventType.NOTE.value,
         status_before=previous_status,
         status_after=repair.status,
-        description="Обновена ремонтна карта",
+        description=(
+            "Променен етап на ремонта"
+            if transition_event_type
+            else "Записана ремонтна карта"
+        ),
         structured_data={key: value for key, value in payload.model_dump(mode="json", exclude_unset=True).items() if key not in {"test_details", "diagnosis", "work_performed", "result", "condition_after"}},
         user_id=user.id,
     )
     db.add(event)
     generated_on_completion: list[GeneratedDocument] = []
-    if (
-        payload.status == RepairStatus.COMPLETED
-        and previous_status != RepairStatus.COMPLETED.value
-    ):
-        db.flush()
-        db.expire(repair, ["events", "parts_used", "participants", "attachments"])
-        try:
-            generated_on_completion = make_repair_documents(
-                db, repair, user.id, "bg"
-            )
-            db.add_all(generated_on_completion)
-            db.flush()
-        except ConfirmedTemplateUnavailableError as exc:
-            db.rollback()
-            raise business_conflict(
-                "repair_protocol_template_unavailable",
-                exc.message,
-                document_type=exc.document_type,
-                language="bg",
-            ) from exc
-        except TemplateValidationError as exc:
-            db.rollback()
-            raise business_conflict(
-                "repair_protocol_generation_failed",
-                "Ремонтът не е приключен, защото задължителният протокол не може да бъде генериран.",
-                document_type="REPAIR_PROTOCOL",
-                language="bg",
-            ) from exc
-        except Exception as exc:
-            db.rollback()
-            raise HTTPException(
-                500,
-                detail={
-                    "code": "repair_protocol_generation_failed",
-                    "message": "Ремонтът не е приключен поради грешка при генериране на задължителния протокол.",
+    if transition_event_type == RepairEventType.COMPLETED.value:
+        generated_on_completion = _generate_completion_documents(db, repair, user)
+        db.add(
+            RepairEvent(
+                repair_id=repair.id,
+                event_type=RepairEventType.DOCUMENT_GENERATED.value,
+                status_before=repair.status,
+                status_after=repair.status,
+                description="Генериран официален ремонтен протокол",
+                structured_data={
+                    "document_ids": [item.id for item in generated_on_completion],
                 },
-            ) from exc
+                user_id=user.id,
+            )
+        )
     if previous_machine_status != repair.machine.status:
         add_machine_event(
             db, repair.machine, user, "REPAIR_STATUS_CHANGED", reference=repair.repair_reference,
             previous_status=previous_machine_status, new_status=repair.machine.status,
-            details={"repair_id": repair.id, "repair_status": repair.status},
+            previous_location_id=previous_location_id,
+            new_location_id=repair.machine.location_id,
+            details={
+                "repair_id": repair.id,
+                "repair_status": repair.status,
+                "event_code": (
+                    "MACHINE_READY"
+                    if repair.status == RepairStatus.COMPLETED.value
+                    else "REPAIR_STATUS_CHANGED"
+                ),
+            },
         )
     add_audit_log(db, user, "repair", repair.id, "Обновена ремонтна карта", {"repair_reference": repair.repair_reference, "previous_status": previous_status, "new_status": repair.status, "machine_previous_status": previous_machine_status, "machine_new_status": repair.machine.status, "completed_by_user_id": user.id if payload.status == RepairStatus.COMPLETED else None, "generated_document_ids": [item.id for item in generated_on_completion]})
     _commit(db)
@@ -1540,21 +1648,19 @@ def add_repair_event(
     if payload.next_status == RepairStatus.COMPLETED:
         ensure_permission(user, Permission.REPAIRS_COMPLETE)
     repair = _load_repair(db, repair_id, lock=True)
+    if repair.status == RepairStatus.COMPLETED.value:
+        raise business_conflict(
+            "completed_repair_is_locked",
+            "Приключеният ремонт е заключен. Използвайте корекция на протокола.",
+        )
     previous = repair.status
+    old_machine_status = repair.machine.status
+    previous_location_id = repair.machine.location_id
     generated_on_completion: list[GeneratedDocument] = []
-    if payload.next_status is not None:
-        ensure_repair_transition(repair.status, payload.next_status.value)
-        if payload.next_status == RepairStatus.COMPLETED:
-            ensure_repair_can_complete(repair)
-            repair.closed_at = utcnow()
-            repair.responsible_user_id = user.id
-            repair.responsible_user = user
-        repair.status = payload.next_status.value
-        machine_status = REPAIR_TO_MACHINE_STATUS[repair.status]
-        ensure_machine_transition(repair.machine.status, machine_status)
-        old_machine_status = repair.machine.status
-        repair.machine.status = machine_status
-        add_machine_event(db, repair.machine, user, "REPAIR_EVENT", reference=repair.repair_reference, previous_status=old_machine_status, new_status=machine_status, details={"event_type": payload.event_type.value})
+    if payload.next_status is not None and payload.next_status.value != repair.status:
+        _, previous_location_id = _apply_repair_transition(
+            db, repair, payload.next_status.value, user
+        )
     event = RepairEvent(
         repair_id=repair.id,
         event_type=payload.event_type.value,
@@ -1567,38 +1673,36 @@ def add_repair_event(
     db.add(event)
     db.flush()
     if payload.next_status == RepairStatus.COMPLETED:
-        db.expire(repair, ["events", "parts_used", "attachments"])
-        try:
-            generated_on_completion = make_repair_documents(
-                db, repair, user.id, "bg"
-            )
-            db.add_all(generated_on_completion)
-            db.flush()
-        except ConfirmedTemplateUnavailableError as exc:
-            db.rollback()
-            raise business_conflict(
-                "repair_protocol_template_unavailable",
-                exc.message,
-                document_type=exc.document_type,
-                language="bg",
-            ) from exc
-        except TemplateValidationError as exc:
-            db.rollback()
-            raise business_conflict(
-                "repair_protocol_generation_failed",
-                "Ремонтът не е приключен, защото задължителният протокол не може да бъде генериран.",
-                document_type="REPAIR_PROTOCOL",
-                language="bg",
-            ) from exc
-        except Exception as exc:
-            db.rollback()
-            raise HTTPException(
-                500,
-                detail={
-                    "code": "repair_protocol_generation_failed",
-                    "message": "Ремонтът не е приключен поради грешка при генериране на задължителния протокол.",
+        generated_on_completion = _generate_completion_documents(db, repair, user)
+        db.add(
+            RepairEvent(
+                repair_id=repair.id,
+                event_type=RepairEventType.DOCUMENT_GENERATED.value,
+                status_before=repair.status,
+                status_after=repair.status,
+                description="Генериран официален ремонтен протокол",
+                structured_data={
+                    "document_ids": [item.id for item in generated_on_completion],
                 },
-            ) from exc
+                user_id=user.id,
+            )
+        )
+    if (
+        old_machine_status != repair.machine.status
+        or previous_location_id != repair.machine.location_id
+    ):
+        add_machine_event(
+            db,
+            repair.machine,
+            user,
+            "REPAIR_EVENT",
+            reference=repair.repair_reference,
+            previous_status=old_machine_status,
+            new_status=repair.machine.status,
+            previous_location_id=previous_location_id,
+            new_location_id=repair.machine.location_id,
+            details={"event_type": payload.event_type.value},
+        )
     add_audit_log(db, user, "repair_event", event.id, "Добавено събитие към ремонта", {"repair_reference": repair.repair_reference, "event_type": event.event_type, "previous_status": previous, "new_status": repair.status, "completed_by_user_id": user.id if generated_on_completion else None, "generated_document_ids": [item.id for item in generated_on_completion]})
     _commit(db)
     return {"id": event.id, "event_type": event.event_type, "status_before": event.status_before, "status_after": event.status_after, "description": event.description, "structured_data": event.structured_data, "user_id": event.user_id, "created_at": event.created_at}
@@ -1623,6 +1727,11 @@ def add_repair_participant(
     full_name = linked_user.full_name if linked_user else (payload.full_name or "")
     job_title = linked_user.job_title if linked_user else payload.job_title
     normalized = " ".join(full_name.casefold().split())
+    identity_key = (
+        f"user:{linked_user.id}"
+        if linked_user
+        else f"name:{normalized}"
+    )
     if any(" ".join(item.full_name_snapshot.casefold().split()) == normalized for item in repair.participants):
         raise business_conflict(
             "repair_participant_already_exists",
@@ -1634,6 +1743,7 @@ def add_repair_participant(
         full_name_snapshot=full_name,
         job_title_snapshot=job_title,
         contribution=payload.contribution,
+        identity_key=identity_key,
         created_by_id=user.id,
     )
     db.add(participant)
@@ -1642,9 +1752,24 @@ def add_repair_participant(
     except IntegrityError as exc:
         db.rollback()
         raise business_conflict(
-            "repair_participant_storage_error",
-            "Участникът не може да бъде записан. Проверете дали вече не е добавен и опитайте отново.",
+            "repair_participant_already_exists",
+            "Този участник вече е добавен към ремонта.",
         ) from exc
+    db.add(
+        RepairEvent(
+            repair_id=repair.id,
+            event_type=RepairEventType.PARTICIPANT_ADDED.value,
+            status_before=repair.status,
+            status_after=repair.status,
+            description=full_name,
+            structured_data={
+                "participant_id": participant.id,
+                "job_title": job_title,
+                "contribution": payload.contribution,
+            },
+            user_id=user.id,
+        )
+    )
     add_audit_log(
         db, user, "repair_participant", participant.id,
         "Добавен участник във вътрешен ремонт",
@@ -1672,6 +1797,17 @@ def remove_repair_participant(
     if participant is None or participant.repair_id != repair.id:
         raise HTTPException(404, "Участникът не е намерен.")
     snapshot = _repair_participant_dict(participant)
+    db.add(
+        RepairEvent(
+            repair_id=repair.id,
+            event_type=RepairEventType.PARTICIPANT_REMOVED.value,
+            status_before=repair.status,
+            status_after=repair.status,
+            description=participant.full_name_snapshot,
+            structured_data={"participant_id": participant.id},
+            user_id=user.id,
+        )
+    )
     db.delete(participant)
     add_audit_log(
         db, user, "repair_participant", participant_id,
@@ -1690,7 +1826,7 @@ def add_repair_part(
     user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> RepairPart:
-    repair = _load_repair(db, repair_id)
+    repair = _load_repair(db, repair_id, lock=True)
     if repair.status == RepairStatus.COMPLETED.value:
         raise business_conflict("repair_is_closed", "Към завършен ремонт не могат да се добавят части.")
     values = payload.model_dump()
@@ -1719,7 +1855,7 @@ def add_repair_part(
     item = RepairPart(repair_id=repair.id, created_by_id=user.id, **values)
     db.add(item)
     db.flush()
-    db.add(RepairEvent(repair_id=repair.id, event_type=RepairEventType.PARTS.value, status_before=repair.status, status_after=repair.status, description=item.description, structured_data={"catalog_part_id": item.catalog_part_id, "part_number": item.part_number, "quantity": item.quantity, "unit": item.unit, "source": item.source}, user_id=user.id))
+    db.add(RepairEvent(repair_id=repair.id, event_type=RepairEventType.PART_ADDED.value, status_before=repair.status, status_after=repair.status, description=item.description, structured_data={"catalog_part_id": item.catalog_part_id, "part_number": item.part_number, "quantity": item.quantity, "unit": item.unit, "source": item.source}, user_id=user.id))
     add_audit_log(db, user, "repair_part", item.id, "Добавена използвана част", {"repair_reference": repair.repair_reference, "catalog_part_id": item.catalog_part_id, "part_number": item.part_number, "quantity": item.quantity, "unit": item.unit, "source": item.source})
     _commit(db)
     db.refresh(item)
@@ -1733,12 +1869,17 @@ def add_repair_attachment(
     user: User = Depends(require_repair_operator),
     db: Session = Depends(get_db),
 ) -> dict:
-    repair = _load_repair(db, repair_id)
+    repair = _load_repair(db, repair_id, lock=True)
+    if repair.status == RepairStatus.COMPLETED.value:
+        raise business_conflict(
+            "repair_is_closed",
+            "Към завършен ремонт не могат да се добавят файлове.",
+        )
     filename, content = _decode_file(payload)
     item = RepairAttachment(repair_id=repair.id, stage=payload.stage, filename=filename, media_type=payload.media_type, content=content, sha256=hashlib.sha256(content).hexdigest(), caption=payload.description, created_by_id=user.id)
     db.add(item)
     db.flush()
-    db.add(RepairEvent(repair_id=repair.id, event_type=RepairEventType.NOTE.value, status_before=repair.status, status_after=repair.status, description="Добавен файл към ремонтната карта", structured_data={"filename": filename, "stage": payload.stage, "sha256": item.sha256}, user_id=user.id))
+    db.add(RepairEvent(repair_id=repair.id, event_type=RepairEventType.ATTACHMENT_ADDED.value, status_before=repair.status, status_after=repair.status, description="Добавен файл към ремонтната карта", structured_data={"filename": filename, "stage": payload.stage, "sha256": item.sha256}, user_id=user.id))
     add_audit_log(db, user, "repair_attachment", item.id, "Добавен файл към ремонта", {"repair_reference": repair.repair_reference, "filename": filename, "stage": payload.stage, "sha256": item.sha256})
     _commit(db)
     return _attachment_dict(item, "repair")
