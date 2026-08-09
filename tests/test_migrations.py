@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from app.models import User
+from app.models import Repair, RepairParticipant, User
 from app.settings import Settings, settings
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.dialects import postgresql
@@ -107,6 +107,30 @@ def test_legacy_sqlite_database_upgrades_without_changing_inventory(tmp_path: Pa
         "source_return_document_id",
         "source_return_batch_id",
     }.issubset({column["name"] for column in inspector.get_columns("repairs")})
+    assert {
+        "required_parts_text",
+        "diagnosis_minutes",
+        "repair_minutes",
+        "testing_minutes",
+    }.issubset({column["name"] for column in inspector.get_columns("repairs")})
+    assert "identity_key" in {
+        column["name"]
+        for column in inspector.get_columns("repair_participants")
+    }
+    assert "uq_repair_participants_identity_key" in {
+        item["name"] for item in inspector.get_indexes("repair_participants")
+    }
+    assert {
+        "ck_repairs_diagnosis_minutes_nonnegative",
+        "ck_repairs_repair_minutes_nonnegative",
+        "ck_repairs_testing_minutes_nonnegative",
+    }.issubset(
+        {
+            item["name"]
+            for item in inspector.get_check_constraints("repairs")
+            if item.get("name")
+        }
+    )
     assert {
         "alternative_part_numbers", "replacement_part_ids", "source_figure",
         "diagram_page", "source_version", "source_document_sha256",
@@ -245,3 +269,22 @@ def test_user_schema_and_partial_owner_index_compile_for_postgresql():
     assert "ck_users_owner_invariants" in table_ddl
     assert "CREATE UNIQUE INDEX" in index_ddl
     assert "WHERE is_system_owner" in index_ddl
+
+
+def test_repair_duration_constraints_and_participant_identity_compile_for_postgresql():
+    repair_ddl = str(
+        CreateTable(Repair.__table__).compile(dialect=postgresql.dialect())
+    )
+    participant_index = next(
+        index
+        for index in RepairParticipant.__table__.indexes
+        if index.name == "uq_repair_participants_identity_key"
+    )
+    participant_index_ddl = str(
+        CreateIndex(participant_index).compile(dialect=postgresql.dialect())
+    )
+    assert "ck_repairs_diagnosis_minutes_nonnegative" in repair_ddl
+    assert "ck_repairs_repair_minutes_nonnegative" in repair_ddl
+    assert "ck_repairs_testing_minutes_nonnegative" in repair_ddl
+    assert "CREATE UNIQUE INDEX" in participant_index_ddl
+    assert "repair_id, identity_key" in participant_index_ddl

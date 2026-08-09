@@ -15,10 +15,10 @@ from sqlalchemy import select
 
 def _advance_to_completed(client, headers, repair_id: int):
     payloads = [
-        {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Диагностика на помпа"},
-        {"status": "REPAIRING", "work_performed": "Подменени уплътнения и извършено сглобяване", "result": "Машината е възстановена"},
+        {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Диагностика на помпа", "required_work": "Подмяна на уплътнения", "diagnosis_minutes": 30},
+        {"status": "REPAIRING", "work_performed": "Подменени уплътнения и извършено сглобяване", "repair_minutes": 75, "result": "Машината е възстановена"},
         {"status": "TESTING", "test_passed": True, "test_method": "Функционален тест", "test_details": "Тестът е успешен", "functional_test_result": "Работи нормално", "condition_after": "Добро"},
-        {"status": "COMPLETED", "test_passed": True, "work_performed": "Подменени уплътнения и извършено сглобяване", "result": "Машината е възстановена", "test_details": "Тестът е успешен", "condition_after": "Добро"},
+        {"status": "COMPLETED", "test_passed": True, "testing_minutes": 20, "work_performed": "Подменени уплътнения и извършено сглобяване", "result": "Машината е възстановена", "test_details": "Тестът е успешен", "condition_after": "Добро"},
     ]
     response = None
     for payload in payloads:
@@ -63,7 +63,8 @@ def test_internal_repair_protocol_is_bg_contains_participants_and_is_idempotent(
         for table in document.tables:
             text += "\n" + "\n".join(cell.text for row in table.rows for cell in row.cells)
         assert "Иван Петров Иванов" in text
-        assert "ВЪТРЕШЕН ПРОТОКОЛ ЗА ИЗВЪРШЕН РЕМОНТ" in text
+        assert "ПРОТОКОЛ ЗА ПРИЕМАНЕ НА ОБОРУДВАНЕ ЗА РЕМОНТ" in text
+        assert "ПРОТОКОЛ ЗА ИЗВЪРШЕН РЕМОНТ" in text
 
     repeated = client.patch(f"/api/repair-cases/{repair_id}", headers=auth_headers, json={"status": "COMPLETED"})
     assert repeated.status_code == 200, repeated.text
@@ -74,13 +75,13 @@ def test_internal_repair_protocol_is_bg_contains_participants_and_is_idempotent(
 def test_missing_bg_template_rolls_back_completed_repair(client, auth_headers, machine_ids, session_factory):
     created = client.post(
         "/api/repair-cases", headers=auth_headers,
-        json={"machine_id": machine_ids["5"], "reported_problem": "Повреден клапан"},
+        json={"machine_id": machine_ids["5"], "reported_problem": "Повреден клапан", "condition_before": "Приета за диагностика"},
     )
     assert created.status_code == 201
     repair_id = created.json()["id"]
     for payload in [
-        {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Клапанът е блокирал"},
-        {"status": "REPAIRING", "work_performed": "Клапанът е сменен", "result": "Ремонтът е извършен"},
+        {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Клапанът е блокирал", "required_work": "Подмяна на клапана", "diagnosis_minutes": 20},
+        {"status": "REPAIRING", "work_performed": "Клапанът е сменен", "repair_minutes": 45, "result": "Ремонтът е извършен"},
         {"status": "TESTING", "test_passed": True, "test_details": "Успешен тест"},
     ]:
         response = client.patch(f"/api/repair-cases/{repair_id}", headers=auth_headers, json=payload)
@@ -93,7 +94,7 @@ def test_missing_bg_template_rolls_back_completed_repair(client, auth_headers, m
         db.commit()
     completed = client.patch(
         f"/api/repair-cases/{repair_id}", headers=auth_headers,
-        json={"status": "COMPLETED", "test_passed": True, "work_performed": "Клапанът е сменен", "result": "Ремонтът е извършен", "test_details": "Успешен тест"},
+        json={"status": "COMPLETED", "test_passed": True, "testing_minutes": 15, "work_performed": "Клапанът е сменен", "result": "Ремонтът е извършен", "condition_after": "Изправна", "test_details": "Успешен тест"},
     )
     assert completed.status_code == 409, completed.text
     body = completed.json()
@@ -111,14 +112,14 @@ def test_compatibility_repair_close_generates_required_protocol_atomically(
     created = client.post(
         "/api/repair-cases",
         headers=auth_headers,
-        json={"machine_id": machine_ids["7"], "reported_problem": "Проверка на съвместимия маршрут"},
+        json={"machine_id": machine_ids["7"], "reported_problem": "Проверка на съвместимия маршрут", "condition_before": "Приета за диагностика"},
     )
     assert created.status_code == 201, created.text
     repair_id = created.json()["id"]
     for payload in [
-        {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Извършена диагностика"},
-        {"status": "REPAIRING", "work_performed": "Извършена ремонтна операция", "result": "Възстановена работа"},
-        {"status": "TESTING", "test_passed": True, "test_details": "Успешен функционален тест"},
+        {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Извършена диагностика", "required_work": "Извършване на ремонтна операция", "diagnosis_minutes": 25},
+        {"status": "REPAIRING", "work_performed": "Извършена ремонтна операция", "repair_minutes": 50, "result": "Възстановена работа"},
+        {"status": "TESTING", "test_passed": True, "testing_minutes": 15, "test_details": "Успешен функционален тест", "condition_after": "Изправна"},
     ]:
         response = client.patch(
             f"/api/repair-cases/{repair_id}", headers=auth_headers, json=payload
@@ -143,7 +144,7 @@ def test_compatibility_repair_close_generates_required_protocol_atomically(
 
 
 def test_repair_participant_cannot_change_after_completion(client, auth_headers, machine_ids):
-    created = client.post("/api/repair-cases", headers=auth_headers, json={"machine_id": machine_ids["7"], "reported_problem": "Тест"})
+    created = client.post("/api/repair-cases", headers=auth_headers, json={"machine_id": machine_ids["7"], "reported_problem": "Тест", "condition_before": "Приета за диагностика"})
     repair_id = created.json()["id"]
     added = client.post(f"/api/repair-cases/{repair_id}/participants", headers=auth_headers, json={"full_name": "Петър Иванов Петров"})
     assert added.status_code == 201
@@ -158,6 +159,6 @@ def test_repair_frontend_contract_is_internal_and_bulgarian():
     translations = (Path(__file__).resolve().parents[1] / "frontend" / "src" / "i18n.tsx").read_text(encoding="utf-8")
     assert "/documents?language=${locale}" not in source
     assert "repairCase.generateProtocolBg" in source
-    assert "repairCase.participants" in source
+    assert "repairCase.section.participants" in source
     assert "Нов вътрешен ремонт" in translations
     assert "Регистрация → Преглед" in translations

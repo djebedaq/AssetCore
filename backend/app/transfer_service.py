@@ -38,6 +38,7 @@ from .models import (
     ProtocolDocument,
     Repair,
     RepairEvent,
+    RepairEventType,
     RepairStatus,
     SignatureSession,
     TransferBatch,
@@ -1623,7 +1624,7 @@ def finalize_signed_transfer_workflow(
             repair.repair_reference = f"REP-{now:%Y}-{repair.id:06d}"
             repair_event = RepairEvent(
                 repair_id=repair.id,
-                event_type="RETURN_DIRECTED_TO_REPAIR",
+                event_type=RepairEventType.RETURN_DIRECTED_TO_REPAIR.value,
                 status_before=None,
                 status_after=RepairStatus.ACCEPTED.value,
                 description="Машината е насочена за ремонт при приемането.",

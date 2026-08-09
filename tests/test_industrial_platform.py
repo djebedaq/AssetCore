@@ -303,6 +303,8 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
             "status": "DIAGNOSIS",
             "inspection_complete": True,
             "diagnosis": "test-only diagnosis",
+            "required_work": "test-only required work",
+            "diagnosis_minutes": 25,
         },
     )
     assert diagnosis.status_code == 200, diagnosis.text
@@ -321,6 +323,7 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
         json={
             "status": "REPAIRING",
             "work_performed": "test-only repair actions",
+            "repair_minutes": 40,
         },
     )
     assert repairing.status_code == 200, repairing.text
@@ -349,6 +352,7 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
             "status": "COMPLETED",
             "test_passed": True,
             "test_details": "test-only successful test",
+            "testing_minutes": 15,
             "condition_after": "test-only condition after",
             "result": "test-only completed result",
         },

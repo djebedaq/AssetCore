@@ -17,16 +17,19 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from .audit import add_audit_log
 from .database import SessionLocal, get_db
 from .document_generation import (
-    ConfirmedTemplateUnavailableError,
-    TemplateValidationError,
     build_daily_report_pdf,
     build_protocol_docx,
     build_protocol_pdf,
-    make_repair_documents,
     safe_filename,
 )
 from .hardening_api import router as hardening_router
-from .industrial_api import router as industrial_router
+from .industrial_api import (
+    _apply_repair_transition,
+    _generate_completion_documents,
+)
+from .industrial_api import (
+    router as industrial_router,
+)
 from .licensing import evaluate_license, serialize_license_state
 from .localization import normalize_language, translate
 from .migrations import run_migrations
@@ -110,11 +113,8 @@ from .transfer_service import (
 from .user_api import router as user_router
 from .user_api import serialize_user
 from .workflow import (
-    REPAIR_TO_MACHINE_STATUS,
     add_machine_event,
     ensure_machine_transition,
-    ensure_repair_can_complete,
-    ensure_repair_transition,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -680,15 +680,11 @@ def update_repair(
         setattr(repair, key, value)
     previous_status = repair.status
     previous_machine_status = repair.machine.status
+    previous_location_id = repair.machine.location_id
     if data.status is not None and data.status.value != repair.status:
-        ensure_repair_transition(repair.status, data.status.value)
-        if data.status.value == RepairStatus.COMPLETED.value:
-            ensure_repair_can_complete(repair)
-            repair.closed_at = utcnow()
-        repair.status = data.status.value
-        next_machine_status = REPAIR_TO_MACHINE_STATUS[repair.status]
-        ensure_machine_transition(repair.machine.status, next_machine_status)
-        repair.machine.status = next_machine_status
+        _, previous_location_id = _apply_repair_transition(
+            db, repair, data.status.value, user
+        )
     if data.close:
         if repair.status != RepairStatus.TESTING.value:
             raise HTTPException(
@@ -701,10 +697,9 @@ def update_repair(
                     ),
                 },
             )
-        ensure_repair_can_complete(repair)
-        repair.closed_at = utcnow()
-        repair.status = RepairStatus.COMPLETED.value
-        repair.machine.status = MachineStatus.READY.value
+        _, previous_location_id = _apply_repair_transition(
+            db, repair, RepairStatus.COMPLETED.value, user
+        )
     db.add(
         RepairEvent(
             repair_id=repair.id,
@@ -724,46 +719,7 @@ def update_repair(
         previous_status != RepairStatus.COMPLETED.value
         and repair.status == RepairStatus.COMPLETED.value
     ):
-        repair.responsible_user_id = user.id
-        db.flush()
-        db.expire(repair, ["events", "parts_used", "participants", "attachments"])
-        try:
-            generated_on_completion = make_repair_documents(
-                db, repair, user.id, "bg"
-            )
-            db.add_all(generated_on_completion)
-            db.flush()
-        except ConfirmedTemplateUnavailableError as exc:
-            db.rollback()
-            raise HTTPException(
-                409,
-                detail={
-                    "code": "repair_protocol_template_unavailable",
-                    "message": exc.message,
-                    "document_type": exc.document_type,
-                    "language": "bg",
-                },
-            ) from exc
-        except TemplateValidationError as exc:
-            db.rollback()
-            raise HTTPException(
-                409,
-                detail={
-                    "code": "repair_protocol_generation_failed",
-                    "message": "Ремонтът не е приключен, защото задължителният протокол не може да бъде генериран.",
-                    "document_type": "REPAIR_PROTOCOL",
-                    "language": "bg",
-                },
-            ) from exc
-        except Exception as exc:
-            db.rollback()
-            raise HTTPException(
-                500,
-                detail={
-                    "code": "repair_protocol_generation_failed",
-                    "message": "Ремонтът не е приключен поради грешка при генериране на задължителния протокол.",
-                },
-            ) from exc
+        generated_on_completion = _generate_completion_documents(db, repair, user)
     if previous_machine_status != repair.machine.status:
         add_machine_event(
             db,
@@ -773,6 +729,8 @@ def update_repair(
             reference=repair.repair_reference,
             previous_status=previous_machine_status,
             new_status=repair.machine.status,
+            previous_location_id=previous_location_id,
+            new_location_id=repair.machine.location_id,
             details={"repair_id": repair.id, "repair_status": repair.status},
         )
     add_audit_log(

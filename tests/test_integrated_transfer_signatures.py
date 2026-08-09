@@ -210,13 +210,14 @@ def test_completed_repair_creates_locked_internal_protocol_and_correction_versio
     assert created.status_code == 201, created.text
     repair_id = created.json()["id"]
     for payload in (
-        {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Тестова диагностика"},
-        {"status": "REPAIRING", "work_performed": "Тестово извършена работа"},
+        {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Тестова диагностика", "required_work": "Тестова необходима работа", "diagnosis_minutes": 20},
+        {"status": "REPAIRING", "work_performed": "Тестово извършена работа", "repair_minutes": 35},
         {"status": "TESTING"},
         {
             "status": "COMPLETED",
             "test_passed": True,
             "test_details": "Тестът е успешен",
+            "testing_minutes": 10,
             "condition_after": "Тестово крайно състояние",
             "result": "Ремонтът е приключен",
         },

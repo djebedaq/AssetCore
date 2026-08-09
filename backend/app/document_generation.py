@@ -993,7 +993,7 @@ def build_repair_protocol_docx(repair: Repair, language: str = "bg") -> bytes:
     return output.getvalue()
 
 
-def build_repair_protocol_pdf(repair: Repair, language: str = "bg") -> bytes:
+def _build_repair_protocol_pdf_legacy(repair: Repair, language: str = "bg") -> bytes:
     language = _language(language)
     t = TEXT[language]
     _, _, body, label, title, small = _pdf_styles()
@@ -1042,6 +1042,159 @@ def build_repair_protocol_pdf(repair: Repair, language: str = "bg") -> bytes:
         KeepTogether(signatures),
         Spacer(1, 2 * mm),
         Paragraph(escape(_signature_status(language, finalized_internal=True)), label),
+    ])
+    pdf.build(story)
+    return output.getvalue()
+
+
+def build_repair_protocol_pdf(
+    repair: Repair,
+    language: str = "bg",
+    source_reference: str = "",
+) -> bytes:
+    """Three-part PDF fallback mirroring the controlled v5 DOCX package."""
+    language = _language(language)
+    _, _, body, label, title, small = _pdf_styles()
+    labels = {
+        "bg": {
+            "accept": "ПРОТОКОЛ ЗА ПРИЕМАНЕ НА ОБОРУДВАНЕ ЗА РЕМОНТ",
+            "done": "ПРОТОКОЛ ЗА ИЗВЪРШЕН РЕМОНТ",
+            "number": "Протокол №", "date": "Дата", "equipment": "Оборудване",
+            "ownership": "Собственост", "condition": "Състояние при приемане",
+            "required": "Описание на необходимия ремонт", "removed": "А) Демонтаж и подготовка",
+            "diagnosis": "Б) Констатирано след разглобяване, почистване и дефектация",
+            "needed": "В) Нужни части за ремонт", "diagnosis_time": "Реално време за диагностика",
+            "participants": "Извършили ремонта / диагностиката", "handed": "Предал оборудването",
+            "accepted": "Приел оборудването", "work": "Извършени ремонтни дейности",
+            "repair_time": "Реално време за ремонт", "testing_time": "Реално време за тестове",
+            "parts": "Вложени резервни части", "hours": "РЕАЛНО ОТРАБОТЕНО ВРЕМЕ",
+            "start": "Начало", "end": "Край", "total": "Общо реално време",
+            "tests": "Тестове и резултат", "after": "Състояние след ремонта",
+            "result": "Краен резултат", "attachments": "Приложения",
+            "approved": "Приел ремонта", "reference": "Ремонтна референция",
+            "source": "Свързано връщане",
+        },
+        "en": {
+            "accept": "EQUIPMENT ACCEPTANCE FOR REPAIR PROTOCOL", "done": "COMPLETED REPAIR PROTOCOL",
+            "number": "Protocol No.", "date": "Date", "equipment": "Equipment", "ownership": "Ownership",
+            "condition": "Condition on acceptance", "required": "Required repair", "removed": "A) Disassembly and preparation",
+            "diagnosis": "B) Findings after inspection", "needed": "C) Parts required", "diagnosis_time": "Actual diagnosis time",
+            "participants": "Repair / diagnosis participants", "handed": "Handed over by", "accepted": "Accepted by",
+            "work": "Repair work performed", "repair_time": "Actual repair time", "testing_time": "Actual testing time",
+            "parts": "Spare parts used", "hours": "ACTUAL LABOUR TIME", "start": "Start", "end": "End", "total": "Total actual time",
+            "tests": "Tests and result", "after": "Condition after repair", "result": "Final result", "attachments": "Attachments",
+            "approved": "Repair accepted by", "reference": "Repair reference", "source": "Linked return",
+        },
+        "ru": {
+            "accept": "ПРОТОКОЛ ПРИЕМА ОБОРУДОВАНИЯ В РЕМОНТ", "done": "ПРОТОКОЛ ВЫПОЛНЕННОГО РЕМОНТА",
+            "number": "Протокол №", "date": "Дата", "equipment": "Оборудование", "ownership": "Собственность",
+            "condition": "Состояние при приеме", "required": "Необходимый ремонт", "removed": "А) Демонтаж и подготовка",
+            "diagnosis": "Б) Результаты дефектации", "needed": "В) Необходимые детали", "diagnosis_time": "Фактическое время диагностики",
+            "participants": "Участники ремонта / диагностики", "handed": "Передал", "accepted": "Принял",
+            "work": "Выполненные работы", "repair_time": "Фактическое время ремонта", "testing_time": "Фактическое время испытаний",
+            "parts": "Использованные детали", "hours": "ФАКТИЧЕСКОЕ РАБОЧЕЕ ВРЕМЯ", "start": "Начало", "end": "Окончание", "total": "Общее время",
+            "tests": "Испытания и результат", "after": "Состояние после ремонта", "result": "Итоговый результат", "attachments": "Приложения",
+            "approved": "Ремонт принял", "reference": "Референция ремонта", "source": "Связанный возврат",
+        },
+    }[language]
+    output = io.BytesIO()
+    number = repair.repair_reference or f"REP-{repair.id:06d}"
+    pdf = SimpleDocTemplate(
+        output, pagesize=A4, leftMargin=10 * mm, rightMargin=8 * mm,
+        topMargin=7 * mm, bottomMargin=8 * mm, title=number, author="AssetCore",
+    )
+
+    def field_table(rows: list[tuple[str, str]]) -> Table:
+        table = Table(
+            [[Paragraph(escape(key), label), Paragraph(escape(value or ""), body)] for key, value in rows],
+            colWidths=[48 * mm, 144 * mm],
+        )
+        table.setStyle(_pdf_table_style())
+        return table
+
+    def box(heading: str, value: str | None) -> Table:
+        table = Table(
+            [[Paragraph(escape(heading), label)], [Paragraph(escape(value or ""), body)]],
+            colWidths=[192 * mm],
+        )
+        table.setStyle(_pdf_table_style(header_rows=1))
+        return table
+
+    participant_text = "; ".join(
+        " — ".join(
+            value for value in (
+                item.full_name_snapshot, item.job_title_snapshot, item.contribution
+            ) if value
+        )
+        for item in repair.participants
+    )
+    machine_text = (
+        f"{repair.machine.name} · №{repair.machine.inventory_number} · "
+        f"{repair.machine.brand} {repair.machine.model or ''} · S/N {repair.machine.serial_number or ''}"
+    )
+    total_minutes = sum(
+        value or 0 for value in (
+            repair.diagnosis_minutes, repair.repair_minutes, repair.testing_minutes
+        )
+    )
+    story: list[object] = [
+        _pdf_header(), Spacer(1, 2 * mm), Paragraph(escape(labels["accept"]), title),
+        field_table([
+            (labels["number"], number), (labels["date"], repair.opened_at.strftime("%d.%m.%Y")),
+            (labels["reference"], number), (labels["source"], source_reference),
+            (labels["equipment"], machine_text), (labels["ownership"], repair.machine.ownership or ""),
+        ]), Spacer(1, 2 * mm), box(labels["condition"], repair.condition_before),
+        Spacer(1, 2 * mm), box(labels["required"], repair.required_work),
+        Spacer(1, 2 * mm), box(labels["removed"], repair.removed_parts_text),
+        Spacer(1, 2 * mm), box(labels["diagnosis"], repair.diagnosis),
+        Spacer(1, 2 * mm), box(labels["needed"], repair.required_parts_text),
+        Spacer(1, 2 * mm), field_table([
+            (labels["diagnosis_time"], _repair_duration(repair.diagnosis_minutes, language)),
+            (labels["participants"], participant_text),
+            (labels["handed"], repair.reported_by_name or ""),
+            (labels["accepted"], repair.accepted_by.full_name if repair.accepted_by else ""),
+        ]), PageBreak(), _pdf_header(), Spacer(1, 2 * mm),
+        Paragraph(escape(labels["done"]), title),
+        field_table([
+            (labels["number"], number),
+            (labels["date"], (repair.closed_at or repair.opened_at).strftime("%d.%m.%Y")),
+            (labels["equipment"], machine_text), (labels["ownership"], repair.machine.ownership or ""),
+        ]), Spacer(1, 2 * mm), box(labels["work"], repair.work_performed),
+        Spacer(1, 2 * mm), field_table([
+            (labels["repair_time"], _repair_duration(repair.repair_minutes, language)),
+            (labels["testing_time"], _repair_duration(repair.testing_minutes, language)),
+            (labels["participants"], participant_text),
+        ]), Spacer(1, 2 * mm), Paragraph(escape(labels["parts"]), label),
+    ]
+    part_rows = [[Paragraph(escape(value), label) for value in ("№", "Part No.", "Описание", "Количество")]]
+    part_rows.extend([
+        [Paragraph(str(index), small), Paragraph(escape(part.part_number or ""), small),
+         Paragraph(escape(part.description), small), Paragraph(escape(f"{part.quantity:g} {part.unit or ''}".strip()), small)]
+        for index, part in enumerate(repair.parts_used, start=1)
+    ])
+    if len(part_rows) == 1:
+        part_rows.append([Paragraph("—", small), Paragraph("", small), Paragraph("", small), Paragraph("", small)])
+    parts_table = Table(part_rows, colWidths=[12 * mm, 40 * mm, 108 * mm, 32 * mm], repeatRows=1)
+    parts_table.setStyle(_pdf_table_style(header_rows=1))
+    story.extend([
+        parts_table, PageBreak(), _pdf_header(), Spacer(1, 2 * mm),
+        Paragraph(escape(labels["hours"]), title),
+        field_table([
+            (labels["start"], repair.started_at.strftime("%d.%m.%Y %H:%M") if repair.started_at else ""),
+            (labels["end"], repair.closed_at.strftime("%d.%m.%Y %H:%M") if repair.closed_at else ""),
+            (labels["total"], _repair_duration(total_minutes, language)),
+        ]), Spacer(1, 2 * mm), box(labels["tests"], _repair_test_summary(repair, language)),
+        Spacer(1, 2 * mm), box(labels["after"], repair.condition_after),
+        Spacer(1, 2 * mm), box(labels["result"], repair.result),
+        Spacer(1, 2 * mm), box(labels["attachments"], "; ".join(item.filename for item in repair.attachments)),
+        Spacer(1, 2 * mm), field_table([
+            (labels["participants"], participant_text),
+            (labels["approved"], " — ".join(value for value in (
+                repair.approved_by.full_name if repair.approved_by else "",
+                repair.approved_by.job_title if repair.approved_by else "",
+            ) if value)),
+            (labels["date"], (repair.closed_at or repair.opened_at).strftime("%d.%m.%Y")),
+        ]),
     ])
     pdf.build(story)
     return output.getvalue()
@@ -1609,6 +1762,23 @@ def _repair_test_summary(repair: Repair, language: str = "bg") -> str:
     return "; ".join(value for value in (passed, *values) if value)
 
 
+def _repair_duration(minutes: int | None, language: str = "bg") -> str:
+    if minutes is None:
+        return ""
+    hours, remainder = divmod(minutes, 60)
+    labels = {
+        "bg": ("ч", "мин"),
+        "en": ("h", "min"),
+        "ru": ("ч", "мин"),
+    }[_language(language)]
+    parts = []
+    if hours:
+        parts.append(f"{hours} {labels[0]}")
+    if remainder or not parts:
+        parts.append(f"{remainder} {labels[1]}")
+    return " ".join(parts)
+
+
 def make_repair_documents(
     db: Session, repair: Repair, created_by_id: int, language: str = "bg"
 ) -> list[GeneratedDocument]:
@@ -1622,9 +1792,12 @@ def make_repair_documents(
         "machine_number": repair.machine.inventory_number,
         "status": repair.status,
         "reported_problem": repair.reported_problem,
+        "condition_before": repair.condition_before,
+        "condition_after": repair.condition_after,
         "reported_by_name": repair.reported_by_name,
         "symptoms": repair.symptoms,
         "required_work": repair.required_work,
+        "required_parts_text": repair.required_parts_text,
         "removed_parts_text": repair.removed_parts_text,
         "diagnosis": repair.diagnosis,
         "work_performed": repair.work_performed,
@@ -1635,6 +1808,22 @@ def make_repair_documents(
         "leaks_detected": repair.leaks_detected,
         "electrical_test_result": repair.electrical_test_result,
         "functional_test_result": repair.functional_test_result,
+        "diagnosis_minutes": repair.diagnosis_minutes,
+        "repair_minutes": repair.repair_minutes,
+        "testing_minutes": repair.testing_minutes,
+        "total_work_minutes": sum(
+            value or 0
+            for value in (
+                repair.diagnosis_minutes,
+                repair.repair_minutes,
+                repair.testing_minutes,
+            )
+        ),
+        "source_return_transfer_id": repair.source_return_transfer_id,
+        "source_return_document_id": repair.source_return_document_id,
+        "source_return_batch_id": repair.source_return_batch_id,
+        "opened_at": repair.opened_at.isoformat(),
+        "started_at": repair.started_at.isoformat() if repair.started_at else None,
         "closed_at": repair.closed_at.isoformat() if repair.closed_at else None,
         "events": [
             {
@@ -1676,9 +1865,57 @@ def make_repair_documents(
                 repair.responsible_user.job_title if repair.responsible_user else None
             ),
         },
+        "accepted_by": {
+            "user_id": repair.accepted_by.id if repair.accepted_by else None,
+            "display_name": repair.accepted_by.full_name if repair.accepted_by else None,
+            "job_title": repair.accepted_by.job_title if repair.accepted_by else None,
+        },
+        "approved_by": {
+            "user_id": repair.approved_by.id if repair.approved_by else None,
+            "display_name": repair.approved_by.full_name if repair.approved_by else None,
+            "job_title": repair.approved_by.job_title if repair.approved_by else None,
+        },
     }
     machine = repair.machine
     date_value = repair.closed_at or repair.opened_at
+    source_document = (
+        db.get(OfficialDocument, repair.source_return_document_id)
+        if repair.source_return_document_id
+        else None
+    )
+    source_batch = (
+        db.get(TransferBatch, repair.source_return_batch_id)
+        if repair.source_return_batch_id
+        else None
+    )
+    source_reference = " · ".join(
+        value
+        for value in (
+            source_document.document_number if source_document else None,
+            source_batch.batch_reference if source_batch else None,
+        )
+        if value
+    )
+    participant_names = "; ".join(
+        " — ".join(
+            value
+            for value in (
+                participant.full_name_snapshot,
+                participant.job_title_snapshot,
+                participant.contribution,
+            )
+            if value
+        )
+        for participant in repair.participants
+    )
+    total_work_minutes = sum(
+        value or 0
+        for value in (
+            repair.diagnosis_minutes,
+            repair.repair_minutes,
+            repair.testing_minutes,
+        )
+    )
     values: dict[str, object] = {
         "DOCUMENT_NUMBER": number,
         "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
@@ -1689,12 +1926,32 @@ def make_repair_documents(
         "SERIAL_NUMBER": machine.serial_number or "",
         "PRESSURE_BAR": machine.pressure_bar,
         "BATCH_REFERENCE": "",
+        "REPAIR_REFERENCE": repair.repair_reference or base,
+        "SOURCE_RETURN_REFERENCE": source_reference,
+        "ACCEPTANCE_DATE": repair.opened_at.strftime("%d.%m.%Y"),
+        "COMPLETION_DATE": date_value.strftime("%d.%m.%Y"),
+        "OWNERSHIP": machine.ownership or "",
         "REPORTED_PROBLEM": repair.reported_problem,
         "CONDITION_BEFORE": repair.condition_before or "",
+        "REQUIRED_WORK": repair.required_work or "",
+        "REQUIRED_PARTS": repair.required_parts_text or "",
+        "REMOVED_PARTS": repair.removed_parts_text or "",
         "DIAGNOSIS": repair.diagnosis or "",
+        "DIAGNOSIS_DURATION": _repair_duration(repair.diagnosis_minutes, language),
         "WORK_PERFORMED": repair.work_performed or "",
+        "REPAIR_DURATION": _repair_duration(repair.repair_minutes, language),
+        "TESTING_DURATION": _repair_duration(repair.testing_minutes, language),
+        "TOTAL_WORK_DURATION": _repair_duration(total_work_minutes, language),
         "TEST_RESULT": _repair_test_summary(repair, language),
         "CONDITION_AFTER": repair.condition_after or repair.result or "",
+        "FINAL_RESULT": repair.result or "",
+        "REPAIR_START": repair.started_at.strftime("%d.%m.%Y %H:%M") if repair.started_at else "",
+        "REPAIR_END": repair.closed_at.strftime("%d.%m.%Y %H:%M") if repair.closed_at else "",
+        "HANDED_OVER_NAME": repair.reported_by_name or "",
+        "ACCEPTED_BY_NAME": repair.accepted_by.full_name if repair.accepted_by else "",
+        "REPAIRER_NAMES": participant_names,
+        "APPROVED_BY_NAME": repair.approved_by.full_name if repair.approved_by else "",
+        "APPROVED_BY_JOB_TITLE": repair.approved_by.job_title if repair.approved_by else "",
         "REPAIR_STATUS": repair.status,
         "LEFT_SIGNER_NAME": repair.responsible_user.full_name if repair.responsible_user else "",
         "LEFT_SIGNER_JOB_TITLE": repair.responsible_user.job_title if repair.responsible_user else "",
@@ -1737,6 +1994,13 @@ def make_repair_documents(
         ]
         or [["Няма допълнителни участници", "", ""]]
     )
+    attachment_rows = [["Файл", "Етап", "Описание"]] + (
+        [
+            [attachment.filename, attachment.stage, attachment.caption or ""]
+            for attachment in repair.attachments
+        ]
+        or [["Няма приложения", "", ""]]
+    )
     docx = render_docx(
         template,
         values,
@@ -1744,9 +2008,12 @@ def make_repair_documents(
             "REPAIR_EVENTS": event_rows,
             "PARTS_USED": part_rows,
             "REPAIR_PARTICIPANTS": participant_rows,
+            "REPAIR_ATTACHMENTS": attachment_rows,
         },
     )
-    pdf = convert_docx_to_pdf(docx) or build_repair_protocol_pdf(repair, language)
+    pdf = convert_docx_to_pdf(docx) or build_repair_protocol_pdf(
+        repair, language, source_reference
+    )
     _register_official_version(
         db,
         number=number,

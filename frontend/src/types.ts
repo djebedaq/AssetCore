@@ -231,13 +231,17 @@ export type RepairCase = {
   reported_problem: string; diagnosis?: string | null; work_performed?: string | null; result?: string | null;
   status: string; repair_type?: string | null; severity?: string | null; condition_before?: string | null;
   condition_after?: string | null; reported_by_name?: string | null; symptoms?: string | null;
-  required_work?: string | null; removed_parts_text?: string | null; cleaning_required: boolean; cleaning_completed_at?: string | null;
+  required_work?: string | null; required_parts_text?: string | null; removed_parts_text?: string | null;
+  diagnosis_minutes?: number | null; repair_minutes?: number | null; testing_minutes?: number | null; total_work_minutes: number;
+  cleaning_required: boolean; cleaning_completed_at?: string | null;
   inspection_completed_at?: string | null; test_required: boolean; test_passed?: boolean | null;
   test_details?: string | null; test_method?: string | null; test_pressure_bar?: number | null; leaks_detected?: boolean | null;
   electrical_test_result?: string | null; functional_test_result?: string | null; responsible_user_id?: number | null;
   responsible_user?: { id: number; full_name: string; job_title?: string | null } | null; participants: RepairParticipant[];
   document_generation_warning?: { code: string; message: string; document_type?: string; language?: string } | null; accepted_by_id?: number | null;
-  approved_by_id?: number | null; approved_at?: string | null; target_date?: string | null;
+  accepted_by?: { id: number; full_name: string; job_title?: string | null } | null;
+  approved_by_id?: number | null; approved_by?: { id: number; full_name: string; job_title?: string | null } | null;
+  approved_at?: string | null; target_date?: string | null;
   opened_at: string; started_at?: string | null; closed_at?: string | null; events: RepairEvent[]; parts_used: RepairPartUsed[];
   attachments: StoredAttachment[];
   generated_documents: Array<{ id: number; document_number: string; document_type: string; format: string; filename: string; created_at: string; download_endpoint: string }>

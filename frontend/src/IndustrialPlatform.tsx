@@ -65,6 +65,12 @@ const EVENT_KEYS: Record<string, TranslationKey> = {
   CLEANING: 'event.cleaning', DIAGNOSIS: 'event.diagnosis', APPROVAL: 'event.approval',
   PARTS: 'event.parts', REPAIR_ACTION: 'event.repairAction', TEST: 'event.test',
   STATUS_CHANGE: 'event.statusChange', COMPLETED: 'event.completed', NOTE: 'event.note',
+  WAITING_APPROVAL: 'status.waitingApproval', WAITING_PARTS: 'status.waitingParts',
+  REPAIRING: 'status.repairing', TESTING: 'status.testing',
+  RETURN_DIRECTED_TO_REPAIR: 'event.returnDirectedToRepair',
+  PARTICIPANT_ADDED: 'event.participantAdded', PARTICIPANT_REMOVED: 'event.participantRemoved',
+  PART_ADDED: 'event.partAdded',
+  DOCUMENT_GENERATED: 'event.documentGenerated', MACHINE_READY: 'event.machineReady',
 }
 
 const DOCUMENT_KEYS: Record<string, TranslationKey> = {
@@ -80,6 +86,13 @@ function translatedCode(
   keys: Record<string, TranslationKey>,
 ): string {
   return keys[value] ? t(keys[value]) : value
+}
+
+function translatedEventCode(
+  t: (key: TranslationKey, values?: Record<string, string | number>) => string,
+  value: string,
+): string {
+  return EVENT_KEYS[value] ? t(EVENT_KEYS[value]) : t('event.other')
 }
 
 function Modal({ title, onClose, children, wide = false }: {
@@ -298,13 +311,13 @@ export function MachinePassportModal({ machineId, onClose, onOpenCatalog }: { ma
             <div><dt>{t('passport.availability')}</dt><dd>{passport.current_state.available ? t('bulk.available') : t('bulk.unavailable')}</dd></div>
             <div><dt>{t('passport.activeTransfer')}</dt><dd>{passport.current_state.active_transfer?.protocol_number || t('common.noValue')}</dd></div>
             <div><dt>{t('passport.activeRepair')}</dt><dd>{passport.current_state.active_repair?.repair_reference || t('common.noValue')}</dd></div>
-            <div><dt>{t('passport.lastMovement')}</dt><dd>{passport.current_state.last_movement ? `${translatedCode(t, passport.current_state.last_movement.event_type, EVENT_KEYS)} · ${date(passport.current_state.last_movement.created_at)}` : t('common.noValue')}</dd></div>
+            <div><dt>{t('passport.lastMovement')}</dt><dd>{passport.current_state.last_movement ? `${translatedEventCode(t, passport.current_state.last_movement.event_type)} · ${date(passport.current_state.last_movement.created_at)}` : t('common.noValue')}</dd></div>
             <div><dt>{t('passport.lastInspection')}</dt><dd>{passport.current_state.last_inspection ? date(passport.current_state.last_inspection.completed_at) : t('common.noValue')}</dd></div>
             <div><dt>{t('passport.lastTest')}</dt><dd>{passport.current_state.last_test ? `${passport.current_state.last_test.passed ? t('common.yes') : t('common.no')} ${passport.current_state.last_test.completed_at ? `· ${date(passport.current_state.last_test.completed_at)}` : ''}` : t('common.noValue')}</dd></div>
           </dl><div className="summary-chips">{passport.current_state.allowed_actions.issue && <span>{t('bulk.issue')}</span>}{passport.current_state.allowed_actions.return && <span>{t('bulk.return')}</span>}{passport.current_state.allowed_actions.repair && <span>{t('nav.repairs')}</span>}{passport.current_state.allowed_actions.edit && <span>{t('common.edit')}</span>}</div>{passport.current_state.active_transfer && <div className="record-detail"><b>{passport.current_state.active_transfer.protocol_number}</b><span>{[passport.current_state.active_transfer.company_unit, passport.current_state.active_transfer.department, passport.current_state.active_transfer.vessel, passport.current_state.active_transfer.dock, passport.current_state.active_transfer.pier, passport.current_state.active_transfer.work_area, passport.current_state.active_transfer.location_text].filter(Boolean).join(' · ')}</span><small>{passport.current_state.active_transfer.issued_at ? date(passport.current_state.active_transfer.issued_at) : t('common.noValue')}</small></div>}</section>
           <section><h4>{t('passport.activeLinks')}</h4><div className="summary-chips"><span>{t('passport.repairsCount', { count: passport.repairs.length })}</span><span>{t('passport.transfersCount', { count: passport.transfers.length })}</span><span>{t('passport.requestsCount', { count: passport.part_requests.length })}</span><span>{t('passport.documentsCount', { count: passport.generated_documents.length + passport.technical_documents.length })}</span></div></section>
         </div>}
-        {tab === 'history' && <div className="timeline">{passport.history.map((event) => <div key={event.id}><i /><span><b>{translatedCode(t, event.event_type, EVENT_KEYS)}</b><small>{date(event.created_at)} · {event.reference || t('common.system')}</small>{(event.previous_status || event.new_status) && <em>{event.previous_status ? statusText(t, event.previous_status) : ''} → {event.new_status ? statusText(t, event.new_status) : ''}</em>}</span></div>)}{!passport.history.length && <div className="empty-state">{t('passport.noHistory')}</div>}</div>}
+        {tab === 'history' && <div className="timeline">{passport.history.map((event) => <div key={event.id}><i /><span><b>{translatedEventCode(t, event.event_type)}</b><small>{date(event.created_at)} · {event.reference || t('common.system')}</small>{(event.previous_status || event.new_status) && <em>{event.previous_status ? statusText(t, event.previous_status) : ''} → {event.new_status ? statusText(t, event.new_status) : ''}</em>}</span></div>)}{!passport.history.length && <div className="empty-state">{t('passport.noHistory')}</div>}</div>}
         {tab === 'repairs' && <div className="document-list">{passport.repairs.map((repair) => <div key={repair.id}><span><b>{repair.repair_reference || t('common.noValue')}</b><small>{statusText(t, repair.status)} · {date(repair.opened_at)}</small><em>{repair.reported_problem}</em></span></div>)}{!passport.repairs.length && <div className="empty-state">{t('passport.noRepairs')}</div>}</div>}
         {tab === 'parts' && <><div className="toolbar"><div><h4>{t('passport.tab.parts')}</h4></div>{onOpenCatalog && <button className="primary" onClick={onOpenCatalog}><PackageCheck size={16} />{t('passport.openCatalog')}</button>}</div><div className="document-list">{passport.parts_used.map((part) => <div key={part.id}><span><b>{part.part_number || t('common.noValue')} · {part.description}</b><small>{part.repair_reference || t('common.noValue')} · {date(part.created_at)}</small><em>{part.quantity} {part.unit || ''}{part.source ? ` · ${part.source}` : ''}</em></span></div>)}{!passport.parts_used.length && <div className="empty-state">{t('passport.noParts')}</div>}</div></>}
         {tab === 'transfers' && <div className="document-list">{passport.transfers.map((transfer) => <div key={transfer.id}><span><b>{transfer.protocol_number}</b><small>{transfer.is_active ? t('global.activeTransfer') : t('global.closedTransfer')} · {transfer.issued_at ? date(transfer.issued_at) : t('common.noValue')}</small><em>{[transfer.batch_reference, transfer.location_text, transfer.accepted_by].filter(Boolean).join(' · ')}</em></span></div>)}{!passport.transfers.length && <div className="empty-state">{t('passport.noTransfers')}</div>}</div>}
@@ -321,6 +334,30 @@ const repairTransitions: Record<string, string[]> = {
   ACCEPTED: ['DIAGNOSIS'], DIAGNOSIS: ['WAITING_APPROVAL', 'WAITING_PARTS', 'REPAIRING'],
   WAITING_APPROVAL: ['WAITING_PARTS', 'REPAIRING'], WAITING_PARTS: ['REPAIRING'],
   REPAIRING: ['WAITING_PARTS', 'TESTING'], TESTING: ['REPAIRING', 'COMPLETED'], COMPLETED: [],
+}
+
+const primaryRepairTransition: Record<string, string | undefined> = {
+  ACCEPTED: 'DIAGNOSIS', DIAGNOSIS: 'REPAIRING', WAITING_APPROVAL: 'REPAIRING',
+  WAITING_PARTS: 'REPAIRING', REPAIRING: 'TESTING', TESTING: 'COMPLETED',
+  COMPLETED: undefined,
+}
+
+const repairContinueKeys: Record<string, TranslationKey> = {
+  ACCEPTED: 'repairCase.continueDiagnosis', DIAGNOSIS: 'repairCase.continueRepair',
+  WAITING_APPROVAL: 'repairCase.continueRepair', WAITING_PARTS: 'repairCase.continueRepair',
+  REPAIRING: 'repairCase.continueTesting', TESTING: 'repairCase.finishRepair',
+}
+
+const repairStageOrder = ['ACCEPTED', 'DIAGNOSIS', 'REPAIRING', 'TESTING', 'COMPLETED']
+
+function repairStageState(current: string, stage: string): 'completed' | 'active' | 'unavailable' {
+  if (current === stage) return 'active'
+  const currentIndex = repairStageOrder.indexOf(current)
+  const stageIndex = repairStageOrder.indexOf(stage)
+  if (current === 'WAITING_APPROVAL' || current === 'WAITING_PARTS') {
+    return ['ACCEPTED', 'DIAGNOSIS'].includes(stage) ? 'completed' : 'unavailable'
+  }
+  return currentIndex > stageIndex && stageIndex >= 0 ? 'completed' : 'unavailable'
 }
 
 function RepairCreateModal({ machines, onClose, onSaved }: { machines: Machine[]; onClose: () => void; onSaved: () => void }) {
@@ -352,33 +389,36 @@ function RepairCreateModal({ machines, onClose, onSaved }: { machines: Machine[]
 function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; onClose: () => void; onChanged: () => void }) {
   const { date, t } = useI18n()
   const [repair, setRepair] = useState<RepairCase | null>(null)
-  const [form, setForm] = useState({ diagnosis: '', required_work: '', removed_parts_text: '', work_performed: '', result: '', condition_after: '', test_method: '', test_pressure_bar: '', leaks_detected: '', electrical_test_result: '', functional_test_result: '', test_details: '', test_passed: '' })
+  const [form, setForm] = useState({ reported_problem: '', condition_before: '', diagnosis: '', diagnosis_minutes: '', required_work: '', required_parts_text: '', removed_parts_text: '', work_performed: '', repair_minutes: '', result: '', condition_after: '', test_method: '', test_pressure_bar: '', testing_minutes: '', leaks_detected: '', electrical_test_result: '', functional_test_result: '', test_details: '', test_passed: '' })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [catalog, setCatalog] = useState<CatalogPartEnhanced[]>([])
   const [partDraft, setPartDraft] = useState({ catalog_part_id: '', quantity: 1 })
   const [participantDraft, setParticipantDraft] = useState({ full_name: '', job_title: '', contribution: '' })
+  const [participantBusy, setParticipantBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const load = () => api<RepairCase>(`/repair-cases/${repairId}`).then(async (data) => {
     const partItems = await api<CatalogPartEnhanced[]>(`/catalog/parts?verified_only=true&machine_id=${data.machine_id}`)
     setRepair(data)
     setCatalog(partItems)
-    setForm({ diagnosis: data.diagnosis || '', required_work: data.required_work || '', removed_parts_text: data.removed_parts_text || '', work_performed: data.work_performed || '', result: data.result || '', condition_after: data.condition_after || '', test_method: data.test_method || '', test_pressure_bar: data.test_pressure_bar != null ? String(data.test_pressure_bar) : '', leaks_detected: data.leaks_detected == null ? '' : data.leaks_detected ? 'yes' : 'no', electrical_test_result: data.electrical_test_result || '', functional_test_result: data.functional_test_result || '', test_details: data.test_details || '', test_passed: data.test_passed == null ? '' : data.test_passed ? 'yes' : 'no' })
+    setForm({ reported_problem: data.reported_problem || '', condition_before: data.condition_before || '', diagnosis: data.diagnosis || '', diagnosis_minutes: data.diagnosis_minutes != null ? String(data.diagnosis_minutes) : '', required_work: data.required_work || '', required_parts_text: data.required_parts_text || '', removed_parts_text: data.removed_parts_text || '', work_performed: data.work_performed || '', repair_minutes: data.repair_minutes != null ? String(data.repair_minutes) : '', result: data.result || '', condition_after: data.condition_after || '', test_method: data.test_method || '', test_pressure_bar: data.test_pressure_bar != null ? String(data.test_pressure_bar) : '', testing_minutes: data.testing_minutes != null ? String(data.testing_minutes) : '', leaks_detected: data.leaks_detected == null ? '' : data.leaks_detected ? 'yes' : 'no', electrical_test_result: data.electrical_test_result || '', functional_test_result: data.functional_test_result || '', test_details: data.test_details || '', test_passed: data.test_passed == null ? '' : data.test_passed ? 'yes' : 'no' })
     setError('')
   }).catch((caught) => setError(friendlyError(caught, t('repairCase.loadError'))))
   useEffect(() => { void load() }, [repairId])
-  async function transition(nextStatus: string) {
+  async function save(nextStatus?: string) {
     if (!repair) return
     if (nextStatus === 'COMPLETED' && !window.confirm(t('repairCase.completeConfirm'))) return
     setBusy(true)
-    const payload: Record<string, unknown> = { ...form, test_pressure_bar: form.test_pressure_bar ? Number(form.test_pressure_bar) : null, leaks_detected: form.leaks_detected ? form.leaks_detected === 'yes' : null, test_passed: form.test_passed ? form.test_passed === 'yes' : null, status: nextStatus }
+    setError('')
+    const payload: Record<string, unknown> = { ...form, diagnosis_minutes: form.diagnosis_minutes ? Number(form.diagnosis_minutes) : null, repair_minutes: form.repair_minutes ? Number(form.repair_minutes) : null, testing_minutes: form.testing_minutes ? Number(form.testing_minutes) : null, test_pressure_bar: form.test_pressure_bar ? Number(form.test_pressure_bar) : null, leaks_detected: form.leaks_detected ? form.leaks_detected === 'yes' : null, test_passed: form.test_passed ? form.test_passed === 'yes' : null }
+    if (nextStatus) payload.status = nextStatus
     if (nextStatus === 'DIAGNOSIS') payload.inspection_complete = true
     if (nextStatus === 'TESTING' && repair.cleaning_required) payload.cleaning_complete = true
     try {
       const updated = await api<RepairCase>(`/repair-cases/${repair.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
       if (updated.document_generation_warning) setError(t('repairCase.documentWarning', { message: updated.document_generation_warning.message }))
       await load(); onChanged()
-    } catch (caught) { setError(friendlyError(caught, t('repairCase.transitionError'))) } finally { setBusy(false) }
+    } catch (caught) { setError(friendlyError(caught, nextStatus ? t('repairCase.transitionError') : t('repairCase.saveError'))) } finally { setBusy(false) }
   }
   async function upload(file?: File) {
     if (!file || !repair) return
@@ -403,6 +443,9 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
   async function addParticipant(event: FormEvent) {
     event.preventDefault()
     if (!repair || !participantDraft.full_name.trim()) return
+    if (participantBusy) return
+    setParticipantBusy(true)
+    setError('')
     try {
       await api(`/repair-cases/${repair.id}/participants`, {
         method: 'POST',
@@ -415,6 +458,7 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
       setParticipantDraft({ full_name: '', job_title: '', contribution: '' })
       await load(); onChanged()
     } catch (caught) { setError(friendlyError(caught, t('repairCase.participantError'))) }
+    finally { setParticipantBusy(false) }
   }
   async function removeParticipant(id: number) {
     if (!repair) return
@@ -422,14 +466,40 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
     catch (caught) { setError(friendlyError(caught, t('repairCase.participantError'))) }
   }
   return <Modal title={repair?.repair_reference || t('common.loading')} onClose={onClose} wide>{error && <div className="error">{error}</div>}{!repair ? <div className="loading">{t('common.loading')}</div> : <>
-    <div className="workflow-strip">{['ACCEPTED', 'DIAGNOSIS', 'WAITING_APPROVAL', 'WAITING_PARTS', 'REPAIRING', 'TESTING', 'COMPLETED'].map((status) => <span className={repair.status === status ? 'active' : ''} key={status}>{statusText(t, status, 'repair')}</span>)}</div>
-    <div className="repair-workspace-grid"><section><h4>{repair.machine_name} · №{repair.machine_number}</h4><p><b>{t('repairs.problem')}</b> {repair.reported_problem}</p><p><b>{t('repairCase.conditionBefore')}</b> {repair.condition_before || t('common.noValue')}</p>
-      <div className="form-grid"><label className="wide">{t('repairs.diagnosisField')}<textarea value={form.diagnosis} onChange={(event) => setForm({ ...form, diagnosis: event.target.value })} /></label><label className="wide">{t('repairCase.requiredWork')}<textarea value={form.required_work} onChange={(event) => setForm({ ...form, required_work: event.target.value })} /></label><label className="wide">{t('repairCase.removedParts')}<textarea value={form.removed_parts_text} onChange={(event) => setForm({ ...form, removed_parts_text: event.target.value })} /></label><label className="wide">{t('repairs.workField')}<textarea value={form.work_performed} onChange={(event) => setForm({ ...form, work_performed: event.target.value })} /></label><label>{t('repairCase.testPassed')}<select value={form.test_passed} onChange={(event) => setForm({ ...form, test_passed: event.target.value })}><option value="">{t('common.notSpecified')}</option><option value="no">{t('common.no')}</option><option value="yes">{t('common.yes')}</option></select></label><label>{t('repairCase.testMethod')}<input value={form.test_method} onChange={(event) => setForm({ ...form, test_method: event.target.value })} /></label><label>{t('repairCase.testPressure')}<input type="number" min="0" max="10000" value={form.test_pressure_bar} onChange={(event) => setForm({ ...form, test_pressure_bar: event.target.value })} /></label><label>{t('repairCase.leaksDetected')}<select value={form.leaks_detected} onChange={(event) => setForm({ ...form, leaks_detected: event.target.value })}><option value="">{t('common.notSpecified')}</option><option value="no">{t('common.no')}</option><option value="yes">{t('common.yes')}</option></select></label><label>{t('repairCase.electricalTest')}<input value={form.electrical_test_result} onChange={(event) => setForm({ ...form, electrical_test_result: event.target.value })} /></label><label>{t('repairCase.functionalTest')}<input value={form.functional_test_result} onChange={(event) => setForm({ ...form, functional_test_result: event.target.value })} /></label><label className="wide">{t('repairs.testResult')}<textarea value={form.test_details} onChange={(event) => setForm({ ...form, test_details: event.target.value })} /></label><label className="wide">{t('repairCase.conditionAfter')}<textarea value={form.condition_after} onChange={(event) => setForm({ ...form, condition_after: event.target.value })} /></label><label className="wide">{t('repairCase.result')}<textarea value={form.result} onChange={(event) => setForm({ ...form, result: event.target.value })} /></label></div>
-      <section className="repair-parts"><h4>{t('repairCase.partsUsed')}</h4><div className="request-line-list">{repair.parts_used.map((part) => <div key={part.id}><span><b>{part.part_number || t('common.noValue')}</b><small>{part.description}{part.source ? ` · ${part.source}` : ''}</small></span><em>{part.quantity} {part.unit}</em></div>)}{!repair.parts_used.length && <div className="empty-state">{t('repairCase.noParts')}</div>}</div>{hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <form className="repair-part-form" onSubmit={addPart}><label>{t('repairCase.catalogPart')}<select required value={partDraft.catalog_part_id} onChange={(event) => setPartDraft({ ...partDraft, catalog_part_id: event.target.value })}><option value="">{t('common.notSpecified')}</option>{catalog.map((part) => <option value={part.id} key={part.id}>{part.part_number} · {part.description}</option>)}</select></label><label>{t('common.quantity')}<input required min="0.01" step="0.01" type="number" value={partDraft.quantity} onChange={(event) => setPartDraft({ ...partDraft, quantity: Number(event.target.value) })} /></label><button className="secondary" disabled={!partDraft.catalog_part_id || partDraft.quantity <= 0}><Plus size={15} />{t('repairCase.addPart')}</button></form>}</section>
-      <section className="repair-parts"><h4>{t('repairCase.participants')}</h4><div className="request-line-list">{repair.participants.map((participant) => <div key={participant.id}><span><b>{participant.full_name}</b><small>{[participant.job_title, participant.contribution].filter(Boolean).join(' · ')}</small></span>{hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <button className="link" type="button" onClick={() => void removeParticipant(participant.id)}>{t('common.remove')}</button>}</div>)}{!repair.participants.length && <div className="empty-state">{t('repairCase.noParticipants')}</div>}</div>{hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <form className="repair-part-form repair-participant-form" onSubmit={addParticipant}><label>{t('repairCase.participantName')}<input required value={participantDraft.full_name} onChange={(event) => setParticipantDraft({ ...participantDraft, full_name: event.target.value })} /></label><label>{t('repairCase.participantJobTitle')}<input value={participantDraft.job_title} onChange={(event) => setParticipantDraft({ ...participantDraft, job_title: event.target.value })} /></label><label>{t('repairCase.participantContribution')}<input value={participantDraft.contribution} onChange={(event) => setParticipantDraft({ ...participantDraft, contribution: event.target.value })} /></label><button className="secondary" disabled={!participantDraft.full_name.trim()}><Plus size={15} />{t('repairCase.addParticipant')}</button></form>}</section>
-      {hasPermission('repairs.edit') && <div className="actions workflow-actions">{repairTransitions[repair.status]?.map((next) => <button disabled={busy} className={next === 'COMPLETED' ? 'primary' : 'secondary'} key={next} onClick={() => void transition(next)}>{statusText(t, next, 'repair')}<ChevronRight size={15} /></button>)}</div>}
-    </section><aside><h4>{t('repairCase.timeline')}</h4><div className="timeline compact-timeline">{repair.events.map((event) => <div key={event.id}><i /><span><b>{translatedCode(t, event.event_type, EVENT_KEYS)}</b>{event.description && ['NOTE', 'REPAIR_ACTION', 'DIAGNOSIS', 'TEST', 'PARTS'].includes(event.event_type) && <em>{event.description}</em>}<small>{date(event.created_at)} · {statusText(t, event.status_after || repair.status, 'repair')}</small></span></div>)}</div></aside></div>
-    <div className="toolbar"><div><h4>{t('passport.attachments')}</h4></div>{hasPermission('repairs.edit') && <><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.docx" onChange={(event) => void upload(event.target.files?.[0])} /><button className="secondary" onClick={() => fileRef.current?.click()}><Upload size={16} />{t('passport.addFile')}</button>{repair.status === 'COMPLETED' && <button className="primary" onClick={() => void generate()}><FileText size={16} />{t('repairCase.generateProtocolBg')}</button>}</>}</div><AttachmentList items={repair.attachments} />
+    <div className="workflow-strip" aria-label={t('repairCase.stageProgress')}>{['ACCEPTED', 'DIAGNOSIS', 'WAITING_APPROVAL', 'WAITING_PARTS', 'REPAIRING', 'TESTING', 'COMPLETED'].map((status) => <span aria-current={repair.status === status ? 'step' : undefined} aria-disabled={repair.status !== status} className={`${repair.status === status ? 'active' : ''} ${['WAITING_APPROVAL', 'WAITING_PARTS'].includes(status) ? (repair.status === status ? 'active' : 'optional') : repairStageState(repair.status, status)}`} key={status}>{statusText(t, status, 'repair')}</span>)}</div>
+    <div className="repair-workspace-grid"><section><h4>{repair.machine_name} · №{repair.machine_number}</h4><p className="muted">{t('repairCase.currentStage', { stage: statusText(t, repair.status, 'repair') })}</p>
+      <div className="form-grid repair-form-sections">
+        <h5 className="wide repair-section-title">{t('repairCase.section.basic')}</h5>
+        <label className="wide">{t('repairs.reportedProblem')}<textarea value={form.reported_problem} onChange={(event) => setForm({ ...form, reported_problem: event.target.value })} /></label>
+        <label className="wide">{t('repairCase.conditionBefore')}<textarea value={form.condition_before} onChange={(event) => setForm({ ...form, condition_before: event.target.value })} /></label>
+        <h5 className="wide repair-section-title">{t('repairCase.section.diagnosis')}</h5>
+        <label className="wide">{t('repairs.diagnosisField')}<textarea value={form.diagnosis} onChange={(event) => setForm({ ...form, diagnosis: event.target.value })} /></label>
+        <label>{t('repairCase.diagnosisMinutes')}<input type="number" min="0" max="100000" value={form.diagnosis_minutes} onChange={(event) => setForm({ ...form, diagnosis_minutes: event.target.value })} /></label>
+        <h5 className="wide repair-section-title">{t('repairCase.section.requiredWork')}</h5>
+        <label className="wide">{t('repairCase.requiredWork')}<textarea value={form.required_work} onChange={(event) => setForm({ ...form, required_work: event.target.value })} /></label>
+        <label className="wide">{t('repairCase.requiredParts')}<textarea value={form.required_parts_text} onChange={(event) => setForm({ ...form, required_parts_text: event.target.value })} /></label>
+        <h5 className="wide repair-section-title">{t('repairCase.section.removedParts')}</h5>
+        <label className="wide">{t('repairCase.removedParts')}<textarea value={form.removed_parts_text} onChange={(event) => setForm({ ...form, removed_parts_text: event.target.value })} /></label>
+        <h5 className="wide repair-section-title">{t('repairCase.section.work')}</h5>
+        <label className="wide">{t('repairs.workField')}<textarea value={form.work_performed} onChange={(event) => setForm({ ...form, work_performed: event.target.value })} /></label>
+        <label>{t('repairCase.repairMinutes')}<input type="number" min="0" max="100000" value={form.repair_minutes} onChange={(event) => setForm({ ...form, repair_minutes: event.target.value })} /></label>
+        <h5 className="wide repair-section-title">{t('repairCase.section.tests')}</h5>
+        <label>{t('repairCase.testPassed')}<select value={form.test_passed} onChange={(event) => setForm({ ...form, test_passed: event.target.value })}><option value="">{t('common.notSpecified')}</option><option value="no">{t('common.no')}</option><option value="yes">{t('common.yes')}</option></select></label>
+        <label>{t('repairCase.testMethod')}<input value={form.test_method} onChange={(event) => setForm({ ...form, test_method: event.target.value })} /></label>
+        <label>{t('repairCase.testPressure')}<input type="number" min="0" max="10000" value={form.test_pressure_bar} onChange={(event) => setForm({ ...form, test_pressure_bar: event.target.value })} /></label>
+        <label>{t('repairCase.testingMinutes')}<input type="number" min="0" max="100000" value={form.testing_minutes} onChange={(event) => setForm({ ...form, testing_minutes: event.target.value })} /></label>
+        <label>{t('repairCase.leaksDetected')}<select value={form.leaks_detected} onChange={(event) => setForm({ ...form, leaks_detected: event.target.value })}><option value="">{t('common.notSpecified')}</option><option value="no">{t('common.no')}</option><option value="yes">{t('common.yes')}</option></select></label>
+        <label>{t('repairCase.electricalTest')}<input value={form.electrical_test_result} onChange={(event) => setForm({ ...form, electrical_test_result: event.target.value })} /></label>
+        <label>{t('repairCase.functionalTest')}<input value={form.functional_test_result} onChange={(event) => setForm({ ...form, functional_test_result: event.target.value })} /></label>
+        <label className="wide">{t('repairs.testResult')}<textarea value={form.test_details} onChange={(event) => setForm({ ...form, test_details: event.target.value })} /></label>
+        <label className="wide">{t('repairCase.conditionAfter')}<textarea value={form.condition_after} onChange={(event) => setForm({ ...form, condition_after: event.target.value })} /></label>
+        <label className="wide">{t('repairCase.result')}<textarea value={form.result} onChange={(event) => setForm({ ...form, result: event.target.value })} /></label>
+      </div>
+      <section className="repair-parts"><h4>{t('repairCase.section.parts')}</h4><div className="request-line-list">{repair.parts_used.map((part) => <div key={part.id}><span><b>{part.part_number || t('common.noValue')}</b><small>{part.description}{part.source ? ` · ${part.source}` : ''}</small></span><em>{part.quantity} {part.unit}</em></div>)}{!repair.parts_used.length && <div className="empty-state">{t('repairCase.noParts')}</div>}</div>{hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <form className="repair-part-form" onSubmit={addPart}><label>{t('repairCase.catalogPart')}<select required value={partDraft.catalog_part_id} onChange={(event) => setPartDraft({ ...partDraft, catalog_part_id: event.target.value })}><option value="">{t('common.notSpecified')}</option>{catalog.map((part) => <option value={part.id} key={part.id}>{part.part_number} · {part.description}</option>)}</select></label><label>{t('common.quantity')}<input required min="0.01" step="0.01" type="number" value={partDraft.quantity} onChange={(event) => setPartDraft({ ...partDraft, quantity: Number(event.target.value) })} /></label><button className="secondary" disabled={!partDraft.catalog_part_id || partDraft.quantity <= 0}><Plus size={15} />{t('repairCase.addPart')}</button></form>}</section>
+      <section className="repair-parts"><h4>{t('repairCase.section.participants')}</h4><div className="request-line-list">{repair.participants.map((participant) => <div key={participant.id}><span><b>{participant.full_name}</b><small>{[participant.job_title, participant.contribution].filter(Boolean).join(' · ')}</small></span>{hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <button className="link" type="button" onClick={() => void removeParticipant(participant.id)}>{t('common.remove')}</button>}</div>)}{!repair.participants.length && <div className="empty-state">{t('repairCase.noParticipants')}</div>}</div>{hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <form className="repair-part-form repair-participant-form" onSubmit={addParticipant}><label>{t('repairCase.participantName')}<input required value={participantDraft.full_name} onChange={(event) => setParticipantDraft({ ...participantDraft, full_name: event.target.value })} /></label><label>{t('repairCase.participantJobTitle')}<input value={participantDraft.job_title} onChange={(event) => setParticipantDraft({ ...participantDraft, job_title: event.target.value })} /></label><label>{t('repairCase.participantContribution')}<input value={participantDraft.contribution} onChange={(event) => setParticipantDraft({ ...participantDraft, contribution: event.target.value })} /></label><button className="secondary" disabled={participantBusy || !participantDraft.full_name.trim()}><Plus size={15} />{participantBusy ? t('repairCase.addingParticipant') : t('repairCase.addParticipant')}</button></form>}</section>
+      {hasPermission('repairs.edit') && repair.status !== 'COMPLETED' && <div className="repair-action-footer"><div className="optional-repair-actions">{repairTransitions[repair.status]?.filter((next) => next !== primaryRepairTransition[repair.status]).map((next) => <button disabled={busy} className="secondary compact" key={next} onClick={() => void save(next)}>{statusText(t, next, 'repair')}</button>)}</div><div className="actions"><button disabled={busy} className="secondary" onClick={() => void save()}>{t('common.save')}</button>{primaryRepairTransition[repair.status] && <button disabled={busy} className="primary" onClick={() => void save(primaryRepairTransition[repair.status])}>{t(repairContinueKeys[repair.status])}<ChevronRight size={15} /></button>}</div></div>}
+    </section><aside><h4>{t('repairCase.section.timeline')}</h4><div className="timeline compact-timeline">{repair.events.map((event) => <div key={event.id}><i /><span><b>{translatedEventCode(t, event.event_type)}</b>{event.description && ['NOTE', 'REPAIR_ACTION', 'DIAGNOSIS', 'TEST', 'PARTS', 'PART_ADDED', 'PARTICIPANT_ADDED', 'PARTICIPANT_REMOVED', 'ATTACHMENT_ADDED', 'DOCUMENT_GENERATED'].includes(event.event_type) && <em>{event.description}</em>}<small>{date(event.created_at)} · {statusText(t, event.status_after || repair.status, 'repair')}</small></span></div>)}</div></aside></div>
+    <div className="toolbar"><div><h4>{t('repairCase.section.attachments')}</h4></div>{hasPermission('repairs.edit') && <><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.docx" onChange={(event) => void upload(event.target.files?.[0])} /><button className="secondary" onClick={() => fileRef.current?.click()}><Upload size={16} />{t('passport.addFile')}</button>{repair.status === 'COMPLETED' && <button className="primary" onClick={() => void generate()}><FileText size={16} />{t('repairCase.generateProtocolBg')}</button>}</>}</div><AttachmentList items={repair.attachments} />
     <div className="document-list">{repair.generated_documents.map((document) => <div key={document.id}><span><b>{document.document_number}</b><small>{translatedCode(t, document.document_type, DOCUMENT_KEYS)} · {date(document.created_at)}</small></span><DocumentButtons path={document.download_endpoint} filename={document.filename} format={document.format} /></div>)}</div>
   </>}</Modal>
 }

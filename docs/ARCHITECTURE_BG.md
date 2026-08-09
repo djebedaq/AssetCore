@@ -22,7 +22,11 @@
 
 Партидата е обща проследима референция, но всяка машина има собствено предаване, протокол и състояние. Частичното връщане не затваря останалите записи.
 
-Приемането разрешава активното местоположение `Цех` по име вътре в транзакцията. Избор `REPAIR` създава един `Repair`, свързан чрез `source_return_transfer_id`, `source_return_document_id` и `source_return_batch_id`. Repair completion и генерирането на задължителния вътрешен протокол са една транзакция; неуспешен генератор връща операцията до предишния ремонтен етап и пази машината `REPAIR`.
+Приемането разрешава активното местоположение `Цех` по име вътре в транзакцията. Избор `REPAIR` създава един `Repair`, свързан чрез `source_return_transfer_id`, `source_return_document_id` и `source_return_batch_id`. Stage requirements са централизирани в `workflow.py` и се оценяват server-side след заключване на ремонта. `WAITING_APPROVAL` и `WAITING_PARTS` са optional branches; UI status pills не извършват mutations.
+
+Participant mutation използва нормализиран `identity_key` и уникален `(repair_id, identity_key)` индекс, затова UI double click и конкурентни заявки не могат да създадат два записа. Историческите participant snapshots остават с `NULL` key и не се пренаписват от миграцията.
+
+Repair completion, записът на реалния approver, генерирането на задължителния тричастов вътрешен DOCX/PDF, `Repair.status=COMPLETED`, `Machine.status=READY` и location resolution на активния `Цех` са една транзакция. Неуспешен генератор или persistence конфликт връща операцията до предишния ремонтен етап и пази машината `REPAIR`.
 
 ## Данни и история
 

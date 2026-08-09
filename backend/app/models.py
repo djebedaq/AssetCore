@@ -123,6 +123,7 @@ class FieldType(str, Enum):
 
 class RepairEventType(str, Enum):
     ACCEPTED = "ACCEPTED"
+    RETURN_DIRECTED_TO_REPAIR = "RETURN_DIRECTED_TO_REPAIR"
     INSPECTION = "INSPECTION"
     CLEANING = "CLEANING"
     DIAGNOSIS = "DIAGNOSIS"
@@ -132,6 +133,11 @@ class RepairEventType(str, Enum):
     TEST = "TEST"
     STATUS_CHANGE = "STATUS_CHANGE"
     COMPLETED = "COMPLETED"
+    PARTICIPANT_ADDED = "PARTICIPANT_ADDED"
+    PARTICIPANT_REMOVED = "PARTICIPANT_REMOVED"
+    PART_ADDED = "PART_ADDED"
+    ATTACHMENT_ADDED = "ATTACHMENT_ADDED"
+    DOCUMENT_GENERATED = "DOCUMENT_GENERATED"
     NOTE = "NOTE"
 
 
@@ -314,6 +320,20 @@ class Machine(Base):
 
 class Repair(Base):
     __tablename__ = "repairs"
+    __table_args__ = (
+        CheckConstraint(
+            "diagnosis_minutes IS NULL OR diagnosis_minutes >= 0",
+            name="ck_repairs_diagnosis_minutes_nonnegative",
+        ),
+        CheckConstraint(
+            "repair_minutes IS NULL OR repair_minutes >= 0",
+            name="ck_repairs_repair_minutes_nonnegative",
+        ),
+        CheckConstraint(
+            "testing_minutes IS NULL OR testing_minutes >= 0",
+            name="ck_repairs_testing_minutes_nonnegative",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     machine_id: Mapped[int] = mapped_column(ForeignKey("machines.id"), index=True)
@@ -340,7 +360,11 @@ class Repair(Base):
     reported_by_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     symptoms: Mapped[str | None] = mapped_column(Text, nullable=True)
     required_work: Mapped[str | None] = mapped_column(Text, nullable=True)
+    required_parts_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     removed_parts_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    diagnosis_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    repair_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    testing_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cleaning_required: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
@@ -931,6 +955,14 @@ class RepairEvent(Base):
 
 class RepairParticipant(Base):
     __tablename__ = "repair_participants"
+    __table_args__ = (
+        Index(
+            "uq_repair_participants_identity_key",
+            "repair_id",
+            "identity_key",
+            unique=True,
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     repair_id: Mapped[int] = mapped_column(ForeignKey("repairs.id"), index=True)
@@ -940,6 +972,7 @@ class RepairParticipant(Base):
     full_name_snapshot: Mapped[str] = mapped_column(String(255))
     job_title_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contribution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    identity_key: Mapped[str | None] = mapped_column(String(320), nullable=True)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

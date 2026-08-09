@@ -177,13 +177,19 @@ class RepairCaseCreate(BaseModel):
 
 
 class RepairCaseUpdate(BaseModel):
+    reported_problem: str | None = None
+    condition_before: str | None = None
     diagnosis: str | None = None
     work_performed: str | None = None
     result: str | None = None
     condition_after: str | None = None
     symptoms: str | None = None
     required_work: str | None = None
+    required_parts_text: str | None = None
     removed_parts_text: str | None = None
+    diagnosis_minutes: int | None = Field(default=None, ge=0, le=100000)
+    repair_minutes: int | None = Field(default=None, ge=0, le=100000)
+    testing_minutes: int | None = Field(default=None, ge=0, le=100000)
     status: RepairStatus | None = None
     responsible_user_id: int | None = None
     severity: str | None = Field(default=None, max_length=80)

@@ -159,10 +159,28 @@ def test_return_for_repair_creates_one_traceable_case_and_blocks_reissue(
         ]
         assert repair.source_return_batch_id == returned["batch_id"]
         assert repair.status == "ACCEPTED"
+        repair_id = repair.id
         machine = session.get(Machine, transfer["machine_id"])
         workshop = session.scalar(select(Location).where(Location.name == "Цех"))
         assert machine.status == "REPAIR"
         assert machine.location_id == workshop.id
+
+    first_transition = client.patch(
+        f"/api/repair-cases/{repair_id}",
+        headers=auth_headers,
+        json={
+            "status": "DIAGNOSIS",
+            "reported_problem": "Ремонт след проверено връщане",
+            "condition_before": "Приета за диагностика след връщане",
+            "inspection_complete": True,
+        },
+    )
+    assert first_transition.status_code == 200, first_transition.text
+    assert first_transition.json()["status"] == "DIAGNOSIS"
+    assert any(
+        event["event_type"] == "RETURN_DIRECTED_TO_REPAIR"
+        for event in first_transition.json()["events"]
+    )
 
     availability = client.get(
         "/api/transfers/availability", headers=auth_headers
