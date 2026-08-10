@@ -21,24 +21,8 @@ MACHINE_STATUS_TRANSITIONS: dict[str, set[str]] = {
 
 REPAIR_STATUS_TRANSITIONS: dict[str, set[str]] = {
     RepairStatus.ACCEPTED.value: {RepairStatus.DIAGNOSIS.value},
-    RepairStatus.DIAGNOSIS.value: {
-        RepairStatus.WAITING_APPROVAL.value,
-        RepairStatus.WAITING_PARTS.value,
-        RepairStatus.REPAIRING.value,
-    },
-    RepairStatus.WAITING_APPROVAL.value: {
-        RepairStatus.WAITING_PARTS.value,
-        RepairStatus.REPAIRING.value,
-    },
-    RepairStatus.WAITING_PARTS.value: {RepairStatus.REPAIRING.value},
-    RepairStatus.REPAIRING.value: {
-        RepairStatus.WAITING_PARTS.value,
-        RepairStatus.TESTING.value,
-    },
-    RepairStatus.TESTING.value: {
-        RepairStatus.REPAIRING.value,
-        RepairStatus.COMPLETED.value,
-    },
+    RepairStatus.DIAGNOSIS.value: {RepairStatus.REPAIRING.value},
+    RepairStatus.REPAIRING.value: {RepairStatus.COMPLETED.value},
     RepairStatus.COMPLETED.value: set(),
 }
 
@@ -97,11 +81,7 @@ def ensure_repair_stage_requirements(repair: Repair, new: str) -> None:
             "За преминаване към Диагностика попълнете описанието на проблема "
             "и състоянието при приемане."
         )
-    elif new in {
-        RepairStatus.WAITING_APPROVAL.value,
-        RepairStatus.WAITING_PARTS.value,
-        RepairStatus.REPAIRING.value,
-    }:
+    elif new == RepairStatus.REPAIRING.value:
         if not (repair.diagnosis or "").strip():
             missing.append("diagnosis")
         if not (repair.required_work or "").strip():
@@ -111,30 +91,6 @@ def ensure_repair_stage_requirements(repair: Repair, new: str) -> None:
         message = (
             "За преминаване към ремонт попълнете диагнозата, необходимата работа "
             "и реалното време за диагностика."
-        )
-    elif new == RepairStatus.TESTING.value:
-        if not (repair.work_performed or "").strip():
-            missing.append("work_performed")
-        if not repair.repair_minutes:
-            missing.append("repair_minutes")
-        message = (
-            "За преминаване към Тестване попълнете извършената работа "
-            "и реалното време за ремонт."
-        )
-    elif new == RepairStatus.COMPLETED.value:
-        if repair.test_required and repair.test_passed is not True:
-            missing.append("test_passed")
-        if repair.test_required and not (repair.test_details or "").strip():
-            missing.append("test_details")
-        if not (repair.result or "").strip():
-            missing.append("result")
-        if not (repair.condition_after or "").strip():
-            missing.append("condition_after")
-        if repair.test_required and not repair.testing_minutes:
-            missing.append("testing_minutes")
-        message = (
-            "Ремонтът не може да бъде завършен без успешен резултат от теста, "
-            "крайно състояние, краен резултат и реално време за тестване."
         )
     if missing:
         raise business_conflict(
@@ -150,35 +106,62 @@ def ensure_repair_stage_requirements(repair: Repair, new: str) -> None:
         )
 
 
-def ensure_repair_can_complete(repair: Repair) -> None:
-    missing: list[str] = []
-    if repair.inspection_completed_at is None:
-        missing.append("преглед")
-    if repair.cleaning_required and repair.cleaning_completed_at is None:
-        missing.append("почистване")
-    if repair.test_required and repair.test_passed is not True:
-        missing.append("успешен тест")
-    if not (repair.diagnosis or "").strip():
-        missing.append("диагноза")
-    if not (repair.required_work or "").strip():
-        missing.append("необходима работа")
+def ensure_repair_can_start_finalization(repair: Repair) -> None:
+    missing_fields: list[str] = []
     if not (repair.work_performed or "").strip():
-        missing.append("описание на извършената работа")
-    if not (repair.result or "").strip():
-        missing.append("резултат")
-    if not (repair.condition_after or "").strip():
-        missing.append("състояние след ремонта")
-    if not repair.diagnosis_minutes:
-        missing.append("реално време за диагностика")
+        missing_fields.append("work_performed")
     if not repair.repair_minutes:
-        missing.append("реално време за ремонт")
+        missing_fields.append("repair_minutes")
+    if missing_fields:
+        raise business_conflict(
+            "repair_stage_requirements_missing",
+            "За преминаване към финалната проверка попълнете извършената работа и реалното време за ремонт.",
+            current_status=repair.status,
+            requested_status=RepairStatus.REPAIRING.value,
+            missing_fields=missing_fields,
+        )
+
+
+def ensure_repair_can_complete(repair: Repair) -> None:
+    missing_fields: list[str] = []
+    missing_requirements: list[str] = []
+
+    def require_text(field: str, label: str) -> None:
+        if not (getattr(repair, field) or "").strip():
+            missing_fields.append(field)
+            missing_requirements.append(label)
+
+    require_text("reported_problem", "описание на проблема")
+    require_text("condition_before", "състояние при приемане")
+    require_text("diagnosis", "диагноза")
+    require_text("required_work", "необходима работа")
+    require_text("work_performed", "описание на извършената работа")
+    require_text("result", "краен резултат")
+    require_text("condition_after", "състояние след ремонта")
+    if repair.test_required and repair.test_passed is not True:
+        missing_fields.append("test_passed")
+        missing_requirements.append("успешен тест")
+    if repair.test_required and not (repair.test_method or "").strip():
+        missing_fields.append("test_method")
+        missing_requirements.append("метод на тестване")
+    if repair.test_required and not (repair.test_details or "").strip():
+        missing_fields.append("test_details")
+        missing_requirements.append("описание на теста")
+    if not repair.diagnosis_minutes:
+        missing_fields.append("diagnosis_minutes")
+        missing_requirements.append("реално време за диагностика")
+    if not repair.repair_minutes:
+        missing_fields.append("repair_minutes")
+        missing_requirements.append("реално време за ремонт")
     if repair.test_required and not repair.testing_minutes:
-        missing.append("реално време за тестване")
-    if missing:
+        missing_fields.append("testing_minutes")
+        missing_requirements.append("реално време за тестване")
+    if missing_fields:
         raise business_conflict(
             "repair_completion_requirements_missing",
-            "Ремонтът не може да бъде завършен преди всички задължителни стъпки.",
-            missing_requirements=missing,
+            "Ремонтът не може да бъде завършен преди да са попълнени и проверени всички задължителни данни.",
+            missing_fields=missing_fields,
+            missing_requirements=missing_requirements,
         )
 
 

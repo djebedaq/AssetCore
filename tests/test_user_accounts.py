@@ -569,10 +569,10 @@ def test_mechanic_operational_workflows_and_director_request_approval(
             "diagnosis_minutes": 20,
         },
         {"status": "REPAIRING", "work_performed": "test-only mechanic work", "repair_minutes": 35},
-        {"status": "TESTING"},
         {
             "status": "COMPLETED",
             "test_passed": True,
+            "test_method": "test-only mechanic functional test",
             "test_details": "test-only successful mechanic test",
             "testing_minutes": 10,
             "condition_after": "test-only final condition",

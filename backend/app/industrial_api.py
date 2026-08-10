@@ -117,6 +117,7 @@ from .workflow import (
     business_conflict,
     ensure_machine_transition,
     ensure_repair_can_complete,
+    ensure_repair_can_start_finalization,
     ensure_repair_stage_requirements,
     ensure_repair_transition,
 )
@@ -281,6 +282,7 @@ def _repair_participant_dict(item: RepairParticipant) -> dict:
         "full_name": item.full_name_snapshot,
         "job_title": item.job_title_snapshot,
         "contribution": item.contribution,
+        "minutes_worked": item.minutes_worked,
         "created_by_id": item.created_by_id,
         "created_at": item.created_at,
     }
@@ -310,6 +312,7 @@ def _repair_dict(repair: Repair) -> dict:
         "required_work": repair.required_work,
         "required_parts_text": repair.required_parts_text,
         "removed_parts_text": repair.removed_parts_text,
+        "diagnostic_cleaning": repair.diagnostic_cleaning,
         "diagnosis_minutes": repair.diagnosis_minutes,
         "repair_minutes": repair.repair_minutes,
         "testing_minutes": repair.testing_minutes,
@@ -320,6 +323,9 @@ def _repair_dict(repair: Repair) -> dict:
                 repair.repair_minutes,
                 repair.testing_minutes,
             )
+        ),
+        "participant_total_minutes": sum(
+            item.minutes_worked or 0 for item in repair.participants
         ),
         "cleaning_required": repair.cleaning_required,
         "cleaning_completed_at": repair.cleaning_completed_at,
@@ -1452,10 +1458,7 @@ def create_repair_case(
 
 _REPAIR_TRANSITION_EVENTS = {
     RepairStatus.DIAGNOSIS.value: RepairEventType.DIAGNOSIS.value,
-    RepairStatus.WAITING_APPROVAL.value: RepairEventType.APPROVAL.value,
-    RepairStatus.WAITING_PARTS.value: RepairEventType.PARTS.value,
     RepairStatus.REPAIRING.value: RepairEventType.REPAIR_ACTION.value,
-    RepairStatus.TESTING.value: RepairEventType.TEST.value,
     RepairStatus.COMPLETED.value: RepairEventType.COMPLETED.value,
 }
 
@@ -1565,7 +1568,7 @@ def update_repair_case(
     if previous_status == RepairStatus.COMPLETED.value:
         changed_fields = payload.model_dump(
             exclude_unset=True,
-            exclude={"status", "inspection_complete", "cleaning_complete"},
+            exclude={"status", "advance_to_final", "inspection_complete", "cleaning_complete"},
         )
         requested_status = payload.status.value if payload.status is not None else None
         if changed_fields or (requested_status not in {None, RepairStatus.COMPLETED.value}):
@@ -1574,7 +1577,10 @@ def update_repair_case(
                 "Приключеният ремонт е заключен. Използвайте корекция на протокола.",
             )
         return _repair_dict(repair)
-    data = payload.model_dump(exclude_unset=True, exclude={"status", "inspection_complete", "cleaning_complete"})
+    data = payload.model_dump(
+        exclude_unset=True,
+        exclude={"status", "advance_to_final", "inspection_complete", "cleaning_complete"},
+    )
     for key, value in data.items():
         setattr(repair, key, value)
     if payload.inspection_complete and repair.inspection_completed_at is None:
@@ -1587,17 +1593,35 @@ def update_repair_case(
         transition_event_type, previous_location_id = _apply_repair_transition(
             db, repair, payload.status.value, user
         )
+    if payload.advance_to_final:
+        if repair.status != RepairStatus.REPAIRING.value:
+            raise business_conflict(
+                "repair_finalization_stage_unavailable",
+                "Финалната проверка може да бъде отворена само след етап „В ремонт“.",
+                current_status=repair.status,
+            )
+        ensure_repair_can_start_finalization(repair)
+        transition_event_type = RepairEventType.REPAIR_ACTION.value
     event = RepairEvent(
         repair_id=repair.id,
         event_type=transition_event_type or RepairEventType.NOTE.value,
         status_before=previous_status,
         status_after=repair.status,
         description=(
-            "Променен етап на ремонта"
+            "Отворена е финалната проверка на ремонта"
+            if payload.advance_to_final
+            else "Променен етап на ремонта"
             if transition_event_type
             else "Записана ремонтна карта"
         ),
-        structured_data={key: value for key, value in payload.model_dump(mode="json", exclude_unset=True).items() if key not in {"test_details", "diagnosis", "work_performed", "result", "condition_after"}},
+        structured_data={
+            **{
+                key: value
+                for key, value in payload.model_dump(mode="json", exclude_unset=True).items()
+                if key not in {"test_details", "diagnosis", "work_performed", "result", "condition_after", "advance_to_final"}
+            },
+            **({"wizard_stage": "COMPLETION"} if payload.advance_to_final else {}),
+        },
         user_id=user.id,
     )
     db.add(event)
@@ -1743,6 +1767,7 @@ def add_repair_participant(
         full_name_snapshot=full_name,
         job_title_snapshot=job_title,
         contribution=payload.contribution,
+        minutes_worked=payload.minutes_worked,
         identity_key=identity_key,
         created_by_id=user.id,
     )
@@ -1766,6 +1791,7 @@ def add_repair_participant(
                 "participant_id": participant.id,
                 "job_title": job_title,
                 "contribution": payload.contribution,
+                "minutes_worked": payload.minutes_worked,
             },
             user_id=user.id,
         )
@@ -1773,7 +1799,12 @@ def add_repair_participant(
     add_audit_log(
         db, user, "repair_participant", participant.id,
         "Добавен участник във вътрешен ремонт",
-        {"repair_id": repair.id, "repair_reference": repair.repair_reference, "full_name": full_name},
+        {
+            "repair_id": repair.id,
+            "repair_reference": repair.repair_reference,
+            "full_name": full_name,
+            "minutes_worked": payload.minutes_worked,
+        },
         repair.repair_reference,
     )
     _commit(db)
@@ -1838,6 +1869,17 @@ def add_repair_part(
             raise business_conflict(
                 "unverified_catalog_part",
                 "Непотвърдена каталожна част не може да бъде отчетена като използвана.",
+                part_number=catalog_part.part_number,
+            )
+        compatible_numbers = {
+            str(value) for value in (catalog_part.compatible_machine_numbers or [])
+        }
+        if str(repair.machine.inventory_number) not in compatible_numbers:
+            raise business_conflict(
+                "catalog_part_not_compatible_with_machine",
+                "Избраната каталожна част не е потвърдена като съвместима с машината от ремонта.",
+                machine_number=repair.machine.inventory_number,
+                catalog_part_id=catalog_part.id,
                 part_number=catalog_part.part_number,
             )
         values.update(

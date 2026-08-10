@@ -187,9 +187,11 @@ class RepairCaseUpdate(BaseModel):
     required_work: str | None = None
     required_parts_text: str | None = None
     removed_parts_text: str | None = None
+    diagnostic_cleaning: str | None = None
     diagnosis_minutes: int | None = Field(default=None, ge=0, le=100000)
     repair_minutes: int | None = Field(default=None, ge=0, le=100000)
     testing_minutes: int | None = Field(default=None, ge=0, le=100000)
+    advance_to_final: bool = False
     status: RepairStatus | None = None
     responsible_user_id: int | None = None
     severity: str | None = Field(default=None, max_length=80)
@@ -225,6 +227,7 @@ class RepairParticipantCreate(BaseModel):
     full_name: str | None = Field(default=None, min_length=3, max_length=255)
     job_title: str | None = Field(default=None, max_length=255)
     contribution: str | None = Field(default=None, max_length=1000)
+    minutes_worked: int = Field(ge=1, le=100000)
 
     @field_validator("full_name", "job_title", "contribution")
     @classmethod
@@ -294,6 +297,7 @@ class RepairCaseOut(BaseModel):
     severity: str | None = None
     condition_before: str | None = None
     condition_after: str | None = None
+    diagnostic_cleaning: str | None = None
     cleaning_required: bool
     cleaning_completed_at: datetime | None = None
     inspection_completed_at: datetime | None = None

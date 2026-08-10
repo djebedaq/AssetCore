@@ -274,6 +274,15 @@ class RepairUpdate(BaseModel):
     diagnosis_minutes: int | None = Field(default=None, ge=0, le=100000)
     repair_minutes: int | None = Field(default=None, ge=0, le=100000)
     testing_minutes: int | None = Field(default=None, ge=0, le=100000)
+    condition_before: str | None = None
+    condition_after: str | None = None
+    required_work: str | None = None
+    required_parts_text: str | None = None
+    removed_parts_text: str | None = None
+    diagnostic_cleaning: str | None = None
+    test_passed: bool | None = None
+    test_method: str | None = None
+    test_details: str | None = None
     status: RepairStatus | None = None
     close: bool = False
 

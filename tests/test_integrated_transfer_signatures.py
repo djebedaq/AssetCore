@@ -212,10 +212,10 @@ def test_completed_repair_creates_locked_internal_protocol_and_correction_versio
     for payload in (
         {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Тестова диагностика", "required_work": "Тестова необходима работа", "diagnosis_minutes": 20},
         {"status": "REPAIRING", "work_performed": "Тестово извършена работа", "repair_minutes": 35},
-        {"status": "TESTING"},
         {
             "status": "COMPLETED",
             "test_passed": True,
+            "test_method": "Тестова функционална проверка",
             "test_details": "Тестът е успешен",
             "testing_minutes": 10,
             "condition_after": "Тестово крайно състояние",

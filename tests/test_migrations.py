@@ -109,14 +109,15 @@ def test_legacy_sqlite_database_upgrades_without_changing_inventory(tmp_path: Pa
     }.issubset({column["name"] for column in inspector.get_columns("repairs")})
     assert {
         "required_parts_text",
+        "diagnostic_cleaning",
         "diagnosis_minutes",
         "repair_minutes",
         "testing_minutes",
     }.issubset({column["name"] for column in inspector.get_columns("repairs")})
-    assert "identity_key" in {
+    assert {"identity_key", "minutes_worked"}.issubset({
         column["name"]
         for column in inspector.get_columns("repair_participants")
-    }
+    })
     assert "uq_repair_participants_identity_key" in {
         item["name"] for item in inspector.get_indexes("repair_participants")
     }
@@ -288,3 +289,78 @@ def test_repair_duration_constraints_and_participant_identity_compile_for_postgr
     assert "ck_repairs_testing_minutes_nonnegative" in repair_ddl
     assert "CREATE UNIQUE INDEX" in participant_index_ddl
     assert "repair_id, identity_key" in participant_index_ddl
+    participant_ddl = str(
+        CreateTable(RepairParticipant.__table__).compile(
+            dialect=postgresql.dialect()
+        )
+    )
+    assert "ck_repair_participants_minutes_positive" in participant_ddl
+
+
+def test_repair_wizard_migration_normalizes_all_legacy_active_paths_without_data_loss(
+    tmp_path: Path,
+):
+    database_path = tmp_path / "repair-legacy-paths.db"
+    config = Config(str(Path(__file__).resolve().parents[1] / "backend" / "alembic.ini"))
+    previous_url = settings.database_url
+    settings.database_url = f"sqlite:///{database_path.as_posix()}"
+    try:
+        command.upgrade(config, "20260809_0017")
+        connection = sqlite3.connect(database_path)
+        connection.executemany(
+            """
+            INSERT INTO repairs (
+              id, machine_id, reported_problem, diagnosis, work_performed,
+              test_details, repair_minutes, cleaning_required, test_required,
+              status, opened_at
+            ) VALUES (?, 1, ?, ?, ?, ?, ?, 0, 1, ?, CURRENT_TIMESTAMP)
+            """,
+            [
+                (1, "approval", "diagnosis approval", None, None, None, "WAITING_APPROVAL"),
+                (2, "parts diagnosis", "diagnosis parts", None, None, None, "WAITING_PARTS"),
+                (3, "parts repair", "diagnosis repair", "preserved work", None, 45, "WAITING_PARTS"),
+                (4, "testing", "diagnosis testing", "preserved testing work", "preserved test", 60, "TESTING"),
+                (5, "completed", "completed diagnosis", "completed work", "completed test", 30, "COMPLETED"),
+            ],
+        )
+        connection.execute(
+            """
+            INSERT INTO repair_participants (
+              id, repair_id, full_name_snapshot, contribution, identity_key,
+              created_by_id, created_at
+            ) VALUES (1, 4, 'Legacy participant', 'preserved contribution',
+              'name:legacy participant', 1, CURRENT_TIMESTAMP)
+            """
+        )
+        connection.commit()
+        connection.close()
+
+        command.upgrade(config, "head")
+    finally:
+        settings.database_url = previous_url
+
+    connection = sqlite3.connect(database_path)
+    rows = connection.execute(
+        "SELECT status, diagnosis, work_performed, test_details, repair_minutes "
+        "FROM repairs ORDER BY id"
+    ).fetchall()
+    participant = connection.execute(
+        "SELECT full_name_snapshot, contribution, minutes_worked "
+        "FROM repair_participants WHERE id = 1"
+    ).fetchone()
+    connection.close()
+    assert [row[0] for row in rows] == [
+        "DIAGNOSIS",
+        "DIAGNOSIS",
+        "REPAIRING",
+        "REPAIRING",
+        "COMPLETED",
+    ]
+    assert rows[2][2:] == ("preserved work", None, 45)
+    assert rows[3][1:] == (
+        "diagnosis testing",
+        "preserved testing work",
+        "preserved test",
+        60,
+    )
+    assert participant == ("Legacy participant", "preserved contribution", None)
