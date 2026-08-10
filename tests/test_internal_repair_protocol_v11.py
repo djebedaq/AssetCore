@@ -17,8 +17,8 @@ def _advance_to_completed(client, headers, repair_id: int):
     payloads = [
         {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Диагностика на помпа", "required_work": "Подмяна на уплътнения", "diagnosis_minutes": 30},
         {"status": "REPAIRING", "work_performed": "Подменени уплътнения и извършено сглобяване", "repair_minutes": 75, "result": "Машината е възстановена"},
-        {"status": "TESTING", "test_passed": True, "test_method": "Функционален тест", "test_details": "Тестът е успешен", "functional_test_result": "Работи нормално", "condition_after": "Добро"},
-        {"status": "COMPLETED", "test_passed": True, "testing_minutes": 20, "work_performed": "Подменени уплътнения и извършено сглобяване", "result": "Машината е възстановена", "test_details": "Тестът е успешен", "condition_after": "Добро"},
+        {"test_passed": True, "test_method": "Функционален тест", "test_details": "Тестът е успешен", "functional_test_result": "Работи нормално", "condition_after": "Добро", "testing_minutes": 20},
+        {"status": "COMPLETED", "test_passed": True, "test_method": "Функционален тест", "testing_minutes": 20, "work_performed": "Подменени уплътнения и извършено сглобяване", "result": "Машината е възстановена", "test_details": "Тестът е успешен", "condition_after": "Добро"},
     ]
     response = None
     for payload in payloads:
@@ -36,7 +36,7 @@ def test_internal_repair_protocol_is_bg_contains_participants_and_is_idempotent(
     repair_id = created.json()["id"]
     participant = client.post(
         f"/api/repair-cases/{repair_id}/participants", headers=auth_headers,
-        json={"full_name": "Иван Петров Иванов", "job_title": "Механик", "contribution": "Съдействие при сглобяването"},
+        json={"full_name": "Иван Петров Иванов", "job_title": "Механик", "contribution": "Съдействие при сглобяването", "minutes_worked": 55},
     )
     assert participant.status_code == 201, participant.text
 
@@ -82,7 +82,7 @@ def test_missing_bg_template_rolls_back_completed_repair(client, auth_headers, m
     for payload in [
         {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Клапанът е блокирал", "required_work": "Подмяна на клапана", "diagnosis_minutes": 20},
         {"status": "REPAIRING", "work_performed": "Клапанът е сменен", "repair_minutes": 45, "result": "Ремонтът е извършен"},
-        {"status": "TESTING", "test_passed": True, "test_details": "Успешен тест"},
+        {"test_passed": True, "test_method": "Функционален тест", "test_details": "Успешен тест", "testing_minutes": 15, "condition_after": "Изправна"},
     ]:
         response = client.patch(f"/api/repair-cases/{repair_id}", headers=auth_headers, json=payload)
         assert response.status_code == 200, response.text
@@ -94,14 +94,14 @@ def test_missing_bg_template_rolls_back_completed_repair(client, auth_headers, m
         db.commit()
     completed = client.patch(
         f"/api/repair-cases/{repair_id}", headers=auth_headers,
-        json={"status": "COMPLETED", "test_passed": True, "testing_minutes": 15, "work_performed": "Клапанът е сменен", "result": "Ремонтът е извършен", "condition_after": "Изправна", "test_details": "Успешен тест"},
+        json={"status": "COMPLETED", "test_passed": True, "test_method": "Функционален тест", "testing_minutes": 15, "work_performed": "Клапанът е сменен", "result": "Ремонтът е извършен", "condition_after": "Изправна", "test_details": "Успешен тест"},
     )
     assert completed.status_code == 409, completed.text
     body = completed.json()
     assert body["detail"]["code"] == "repair_protocol_template_unavailable"
     with session_factory() as db:
         repair = db.get(Repair, repair_id)
-        assert repair.status == "TESTING"
+        assert repair.status == "REPAIRING"
         assert repair.machine.status == "REPAIR"
         assert not list(db.scalars(select(GeneratedDocument).where(GeneratedDocument.repair_id == repair_id)))
 
@@ -119,7 +119,7 @@ def test_compatibility_repair_close_generates_required_protocol_atomically(
     for payload in [
         {"status": "DIAGNOSIS", "inspection_complete": True, "diagnosis": "Извършена диагностика", "required_work": "Извършване на ремонтна операция", "diagnosis_minutes": 25},
         {"status": "REPAIRING", "work_performed": "Извършена ремонтна операция", "repair_minutes": 50, "result": "Възстановена работа"},
-        {"status": "TESTING", "test_passed": True, "testing_minutes": 15, "test_details": "Успешен функционален тест", "condition_after": "Изправна"},
+        {"test_passed": True, "test_method": "Функционален тест", "testing_minutes": 15, "test_details": "Успешен функционален тест", "condition_after": "Изправна"},
     ]:
         response = client.patch(
             f"/api/repair-cases/{repair_id}", headers=auth_headers, json=payload
@@ -146,7 +146,7 @@ def test_compatibility_repair_close_generates_required_protocol_atomically(
 def test_repair_participant_cannot_change_after_completion(client, auth_headers, machine_ids):
     created = client.post("/api/repair-cases", headers=auth_headers, json={"machine_id": machine_ids["7"], "reported_problem": "Тест", "condition_before": "Приета за диагностика"})
     repair_id = created.json()["id"]
-    added = client.post(f"/api/repair-cases/{repair_id}/participants", headers=auth_headers, json={"full_name": "Петър Иванов Петров"})
+    added = client.post(f"/api/repair-cases/{repair_id}/participants", headers=auth_headers, json={"full_name": "Петър Иванов Петров", "minutes_worked": 20})
     assert added.status_code == 201
     _advance_to_completed(client, auth_headers, repair_id)
     blocked = client.delete(f"/api/repair-cases/{repair_id}/participants/{added.json()['id']}", headers=auth_headers)
@@ -161,4 +161,4 @@ def test_repair_frontend_contract_is_internal_and_bulgarian():
     assert "repairCase.generateProtocolBg" in source
     assert "repairCase.section.participants" in source
     assert "Нов вътрешен ремонт" in translations
-    assert "Регистрация → Преглед" in translations
+    assert "Приета → Диагностика → В ремонт → Завършена" in translations

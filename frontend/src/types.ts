@@ -223,7 +223,8 @@ export type RepairPartUsed = {
 
 export type RepairParticipant = {
   id: number; repair_id: number; user_id?: number | null; full_name: string;
-  job_title?: string | null; contribution?: string | null; created_by_id: number; created_at: string
+  job_title?: string | null; contribution?: string | null; minutes_worked?: number | null;
+  created_by_id: number; created_at: string
 }
 
 export type RepairCase = {
@@ -232,7 +233,9 @@ export type RepairCase = {
   status: string; repair_type?: string | null; severity?: string | null; condition_before?: string | null;
   condition_after?: string | null; reported_by_name?: string | null; symptoms?: string | null;
   required_work?: string | null; required_parts_text?: string | null; removed_parts_text?: string | null;
+  diagnostic_cleaning?: string | null;
   diagnosis_minutes?: number | null; repair_minutes?: number | null; testing_minutes?: number | null; total_work_minutes: number;
+  participant_total_minutes: number;
   cleaning_required: boolean; cleaning_completed_at?: string | null;
   inspection_completed_at?: string | null; test_required: boolean; test_passed?: boolean | null;
   test_details?: string | null; test_method?: string | null; test_pressure_bar?: number | null; leaks_detected?: boolean | null;

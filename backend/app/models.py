@@ -362,6 +362,7 @@ class Repair(Base):
     required_work: Mapped[str | None] = mapped_column(Text, nullable=True)
     required_parts_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     removed_parts_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    diagnostic_cleaning: Mapped[str | None] = mapped_column(Text, nullable=True)
     diagnosis_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     repair_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     testing_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -956,6 +957,10 @@ class RepairEvent(Base):
 class RepairParticipant(Base):
     __tablename__ = "repair_participants"
     __table_args__ = (
+        CheckConstraint(
+            "minutes_worked IS NULL OR minutes_worked > 0",
+            name="ck_repair_participants_minutes_positive",
+        ),
         Index(
             "uq_repair_participants_identity_key",
             "repair_id",
@@ -972,6 +977,7 @@ class RepairParticipant(Base):
     full_name_snapshot: Mapped[str] = mapped_column(String(255))
     job_title_snapshot: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contribution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    minutes_worked: Mapped[int | None] = mapped_column(Integer, nullable=True)
     identity_key: Mapped[str | None] = mapped_column(String(320), nullable=True)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

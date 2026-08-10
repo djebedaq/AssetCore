@@ -258,16 +258,33 @@ backdoor. Всички успешни и отхвърлени опити се о
 
 ## Ремонтни преходи и completion gate
 
-Допустимата последователност е `ACCEPTED → DIAGNOSIS → WAITING_APPROVAL / WAITING_PARTS / REPAIRING → TESTING → COMPLETED`. `WAITING_APPROVAL` и `WAITING_PARTS` са optional branches. `PATCH` записва подадените полета и по желание `status`; важните изисквания се оценяват в същата транзакция след row lock на PostgreSQL.
+Допустимата активна последователност е точно `ACCEPTED → DIAGNOSIS → REPAIRING → COMPLETED`. `WAITING_APPROVAL`, `WAITING_PARTS` и `TESTING` не се приемат като нови активни преходи; пазят се само за историческа съвместимост. `PATCH` записва само подадените полета и по желание `status`; важните изисквания се оценяват в същата транзакция след row lock на PostgreSQL. `advance_to_final=true` отваря финалната визуална стъпка след проверка на ремонтната работа, без да сменя DB статуса от `REPAIRING`.
 
 - към `DIAGNOSIS`: `reported_problem` и `condition_before`;
-- към `WAITING_*`/`REPAIRING`: `diagnosis`, `required_work`, `diagnosis_minutes`;
-- към `TESTING`: `work_performed`, `repair_minutes` и завършено изискано почистване;
-- към `COMPLETED`: успешен задължителен тест, `test_details`, `result`, `condition_after`, `testing_minutes` и всички completion gates.
+- към `REPAIRING`: `diagnosis`, `required_work`, `diagnosis_minutes`;
+- към финалната стъпка с `advance_to_final=true`: `work_performed` и `repair_minutes`;
+- към `COMPLETED`: `reported_problem`, `condition_before`, `diagnosis`, `required_work`, `work_performed`, реалните продължителности, успешен изискан тест, `test_method`, `test_details`, `result` и `condition_after`.
 
 Невалиден преход или липсваща стъпка връща HTTP 409 с `detail.code=repair_stage_requirements_missing` или конкретен completion code и човешки `detail.message` на български. Отказът не оставя променени полета, статус или документ. Успешният `COMPLETED` записва DOCX/PDF, approver, repair/machine events, `machine.status=READY` и активното местоположение `Цех` в една транзакция.
 
-`POST /participants` приема `user_id` или `full_name`, `job_title` и `contribution`. Нормализираният identity key е уникален в рамките на ремонта; повторение и едновременен double submit връщат HTTP 409 с `repair_participant_already_exists`. `POST /parts` разрешава verified catalog reference и пази каталожния номер, количество, мярка и provenance snapshot. След `COMPLETED` participant/part/attachment mutations са заключени.
+`POST /participants` приема `user_id` или `full_name`, optional `job_title`/`contribution` и задължително положително `minutes_worked`. Нормализираният identity key е уникален в рамките на ремонта; повторение и едновременен double submit връщат HTTP 409 с `repair_participant_already_exists`. Отговорът на картата съдържа `participant_total_minutes`, отделно от `total_work_minutes`. `POST /parts` разрешава само verified catalog reference, съвместима с машината на ремонта, и пази каталожния номер, количество, мярка и provenance snapshot. След `COMPLETED` participant/part/attachment mutations са заключени.
+
+Примерни stage payload-и:
+
+```json
+{"reported_problem":"...","condition_before":"...","status":"DIAGNOSIS"}
+{"removed_parts_text":"...","diagnostic_cleaning":"...","diagnosis":"...","required_work":"...","required_parts_text":"...","diagnosis_minutes":45,"status":"REPAIRING"}
+{"work_performed":"...","repair_minutes":90,"advance_to_final":true}
+{"test_passed":true,"test_method":"...","test_details":"...","testing_minutes":20,"condition_after":"...","result":"...","status":"COMPLETED"}
+```
+
+Пример за допълнителен участник:
+
+```json
+{"full_name":"...","job_title":"...","contribution":"...","minutes_worked":75}
+```
+
+Многоточието означава реална операторска стойност; примерите не са seed или производствени бизнес записи.
 
 ## Файлове и версии
 

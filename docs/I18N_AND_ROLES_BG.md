@@ -8,7 +8,7 @@
 
 ## Технически статуси
 
-Машинният workflow използва `READY`, `ISSUED`, `IN_USE`, `RETURNED`, `INSPECTION`, `CLEANING`, `REPAIR`, `WAITING_APPROVAL`, `WAITING_PARTS` и `TESTING`. Партидите използват `ACTIVE`, `PARTIALLY_RETURNED` и `RETURNED`. Ремонтите и заявките за части имат отделни enum домейни. UI показва превод; API интеграциите записват кода.
+Оперативният машинен workflow използва `READY`, `ISSUED` и `REPAIR`. Активният ремонтен workflow използва `ACCEPTED`, `DIAGNOSIS`, `REPAIRING` и `COMPLETED`; `WAITING_APPROVAL`, `WAITING_PARTS` и `TESTING` остават преводими само за история/legacy snapshots. Партидите използват `ACTIVE`, `PARTIALLY_RETURNED` и `RETURNED`. Ремонтите и заявките за части имат отделни enum домейни. UI показва превод; API интеграциите записват кода.
 
 ## Окончателни роли
 

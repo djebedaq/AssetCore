@@ -38,7 +38,7 @@ import {
 import { statusText, useI18n, type TranslationKey } from './i18n'
 import { SUPPORTED_LOCALES, type Locale } from './locale'
 import { hasPermission, storedUser } from './permissions'
-import type { AssetCategory, Department, EmergencyAccessStatus, Location, Machine, PartRequest, PermissionCode, Repair, UserSession } from './types'
+import type { AssetCategory, Department, EmergencyAccessStatus, Location, Machine, PartRequest, PermissionCode, UserSession } from './types'
 import UserAdministration from './UserAdministration'
 import GovernancePanel from './GovernancePanel'
 import OfficialDocuments from './OfficialDocuments'
@@ -125,15 +125,6 @@ const MACHINE_STATUS_CODES = [
   'READY',
   'ISSUED',
   'REPAIR',
-]
-
-const REPAIR_STATUS_CODES = [
-  'ACCEPTED',
-  'DIAGNOSIS',
-  'WAITING_APPROVAL',
-  'WAITING_PARTS',
-  'REPAIRING',
-  'TESTING',
 ]
 
 const PART_STATUS_CODES = [
@@ -649,132 +640,7 @@ function MachineModal({ machine, locations, departments, categories, onClose, on
 }
 
 export function Repairs() {
-  const { date, t } = useI18n()
-  const [items, setItems] = useState<Repair[]>([])
-  const [machines, setMachines] = useState<Machine[]>([])
-  const [show, setShow] = useState(false)
-  const [closing, setClosing] = useState<Repair | null>(null)
-  const [error, setError] = useState(false)
-
-  const load = () => Promise.all([api<Repair[]>('/repairs'), api<Machine[]>('/machines')])
-    .then(([repairs, machineItems]) => {
-      setItems(repairs)
-      setMachines(machineItems)
-      setError(false)
-    })
-    .catch(() => setError(true))
-
-  useEffect(() => { void load() }, [])
-
-  return (
-    <>
-      <div className="toolbar">
-        <div><h3>{t('repairs.title')}</h3><p className="muted">{t('repairs.subtitle')}</p></div>
-        {hasPermission('repairs.create') && <button className="primary" onClick={() => setShow(true)}><Plus size={18} />{t('repairs.new')}</button>}
-      </div>
-      {error && <div className="error" role="alert">{t('errors.generic')}</div>}
-      <div className="cards-list">
-        {items.map((repair) => (
-          <div className="repair-card" key={repair.id}>
-            <div>
-              <span className="badge">{statusText(t, repair.status, 'repair')}</span>
-              <h3>{repair.machine.name}</h3>
-              <p><b>{t('repairs.problem')}</b> {repair.reported_problem}</p>
-              {repair.diagnosis && <p><b>{t('repairs.diagnosis')}</b> {repair.diagnosis}</p>}
-              {repair.work_performed && <p><b>{t('repairs.workPerformed')}</b> {repair.work_performed}</p>}
-            </div>
-            <div className="repair-side">
-              <small>{date(repair.opened_at)}</small>
-              {!repair.closed_at && hasPermission('repairs.edit') && (
-                <button onClick={() => setClosing(repair)}>{t('repairs.finishAfterTest')}</button>
-              )}
-            </div>
-          </div>
-        ))}
-        {!items.length && <div className="empty-state">{t('repairs.empty')}</div>}
-      </div>
-      {show && <RepairModal machines={machines} onClose={() => setShow(false)} onSaved={() => { setShow(false); void load() }} />}
-      {closing && <RepairCloseModal repair={closing} onClose={() => setClosing(null)} onSaved={() => { setClosing(null); void load() }} />}
-    </>
-  )
-}
-
-function RepairModal({ machines, onClose, onSaved }: { machines: Machine[]; onClose: () => void; onSaved: () => void }) {
-  const { t } = useI18n()
-  const [form, setForm] = useState({
-    machine_id: machines[0]?.id,
-    reported_problem: '',
-    diagnosis: '',
-    work_performed: '',
-    status: 'ACCEPTED',
-  })
-  const [error, setError] = useState('')
-
-  async function save(event: FormEvent) {
-    event.preventDefault()
-    setError('')
-    try {
-      await api('/repairs', { method: 'POST', body: JSON.stringify(form) })
-      onSaved()
-    } catch {
-      setError(t('repairs.saveError'))
-    }
-  }
-
-  return (
-    <div className="modal-bg">
-      <div className="modal" role="dialog" aria-modal="true" aria-label={t('repairs.acceptTitle')}>
-        <div className="modal-head"><h3>{t('repairs.acceptTitle')}</h3><button onClick={onClose} aria-label={t('common.close')}><X /></button></div>
-        <form onSubmit={save} className="form-grid">
-          <label>{t('repairs.machine')}<select value={form.machine_id} onChange={(event) => setForm({ ...form, machine_id: Number(event.target.value) })}>{machines.map((machine) => <option value={machine.id} key={machine.id}>{machine.name}</option>)}</select></label>
-          <label>{t('common.status')}<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{REPAIR_STATUS_CODES.map((status) => <option value={status} key={status}>{statusText(t, status, 'repair')}</option>)}</select></label>
-          <label className="wide">{t('repairs.reportedProblem')}<textarea required value={form.reported_problem} onChange={(event) => setForm({ ...form, reported_problem: event.target.value })} /></label>
-          <label className="wide">{t('repairs.diagnosisField')}<textarea value={form.diagnosis} onChange={(event) => setForm({ ...form, diagnosis: event.target.value })} /></label>
-          <label className="wide">{t('repairs.workField')}<textarea value={form.work_performed} onChange={(event) => setForm({ ...form, work_performed: event.target.value })} /></label>
-          {error && <div className="error wide" role="alert">{error}</div>}
-          <div className="actions wide"><button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary">{t('common.save')}</button></div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-function RepairCloseModal({ repair, onClose, onSaved }: { repair: Repair; onClose: () => void; onSaved: () => void }) {
-  const { t } = useI18n()
-  const [result, setResult] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  async function close(event: FormEvent) {
-    event.preventDefault()
-    setBusy(true)
-    setError('')
-    try {
-      await api(`/repairs/${repair.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ close: true, status: 'TESTING', result }),
-      })
-      onSaved()
-    } catch {
-      setError(t('repairs.closeError'))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="modal-bg">
-      <div className="modal" role="dialog" aria-modal="true" aria-label={t('repairs.closeTitle')}>
-        <div className="modal-head"><h3>{t('repairs.closeTitle')}</h3><button onClick={onClose} aria-label={t('common.close')}><X /></button></div>
-        <form onSubmit={close} className="form-grid">
-          <p className="confirmation-warning wide">{t('repairs.closeWarning')}</p>
-          <label className="wide">{t('repairs.testResult')}<textarea required value={result} onChange={(event) => setResult(event.target.value)} /></label>
-          {error && <div className="error wide" role="alert">{error}</div>}
-          <div className="actions wide"><button type="button" className="secondary" onClick={onClose} disabled={busy}>{t('common.cancel')}</button><button className="primary" disabled={busy || !result.trim()}>{t('repairs.closeConfirm')}</button></div>
-        </form>
-      </div>
-    </div>
-  )
+  return <IndustrialRepairs />
 }
 
 export function Parts() {

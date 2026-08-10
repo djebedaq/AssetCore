@@ -686,14 +686,14 @@ def update_repair(
             db, repair, data.status.value, user
         )
     if data.close:
-        if repair.status != RepairStatus.TESTING.value:
+        if repair.status != RepairStatus.REPAIRING.value:
             raise HTTPException(
                 409,
                 detail={
-                    "code": "repair_testing_required",
+                    "code": "repair_final_stage_required",
                     "message": (
-                        "Ремонтът може да бъде приключен само от етап „Тестване“. "
-                        "Използвайте ремонтната карта за запис на прегледа и теста."
+                        "Ремонтът може да бъде приключен само от етап „В ремонт“ "
+                        "след попълване на финалната стъпка в ремонтната карта."
                     ),
                 },
             )

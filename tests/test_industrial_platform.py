@@ -327,13 +327,6 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
         },
     )
     assert repairing.status_code == 200, repairing.text
-    testing = client.patch(
-        f"/api/repair-cases/{repair_id}",
-        headers=auth_headers,
-        json={"status": "TESTING"},
-    )
-    assert testing.status_code == 200, testing.text
-
     failed_completion = client.patch(
         f"/api/repair-cases/{repair_id}",
         headers=auth_headers,
@@ -351,6 +344,7 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
         json={
             "status": "COMPLETED",
             "test_passed": True,
+            "test_method": "test-only functional method",
             "test_details": "test-only successful test",
             "testing_minutes": 15,
             "condition_after": "test-only condition after",

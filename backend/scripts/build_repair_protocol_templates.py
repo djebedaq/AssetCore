@@ -1,4 +1,4 @@
-"""Build the v5 repair package without modifying approved transfer templates.
+"""Build the v6 repair package without modifying approved transfer templates.
 
 The first body table is retained from each published transfer_issue v3 source,
 including its image relationships and formatting. Only the body below that
@@ -23,8 +23,10 @@ LABELS = {
         "completed_title": "ПРОТОКОЛ ЗА ИЗВЪРШЕН РЕМОНТ",
         "number": "Протокол №", "date": "Дата", "equipment": "Оборудване",
         "ownership": "Собственост", "condition": "Състояние при приемане",
+        "problem": "Описание на проблема",
         "required_repair": "Описание на необходимия ремонт",
         "disassembly": "А) Демонтаж и подготовка",
+        "cleaning": "Почистване при диагностиката",
         "findings": "Б) Констатирано след разглобяване, почистване и дефектация",
         "needed_parts": "В) Нужни части за ремонт",
         "diagnosis_time": "Реално време за демонтаж, почистване, диагностика и дефектация",
@@ -38,6 +40,7 @@ LABELS = {
         "hours": "Описание на реално отработеното време",
         "start": "Начало на ремонта", "end": "Край на ремонта",
         "total": "Общо реално време", "tests": "Тестове и резултат",
+        "participant_total": "Общо време на участниците",
         "final_condition": "Състояние след ремонта", "final_result": "Краен резултат",
         "attachments": "Приложения към ремонтната карта",
         "performed": "Извършили ремонта", "approved": "Приел ремонта",
@@ -49,8 +52,10 @@ LABELS = {
         "completed_title": "COMPLETED REPAIR PROTOCOL",
         "number": "Protocol No.", "date": "Date", "equipment": "Equipment",
         "ownership": "Ownership", "condition": "Condition on acceptance",
+        "problem": "Reported problem",
         "required_repair": "Required repair",
         "disassembly": "A) Disassembly and preparation",
+        "cleaning": "Cleaning during diagnosis",
         "findings": "B) Findings after disassembly, cleaning and inspection",
         "needed_parts": "C) Parts required for repair",
         "diagnosis_time": "Actual disassembly, cleaning, diagnosis and inspection time",
@@ -60,6 +65,7 @@ LABELS = {
         "testing_time": "Actual testing time", "parts": "Spare parts used",
         "removed": "Removed parts", "hours": "Actual labour time",
         "start": "Repair start", "end": "Repair end", "total": "Total actual time",
+        "participant_total": "Total participant labour time",
         "tests": "Tests and result", "final_condition": "Condition after repair",
         "final_result": "Final result", "attachments": "Repair case attachments",
         "performed": "Repair performed by", "approved": "Repair accepted by",
@@ -71,8 +77,10 @@ LABELS = {
         "completed_title": "ПРОТОКОЛ ВЫПОЛНЕННОГО РЕМОНТА",
         "number": "Протокол №", "date": "Дата", "equipment": "Оборудование",
         "ownership": "Собственность", "condition": "Состояние при приеме",
+        "problem": "Описание проблемы",
         "required_repair": "Необходимый ремонт",
         "disassembly": "А) Демонтаж и подготовка",
+        "cleaning": "Очистка при диагностике",
         "findings": "Б) Результаты разборки, очистки и дефектации",
         "needed_parts": "В) Необходимые запасные части",
         "diagnosis_time": "Фактическое время демонтажа, очистки, диагностики и дефектации",
@@ -82,6 +90,7 @@ LABELS = {
         "testing_time": "Фактическое время испытаний", "parts": "Использованные запасные части",
         "removed": "Демонтированные части", "hours": "Фактическое рабочее время",
         "start": "Начало ремонта", "end": "Окончание ремонта", "total": "Общее фактическое время",
+        "participant_total": "Общее время участников",
         "tests": "Испытания и результат", "final_condition": "Состояние после ремонта",
         "final_result": "Итоговый результат", "attachments": "Приложения к ремонту",
         "performed": "Ремонт выполнили", "approved": "Ремонт принял",
@@ -182,9 +191,11 @@ def build(language: str) -> Document:
         (t["equipment"], "{{MACHINE_NAME}} · №{{MACHINE_NUMBER}} · {{BRAND}} {{MODEL}} · S/N {{SERIAL_NUMBER}}"),
         (t["ownership"], "{{OWNERSHIP}}"),
     ])
+    _section(document, t["problem"], "{{REPORTED_PROBLEM}}")
     _section(document, t["condition"], "{{CONDITION_BEFORE}}")
     _section(document, t["required_repair"], "{{REQUIRED_WORK}}")
     _section(document, t["disassembly"], "{{REMOVED_PARTS}}")
+    _section(document, t["cleaning"], "{{DIAGNOSTIC_CLEANING}}")
     _section(document, t["findings"], "{{DIAGNOSIS}}")
     _section(document, t["needed_parts"], "{{REQUIRED_PARTS}}")
     _grid(document, [(t["diagnosis_time"], "{{DIAGNOSIS_DURATION}}")])
@@ -213,6 +224,7 @@ def build(language: str) -> Document:
     _grid(document, [
         (t["start"], "{{REPAIR_START}}"), (t["end"], "{{REPAIR_END}}"),
         (t["total"], "{{TOTAL_WORK_DURATION}}"),
+        (t["participant_total"], "{{PARTICIPANT_TOTAL_DURATION}}"),
     ])
     _section(document, t["tests"], "{{TEST_RESULT}}", 4)
     _section(document, t["final_condition"], "{{CONDITION_AFTER}}")
@@ -231,7 +243,7 @@ def build(language: str) -> Document:
 
 def main() -> None:
     for language in LABELS:
-        output = TEMPLATES / f"repair_protocol-{language}-v5.docx"
+        output = TEMPLATES / f"repair_protocol-{language}-v6.docx"
         build(language).save(output)
 
 

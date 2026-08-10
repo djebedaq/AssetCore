@@ -45,6 +45,7 @@ from app.models import (  # noqa: E402
     Repair,
     RepairEvent,
     RepairEventType,
+    RepairParticipant,
     RepairStatus,
     TransferBatch,
     TransferBatchStatus,
@@ -205,12 +206,16 @@ def generate(output: Path) -> dict:
             required_work="QA тестова необходима работа",
             required_parts_text="QA тестова бележка за нужни части",
             removed_parts_text="QA тестов демонтаж и подготовка",
+            diagnostic_cleaning="QA тестово почистване при диагностиката",
             work_performed="QA тестово описание на извършена работа",
             result="QA тестов резултат",
             condition_before="QA тестово състояние преди ремонта",
             condition_after="QA тестово състояние след ремонта",
             inspection_completed_at=now,
             test_passed=True,
+            test_method="QA функционален тест под налягане",
+            test_pressure_bar=500,
+            leaks_detected=False,
             test_details="QA тестът е отчетен като успешен само в изолираната проверка",
             diagnosis_minutes=30,
             repair_minutes=75,
@@ -226,10 +231,21 @@ def generate(output: Path) -> dict:
         db.add(repair)
         db.flush()
         db.add(
+            RepairParticipant(
+                repair_id=repair.id,
+                full_name_snapshot="QA участник без производствен запис",
+                job_title_snapshot="QA роля",
+                contribution="Визуална проверка на participant реда",
+                minutes_worked=55,
+                identity_key="qa-only-participant",
+                created_by_id=user.id,
+            )
+        )
+        db.add(
             RepairEvent(
                 repair_id=repair.id,
                 event_type=RepairEventType.TEST.value,
-                status_before=RepairStatus.TESTING.value,
+                status_before=RepairStatus.REPAIRING.value,
                 status_after=RepairStatus.COMPLETED.value,
                 description="QA тестово хронологично събитие",
                 user_id=user.id,
