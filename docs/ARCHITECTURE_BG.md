@@ -8,13 +8,16 @@
 - `backend/app/industrial_schemas.py` е договорът за паспорти, configurable categories, ремонти, каталог, библиотека, шаблони и administration.
 - `backend/app/industrial_api.py` съдържа универсалните индустриални API модули и provenance/approval границите.
 - `backend/app/workflow.py` централизира позволените машинни и ремонтни преходи и completion gates.
+- `backend/app/repairs/service.py` прилага ремонтните преходи и задължителното document persistence без commit; API маршрутът остава собственик на транзакцията.
 - `backend/app/transfer_service.py` е транзакционният домейн за издаване, връщане, партиди и документи.
 - `backend/app/document_generation.py` генерира индивидуалните DOCX/PDF snapshots и безопасни имена.
+- `backend/app/application_errors.py` дефинира общия безопасен production error договор, diagnostic ID и структуриран log context.
 - `backend/app/localization.py` локализира backend съобщения и статусни етикети без промяна на съхранените стойности.
 - `backend/alembic` е единственият поддържан път за промяна на схемата.
 - `frontend/src/api.ts` е удостовереният API клиент и изпраща `Accept-Language`.
 - `frontend/src/i18n.tsx` съдържа централния BG/EN/RU речник, форматиране и status mapping.
-- `frontend/src/App.tsx`, `BulkTransfers.tsx` и `IndustrialPlatform.tsx` реализират responsive PWA екраните, глобалното търсене и цифровия паспорт.
+- `frontend/src/App.tsx`, `BulkTransfers.tsx` и `IndustrialPlatform.tsx` реализират responsive PWA екраните, глобалното търсене, каталога и цифровия паспорт; `industrialUi.tsx` съдържа повторно използваните modal/document/attachment presentation действия.
+- `frontend/src/features/repairs/IndustrialRepairs.tsx` е самостоятелният repair screen, `repairApi.ts` е типизираната му API граница, а `workflow.ts` пази stage/form/payload договора без React state.
 
 ## Домейн и транзакции
 
@@ -27,6 +30,24 @@
 Participant mutation използва нормализиран `identity_key` и уникален `(repair_id, identity_key)` индекс, затова UI double click и конкурентни заявки не могат да създадат два записа. Новите редове изискват положително `minutes_worked`; историческите participant snapshots могат да останат с `NULL` key/време и не се пренаписват от миграцията.
 
 Repair completion, записът на реалния approver, генерирането на задължителния тричастов вътрешен DOCX/PDF, `Repair.status=COMPLETED`, `Machine.status=READY` и location resolution на активния `Цех` са една транзакция. Неуспешен генератор или persistence конфликт връща операцията до предишния ремонтен етап и пази машината `REPAIR`.
+
+`main.py` и `industrial_api.py` са route owners: проверяват permission/request договора, извикват публичния repair service и commit-ват само след успешно записани документи, events и audit. `apply_repair_transition()` и document generator-ът никога не commit-ват. Името `generate_completion_documents_or_rollback()` прави изричен факта, че document failure връща цялата текуща owner транзакция. Така legacy и текущият маршрут използват една и съща бизнес логика.
+
+Document слоят получава canonical SQLAlchemy snapshot и връща `GeneratedDocument` записи/bytes/hash metadata. Той не решава permission, machine status или repair transition. Signature подготовката и финализацията остават в `transfer_signing.py` и `signature_rendering.py`; `transfer_service.py` управлява транзакционното им включване, без промяна на manifest, reuse protection или PostgreSQL locking.
+
+## Грешки и structured logging
+
+Очакваните validation/business откази пазят текущите HTTP 409/422 кодове и конкретни български съобщения. Неочаквана критична workflow грешка се преобразува до безопасен договор с `code`, `message`, `operation`, `stage` и `diagnostic_id`. Server log-ът съдържа traceback и само изрично подаден контекст като `machine_id`, `repair_id`, `transfer_id`, `batch_id`, `document_id` и `user_id`. Пароли, token-и, signature bytes, encryption keys и request bodies не се подават като context.
+
+### Как се диагностицира production bug
+
+1. Копирайте `diagnostic_id` от UI/API отговора; не копирайте credentials или подписи.
+2. Намерете същия ID в Render/server logs и проверете `operation` и `stage`.
+3. Използвайте само записаните entity ID стойности, за да намерите свързаните machine/repair/transfer/batch/document и audit записи.
+4. Възпроизведете проблема върху изолирана SQLite или PostgreSQL test база със същия API договор, без production snapshot промени.
+5. Добавете regression тест, който доказва както отказа, така и пълния rollback.
+6. Приложете минималната корекция и изпълнете domain тестовете, пълния pytest, frontend QA и PostgreSQL smoke.
+7. Съпоставете diagnostic ID със commit/PR и запазете audit/document history непроменени.
 
 ## Данни и история
 

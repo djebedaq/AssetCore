@@ -109,17 +109,17 @@ from .permissions import (
     is_observer,
     require_permission,
 )
+from .repairs import (
+    apply_repair_transition,
+    generate_completion_documents_or_rollback,
+)
 from .settings import settings
 from .template_engine import validate_template
 from .workflow import (
-    REPAIR_TO_MACHINE_STATUS,
     add_machine_event,
     business_conflict,
     ensure_machine_transition,
-    ensure_repair_can_complete,
     ensure_repair_can_start_finalization,
-    ensure_repair_stage_requirements,
-    ensure_repair_transition,
 )
 
 router = APIRouter(prefix="/api", tags=["industrial-platform"])
@@ -1456,103 +1456,6 @@ def create_repair_case(
     return _repair_dict(_load_repair(db, repair.id))
 
 
-_REPAIR_TRANSITION_EVENTS = {
-    RepairStatus.DIAGNOSIS.value: RepairEventType.DIAGNOSIS.value,
-    RepairStatus.REPAIRING.value: RepairEventType.REPAIR_ACTION.value,
-    RepairStatus.COMPLETED.value: RepairEventType.COMPLETED.value,
-}
-
-
-def _active_workshop(db: Session) -> Location:
-    statement = select(Location).where(
-        Location.name == "Цех",
-        Location.is_active.is_(True),
-    )
-    if db.bind is not None and db.bind.dialect.name == "postgresql":
-        statement = statement.with_for_update()
-    workshop = db.scalar(statement)
-    if workshop is None:
-        raise business_conflict(
-            "active_workshop_location_missing",
-            "Ремонтът не може да бъде завършен, защото няма активно местоположение „Цех“.",
-        )
-    return workshop
-
-
-def _apply_repair_transition(
-    db: Session,
-    repair: Repair,
-    next_status: str,
-    user: User,
-) -> tuple[str, int | None]:
-    ensure_repair_transition(repair.status, next_status)
-    ensure_repair_stage_requirements(repair, next_status)
-    previous_location_id = repair.machine.location_id
-    if next_status == RepairStatus.COMPLETED.value:
-        ensure_repair_can_complete(repair)
-        workshop = _active_workshop(db)
-        now = utcnow()
-        repair.closed_at = now
-        repair.approved_by_id = user.id
-        repair.approved_by = user
-        repair.approved_at = now
-        repair.machine.location_id = workshop.id
-    if next_status == RepairStatus.REPAIRING.value and repair.started_at is None:
-        repair.started_at = utcnow()
-    repair.status = next_status
-    machine_status = REPAIR_TO_MACHINE_STATUS[next_status]
-    try:
-        ensure_machine_transition(repair.machine.status, machine_status)
-    except HTTPException as exc:
-        repair_controlled = set(REPAIR_TO_MACHINE_STATUS.values())
-        if (
-            repair.machine.status not in repair_controlled
-            or machine_status not in repair_controlled
-        ):
-            raise exc
-    repair.machine.status = machine_status
-    return _REPAIR_TRANSITION_EVENTS[next_status], previous_location_id
-
-
-def _generate_completion_documents(
-    db: Session,
-    repair: Repair,
-    user: User,
-) -> list[GeneratedDocument]:
-    db.flush()
-    db.expire(repair, ["events", "parts_used", "participants", "attachments"])
-    try:
-        documents = make_repair_documents(db, repair, user.id, "bg")
-        db.add_all(documents)
-        db.flush()
-        return documents
-    except ConfirmedTemplateUnavailableError as exc:
-        db.rollback()
-        raise business_conflict(
-            "repair_protocol_template_unavailable",
-            exc.message,
-            document_type=exc.document_type,
-            language="bg",
-        ) from exc
-    except TemplateValidationError as exc:
-        db.rollback()
-        raise business_conflict(
-            "repair_protocol_generation_failed",
-            "Ремонтът не е приключен, защото задължителният протокол не може да бъде генериран.",
-            document_type="REPAIR_PROTOCOL",
-            language="bg",
-        ) from exc
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(
-            500,
-            detail={
-                "code": "repair_protocol_generation_failed",
-                "message": "Ремонтът не е приключен поради грешка при генериране на задължителния протокол.",
-            },
-        ) from exc
-
-
 @router.patch("/repair-cases/{repair_id}")
 def update_repair_case(
     repair_id: int,
@@ -1590,7 +1493,7 @@ def update_repair_case(
     transition_event_type: str | None = None
     previous_location_id = repair.machine.location_id
     if payload.status is not None and payload.status.value != repair.status:
-        transition_event_type, previous_location_id = _apply_repair_transition(
+        transition_event_type, previous_location_id = apply_repair_transition(
             db, repair, payload.status.value, user
         )
     if payload.advance_to_final:
@@ -1627,7 +1530,9 @@ def update_repair_case(
     db.add(event)
     generated_on_completion: list[GeneratedDocument] = []
     if transition_event_type == RepairEventType.COMPLETED.value:
-        generated_on_completion = _generate_completion_documents(db, repair, user)
+        generated_on_completion = generate_completion_documents_or_rollback(
+            db, repair, user
+        )
         db.add(
             RepairEvent(
                 repair_id=repair.id,
@@ -1682,7 +1587,7 @@ def add_repair_event(
     previous_location_id = repair.machine.location_id
     generated_on_completion: list[GeneratedDocument] = []
     if payload.next_status is not None and payload.next_status.value != repair.status:
-        _, previous_location_id = _apply_repair_transition(
+        _, previous_location_id = apply_repair_transition(
             db, repair, payload.next_status.value, user
         )
     event = RepairEvent(
@@ -1697,7 +1602,9 @@ def add_repair_event(
     db.add(event)
     db.flush()
     if payload.next_status == RepairStatus.COMPLETED:
-        generated_on_completion = _generate_completion_documents(db, repair, user)
+        generated_on_completion = generate_completion_documents_or_rollback(
+            db, repair, user
+        )
         db.add(
             RepairEvent(
                 repair_id=repair.id,

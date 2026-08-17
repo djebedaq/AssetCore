@@ -422,13 +422,28 @@ def test_document_generation_failure_rolls_back_entire_issue(
     response = issue(
         client, auth_headers, issue_payload(machine_ids["4"], machine_ids["5"])
     )
-    assert response.status_code == 500
+    assert response.status_code == 500, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "bulk_issue_internal_error"
+    assert detail["operation"] == "bulk_issue"
+    assert detail["stage"] == "generate_issue_documents:machine_5"
+    assert detail["diagnostic_id"].startswith("ISSERR-")
+    assert detail["diagnostic_id"] in detail["message"]
     with session_factory() as session:
         assert session.scalar(select(func.count(TransferProtocol.id))) == 0
         assert session.scalar(select(func.count(TransferBatch.id))) == 0
         assert session.scalar(select(func.count(ProtocolDocument.id))) == 0
         assert session.get(Machine, machine_ids["4"]).status == "READY"
         assert session.get(Machine, machine_ids["5"]).status == "READY"
+        audit = session.scalar(
+            select(AuditLog)
+            .where(AuditLog.action == "Неуспешно групово издаване")
+            .order_by(AuditLog.id.desc())
+        )
+        assert audit is not None
+        audit_details = json.loads(audit.details or "{}")
+        assert audit_details["диагностика"]["diagnostic_id"] == detail["diagnostic_id"]
+        assert audit_details["диагностика"]["stage"] == detail["stage"]
 
 
 def test_sqlite_partial_unique_index_is_present(session_factory):

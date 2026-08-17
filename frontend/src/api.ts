@@ -9,6 +9,9 @@ function apiUrl(path: string): string {
 export type StructuredApiError = {
   code?: string
   message?: string
+  operation?: string
+  stage?: string
+  diagnostic_id?: string
   conflicts?: Array<Record<string, unknown>>
   [key: string]: unknown
 }

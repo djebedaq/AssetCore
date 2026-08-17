@@ -4,7 +4,6 @@ import hashlib
 import json
 import logging
 from contextlib import nullcontext
-from dataclasses import dataclass
 from threading import RLock
 from typing import Any
 from uuid import uuid4
@@ -13,6 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from .application_errors import ApplicationError, unexpected_workflow_error
 from .audit import add_audit_log
 from .document_generation import (
     DOCX_MEDIA_TYPE,
@@ -68,15 +68,8 @@ def _sqlite_guard(db: Session):
     return nullcontext()
 
 
-@dataclass
-class TransferServiceError(Exception):
-    status_code: int
-    code: str
-    message: str
-    data: dict[str, Any]
-
-    def as_detail(self) -> dict[str, Any]:
-        return {"code": self.code, "message": self.message, **self.data}
+class TransferServiceError(ApplicationError):
+    """Backward-compatible transfer error using the shared application contract."""
 
 
 def _for_update(db: Session, statement):
@@ -207,7 +200,7 @@ def _return_stage_label(stage: str) -> str:
         label += f" за машина №{suffix.removeprefix('machine_')}"
     return label
 
-def _record_rejection(
+def _add_rejection_audit(
     db: Session,
     user: User,
     action: str,
@@ -232,7 +225,6 @@ def _record_rejection(
         action,
         details,
     )
-    db.commit()
 
 
 def _active_transfers_for_machines(
@@ -447,6 +439,10 @@ def _bulk_issue_impl(
 ) -> dict[str, Any]:
     machine_ids = list(data.machine_ids)
     language = user.preferred_language
+    stage = "validate_issue_request"
+    batch_id: int | None = None
+    current_machine_id: int | None = None
+    current_transfer_id: int | None = None
     try:
         if data.recipient is None:
             raise TransferServiceError(
@@ -455,13 +451,17 @@ def _bulk_issue_impl(
                 translate("issue.recipient_identity_required", language),
                 {},
             )
+        stage = "load_issue_machines"
         machines, active = _load_issue_machines(db, machine_ids, language)
+        stage = "load_open_repairs"
         open_repairs = _open_repairs_for_machines(db, machine_ids, lock=True)
+        stage = "validate_issue_location"
         _validate_location_ids(
             db,
             {data.location_id} if data.location_id is not None else set(),
             language,
         )
+        stage = "validate_issue_conflicts"
         conflicts = _issue_conflicts(machines, active, open_repairs, language)
         if conflicts:
             raise TransferServiceError(
@@ -482,9 +482,11 @@ def _bulk_issue_impl(
             )
             if value
         )
+        stage = "create_issue_recipient_identity"
         external_signer = create_external_party(
             db, recipient, user, "ACCEPTANCE"
         )
+        stage = "create_issue_batch"
         batch = TransferBatch(
             batch_reference=f"TEMP-{uuid4().hex}",
             status=TransferBatchStatus.ACTIVE.value,
@@ -494,6 +496,7 @@ def _bulk_issue_impl(
         )
         db.add(batch)
         db.flush()
+        batch_id = batch.id
         batch.batch_reference = f"HPWJ-B-{now:%Y%m%d}-{batch.id:06d}"
 
         machine_by_id = {machine.id: machine for machine in machines}
@@ -502,6 +505,8 @@ def _bulk_issue_impl(
         signing_by_transfer: dict[int, dict[str, Any]] = {}
         for machine_id in machine_ids:
             machine = machine_by_id[machine_id]
+            current_machine_id = machine.id
+            stage = f"create_issue_transfer:machine_{machine.inventory_number}"
             previous_status = machine.status
             previous_location_id = machine.location_id
             transfer = TransferProtocol(
@@ -534,8 +539,10 @@ def _bulk_issue_impl(
             )
             db.add(transfer)
             db.flush()
+            current_transfer_id = transfer.id
             transfer.protocol_number = f"HPWJ-{now:%Y%m%d}-{transfer.id:06d}"
             transfer.machine = machine
+            stage = f"generate_issue_documents:machine_{machine.inventory_number}"
             documents = make_protocol_documents(
                 db, transfer, batch, user.id, "bg"
             )
@@ -598,6 +605,7 @@ def _bulk_issue_impl(
                 batch.batch_reference,
             )
 
+        stage = "prepare_issue_batch_signing"
         batch_signing_document, batch_signing_tasks = prepare_issue_batch_signing(
             db,
             batch=batch,
@@ -612,6 +620,7 @@ def _bulk_issue_impl(
         if transfers:
             signing_by_transfer[transfers[0].id]["signing_tasks"] = batch_signing_tasks
 
+        stage = "record_issue_batch_audit"
         add_audit_log(
             db,
             user,
@@ -632,6 +641,7 @@ def _bulk_issue_impl(
             },
             batch.batch_reference,
         )
+        stage = "commit_issue_transaction"
         db.commit()
         loaded = db.scalar(
             select(TransferBatch)
@@ -649,7 +659,7 @@ def _bulk_issue_impl(
         )
     except TransferServiceError as exc:
         db.rollback()
-        _record_rejection(
+        _add_rejection_audit(
             db,
             user,
             "Отказано групово издаване",
@@ -657,16 +667,18 @@ def _bulk_issue_impl(
             exc.message,
             exc.data.get("conflicts"),
         )
+        db.commit()
         raise
     except ConfirmedTemplateUnavailableError as exc:
         db.rollback()
-        _record_rejection(
+        _add_rejection_audit(
             db,
             user,
             "Отказано групово издаване",
             machine_ids,
             exc.message,
         )
+        db.commit()
         raise TransferServiceError(
             409,
             "document_template_unavailable",
@@ -679,13 +691,14 @@ def _bulk_issue_impl(
         ) from exc
     except TemplateValidationError as exc:
         db.rollback()
-        _record_rejection(
+        _add_rejection_audit(
             db,
             user,
             "Отказано групово издаване",
             machine_ids,
             str(exc),
         )
+        db.commit()
         raise TransferServiceError(
             409,
             "document_generation_validation_failed",
@@ -693,13 +706,14 @@ def _bulk_issue_impl(
         ) from exc
     except TransferSigningConfigurationError as exc:
         db.rollback()
-        _record_rejection(
+        _add_rejection_audit(
             db,
             user,
             "Отказано групово издаване",
             machine_ids,
             str(exc),
         )
+        db.commit()
         raise TransferServiceError(
             409,
             "signature_configuration_invalid",
@@ -729,7 +743,7 @@ def _bulk_issue_impl(
             if conflicts
             else translate("issue.concurrent", language)
         )
-        _record_rejection(
+        _add_rejection_audit(
             db,
             user,
             "Отказано групово издаване",
@@ -737,25 +751,58 @@ def _bulk_issue_impl(
             message,
             conflicts,
         )
+        db.commit()
         raise TransferServiceError(
             409,
             "concurrent_issue_conflict",
             message,
             {"conflicts": conflicts},
         ) from exc
-    except Exception:
+    except Exception as exc:
+        application_error = unexpected_workflow_error(
+            logger,
+            exc,
+            code="bulk_issue_internal_error",
+            message="Издаването не можа да бъде завършено поради вътрешна грешка.",
+            operation="bulk_issue",
+            stage=stage,
+            diagnostic_prefix="ISSERR",
+            context={
+                "batch_id": batch_id,
+                "machine_id": current_machine_id,
+                "transfer_id": current_transfer_id,
+                "user_id": user.id,
+            },
+        )
         db.rollback()
         try:
-            _record_rejection(
+            _add_rejection_audit(
                 db,
                 user,
                 "Неуспешно групово издаване",
                 machine_ids,
-                "Операцията е върната изцяло поради вътрешна грешка.",
+                application_error.message,
+                diagnostics={
+                    "diagnostic_id": application_error.diagnostic_id,
+                    "operation": application_error.operation,
+                    "stage": application_error.stage,
+                },
             )
+            db.commit()
         except Exception:
+            logger.exception(
+                "AssetCore failed to persist bulk issue diagnostic diagnostic_id=%s",
+                application_error.diagnostic_id,
+            )
             db.rollback()
-        raise
+        raise TransferServiceError(
+            status_code=application_error.status_code,
+            code=application_error.code,
+            message=application_error.message,
+            operation=application_error.operation,
+            stage=application_error.stage,
+            diagnostic_id=application_error.diagnostic_id,
+        ) from exc
 
 
 def bulk_issue(
@@ -2081,7 +2128,7 @@ def _bulk_return_impl(
         }
     except TransferServiceError as exc:
         db.rollback()
-        _record_rejection(
+        _add_rejection_audit(
             db,
             user,
             "Отказано групово връщане",
@@ -2089,16 +2136,18 @@ def _bulk_return_impl(
             exc.message,
             exc.data.get("conflicts"),
         )
+        db.commit()
         raise
     except ConfirmedTemplateUnavailableError as exc:
         db.rollback()
-        _record_rejection(
+        _add_rejection_audit(
             db,
             user,
             "Отказано групово връщане",
             machine_ids,
             exc.message,
         )
+        db.commit()
         raise TransferServiceError(
             409,
             "document_template_unavailable",
@@ -2111,13 +2160,14 @@ def _bulk_return_impl(
         ) from exc
     except TemplateValidationError as exc:
         db.rollback()
-        _record_rejection(
+        _add_rejection_audit(
             db,
             user,
             "Отказано групово връщане",
             machine_ids,
             str(exc),
         )
+        db.commit()
         raise TransferServiceError(
             409,
             "document_generation_validation_failed",
@@ -2125,13 +2175,14 @@ def _bulk_return_impl(
         ) from exc
     except TransferSigningConfigurationError as exc:
         db.rollback()
-        _record_rejection(
+        _add_rejection_audit(
             db,
             user,
             "Отказано групово връщане",
             machine_ids,
             str(exc),
         )
+        db.commit()
         raise TransferServiceError(
             409,
             "signature_configuration_invalid",
@@ -2164,7 +2215,7 @@ def _bulk_return_impl(
             "transfer_ids": transfer_ids,
         }
         try:
-            _record_rejection(
+            _add_rejection_audit(
                 db,
                 user,
                 "Неуспешно групово връщане",
@@ -2172,6 +2223,7 @@ def _bulk_return_impl(
                 safe_message,
                 diagnostics=diagnostics,
             )
+            db.commit()
         except Exception:
             logger.exception(
                 "AssetCore failed to persist bulk return diagnostic "

@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from .application_errors import ApplicationError
 from .audit import add_audit_log
 from .database import SessionLocal, get_db
 from .document_generation import (
@@ -23,10 +24,6 @@ from .document_generation import (
     safe_filename,
 )
 from .hardening_api import router as hardening_router
-from .industrial_api import (
-    _apply_repair_transition,
-    _generate_completion_documents,
-)
 from .industrial_api import (
     router as industrial_router,
 )
@@ -60,6 +57,10 @@ from .models import (
     utcnow,
 )
 from .permissions import Permission, ensure_permission, is_observer, require_permission
+from .repairs import (
+    apply_repair_transition,
+    generate_completion_documents_or_rollback,
+)
 from .schemas import (
     AuditLogOut,
     AvailabilityOut,
@@ -208,6 +209,16 @@ async def validation_error_handler(
                 "errors": errors,
             }
         },
+    )
+
+
+@app.exception_handler(ApplicationError)
+async def application_error_handler(
+    _: Request, exc: ApplicationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.as_detail()},
     )
 
 def _raise_service_error(exc: TransferServiceError) -> None:
@@ -682,7 +693,7 @@ def update_repair(
     previous_machine_status = repair.machine.status
     previous_location_id = repair.machine.location_id
     if data.status is not None and data.status.value != repair.status:
-        _, previous_location_id = _apply_repair_transition(
+        _, previous_location_id = apply_repair_transition(
             db, repair, data.status.value, user
         )
     if data.close:
@@ -697,7 +708,7 @@ def update_repair(
                     ),
                 },
             )
-        _, previous_location_id = _apply_repair_transition(
+        _, previous_location_id = apply_repair_transition(
             db, repair, RepairStatus.COMPLETED.value, user
         )
     db.add(
@@ -719,7 +730,9 @@ def update_repair(
         previous_status != RepairStatus.COMPLETED.value
         and repair.status == RepairStatus.COMPLETED.value
     ):
-        generated_on_completion = _generate_completion_documents(db, repair, user)
+        generated_on_completion = generate_completion_documents_or_rollback(
+            db, repair, user
+        )
     if previous_machine_status != repair.machine.status:
         add_machine_event(
             db,
