@@ -195,7 +195,7 @@ Password policy: минимум 10 знака, поне една малка и �
 
 `BatchProgressOut` включва `machine_numbers`. `BatchTransferOut` включва `issue_documents` и `return_documents`; до успешно приемане `return_documents` е празен масив. ZIP за return operation batch включва наличните финални issue и return DOCX/PDF файлове.
 
-Основни transfer грешки: `issue_conflict`, `return_conflict`, `workshop_location_missing`, `return_repair_already_exists`, `machine_has_open_repair`, `repair_protocol_template_unavailable` и `repair_protocol_generation_failed`. Всички имат структуриран `code` и безопасно човешко съобщение.
+Основни transfer грешки: `issue_conflict`, `return_conflict`, `workshop_location_missing`, `return_repair_already_exists`, `machine_has_open_repair`, `repair_protocol_template_unavailable` и `repair_protocol_generation_failed`. Всички имат структуриран `code` и безопасно човешко съобщение. Неочакваните критични workflow грешки добавят `operation`, `stage` и `diagnostic_id`; traceback и вътрешни пътища остават само в server logs.
 
 Празен списък или повторен identifier връща HTTP 422. Липсваща машина връща 404. Активно предаване, неготов статус или concurrent uniqueness конфликт връща HTTP 409. Всички машини се заключват и валидират преди запис; при проблем не се създават партида, предавания или документи.
 
