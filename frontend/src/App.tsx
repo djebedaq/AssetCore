@@ -337,7 +337,7 @@ function App() {
           {page === 'machines' && <Machines onOpenCatalog={(machineId) => { setCatalogMachineId(machineId); setPage('catalog') }} />}
           {page === 'transfers' && <Transfers />}
           {page === 'repairs' && <IndustrialRepairs />}
-          {page === 'catalog' && <IndustrialCatalog defaultMachineId={catalogMachineId || undefined} />}
+          {page === 'catalog' && <IndustrialCatalog defaultMachineId={catalogMachineId || undefined} onUnknownPart={() => setPage('parts')} />}
           {page === 'parts' && <IndustrialPartRequests />}
           {page === 'documents' && <TechnicalLibrary />}
           {page === 'official' && <OfficialDocuments />}

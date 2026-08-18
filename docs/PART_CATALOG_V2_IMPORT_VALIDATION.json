@@ -1,0 +1,31 @@
+{
+  "dataset_version": "PARTS_CATALOG_V2",
+  "valid": true,
+  "errors": [],
+  "warnings": [],
+  "source_count": 9,
+  "record_count": 611,
+  "records_by_family": {
+    "FALCH_1000": 244,
+    "FALCH_500": 309,
+    "HYDWIN_FUSSEN_500": 58
+  },
+  "records_by_source": {
+    "falch_1000_drive_pump": 34,
+    "falch_1000_liquid_part": 46,
+    "falch_1000_wheel_jet": 164,
+    "falch_500_pump": 65,
+    "falch_500_unloader_valve": 65,
+    "falch_500_valve_500bar": 32,
+    "falch_500_wheel_jet": 147,
+    "hydwin_fussen_500_plunger_pump": 58,
+    "hydwin_fussen_500_scope_instruction": 0
+  },
+  "repair_kit_count": 7,
+  "repair_kit_component_count": 84,
+  "verified_hotspot_count": 6,
+  "hotspot_count": 6,
+  "blank_part_number_count": 3,
+  "non_numeric_quantity_count": 1,
+  "replaced_by_count": 3
+}

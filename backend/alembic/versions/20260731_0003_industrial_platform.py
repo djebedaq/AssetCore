@@ -929,9 +929,14 @@ def downgrade() -> None:
             "extracted_text", "page_count", "notes", "linked_machine_numbers",
         ):
             batch.drop_column(column)
+    part_catalog_constraints = {
+        item.get("name")
+        for item in sa.inspect(op.get_bind()).get_unique_constraints("part_catalog")
+    }
     with op.batch_alter_table("part_catalog") as batch:
         batch.drop_index("ix_part_catalog_verified_by_id")
-        batch.drop_constraint("uq_part_catalog_source_position", type_="unique")
+        if "uq_part_catalog_source_position" in part_catalog_constraints:
+            batch.drop_constraint("uq_part_catalog_source_position", type_="unique")
         for column in (
             "verified_at", "verified_by_id", "is_verified", "provenance_confidence",
             "source_excerpt", "alternative_part_number", "alternative_part_numbers",

@@ -8,7 +8,11 @@ Generic Render URLs с `postgresql://` или legacy `postgres://` се норм
 
 ## Миграция
 
-Текущият `head` е `20260808_0016`. Той добавя проследимите връзки от автоматично създаден ремонт към return transfer/document/batch, гарантира активния проверен справочен запис `Цех` и нормализира само текущия машинен статус: активно предаване → `ISSUED`, иначе незавършен ремонт → `REPAIR`, иначе `READY`. Audit, document, transfer и repair snapshot историята не се преписва. Downgrade премахва новите връзки, но умишлено не измисля предишни оперативни статуси.
+Текущият `head` е `20260818_0019`. Той добавя source identity/metadata към `part_catalog`, active/source metadata към technical documents и repair kits, source metadata към kit components и position-centric таблиците `catalog_diagrams`/`catalog_position_hotspots`. Старият недостатъчен unique key за каталожна позиция се премахва, без да се изтриват исторически редове. Миграцията работи с PostgreSQL и SQLite; downgrade премахва v2 полетата/таблиците, но умишлено не възстановява constraint, който би наложил изтриване на authoritative repeated variants.
+
+След `upgrade head` seed-ът валидира всички девет source файла и SHA-256 стойностите им, архивира старите active catalog/kit/document записи и идемпотентно импортира `PARTS_CATALOG_V2`. При липсващ или променен source bootstrap/read проверката fail-ва затворено. Docker image трябва да съдържа `backend/resources/technical_docs/PARTS_CATALOG/` и `backend/resources/catalog/v2/` непроменени.
+
+Предходният `20260808_0016` добавя проследимите връзки от автоматично създаден ремонт към return transfer/document/batch, гарантира активния проверен справочен запис `Цех` и нормализира само текущия машинен статус: активно предаване → `ISSUED`, иначе незавършен ремонт → `REPAIR`, иначе `READY`. Audit, document, transfer и repair snapshot историята не се преписва.
 
 `20260801_0006` добавя двуфазните `AWAITING_SIGNATURE` transfer операции, immutable signing hash, защита от повторен PNG подпис, snapshot полета за външните участници и връзка към точната template версия. Repair signature slots се деактивират, без да се изтрива историческа конфигурация. `20260801_0005` преди него добавя профилите, owner designation, лицензите и основата на official document/signature модела. Нито една миграция не допълва имена, длъжности или business history чрез догадки.
 

@@ -682,14 +682,14 @@ class PartRequest(Base):
 
 class PartCatalog(Base):
     __tablename__ = "part_catalog"
-    __table_args__ = (
-        UniqueConstraint(
-            "brand", "model", "assembly", "position", "part_number",
-            name="uq_part_catalog_source_position",
-        ),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    source_record_key: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, unique=True, index=True
+    )
+    source_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    source_row_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    family: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     brand: Mapped[str] = mapped_column(String(120), index=True)
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     assembly: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -697,6 +697,16 @@ class PartCatalog(Base):
     part_number: Mapped[str] = mapped_column(String(120), index=True)
     description: Mapped[str] = mapped_column(String(500))
     quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    quantity_raw: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    description_de: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_fr: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_2: Mapped[str | None] = mapped_column(Text, nullable=True)
+    valid_for_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
+    repair_kit_code: Mapped[str | None] = mapped_column(
+        String(120), nullable=True, index=True
+    )
+    source_anomaly_codes: Mapped[list | None] = mapped_column(JSON, nullable=True)
     source_document: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_page: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_figure: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -792,6 +802,12 @@ class TechnicalDocument(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     linked_machine_numbers: Mapped[list | None] = mapped_column(JSON, nullable=True)
     sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    dataset_version: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    allowed_pages: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False, index=True
+    )
     uploaded_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     uploaded_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     media_type: Mapped[str | None] = mapped_column(String(150), nullable=True)
@@ -1253,6 +1269,10 @@ class RepairKit(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    family: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    source_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    source_version: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    source_document_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     name: Mapped[str] = mapped_column(String(255))
     brand: Mapped[str | None] = mapped_column(String(120), nullable=True)
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -1265,6 +1285,9 @@ class RepairKit(Base):
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_approved: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False, index=True
     )
     approved_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True
@@ -1290,6 +1313,10 @@ class RepairKitComponent(Base):
     kit_id: Mapped[int] = mapped_column(ForeignKey("repair_kits.id"), index=True)
     part_id: Mapped[int] = mapped_column(ForeignKey("part_catalog.id"), index=True)
     quantity: Mapped[float] = mapped_column(Float, default=1.0)
+    quantity_raw: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_record_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    source_document: Mapped[str | None] = mapped_column(String(700), nullable=True)
+    source_page: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_optional: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false"), nullable=False
     )
@@ -1297,6 +1324,65 @@ class RepairKitComponent(Base):
 
     kit: Mapped[RepairKit] = relationship(back_populates="components")
     part: Mapped[PartCatalog] = relationship()
+
+
+class CatalogDiagram(Base):
+    """Source-page diagram metadata for the authoritative catalog."""
+
+    __tablename__ = "catalog_diagrams"
+    __table_args__ = (
+        UniqueConstraint("source_id", "page_number", name="uq_catalog_diagram_source_page"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(120), index=True)
+    family: Mapped[str] = mapped_column(String(80), index=True)
+    assembly: Mapped[str] = mapped_column(String(120), index=True)
+    technical_document_id: Mapped[int] = mapped_column(
+        ForeignKey("technical_documents.id"), index=True
+    )
+    page_number: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(500))
+    source_pdf_sha256: Mapped[str] = mapped_column(String(64), index=True)
+    render_version: Mapped[str] = mapped_column(String(80), default="PDF_PREVIEW_V1")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    technical_document: Mapped[TechnicalDocument] = relationship()
+    hotspots: Mapped[list[CatalogPositionHotspot]] = relationship(
+        back_populates="diagram", cascade="all, delete-orphan"
+    )
+
+
+class CatalogPositionHotspot(Base):
+    """Position-centric mapping; one position may resolve to multiple part rows."""
+
+    __tablename__ = "catalog_position_hotspots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    hotspot_key: Mapped[str] = mapped_column(String(500), unique=True, index=True)
+    diagram_id: Mapped[int] = mapped_column(ForeignKey("catalog_diagrams.id"), index=True)
+    position: Mapped[str] = mapped_column(String(40), index=True)
+    x: Mapped[float] = mapped_column(Float)
+    y: Mapped[float] = mapped_column(Float)
+    width: Mapped[float] = mapped_column(Float, default=0.03)
+    height: Mapped[float] = mapped_column(Float, default=0.03)
+    provenance: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False, index=True
+    )
+    verified_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    diagram: Mapped[CatalogDiagram] = relationship(back_populates="hotspots")
+    verified_by: Mapped[User | None] = relationship(foreign_keys=[verified_by_id])
+    created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_id])
 
 
 class TechnicalDocumentRevision(Base):

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .application_errors import ApplicationError
 from .audit import add_audit_log
+from .catalog import router as catalog_router
 from .database import SessionLocal, get_db
 from .document_generation import (
     build_daily_report_pdf,
@@ -149,6 +150,7 @@ app.add_middleware(
 app.include_router(industrial_router)
 app.include_router(user_router)
 app.include_router(hardening_router)
+app.include_router(catalog_router)
 
 
 @app.middleware("http")
@@ -855,7 +857,7 @@ def catalog(
     _: User = Depends(require_parts_viewer),
     db: Session = Depends(get_db),
 ) -> list[PartCatalog]:
-    statement = select(PartCatalog)
+    statement = select(PartCatalog).where(PartCatalog.is_active.is_(True))
     if brand:
         statement = statement.where(PartCatalog.brand == brand)
     if model:
@@ -872,14 +874,18 @@ def catalog(
         statement = statement.where(
             or_(
                 PartCatalog.part_number.ilike(f"%{q}%"),
+                PartCatalog.replaced_by_part_number.ilike(f"%{q}%"),
                 PartCatalog.alternative_part_number.ilike(f"%{q}%"),
                 PartCatalog.name_bg.ilike(f"%{q}%"),
                 PartCatalog.name_en.ilike(f"%{q}%"),
                 PartCatalog.name_ru.ilike(f"%{q}%"),
                 PartCatalog.original_name.ilike(f"%{q}%"),
                 PartCatalog.description.ilike(f"%{q}%"),
+                PartCatalog.description_2.ilike(f"%{q}%"),
                 PartCatalog.assembly.ilike(f"%{q}%"),
                 PartCatalog.position.ilike(f"%{q}%"),
+                PartCatalog.repair_kit_code.ilike(f"%{q}%"),
+                PartCatalog.valid_for_raw.ilike(f"%{q}%"),
             )
         )
     items = db.scalars(
@@ -1272,7 +1278,7 @@ def documents(
     _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
 ) -> list[TechnicalDocument]:
     return db.scalars(
-        select(TechnicalDocument).order_by(
+        select(TechnicalDocument).where(TechnicalDocument.is_active.is_(True)).order_by(
             TechnicalDocument.brand,
             TechnicalDocument.category,
             TechnicalDocument.title,

@@ -256,7 +256,7 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
         "/api/repair-cases",
         headers=auth_headers,
         json={
-            "machine_id": machine_ids["4"],
+            "machine_id": machine_ids["9"],
             "reported_problem": "test-only reported problem",
             "condition_before": "test-only condition before",
             "cleaning_required": False,
@@ -269,7 +269,7 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
 
     catalog_part = client.get("/api/catalog/parts", headers=auth_headers).json()[0]
     request_payload = {
-        "machine_id": machine_ids["4"],
+        "machine_id": machine_ids["9"],
         "repair_id": repair_id,
         "priority": "NORMAL",
         "language": "bg",
@@ -284,7 +284,7 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
     mismatched = client.post(
         "/api/part-requests/multi",
         headers=auth_headers,
-        json={**request_payload, "machine_id": machine_ids["5"]},
+        json={**request_payload, "machine_id": machine_ids["10"]},
     )
     assert mismatched.status_code == 409, mismatched.text
     linked_request = client.post(
@@ -369,7 +369,7 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
         repair = session.get(Repair, repair_id)
         linked = session.get(PartRequest, linked_request.json()["id"])
         assert linked.repair_id == repair_id
-        machine = session.get(Machine, machine_ids["4"])
+        machine = session.get(Machine, machine_ids["9"])
         assert repair.status == RepairStatus.COMPLETED.value
         assert machine.status == "READY"
         assert session.scalar(
@@ -389,7 +389,7 @@ def test_multiline_part_request_approval_and_versioned_documents(
         "/api/part-requests/multi",
         headers=auth_headers,
         json={
-            "machine_id": machine_ids["4"],
+            "machine_id": machine_ids["9"],
             "priority": "URGENT",
             "language": "bg",
             "reason": "test-only request reason",
@@ -679,8 +679,8 @@ def test_visual_part_hotspot_requires_provenance_and_human_verification(
         "/api/technical-library",
         headers=auth_headers,
         json={
-            "brand": "CombiJet",
-            "model": "JE60-500",
+            "brand": "Falch",
+            "model": "Wheel Jet 15-e",
             "category": "test-only visual source",
             "title": "test-only hotspot source",
             "language": "bg",
@@ -692,7 +692,7 @@ def test_visual_part_hotspot_requires_provenance_and_human_verification(
     )
     assert document.status_code == 201, document.text
     catalog = client.get("/api/catalog/parts", headers=auth_headers).json()
-    part = next(item for item in catalog if item["brand"] == "CombiJet")
+    part = next(item for item in catalog if item["family"] == "FALCH_500")
 
     forbidden = client.post(
         f"/api/catalog/parts/{part['id']}/hotspots",
@@ -996,7 +996,7 @@ def test_repair_kit_requires_verified_parts_and_expands_authoritatively(
         "/api/part-requests/multi",
         headers=auth_headers,
         json={
-            "machine_id": machine_ids["4"],
+            "machine_id": machine_ids["9"],
             "repair_kit_id": kit.json()["id"],
             "repair_kit_mode": "COMPONENTS",
             "language": "bg",

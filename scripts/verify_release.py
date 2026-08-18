@@ -28,6 +28,8 @@ if str(ROOT) not in sys.path:
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from alembic.script import ScriptDirectory  # noqa: E402
+from app.catalog.sources import CATALOG_VERSION  # noqa: E402
+from app.catalog.validation import validate_catalog_v2  # noqa: E402
 from app.database import Base  # noqa: E402
 from app.licensing import evaluate_license  # noqa: E402
 from app.main import health  # noqa: E402
@@ -199,17 +201,36 @@ def run(output: Path) -> Verification:
             ),
         )
         verification.check("Audit таблицата е достъпна", (db.scalar(select(func.count(AuditLog.id))) or 0) >= 0)
-        catalog_count = db.scalar(select(func.count(PartCatalog.id))) or 0
-        verified_catalog_count = db.scalar(
+        catalog_count = db.scalar(
             select(func.count(PartCatalog.id)).where(
-                PartCatalog.is_verified.is_(True),
-                PartCatalog.verification_status == "VERIFIED_SOURCE_TABLE",
+                PartCatalog.is_active.is_(True),
+                PartCatalog.source_version == CATALOG_VERSION,
             )
         ) or 0
+        verified_catalog_count = db.scalar(
+            select(func.count(PartCatalog.id)).where(
+                PartCatalog.is_active.is_(True),
+                PartCatalog.is_verified.is_(True),
+                PartCatalog.source_version == CATALOG_VERSION,
+                PartCatalog.verification_status == "VERIFIED_SOURCE_ROW",
+            )
+        ) or 0
+        catalog_validation = validate_catalog_v2()
         verification.check(
-            "Каталогът съдържа 774 проверени позиции от трите производителя",
-            catalog_count == 774 and verified_catalog_count == 774,
-            f"total={catalog_count}, verified={verified_catalog_count}",
+            "Authoritative каталогът съдържа точно 611 проверени source реда",
+            catalog_count == 611
+            and verified_catalog_count == 611
+            and catalog_validation["valid"]
+            and catalog_validation["records_by_family"]
+            == {
+                "FALCH_1000": 244,
+                "FALCH_500": 309,
+                "HYDWIN_FUSSEN_500": 58,
+            },
+            (
+                f"total={catalog_count}, verified={verified_catalog_count}, "
+                f"sources={catalog_validation['source_count']}"
+            ),
         )
         licence = evaluate_license(db)
         verification.check("License validation връща контролиран статус", licence.state in {"NOT_INSTALLED", "ACTIVE", "GRACE_PERIOD", "READ_ONLY", "INVALID", "NOT_YET_VALID"})

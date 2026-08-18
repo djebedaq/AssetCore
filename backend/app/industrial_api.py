@@ -737,6 +737,7 @@ def machine_passport(
         item
         for item in db.scalars(
             select(TechnicalDocument)
+            .where(TechnicalDocument.is_active.is_(True))
             .options(selectinload(TechnicalDocument.revisions))
             .where(TechnicalDocument.linked_machine_numbers.is_not(None))
             .order_by(TechnicalDocument.title)
@@ -1772,7 +1773,7 @@ def add_repair_part(
         catalog_part = db.get(PartCatalog, payload.catalog_part_id)
         if catalog_part is None:
             raise HTTPException(404, "Частта от каталога не е намерена.")
-        if not catalog_part.is_verified:
+        if not catalog_part.is_verified or not catalog_part.is_active:
             raise business_conflict(
                 "unverified_catalog_part",
                 "Непотвърдена каталожна част не може да бъде отчетена като използвана.",
@@ -1899,13 +1900,31 @@ def create_multi_part_request(
         }
         if set(catalog_parts) != catalog_ids:
             raise HTTPException(404, "Една или повече каталожни части не са намерени.")
-        unverified = [item.part_number for item in catalog_parts.values() if not item.is_verified]
+        unverified = [
+            item.part_number
+            for item in catalog_parts.values()
+            if not item.is_verified or not item.is_active
+        ]
         if unverified:
             raise business_conflict(
                 "unverified_catalog_parts",
                 "Непотвърдена каталожна част не може да бъде добавена към официална заявка.",
                 part_numbers=sorted(unverified),
             )
+        if machine is not None:
+            incompatible = [
+                item.part_number
+                for item in catalog_parts.values()
+                if str(machine.inventory_number)
+                not in {str(value) for value in (item.compatible_machine_numbers or [])}
+            ]
+            if incompatible:
+                raise business_conflict(
+                    "catalog_parts_not_compatible_with_machine",
+                    "Една или повече каталожни части не са потвърдени за избраната машина.",
+                    machine_number=machine.inventory_number,
+                    part_numbers=sorted(incompatible),
+                )
     kit: RepairKit | None = None
     if payload.repair_kit_id is not None:
         kit = db.scalar(
@@ -1915,7 +1934,7 @@ def create_multi_part_request(
         )
         if kit is None:
             raise HTTPException(404, "Ремонтният комплект не е намерен.")
-        if not kit.is_approved:
+        if not kit.is_approved or not kit.is_active:
             raise business_conflict(
                 "repair_kit_not_approved",
                 "Непотвърден ремонтен комплект не може да бъде използван в официална заявка.",
@@ -1951,7 +1970,7 @@ def create_multi_part_request(
     first = payload.lines[0]
     first_catalog = catalog_parts.get(first.catalog_part_id) if first.catalog_part_id else None
     first_name = kit.name if kit and payload.repair_kit_mode == "KIT" else first_catalog.description if first_catalog else first.description
-    first_number = kit.code if kit and payload.repair_kit_mode == "KIT" else first_catalog.part_number if first_catalog else first.part_number
+    first_number = kit.code if kit and payload.repair_kit_mode == "KIT" else (first_catalog.replaced_by_part_number or first_catalog.part_number) if first_catalog else first.part_number
     request_item = PartRequest(machine_id=resolved_machine_id, repair_id=payload.repair_id, repair_kit_id=payload.repair_kit_id, repair_kit_mode=payload.repair_kit_mode if kit else None, part_name=first_name, part_number=first_number, quantity=max(1, int(first.quantity)), reason=payload.reason, department=payload.department, priority=payload.priority.value, status=PartRequestStatus.DRAFT.value, language=payload.language.value, requested_by_id=user.id)
     db.add(request_item)
     db.flush()
@@ -1977,7 +1996,7 @@ def create_multi_part_request(
             values.update(
                 {
                     "position": part.position,
-                    "part_number": part.part_number,
+                    "part_number": part.replaced_by_part_number or part.part_number,
                     "description": part.description,
                     "unit": part.unit,
                     "source_document": part.source_document,
@@ -2796,7 +2815,7 @@ def verify_part_hotspot(
 def list_repair_kits(
     _: User = Depends(require_parts_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
-    kits = db.scalars(select(RepairKit).options(selectinload(RepairKit.components).joinedload(RepairKitComponent.part)).order_by(RepairKit.name)).all()
+    kits = db.scalars(select(RepairKit).options(selectinload(RepairKit.components).joinedload(RepairKitComponent.part)).where(RepairKit.is_active.is_(True)).order_by(RepairKit.name)).all()
     return [{"id": kit.id, "code": kit.code, "name": kit.name, "brand": kit.brand, "model": kit.model, "compatible_models": kit.compatible_models, "revision": kit.revision, "assembly": kit.assembly, "source_document": kit.source_document, "source_page": kit.source_page, "provenance": kit.provenance, "confidence": kit.confidence, "is_approved": kit.is_approved, "approved_by_id": kit.approved_by_id, "approved_at": kit.approved_at, "created_at": kit.created_at, "components": [{"id": component.id, "part_id": component.part_id, "part_number": component.part.part_number, "description": component.part.description, "quantity": component.quantity, "is_optional": component.is_optional, "note": component.note, "alternative_part_numbers": component.part.alternative_part_numbers, "replacement_part_ids": component.part.replacement_part_ids} for component in kit.components]} for kit in kits]
 
 
@@ -2866,7 +2885,7 @@ def technical_library(
     _: User = Depends(require_document_viewer),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    statement = select(TechnicalDocument).options(selectinload(TechnicalDocument.revisions))
+    statement = select(TechnicalDocument).options(selectinload(TechnicalDocument.revisions)).where(TechnicalDocument.is_active.is_(True))
     if brand:
         statement = statement.where(TechnicalDocument.brand == brand)
     if model:
@@ -3367,8 +3386,8 @@ def global_search(
             "transfers": [],
             "generated_documents": [],
         }
-    parts = db.scalars(select(PartCatalog).where(or_(PartCatalog.part_number.ilike(term), PartCatalog.alternative_part_number.ilike(term), PartCatalog.description.ilike(term), PartCatalog.name_bg.ilike(term), PartCatalog.name_en.ilike(term), PartCatalog.name_ru.ilike(term), PartCatalog.original_name.ilike(term), PartCatalog.brand.ilike(term), PartCatalog.model.ilike(term), PartCatalog.assembly.ilike(term), PartCatalog.position.ilike(term))).limit(limit)).all()
-    documents = db.scalars(select(TechnicalDocument).where(or_(TechnicalDocument.title.ilike(term), TechnicalDocument.brand.ilike(term), TechnicalDocument.category.ilike(term), TechnicalDocument.model.ilike(term), TechnicalDocument.extracted_text.ilike(term), TechnicalDocument.notes.ilike(term), TechnicalDocument.revision.ilike(term), TechnicalDocument.source_label.ilike(term))).limit(limit)).all()
+    parts = db.scalars(select(PartCatalog).where(PartCatalog.is_active.is_(True), or_(PartCatalog.part_number.ilike(term), PartCatalog.replaced_by_part_number.ilike(term), PartCatalog.alternative_part_number.ilike(term), PartCatalog.description.ilike(term), PartCatalog.name_bg.ilike(term), PartCatalog.name_en.ilike(term), PartCatalog.name_ru.ilike(term), PartCatalog.original_name.ilike(term), PartCatalog.brand.ilike(term), PartCatalog.model.ilike(term), PartCatalog.assembly.ilike(term), PartCatalog.position.ilike(term), PartCatalog.repair_kit_code.ilike(term))).limit(limit)).all()
+    documents = db.scalars(select(TechnicalDocument).where(TechnicalDocument.is_active.is_(True), or_(TechnicalDocument.title.ilike(term), TechnicalDocument.brand.ilike(term), TechnicalDocument.category.ilike(term), TechnicalDocument.model.ilike(term), TechnicalDocument.extracted_text.ilike(term), TechnicalDocument.notes.ilike(term), TechnicalDocument.revision.ilike(term), TechnicalDocument.source_label.ilike(term))).limit(limit)).all()
     repairs = db.scalars(select(Repair).options(joinedload(Repair.machine)).where(or_(Repair.repair_reference.ilike(term), Repair.reported_problem.ilike(term), Repair.symptoms.ilike(term), Repair.diagnosis.ilike(term), Repair.required_work.ilike(term), Repair.work_performed.ilike(term), Repair.result.ilike(term))).limit(limit)).all()
     requests = db.scalars(select(PartRequest).where(or_(PartRequest.request_reference.ilike(term), PartRequest.part_name.ilike(term), PartRequest.part_number.ilike(term), PartRequest.reason.ilike(term), PartRequest.lines.any(or_(PartRequestLine.part_number.ilike(term), PartRequestLine.description.ilike(term), PartRequestLine.position.ilike(term))))).limit(limit)).all()
     transfers = db.scalars(

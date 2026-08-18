@@ -79,7 +79,7 @@ def test_unknown_part_can_only_be_linked_by_admin_to_verified_compatible_catalog
         "/api/part-requests/unknown",
         headers=auth_headers,
         json={
-            "machine_id": machine_ids["4"],
+            "machine_id": machine_ids["9"],
             "assembly": "test-only assembly",
             "description": "test-only unknown part",
             "quantity": 1,
@@ -94,7 +94,7 @@ def test_unknown_part_can_only_be_linked_by_admin_to_verified_compatible_catalog
     request_id = created.json()["id"]
     line_id = created.json()["lines"][0]["id"]
     compatible = client.get(
-        f"/api/catalog/parts?verified_only=true&machine_id={machine_ids['4']}",
+        f"/api/catalog/parts?verified_only=true&machine_id={machine_ids['9']}",
         headers=auth_headers,
     ).json()
     assert compatible
