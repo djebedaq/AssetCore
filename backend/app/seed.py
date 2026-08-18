@@ -13,8 +13,6 @@ from .models import (
     Location,
     Machine,
     MachineStatus,
-    TechnicalDocument,
-    TechnicalDocumentRevision,
     InstallationOwnership,
     ProfileStatus,
     SignatureSlot,
@@ -22,7 +20,7 @@ from .models import (
     UserRole,
     utcnow,
 )
-from .catalog_import import import_verified_catalog
+from .catalog.importer import import_authoritative_catalog
 from .security import hash_password
 from .settings import settings
 
@@ -214,63 +212,9 @@ def _seed_verified_registry(db: Session) -> None:
 
 # --- Director Preview: technical library and verified catalog records ---
 def _seed_documents_and_catalog(db: Session) -> None:
-    root = Path(__file__).resolve().parents[1] / 'resources' / 'technical_docs'
-    if root.exists():
-        for path in sorted(p for p in root.rglob('*') if p.is_file()):
-            rel = path.relative_to(root).as_posix()
-            brand_folder = rel.split('/')[0].lower()
-            brand = {'falch500':'Falch','falch1000':'Falch','hydwin':'HYDWIN (Fussen)','combijet':'CombiJet','protocols_hpwj':'HPWJ протоколи','parts_requests_hpwj':'HPWJ заявки'}.get(brand_folder, brand_folder)
-            model = {'falch500':'Wheel Jet 15-e','falch1000':'Wheel Jet 30-e','hydwin':'FCE15/50','combijet':'JE60-500'}.get(brand_folder)
-            linked_numbers = {'falch500':['9','10','11','12','13','14','15','16','19'],'falch1000':['7','17','18'],'hydwin':['20','21','22','23','24'],'combijet':['4','5']}.get(brand_folder)
-            suffix = path.suffix.lower()
-            if brand_folder == 'protocols_hpwj':
-                category = 'Реални протоколи преди/след ремонт'
-            elif brand_folder == 'parts_requests_hpwj':
-                category = 'Реални заявки за резервни части'
-            elif suffix == '.pdf':
-                category = 'Parts list / ръководство'
-            else:
-                category = 'Работен документ'
-            if not db.scalar(select(TechnicalDocument).where(TechnicalDocument.file_path == rel)):
-                db.add(TechnicalDocument(brand=brand, model=model, category=category, title=path.name, file_path=rel, linked_machine_numbers=linked_numbers))
-            else:
-                document = db.scalar(select(TechnicalDocument).where(TechnicalDocument.file_path == rel))
-                if document is not None:
-                    document.brand = brand
-                    document.model = model
-                    document.linked_machine_numbers = linked_numbers
-    db.commit()
-
-    for document in db.scalars(select(TechnicalDocument)).all():
-        path = root / document.file_path
-        if not path.is_file():
-            continue
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        document.sha256 = digest
-        document.uploaded_filename = document.title
-        document.created_at = document.created_at or utcnow()
-        if not db.scalar(
-            select(TechnicalDocumentRevision).where(
-                TechnicalDocumentRevision.document_id == document.id,
-                TechnicalDocumentRevision.version == 1,
-            )
-        ):
-            document.revisions.append(
-                TechnicalDocumentRevision(
-                    version=1,
-                    revision_label=document.revision,
-                    filename=path.name,
-                    media_type="application/octet-stream",
-                    file_path=document.file_path,
-                    sha256=digest,
-                    change_note="Първоначално проверено файлово копие от техническата библиотека.",
-                )
-            )
-    db.commit()
-
     admin = db.scalar(select(User).where(User.is_system_owner.is_(True)))
     if admin:
-        import_verified_catalog(db, admin)
+        import_authoritative_catalog(db, admin)
         db.commit()
 
 
@@ -360,7 +304,7 @@ def _seed_document_templates(db: Session) -> None:
                 "page": "A4 portrait",
                 "sections": ["technical_specification_title", "machine_identity", "parts_table", "remarks", "request_reference_date_requester"],
                 "reference_only": False,
-                "controlled_reference": "technical_docs/parts_requests_hpwj/KK 1001 FALCH 500.docx",
+                "controlled_reference": "reference_protocols/controlled_parts_request_layout_reference.docx",
             },
         },
     ]

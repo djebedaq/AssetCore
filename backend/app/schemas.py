@@ -676,6 +676,10 @@ class PartCatalogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    source_record_key: str | None = None
+    source_id: str | None = None
+    source_row_index: int | None = None
+    family: str | None = None
     brand: str
     model: str | None = None
     manufacturer: str | None = None
@@ -684,6 +688,14 @@ class PartCatalogOut(BaseModel):
     part_number: str
     description: str
     quantity: float | None = None
+    quantity_raw: str | None = None
+    description_de: str | None = None
+    description_en: str | None = None
+    description_fr: str | None = None
+    description_2: str | None = None
+    valid_for_raw: str | None = None
+    repair_kit_code: str | None = None
+    source_anomaly_codes: list[str] | None = None
     unit: str | None = None
     technical_specification: str | None = None
     compatible_models: str | None = None

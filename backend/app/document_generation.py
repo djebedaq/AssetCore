@@ -86,11 +86,11 @@ def _reference_by_sha256(folder: Path, expected_sha256: str) -> Path:
 
 
 REPAIR_REFERENCE = _reference_by_sha256(
-    RESOURCES / "technical_docs" / "protocols_hpwj",
+    RESOURCES / "reference_protocols",
     "39337dfc445d61b4d5144259ca35624c2049d266378e326780176de3104784c1",
 )
 PARTS_REFERENCE = _reference_by_sha256(
-    RESOURCES / "technical_docs" / "parts_requests_hpwj",
+    RESOURCES / "reference_protocols",
     "3ba8e43102ae044b02b6aa7a4cd3b06ff00bce444a56fc8da6ba737c42bbc7a7",
 )
 

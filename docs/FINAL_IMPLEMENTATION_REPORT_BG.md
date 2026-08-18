@@ -1,5 +1,7 @@
 # AssetCore — доклад за реализацията
 
+> Исторически отчет за по-ранен release candidate. Секциите за `verified_parts_v1`, legacy technical sources и 774 каталожни реда са superseded от `PARTS_CATALOG_V2`. Текущият authoritative отчет е `docs/PART_CATALOG_V2_IMPORT_VALIDATION_BG.md`.
+
 ## Начално състояние
 Анализирана е предоставената версия `AssetCore-main 5(1).zip`. Системата вече съдържа развита архитектура за трансфери, подписи, документи, ремонти, техническа библиотека и каталог на части.
 

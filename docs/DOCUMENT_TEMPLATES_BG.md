@@ -2,7 +2,7 @@
 
 ## Източници
 
-Снимките в `backend/resources/reference_photos` са визуалните образци за приемане/предаване и parts requests. Реалните DOCX в `backend/resources/technical_docs/protocols_hpwj` и `parts_requests_hpwj` са package/style/header източници. Те са read-only references и съдържащите се исторически записи никога не се копират като нови бизнес факти.
+Снимките в `backend/resources/reference_photos` са визуалните образци за приемане/предаване и parts requests. Контролираните DOCX layout източници са `backend/resources/reference_protocols/controlled_repair_layout_reference.docx` и `controlled_parts_request_layout_reference.docx`. Те са read-only references и съдържащите се исторически записи никога не се копират като нови бизнес факти. Папката `technical_docs/PARTS_CATALOG` съдържа само authoritative каталожни източници и не се използва като document-template library.
 
 ## Генериране
 

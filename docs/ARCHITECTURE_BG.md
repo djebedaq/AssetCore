@@ -12,12 +12,27 @@
 - `backend/app/transfer_service.py` е транзакционният домейн за издаване, връщане, партиди и документи.
 - `backend/app/document_generation.py` генерира индивидуалните DOCX/PDF snapshots и безопасни имена.
 - `backend/app/application_errors.py` дефинира общия безопасен production error договор, diagnostic ID и структуриран log context.
+- `backend/app/catalog/` е отделният authoritative каталог domain: `routes.py` пази HTTP/permission договора, `service.py` прилага family/source integrity правилата, `repository.py` ограничава активните заявки, `importer.py` извършва идемпотентно архивиране/upsert, а `validation.py` проверява immutable source manifest и dataset.
+- `backend/resources/catalog/v2/manifest.json` и разделените JSON файлове са versioned immutable projection на точно деветте файла под `backend/resources/technical_docs/PARTS_CATALOG/`; `backend/scripts/build_catalog_v2.py` е възпроизводимият extractor, а `catalog_v2_validation.py` е release gate.
 - `backend/app/localization.py` локализира backend съобщения и статусни етикети без промяна на съхранените стойности.
 - `backend/alembic` е единственият поддържан път за промяна на схемата.
 - `frontend/src/api.ts` е удостовереният API клиент и изпраща `Accept-Language`.
 - `frontend/src/i18n.tsx` съдържа централния BG/EN/RU речник, форматиране и status mapping.
 - `frontend/src/App.tsx`, `BulkTransfers.tsx` и `IndustrialPlatform.tsx` реализират responsive PWA екраните, глобалното търсене, каталога и цифровия паспорт; `industrialUi.tsx` съдържа повторно използваните modal/document/attachment presentation действия.
 - `frontend/src/features/repairs/IndustrialRepairs.tsx` е самостоятелният repair screen, `repairApi.ts` е типизираната му API граница, а `workflow.ts` пази stage/form/payload договора без React state.
+- `frontend/src/features/catalog/` е самостоятелният machine-first каталог screen. `catalogApi.ts` пази focused API calls, `catalogState.ts` — deterministic cart/kit merge правилата, а `IndustrialCatalog.tsx` — responsive diagram/table/cart workflow без hardcoded production URL или технически source данни.
+
+## Authoritative каталог за резервни части
+
+Активният dataset е само `PARTS_CATALOG_V2`: 611 source реда от FALCH_500, FALCH_1000 и HYDWIN_FUSSEN_500. Семейството се определя чрез exact brand/model плюс проверен inventory number от manifest-а; няма fuzzy matching. CombiJet, машина №19 и всеки неподдържан модел получават празен каталог, не чужди части.
+
+`PartCatalog.source_record_key` е уникалната identity на source реда. Тя пази repeated positions/applicability variants, които старият ключ `brand + model + assembly + position + part_number` не можеше да представи без overwrite. Оригиналният номер, `Replaced by`, `quantity_raw`, `Valid for`, repair-kit code, source page/version/hash и anomaly codes остават отделни полета.
+
+`CatalogDiagram` свързва exact PDF page с контролиран `TechnicalDocument`. `CatalogPositionHotspot` е position-centric, а не `hotspot → part`: една позиция може безопасно да върне няколко source variants. Само шест ръчно проверени координати са активни; останалите позиции се избират от пълната source таблица. Административна корекция изисква `parts.manage`, причина и audit запис.
+
+`RepairKit`/`RepairKitComponent` се използват повторно, но active/approved records се rebuild-ват само от изричната Falch колона `Repair kit`. Source quantity за kit component не се смесва с order quantity при единичен избор. Старите каталог, kit и technical-document DB записи се деактивират, вместо да се изтриват, за да останат четими историческите ремонти и заявки.
+
+Всеки read път проверява текущия SHA-256 на source файла. Липсващ или променен source връща безопасен `ApplicationError` с `catalog_source_integrity_failed`, `operation=catalog_read` и `stage=source_integrity`; непроверен dataset никога не се показва като verified.
 
 ## Домейн и транзакции
 

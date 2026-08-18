@@ -38,6 +38,7 @@ jobs:
       - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
       - run: python -m compileall backend/app backend/scripts scripts tests
       - run: python -m ruff check --select E9 backend/app backend/scripts scripts tests
+      - run: PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py
       - run: python -m pytest -q
       - run: python scripts/verify_release.py --output release-verification
       - uses: actions/upload-artifact@v4

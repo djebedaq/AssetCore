@@ -8,7 +8,11 @@ Generic Render URLs с `postgresql://` или legacy `postgres://` се норм
 
 ## Миграция
 
-Текущият `head` е `20260808_0016`. Той добавя проследимите връзки от автоматично създаден ремонт към return transfer/document/batch, гарантира активния проверен справочен запис `Цех` и нормализира само текущия машинен статус: активно предаване → `ISSUED`, иначе незавършен ремонт → `REPAIR`, иначе `READY`. Audit, document, transfer и repair snapshot историята не се преписва. Downgrade премахва новите връзки, но умишлено не измисля предишни оперативни статуси.
+Текущият `head` е `20260818_0019`. Той добавя source identity/metadata към `part_catalog`, active/source metadata към technical documents и repair kits, source metadata към kit components и position-centric таблиците `catalog_diagrams`/`catalog_position_hotspots`. Старият недостатъчен unique key за каталожна позиция се премахва, без да се изтриват исторически редове. Миграцията работи с PostgreSQL и SQLite. Guarded downgrade възстановява schema `0018` и `uq_part_catalog_source_position`, когато данните са съвместими; ако V2 source variants се сблъскват по legacy identity `brand/model/assembly/position/part_number`, downgrade отказва преди каквито и да е destructive промени, без merge, delete или загуба на history.
+
+След `upgrade head` seed-ът валидира всички девет source файла и SHA-256 стойностите им, архивира старите active catalog/kit/document записи и идемпотентно импортира `PARTS_CATALOG_V2`. При липсващ или променен source bootstrap/read проверката fail-ва затворено. Docker image трябва да съдържа `backend/resources/technical_docs/PARTS_CATALOG/` и `backend/resources/catalog/v2/` непроменени.
+
+Предходният `20260808_0016` добавя проследимите връзки от автоматично създаден ремонт към return transfer/document/batch, гарантира активния проверен справочен запис `Цех` и нормализира само текущия машинен статус: активно предаване → `ISSUED`, иначе незавършен ремонт → `REPAIR`, иначе `READY`. Audit, document, transfer и repair snapshot историята не се преписва.
 
 `20260801_0006` добавя двуфазните `AWAITING_SIGNATURE` transfer операции, immutable signing hash, защита от повторен PNG подпис, snapshot полета за външните участници и връзка към точната template версия. Repair signature slots се деактивират, без да се изтрива историческа конфигурация. `20260801_0005` преди него добавя профилите, owner designation, лицензите и основата на official document/signature модела. Нито една миграция не допълва имена, длъжности или business history чрез догадки.
 
@@ -26,7 +30,7 @@ python -m alembic -c backend/alembic.ini upgrade head
 
 Вграденото приложение изпълнява `upgrade head` в lifespan преди seed проверката. В production се препоръчва и отделна pre-deploy миграционна стъпка, когато платформата я поддържа, за да се вижда резултатът преди трафик.
 
-Rollback е описан във всяка Alembic revision, но преди downgrade направете валидиран backup. Downgrade на final-role migration връща `director` към `manager` и `observer` към `viewer` и премахва новите owner/session колони; не го използвайте като обикновена production операция. По-старите downgrade стъпки могат да премахнат нови таблици/полета и да загубят transfer/document история.
+Rollback е описан във всяка Alembic revision, но преди downgrade направете валидиран backup. `0019 → 0018` е guarded: при несъвместими source variants завършва с ясно `Cannot downgrade PARTS_CATALOG_V2 to 0018 safely` преди промяна на schema и изисква предварително archive/export или контролирана миграция на references. Downgrade на final-role migration връща `director` към `manager` и `observer` към `viewer` и премахва новите owner/session колони; не го използвайте като обикновена production операция. По-старите downgrade стъпки могат да премахнат нови таблици/полета и да загубят transfer/document история.
 
 ## Docker
 
