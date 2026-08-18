@@ -307,7 +307,12 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
     setDetails(null)
     setSelectedPart(null)
     setKitPreview(null)
-    if (!machineId || !sourceId) return
+    if (
+      !machineId
+      || !sourceId
+      || context?.machine_id !== machineId
+      || !context.assemblies.some((assembly) => assembly.source_id === sourceId)
+    ) return
     setLoading(true)
     void Promise.all([
       catalogApi.assembly(machineId, sourceId),
@@ -319,7 +324,7 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
       setError('')
     }).catch((caught) => setError(friendlyError(caught, t('catalog.loadError'))))
       .finally(() => setLoading(false))
-  }, [machineId, sourceId, t])
+  }, [context, machineId, sourceId, t])
 
   const machine = machines.find((item) => item.id === machineId)
   const diagram = details?.diagrams.find((item) => item.id === diagramId)

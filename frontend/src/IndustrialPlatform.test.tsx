@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from './i18n'
@@ -108,5 +108,55 @@ describe('индустриален каталог', () => {
     expect(screen.getAllByText('Количество по схема').length).toBeGreaterThan(0)
     expect(screen.getAllByText('3').length).toBeGreaterThan(0)
     expect(screen.getByLabelText('Заявено количество 7.906-007.11')).toHaveValue(1)
+  })
+
+  it('не изпраща стария възел с новата машина при смяна на family context', async () => {
+    const falchSource = 'falch_500_valve_500bar'
+    const hydwinSource = 'hydwin_fussen_500_plunger_pump'
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input)
+      if (path.endsWith('/api/machines')) return jsonResponse([
+        { id: 9, inventory_number: '9', name: 'Wheel Jet 15-e', brand: 'Falch', model: 'Wheel Jet 15-e', pressure_bar: 500, status: 'READY', created_at: '2026-07-31T00:00:00', updated_at: '2026-07-31T00:00:00' },
+        { id: 20, inventory_number: '20', name: 'FCE15/50', brand: 'HYDWIN/Fussen', model: 'FCE15/50', pressure_bar: 500, status: 'READY', created_at: '2026-07-31T00:00:00', updated_at: '2026-07-31T00:00:00' },
+      ])
+      if (path.endsWith('/api/catalog/v2/machines/9')) return jsonResponse({
+        dataset_version: 'PARTS_CATALOG_V2', supported: true, message: '', machine_id: 9,
+        machine_number: '9', brand: 'Falch', model: 'Wheel Jet 15-e', family: 'FALCH_500',
+        assemblies: [{ source_id: falchSource, family: 'FALCH_500', assembly: 'VALVE_500BAR', title: 'Valve 500 bar', part_count: 32, diagram_count: 0, verified_hotspot_count: 0, diagrams: [] }],
+      })
+      if (path.endsWith('/api/catalog/v2/machines/20')) return jsonResponse({
+        dataset_version: 'PARTS_CATALOG_V2', supported: true, message: '', machine_id: 20,
+        machine_number: '20', brand: 'HYDWIN/Fussen', model: 'FCE15/50', family: 'HYDWIN_FUSSEN_500',
+        assemblies: [{ source_id: hydwinSource, family: 'HYDWIN_FUSSEN_500', assembly: 'PLUNGER_PUMP', title: 'Plunger Pump', part_count: 58, diagram_count: 0, verified_hotspot_count: 0, diagrams: [] }],
+      })
+      if (path.includes(`/api/catalog/v2/assemblies/${falchSource}?machine_id=9`)) return jsonResponse({
+        dataset_version: 'PARTS_CATALOG_V2', machine_id: 9, machine_number: '9', family: 'FALCH_500',
+        source_id: falchSource, assembly: 'VALVE_500BAR', title: 'Valve 500 bar', diagrams: [], parts: [],
+      })
+      if (path.includes(`/api/catalog/v2/assemblies/${hydwinSource}?machine_id=20`)) return jsonResponse({
+        dataset_version: 'PARTS_CATALOG_V2', machine_id: 20, machine_number: '20', family: 'HYDWIN_FUSSEN_500',
+        source_id: hydwinSource, assembly: 'PLUNGER_PUMP', title: 'Plunger Pump', diagrams: [], parts: [],
+      })
+      if (path.includes('/api/catalog/v2/repair-kits?')) return jsonResponse([])
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+
+    render(
+      <I18nProvider initialLocale="bg">
+        <IndustrialCatalog />
+      </I18nProvider>,
+    )
+    const machine = await screen.findByLabelText('Избери машина')
+    await user.selectOptions(machine, '9')
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/assemblies/${falchSource}?machine_id=9`))).toBe(true))
+
+    await user.selectOptions(machine, '20')
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/assemblies/${hydwinSource}?machine_id=20`))).toBe(true))
+
+    const paths = fetchMock.mock.calls.map(([input]) => String(input))
+    expect(paths.some((path) => path.includes(`/assemblies/${falchSource}?machine_id=20`))).toBe(false)
+    expect(paths.some((path) => path.includes(`source_id=${falchSource}`) && path.includes('machine_id=20'))).toBe(false)
   })
 })
