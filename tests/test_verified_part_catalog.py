@@ -13,6 +13,7 @@ from app.models import (
     CatalogPositionHotspot,
     Machine,
     PartCatalog,
+    PartRequest,
     RepairKit,
     RepairKitComponent,
     TechnicalDocument,
@@ -250,6 +251,47 @@ def test_machine_first_api_enforces_exact_family_mapping_and_unsupported_models(
     )
     assert mismatch.status_code == 409
     assert mismatch.json()["detail"]["code"] == "catalog_family_mismatch"
+
+
+def test_multi_part_request_keeps_server_side_machine_compatibility_guard(
+    client, auth_headers, session_factory
+):
+    machine_ids = _machine_ids(session_factory)
+    with session_factory() as session:
+        falch_part = session.scalar(
+            select(PartCatalog).where(
+                PartCatalog.source_id == "falch_500_valve_500bar",
+                PartCatalog.position == "3",
+                PartCatalog.is_active.is_(True),
+                PartCatalog.is_verified.is_(True),
+            )
+        )
+        assert falch_part is not None
+        part_id = falch_part.id
+        before = session.scalar(select(func.count(PartRequest.id)))
+
+    rejected = client.post(
+        "/api/part-requests/multi",
+        headers=auth_headers,
+        json={
+            "machine_id": machine_ids["20"],
+            "language": "bg",
+            "lines": [
+                {
+                    "catalog_part_id": part_id,
+                    "description": "test-only client value",
+                    "quantity": 1,
+                }
+            ],
+        },
+    )
+    assert rejected.status_code == 409, rejected.text
+    assert (
+        rejected.json()["detail"]["code"]
+        == "catalog_parts_not_compatible_with_machine"
+    )
+    with session_factory() as session:
+        assert session.scalar(select(func.count(PartRequest.id))) == before
 
 
 def test_search_supports_number_description_position_kit_and_replaced_number(

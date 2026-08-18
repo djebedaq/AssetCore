@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BookOpen,
   CheckCircle2,
@@ -37,6 +37,13 @@ type Props = {
   onUnknownPart?: () => void
 }
 
+type MachineCartState = {
+  machineId: number | null
+  lines: CatalogCartLine[]
+}
+
+const EMPTY_MACHINE_CART: MachineCartState = { machineId: null, lines: [] }
+
 function DiagramViewer({
   machineId,
   diagram,
@@ -53,6 +60,7 @@ function DiagramViewer({
   const { t } = useI18n()
   const [url, setUrl] = useState('')
   const [hotspots, setHotspots] = useState<PositionHotspot[]>([])
+  const [hotspotsLoaded, setHotspotsLoaded] = useState(false)
   const [zoom, setZoom] = useState(100)
   const [error, setError] = useState('')
   const viewport = useRef<HTMLDivElement>(null)
@@ -61,6 +69,8 @@ function DiagramViewer({
     let active = true
     let objectUrl = ''
     setUrl('')
+    setHotspots([])
+    setHotspotsLoaded(false)
     setError('')
     void Promise.all([
       createApiObjectUrl(diagram.preview_endpoint),
@@ -70,8 +80,11 @@ function DiagramViewer({
       if (active) {
         setUrl(preview.url)
         setHotspots(items)
+        setHotspotsLoaded(true)
       }
-    }).catch((caught) => setError(friendlyError(caught, t('catalog.documentPreviewError'))))
+    }).catch((caught) => {
+      if (active) setError(friendlyError(caught, t('catalog.documentPreviewError')))
+    })
     return () => {
       active = false
       if (objectUrl) URL.revokeObjectURL(objectUrl)
@@ -120,7 +133,9 @@ function DiagramViewer({
       </div>
     </div>
     <div className="catalog-v2-diagram-footer">
-      <span>{t('catalog.panHint')}</span>
+      <span>{hotspotsLoaded && (hotspots.length
+        ? t('catalog.verifiedClickablePositionsOnly')
+        : t('catalog.noVerifiedClickablePositions'))}<small>{t('catalog.panHint')}</small></span>
       <button className="secondary compact" onClick={() => void downloadApiFile(diagram.download_endpoint, `${diagram.source_id}.pdf`)}><Download size={16} />{t('catalog.openOriginalPdf')}</button>
     </div>
   </div>
@@ -186,12 +201,14 @@ function RepairKitPreview({
 
 function RequestCart({
   machineId,
+  cartMachineId,
   lines,
   onChange,
   undoAvailable,
   onUndo,
 }: {
   machineId: number
+  cartMachineId: number | null
   lines: CatalogCartLine[]
   onChange: (lines: CatalogCartLine[]) => void
   undoAvailable: boolean
@@ -205,6 +222,10 @@ function RequestCart({
   const [created, setCreated] = useState('')
 
   async function submit() {
+    if (!lines.length || cartMachineId !== machineId) {
+      setError(t('catalog.cartMachineMismatch'))
+      return
+    }
     setSubmitting(true)
     setError('')
     try {
@@ -263,6 +284,8 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
   const { t } = useI18n()
   const [machines, setMachines] = useState<Machine[]>([])
   const [machineId, setMachineId] = useState<number | ''>(defaultMachineId || '')
+  const previousDefaultMachineId = useRef(defaultMachineId)
+  const [pendingMachineId, setPendingMachineId] = useState<number | '' | null>(null)
   const [context, setContext] = useState<MachineCatalog | null>(null)
   const [sourceId, setSourceId] = useState('')
   const [details, setDetails] = useState<AssemblyDetails | null>(null)
@@ -272,11 +295,29 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
   const [variantChoice, setVariantChoice] = useState<{ position: string; variants: CatalogPart[] } | null>(null)
   const [kits, setKits] = useState<CatalogRepairKit[]>([])
   const [kitPreview, setKitPreview] = useState<CatalogRepairKit | null>(null)
-  const [cart, setCart] = useState<CatalogCartLine[]>([])
-  const [undoCart, setUndoCart] = useState<CatalogCartLine[] | null>(null)
+  const [cart, setCart] = useState<MachineCartState>(EMPTY_MACHINE_CART)
+  const [undoCart, setUndoCart] = useState<MachineCartState | null>(null)
   const [toast, setToast] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const applyMachineSelection = useCallback((nextMachineId: number | '') => {
+    setCart(EMPTY_MACHINE_CART)
+    setUndoCart(null)
+    setToast('')
+    setSelectedPart(null)
+    setVariantChoice(null)
+    setKitPreview(null)
+    setContext(null)
+    setDetails(null)
+    setDiagramId('')
+    setSourceId('')
+    setPartsQuery('')
+    setKits([])
+    setError('')
+    setPendingMachineId(null)
+    setMachineId(nextMachineId)
+  }, [])
 
   useEffect(() => {
     void api<Machine[]>('/machines')
@@ -284,9 +325,18 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
       .catch((caught) => setError(friendlyError(caught, t('catalog.loadError'))))
   }, [t])
   useEffect(() => {
-    if (defaultMachineId) setMachineId(defaultMachineId)
-  }, [defaultMachineId])
+    const previous = previousDefaultMachineId.current
+    previousDefaultMachineId.current = defaultMachineId
+    if (
+      defaultMachineId !== undefined
+      && defaultMachineId !== previous
+      && defaultMachineId !== machineId
+    ) {
+      applyMachineSelection(defaultMachineId)
+    }
+  }, [applyMachineSelection, defaultMachineId, machineId])
   useEffect(() => {
+    let active = true
     setContext(null)
     setDetails(null)
     setSourceId('')
@@ -297,15 +347,26 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
     setLoading(true)
     void catalogApi.machine(machineId)
       .then((value) => {
-        setContext(value)
-        setSourceId(value.assemblies[0]?.source_id || '')
+        if (active) {
+          setContext(value)
+          setSourceId(value.assemblies[0]?.source_id || '')
+        }
       })
-      .catch((caught) => setError(friendlyError(caught, t('catalog.loadError'))))
-      .finally(() => setLoading(false))
+      .catch((caught) => {
+        if (active) setError(friendlyError(caught, t('catalog.loadError')))
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [machineId, t])
   useEffect(() => {
+    let active = true
     setDetails(null)
     setSelectedPart(null)
+    setVariantChoice(null)
     setKitPreview(null)
     if (
       !machineId
@@ -318,12 +379,20 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
       catalogApi.assembly(machineId, sourceId),
       catalogApi.repairKits(machineId, sourceId),
     ]).then(([assembly, repairKits]) => {
-      setDetails(assembly)
-      setKits(repairKits)
-      setDiagramId(assembly.diagrams[0]?.id || '')
-      setError('')
-    }).catch((caught) => setError(friendlyError(caught, t('catalog.loadError'))))
-      .finally(() => setLoading(false))
+      if (active) {
+        setDetails(assembly)
+        setKits(repairKits)
+        setDiagramId(assembly.diagrams[0]?.id || '')
+        setError('')
+      }
+    }).catch((caught) => {
+      if (active) setError(friendlyError(caught, t('catalog.loadError')))
+    }).finally(() => {
+      if (active) setLoading(false)
+    })
+    return () => {
+      active = false
+    }
   }, [context, machineId, sourceId, t])
 
   const machine = machines.find((item) => item.id === machineId)
@@ -344,7 +413,15 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
   }, [details, partsQuery])
 
   function addSelectedPart(part: CatalogPart) {
-    setCart((current) => addPart(current, part))
+    if (!machineId) return
+    if (cart.lines.length > 0 && cart.machineId !== machineId) {
+      setError(t('catalog.cartMachineMismatch'))
+      return
+    }
+    setCart((current) => ({
+      machineId,
+      lines: addPart(current.lines, part),
+    }))
     setUndoCart(null)
     setToast(t('catalog.positionAdded', { position: part.position }))
   }
@@ -352,11 +429,33 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
     setKitPreview(kits.find((kit) => kit.code === code) || null)
   }
   function confirmKit(kit: CatalogRepairKit) {
-    if (!details) return
+    if (!details || !machineId) return
+    if (cart.lines.length > 0 && cart.machineId !== machineId) {
+      setError(t('catalog.cartMachineMismatch'))
+      return
+    }
     setUndoCart(cart)
-    setCart(addRepairKit(cart, kit, details.parts))
+    setCart({
+      machineId,
+      lines: addRepairKit(cart.lines, kit, details.parts),
+    })
     setKitPreview(null)
     setToast(t('catalog.kitAdded', { code: kit.code }))
+  }
+  function changeCart(lines: CatalogCartLine[]) {
+    setCart((current) => ({
+      machineId: lines.length ? current.machineId : null,
+      lines,
+    }))
+    if (!lines.length) setUndoCart(null)
+  }
+  function requestMachineSelection(nextMachineId: number | '') {
+    if (nextMachineId === machineId) return
+    if (cart.lines.length > 0) {
+      setPendingMachineId(nextMachineId)
+      return
+    }
+    applyMachineSelection(nextMachineId)
   }
 
   return <>
@@ -364,10 +463,18 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
     {toast && <div className="success catalog-v2-toast" role="status"><CheckCircle2 size={18} />{toast}<button className="link" onClick={() => setToast('')}>{t('common.close')}</button></div>}
     {error && <div className="error">{error}</div>}
     <section className="catalog-v2-machine panel">
-      <label>{t('catalog.chooseMachine')}<select value={machineId} onChange={(event) => setMachineId(event.target.value ? Number(event.target.value) : '')}><option value="">{t('catalog.chooseMachinePlaceholder')}</option>{machines.map((item) => <option value={item.id} key={item.id}>№{item.inventory_number} · {item.brand} {item.model || ''}</option>)}</select></label>
+      <label>{t('catalog.chooseMachine')}<select value={machineId} onChange={(event) => requestMachineSelection(event.target.value ? Number(event.target.value) : '')}><option value="">{t('catalog.chooseMachinePlaceholder')}</option>{machines.map((item) => <option value={item.id} key={item.id}>№{item.inventory_number} · {item.brand} {item.model || ''}</option>)}</select></label>
       {machine && <div><b>№{machine.inventory_number} · {machine.brand}</b><span>{machine.model || t('common.noValue')}</span><small>{t('machines.pressure')}: {machine.pressure_bar ?? t('common.noValue')} · {t('common.status')}: {statusText(t, machine.status)} · {t('common.location')}: {machine.location?.name || t('common.noValue')}</small></div>}
       {context?.supported && <label>{t('catalog.chooseAssembly')}<select value={sourceId} onChange={(event) => setSourceId(event.target.value)}>{context.assemblies.map((assembly) => <option key={assembly.source_id} value={assembly.source_id}>{assembly.title} · {assembly.part_count}</option>)}</select></label>}
     </section>
+    {pendingMachineId !== null && <div className="catalog-v2-machine-switch panel" role="dialog" aria-modal="true" aria-labelledby="catalog-machine-switch-title">
+      <h3 id="catalog-machine-switch-title">{t('catalog.changeMachineTitle')}</h3>
+      <p>{t('catalog.changeMachineWarning')}</p>
+      <div className="actions">
+        <button className="secondary" onClick={() => setPendingMachineId(null)}>{t('common.cancel')}</button>
+        <button className="primary" onClick={() => applyMachineSelection(pendingMachineId)}>{t('catalog.changeMachineConfirm')}</button>
+      </div>
+    </div>}
     {loading && <div className="empty-state">{t('common.loading')}</div>}
     {!machineId && !loading && <div className="empty-state visual-catalog-empty"><BookOpen size={36} /><h3>{t('catalog.chooseMachineTitle')}</h3><p>{t('catalog.chooseMachineExplanation')}</p></div>}
     {context && !context.supported && <div className="empty-state visual-catalog-empty"><BookOpen size={36} /><h3>{context.message}</h3>{onUnknownPart && hasPermission('requests.create') && <button className="secondary" onClick={onUnknownPart}>{t('unknownPart.new')}</button>}</div>}
@@ -376,7 +483,7 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
         <nav className="catalog-v2-diagram-tabs" aria-label={t('catalog.visualWorkspace')}>{details.diagrams.map((item) => <button className={item.id === diagramId ? 'active' : ''} key={item.id} onClick={() => setDiagramId(item.id)}>{t('common.page')} {item.page_number}</button>)}</nav>
         {diagram && <DiagramViewer machineId={machineId} diagram={diagram} onSelect={setSelectedPart} onAdd={addSelectedPart} onVariants={(position, variants) => setVariantChoice({ position, variants })} />}
         {!diagram && <div className="empty-state">{t('catalog.noVerifiedDiagram')}</div>}
-        {variantChoice && <div className="catalog-v2-variants panel" role="dialog" aria-label={t('catalog.variantChoice', { position: variantChoice.position })}><h3>{t('catalog.variantChoice', { position: variantChoice.position })}</h3>{variantChoice.variants.map((part) => <button key={part.source_record_key} onClick={() => { setSelectedPart(part); setVariantChoice(null) }}><span><b>{part.part_number || t('common.noValue')}</b><small>{part.description}</small><em>{part.valid_for_raw || t('common.noValue')}</em></span><ChevronRight size={17} /></button>)}<button className="secondary" onClick={() => setVariantChoice(null)}>{t('common.cancel')}</button></div>}
+        {variantChoice && <div className="catalog-v2-variants panel" role="dialog" aria-label={t('catalog.variantChoice', { position: variantChoice.position })}><h3>{t('catalog.variantChoice', { position: variantChoice.position })}</h3>{variantChoice.variants.map((part) => <button key={part.source_record_key} onClick={() => { setSelectedPart(part); addSelectedPart(part); setVariantChoice(null) }}><span><b>{part.part_number || t('common.noValue')}</b><small>{part.description}</small><em>{part.valid_for_raw || t('common.noValue')}</em></span><ChevronRight size={17} /></button>)}<button className="secondary" onClick={() => setVariantChoice(null)}>{t('common.cancel')}</button></div>}
         <section className="catalog-v2-parts">
           <div className="searchbox"><Search size={17} /><input value={partsQuery} onChange={(event) => setPartsQuery(event.target.value)} placeholder={t('catalog.searchPositions')} /></div>
           <div className="table-card"><table><thead><tr><th>{t('catalog.position')}</th><th>{t('common.partNumber')}</th><th>{t('catalog.description')}</th><th>{t('catalog.sourceQuantity')}</th><th>{t('catalog.repairKit')}</th></tr></thead><tbody>{filteredParts.map((part) => <tr className={selectedPart?.source_record_key === part.source_record_key ? 'selected-catalog-row' : ''} key={part.source_record_key} tabIndex={0} onClick={() => setSelectedPart(part)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedPart(part) } }}><td><b>{part.position}</b></td><td><code>{part.part_number || t('common.noValue')}</code>{part.replaced_by_part_number && <small>→ {part.replaced_by_part_number}</small>}</td><td>{part.description}<small>{part.valid_for_raw}</small></td><td>{part.quantity_raw || t('common.noValue')}</td><td>{part.repair_kit_code || t('common.noValue')}</td></tr>)}</tbody></table></div>
@@ -387,7 +494,7 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
         {kitPreview && <RepairKitPreview kit={kitPreview} onClose={() => setKitPreview(null)} onConfirm={() => confirmKit(kitPreview)} />}
         {onUnknownPart && hasPermission('requests.create') && <button className="secondary catalog-v2-unknown" onClick={onUnknownPart}>{t('unknownPart.notFound')}</button>}
       </main>
-      <RequestCart machineId={machineId} lines={cart} onChange={setCart} undoAvailable={undoCart !== null} onUndo={() => { if (undoCart) setCart(undoCart); setUndoCart(null); setToast(t('catalog.kitAdditionUndone')) }} />
+      <RequestCart key={machineId} machineId={machineId} cartMachineId={cart.machineId} lines={cart.lines} onChange={changeCart} undoAvailable={undoCart !== null} onUndo={() => { if (undoCart) setCart(undoCart); setUndoCart(null); setToast(t('catalog.kitAdditionUndone')) }} />
     </div>}
   </>
 }

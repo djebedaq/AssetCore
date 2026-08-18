@@ -14,6 +14,21 @@ down_revision = "20260810_0018"
 branch_labels = None
 depends_on = None
 
+LEGACY_CATALOG_IDENTITY = [
+    "brand",
+    "model",
+    "assembly",
+    "position",
+    "part_number",
+]
+
+UNSAFE_DOWNGRADE_MESSAGE = (
+    "Cannot downgrade PARTS_CATALOG_V2 to 0018 safely: "
+    "catalog contains source variants that violate the legacy "
+    "uq_part_catalog_source_position identity. Archive/export or migrate "
+    "those references before downgrade."
+)
+
 
 def _tables() -> set[str]:
     return set(sa.inspect(op.get_bind()).get_table_names())
@@ -58,6 +73,29 @@ def _create_index_if_missing(
 def _drop_index_if_present(table: str, name: str) -> None:
     if name in _indexes(table):
         op.drop_index(name, table_name=table)
+
+
+def _legacy_identity_conflict_count() -> int:
+    """Return groups that the legacy unique constraint cannot represent.
+
+    ``model``, ``assembly`` and ``position`` are nullable. PostgreSQL and
+    SQLite legacy unique constraints permit repeated rows when any of those
+    values is NULL, so only fully populated identities are conflicts.
+    """
+
+    result = op.get_bind().execute(
+        sa.text(
+            "SELECT COUNT(*) FROM ("
+            "SELECT 1 FROM part_catalog "
+            "WHERE model IS NOT NULL "
+            "AND assembly IS NOT NULL "
+            "AND position IS NOT NULL "
+            "GROUP BY brand, model, assembly, position, part_number "
+            "HAVING COUNT(*) > 1"
+            ") AS legacy_identity_conflicts"
+        )
+    )
+    return int(result.scalar_one())
 
 
 def upgrade() -> None:
@@ -225,6 +263,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # This preflight must remain the first operation. SQLite DDL is not fully
+    # transactional, and PostgreSQL should fail without relying on rollback to
+    # reconstruct any table, column, index or source-backed catalog row.
+    if _legacy_identity_conflict_count():
+        raise RuntimeError(UNSAFE_DOWNGRADE_MESSAGE)
+
     tables = _tables()
     if "catalog_position_hotspots" in tables:
         op.drop_table("catalog_position_hotspots")
@@ -295,6 +339,9 @@ def downgrade() -> None:
                 for column in present:
                     batch.drop_column(column)
 
-    # The v2 source intentionally contains rows that share the legacy identity.
-    # Restoring the old constraint would require deleting source-backed rows, so
-    # downgrade leaves it absent rather than corrupting catalog history.
+    if "uq_part_catalog_source_position" not in _unique_constraints("part_catalog"):
+        with op.batch_alter_table("part_catalog") as batch:
+            batch.create_unique_constraint(
+                "uq_part_catalog_source_position",
+                LEGACY_CATALOG_IDENTITY,
+            )

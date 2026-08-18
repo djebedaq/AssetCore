@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import sqlite3
 from pathlib import Path
@@ -13,6 +14,23 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex, CreateTable
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _migration_config() -> Config:
+    config = Config(str(ROOT / "backend" / "alembic.ini"))
+    config.set_main_option("script_location", str(ROOT / "backend" / "alembic"))
+    return config
+
+
+def _run_sqlite_revision(database_path: Path, operation, revision: str) -> None:
+    previous_url = settings.database_url
+    settings.database_url = f"sqlite:///{database_path.as_posix()}"
+    try:
+        operation(_migration_config(), revision)
+    finally:
+        settings.database_url = previous_url
+
 
 def test_render_postgresql_url_uses_psycopg_v3_driver():
     configured = Settings(
@@ -20,6 +38,134 @@ def test_render_postgresql_url_uses_psycopg_v3_driver():
         _env_file=None,
     )
     assert configured.database_url.startswith("postgresql+psycopg://")
+
+
+def test_published_industrial_platform_migration_content_is_immutable():
+    migration = (
+        ROOT
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260731_0003_industrial_platform.py"
+    )
+    normalized_content = migration.read_bytes().replace(b"\r\n", b"\n")
+    assert hashlib.sha256(normalized_content).hexdigest() == (
+        "f23f3cc084352bfa4740641d992b16d44de9194d12c334248d95f19a1af2faa6"
+    )
+
+
+def test_catalog_v2_safe_downgrade_restores_0018_schema_and_reupgrades(
+    tmp_path: Path,
+):
+    database_path = tmp_path / "catalog-v2-safe-downgrade.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260810_0018")
+    _run_sqlite_revision(database_path, command.upgrade, "20260818_0019")
+    _run_sqlite_revision(database_path, command.downgrade, "20260810_0018")
+
+    downgraded_engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    downgraded = inspect(downgraded_engine)
+    try:
+        assert "catalog_diagrams" not in downgraded.get_table_names()
+        assert "catalog_position_hotspots" not in downgraded.get_table_names()
+        assert "source_record_key" not in {
+            column["name"] for column in downgraded.get_columns("part_catalog")
+        }
+        assert "uq_part_catalog_source_position" in {
+            constraint["name"]
+            for constraint in downgraded.get_unique_constraints("part_catalog")
+        }
+    finally:
+        downgraded_engine.dispose()
+
+    _run_sqlite_revision(database_path, command.upgrade, "20260818_0019")
+    upgraded_engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    upgraded = inspect(upgraded_engine)
+    try:
+        assert "catalog_diagrams" in upgraded.get_table_names()
+        assert "catalog_position_hotspots" in upgraded.get_table_names()
+        assert "source_record_key" in {
+            column["name"] for column in upgraded.get_columns("part_catalog")
+        }
+        assert "uq_part_catalog_source_position" not in {
+            constraint["name"]
+            for constraint in upgraded.get_unique_constraints("part_catalog")
+        }
+    finally:
+        upgraded_engine.dispose()
+
+
+def test_catalog_v2_unsafe_downgrade_fails_before_sqlite_schema_changes(
+    tmp_path: Path,
+):
+    database_path = tmp_path / "catalog-v2-unsafe-downgrade.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260818_0019")
+    with sqlite3.connect(database_path) as connection:
+        connection.executemany(
+            """
+            INSERT INTO part_catalog (
+              source_record_key, source_id, source_row_index, family,
+              brand, model, assembly, position, part_number, description
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "test-only-source-variant-a",
+                    "test-only-source-a",
+                    1,
+                    "TEST_ONLY_FAMILY",
+                    "Test-only brand",
+                    "Test-only model",
+                    "TEST_ONLY_ASSEMBLY",
+                    "1",
+                    "TEST-ONLY-PART",
+                    "Test-only source variant A",
+                ),
+                (
+                    "test-only-source-variant-b",
+                    "test-only-source-b",
+                    2,
+                    "TEST_ONLY_FAMILY",
+                    "Test-only brand",
+                    "Test-only model",
+                    "TEST_ONLY_ASSEMBLY",
+                    "1",
+                    "TEST-ONLY-PART",
+                    "Test-only source variant B",
+                ),
+            ],
+        )
+
+    before_engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    before = inspect(before_engine)
+    before_tables = set(before.get_table_names())
+    before_columns = {
+        column["name"] for column in before.get_columns("part_catalog")
+    }
+    before_engine.dispose()
+
+    with pytest.raises(
+        RuntimeError,
+        match="Cannot downgrade PARTS_CATALOG_V2 to 0018 safely",
+    ):
+        _run_sqlite_revision(database_path, command.downgrade, "20260810_0018")
+
+    after_engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    after = inspect(after_engine)
+    try:
+        assert set(after.get_table_names()) == before_tables
+        assert {
+            column["name"] for column in after.get_columns("part_catalog")
+        } == before_columns
+        with after_engine.connect() as connection:
+            assert connection.exec_driver_sql(
+                "SELECT version_num FROM alembic_version"
+            ).scalar_one() == "20260818_0019"
+            assert connection.exec_driver_sql(
+                "SELECT COUNT(*) FROM part_catalog WHERE source_record_key "
+                "LIKE 'test-only-source-variant-%'"
+            ).scalar_one() == 2
+    finally:
+        after_engine.dispose()
 
 
 def test_legacy_sqlite_database_upgrades_without_changing_inventory(tmp_path: Path):

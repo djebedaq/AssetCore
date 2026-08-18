@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.orm import Session
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,6 +64,66 @@ def _upgrade(url: str) -> None:
         settings.database_url = previous
 
 
+def _downgrade(url: str, revision: str) -> None:
+    previous = settings.database_url
+    try:
+        settings.database_url = url
+        command.downgrade(_alembic_config(), revision)
+    finally:
+        settings.database_url = previous
+
+
+def _revision(url: str) -> str:
+    engine = create_engine(url, pool_pre_ping=True)
+    try:
+        with engine.connect() as connection:
+            return connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one()
+    finally:
+        engine.dispose()
+
+
+def _verify_safe_catalog_downgrade_round_trip(url: str) -> None:
+    _downgrade(url, "20260810_0018")
+    _upgrade(url)
+    if _revision(url) != _expected_head():
+        raise RuntimeError("PostgreSQL catalog migration round trip missed head.")
+
+
+def _verify_guarded_catalog_downgrade(url: str) -> None:
+    try:
+        _downgrade(url, "20260810_0018")
+    except RuntimeError as caught:
+        if "Cannot downgrade PARTS_CATALOG_V2 to 0018 safely" not in str(caught):
+            raise
+    else:
+        raise RuntimeError("Incompatible PostgreSQL catalog downgrade was not blocked.")
+
+    engine = create_engine(url, pool_pre_ping=True)
+    try:
+        inspector = inspect(engine)
+        if _revision(url) != _expected_head():
+            raise RuntimeError("Guarded PostgreSQL downgrade changed Alembic head.")
+        if "catalog_diagrams" not in inspector.get_table_names():
+            raise RuntimeError("Guarded PostgreSQL downgrade removed the v2 schema.")
+        if "source_record_key" not in {
+            column["name"] for column in inspector.get_columns("part_catalog")
+        }:
+            raise RuntimeError("Guarded PostgreSQL downgrade removed v2 columns.")
+        with engine.connect() as connection:
+            source_rows = connection.execute(
+                text(
+                    "SELECT COUNT(*) FROM part_catalog "
+                    "WHERE source_version = 'PARTS_CATALOG_V2'"
+                )
+            ).scalar_one()
+        if source_rows != 611:
+            raise RuntimeError("Guarded PostgreSQL downgrade changed catalog rows.")
+    finally:
+        engine.dispose()
+
+
 def main() -> None:
     source_url = _safe_test_url("ASSETCORE_POSTGRES_SOURCE_URL")
     restore_url = _safe_test_url("ASSETCORE_POSTGRES_RESTORE_URL")
@@ -73,6 +133,7 @@ def main() -> None:
         raise SystemExit("PG_DUMP and PG_RESTORE must identify the PostgreSQL client tools.")
 
     _upgrade(source_url)
+    _verify_safe_catalog_downgrade_round_trip(source_url)
     source_engine = create_engine(source_url, pool_pre_ping=True)
     previous_settings = (
         settings.owner_email,
@@ -97,6 +158,8 @@ def main() -> None:
             settings.owner_initial_password,
         ) = previous_settings
         source_engine.dispose()
+
+    _verify_guarded_catalog_downgrade(source_url)
 
     backup_key = base64.b64encode(secrets.token_bytes(32)).decode()
     with tempfile.TemporaryDirectory(prefix="assetcore-postgres-roundtrip-") as temp_name:
