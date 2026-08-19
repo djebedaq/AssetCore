@@ -116,7 +116,7 @@ function setupFetch(options: {
     })
     if (path.includes('/api/catalog/v2/repair-kits?')) return jsonResponse(repairKits)
     if (path.includes('/api/catalog/v2/diagrams/991/hotspots?')) return jsonResponse(hotspots)
-    if (path.endsWith('/api/catalog/v2/hotspots/991') && init?.method === 'PATCH') return jsonResponse({ id: 991, x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'MANUAL_VISUAL_VERIFICATION: test-only audited correction' })
+    if (path.endsWith('/api/catalog/v2/hotspots/991') && init?.method === 'PATCH') return jsonResponse({ id: 991, x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'MANUALLY_CONFIRMED', confidence: 1 })
     if (path.includes('/api/technical-library/991/preview?page=1')) {
       return new Response(new Blob(['test-only-preview'], { type: 'image/png' }))
     }
@@ -216,7 +216,7 @@ describe('machine-bound catalog request cart', () => {
     setupFetch({
       falchDiagrams: [testDiagram],
       falchParts: [variantA, variantB],
-      hotspots: [{ id: 991, hotspot_key: 'test-only-position-0', diagram_id: 991, page_number: 1, position: '0', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'test-only-manual-verification', confidence: 1, variants: [variantA, variantB] }],
+      hotspots: [{ id: 991, hotspot_key: 'test-only-position-0', diagram_id: 991, page_number: 1, position: '0', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [variantA, variantB] }],
     })
     const user = userEvent.setup()
     render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
@@ -245,7 +245,7 @@ describe('machine-bound catalog request cart', () => {
 
   it('shows repair-kit positions without adding them to the request', async () => {
     const testDiagram = diagram()
-    const hotspot = { id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'MANUAL_VISUAL_VERIFICATION: test-only', confidence: 1, variants: [falchPart] }
+    const hotspot: PositionHotspot = { id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [falchPart] }
     const kit: CatalogRepairKit = {
       id: 81, code: 'TEST-KIT', name: 'Test-only kit', family: 'FALCH_500', source_id: FALCH_SOURCE_ID,
       brand: 'Falch', model: 'Test fixture', assembly: 'TEST_ASSEMBLY', source_document: 'TEST_ONLY.pdf',
@@ -265,16 +265,18 @@ describe('machine-bound catalog request cart', () => {
   it('allows only an administrator UI session to save an audited QA correction', async () => {
     localStorage.setItem('assetcore_user', JSON.stringify({ role: 'administrator', permissions: ['parts.view', 'parts.manage'] }))
     const testDiagram = diagram()
-    const hotspot = { id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'MANUAL_VISUAL_VERIFICATION: test-only', confidence: 1, variants: [falchPart] }
+    const hotspot: PositionHotspot = { id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [falchPart] }
     const fetchMock = setupFetch({ falchDiagrams: [testDiagram], hotspots: [hotspot] })
     const user = userEvent.setup()
     render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
 
     await user.click(await screen.findByRole('button', { name: 'QA на областите' }))
     await user.click(await screen.findByRole('button', { name: /Поз. 3:/ }))
+    expect(screen.getByText('Автоматично съпоставена')).toBeInTheDocument()
     await user.type(screen.getByLabelText('Основание за корекцията'), 'Проверена тестова корекция')
     await user.click(screen.getByRole('button', { name: 'Запази' }))
 
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/api/catalog/v2/hotspots/991') && init?.method === 'PATCH')).toBe(true)
+    expect(await screen.findByText('Ръчно потвърдена')).toBeInTheDocument()
   })
 })

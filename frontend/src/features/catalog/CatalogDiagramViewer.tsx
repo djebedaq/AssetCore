@@ -267,6 +267,10 @@ export function CatalogDiagramViewer({
     </div>
     {qaMode && editing && <div className="catalog-v2-hotspot-editor" role="region" aria-label={t('catalog.qaEditor')}>
       <b><Move size={16} />{t('catalog.position')} {editing.position}</b>
+      <div className="catalog-v2-provenance">
+        <span>{t('catalog.qaProvenance')}</span>
+        <strong>{t(editing.provenance === 'MANUALLY_CONFIRMED' ? 'catalog.provenanceManuallyConfirmed' : 'catalog.provenanceAutoMatched')}</strong>
+      </div>
       {(['x', 'y', 'width', 'height'] as const).map((field) => <label key={field}>{field}<input type="number" min="0" max="1" step="0.001" value={editing[field]} onChange={(event) => updateEditing({ [field]: Number(event.target.value) })} /></label>)}
       <label>{t('catalog.qaVerified')}<input type="checkbox" checked={editing.is_verified} onChange={(event) => updateEditing({ is_verified: event.target.checked })} /></label>
       <label className="reason">{t('catalog.qaReason')}<input value={reason} onChange={(event) => setReason(event.target.value)} /></label>

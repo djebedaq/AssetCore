@@ -6,6 +6,12 @@ from typing import Any
 
 from pypdf import PdfReader
 
+from .position_mapping import (
+    ALLOWED_POSITION_PROVENANCE,
+    AUTO_MATCHED,
+    MANUALLY_CONFIRMED,
+    occurrence_identity,
+)
 from .sources import (
     CATALOG_ROOT,
     CATALOG_VERSION,
@@ -31,6 +37,14 @@ FALCH_ANCHORS = {
     ("falch_1000_liquid_part", "16"): ("E1230967", "valve guide", "E0113687", 3.0),
 }
 
+EXPECTED_POSITION_MAPPING_TOTALS = {
+    "mapped_position_count": 581,
+    "hotspot_occurrence_count": 818,
+    "duplicate_callout_count": 237,
+    "unresolved_position_count": 0,
+    "positions_not_drawn_count": 2,
+}
+
 
 def validate_catalog_v2() -> dict[str, Any]:
     manifest = load_manifest()
@@ -49,6 +63,13 @@ def validate_catalog_v2() -> dict[str, Any]:
         (item["source_id"], str(item["position"]))
         for item in mapping_review.get("positions_not_drawn") or []
     }
+    manual_occurrence_rows = list(mapping_review.get("manual_occurrences") or [])
+    manual_occurrence_evidence = {
+        occurrence_identity(item) for item in manual_occurrence_rows
+    }
+    matched_manual_evidence: set[tuple[Any, ...]] = set()
+    if len(manual_occurrence_evidence) != len(manual_occurrence_rows):
+        errors.append("duplicate manual occurrence evidence")
     mapping_by_source = {
         item["source_id"]: item for item in mapping_report.get("sources") or []
     }
@@ -128,13 +149,33 @@ def validate_catalog_v2() -> dict[str, Any]:
             if all(isinstance(value, (int, float)) for value in (x, y, width, height)):
                 if x + width > 1.001 or y + height > 1.001:
                     errors.append(f"{hotspot.get('hotspot_key')}: geometry outside page")
-            if hotspot.get("is_verified") and not hotspot.get("provenance"):
-                errors.append(f"{hotspot.get('hotspot_key')}: verified without provenance")
-            if hotspot.get("is_verified") and not str(hotspot.get("provenance")).startswith(
-                "MANUAL_VISUAL_VERIFICATION:"
-            ):
+            if hotspot.get("is_verified") is not True:
+                errors.append(f"{hotspot.get('hotspot_key')}: active hotspot is not verified")
+            provenance = hotspot.get("provenance")
+            if provenance not in ALLOWED_POSITION_PROVENANCE:
                 errors.append(
-                    f"{hotspot.get('hotspot_key')}: unsupported verification method"
+                    f"{hotspot.get('hotspot_key')}: unsupported provenance {provenance!r}"
+                )
+            identity = occurrence_identity(hotspot)
+            expected_provenance = (
+                MANUALLY_CONFIRMED
+                if identity in manual_occurrence_evidence
+                else AUTO_MATCHED
+            )
+            if provenance != expected_provenance:
+                errors.append(
+                    f"{hotspot.get('hotspot_key')}: provenance does not match exact review evidence"
+                )
+            if identity in manual_occurrence_evidence:
+                matched_manual_evidence.add(identity)
+            confidence = hotspot.get("confidence")
+            if provenance == MANUALLY_CONFIRMED and confidence != 1.0:
+                errors.append(
+                    f"{hotspot.get('hotspot_key')}: manual confirmation must have confidence 1.0"
+                )
+            if provenance == AUTO_MATCHED and confidence is not None:
+                errors.append(
+                    f"{hotspot.get('hotspot_key')}: automatic match must not claim manual confidence"
                 )
         expected_drawn = {
             position
@@ -159,10 +200,17 @@ def validate_catalog_v2() -> dict[str, Any]:
         if source.get("diagram_pages") and expected_report is None:
             errors.append(f"{source['source_id']}: missing mapping report entry")
         if source.get("diagram_pages"):
+            provenance_counts = Counter(
+                item.get("provenance") for item in source_hotspots
+            )
             coverage_by_source[source["source_id"]] = {
                 "bom_position_count": len(positions),
                 "mapped_position_count": len(mapped_positions),
                 "hotspot_occurrence_count": len(source_hotspots),
+                "auto_matched_occurrence_count": provenance_counts[AUTO_MATCHED],
+                "manually_confirmed_occurrence_count": provenance_counts[
+                    MANUALLY_CONFIRMED
+                ],
                 "duplicate_callout_count": len(source_hotspots) - len(mapped_positions),
                 "unresolved_position_count": len(missing_positions),
             }
@@ -185,6 +233,40 @@ def validate_catalog_v2() -> dict[str, Any]:
     )
     if duplicate_hotspot_keys:
         errors.append(f"duplicate hotspot_key: {duplicate_hotspot_keys}")
+    if matched_manual_evidence != manual_occurrence_evidence:
+        errors.append("not every manual occurrence evidence item maps to one hotspot")
+
+    provenance_counts = Counter(row.get("provenance") for row in hotspots)
+    actual_mapping_totals = {
+        "mapped_position_count": sum(
+            item["mapped_position_count"] for item in coverage_by_source.values()
+        ),
+        "hotspot_occurrence_count": len(hotspots),
+        "auto_matched_occurrence_count": provenance_counts[AUTO_MATCHED],
+        "manually_confirmed_occurrence_count": provenance_counts[MANUALLY_CONFIRMED],
+        "duplicate_callout_count": sum(
+            item["duplicate_callout_count"] for item in coverage_by_source.values()
+        ),
+        "unresolved_position_count": sum(
+            item["unresolved_position_count"] for item in coverage_by_source.values()
+        ),
+        "positions_not_drawn_count": len(not_drawn),
+    }
+    if (
+        actual_mapping_totals["auto_matched_occurrence_count"]
+        + actual_mapping_totals["manually_confirmed_occurrence_count"]
+        != actual_mapping_totals["hotspot_occurrence_count"]
+    ):
+        errors.append("position provenance counts do not cover every hotspot occurrence")
+    for metric, expected in EXPECTED_POSITION_MAPPING_TOTALS.items():
+        if actual_mapping_totals[metric] != expected:
+            errors.append(
+                f"position mapping {metric}: {actual_mapping_totals[metric]} != {expected}"
+            )
+    report_totals = mapping_report.get("totals") or {}
+    for metric, actual in actual_mapping_totals.items():
+        if report_totals.get(metric) != actual:
+            errors.append(f"position mapping report {metric} mismatch")
 
     hydwin = [row for row in records if row.get("family") == "HYDWIN_FUSSEN_500"]
     if len(hydwin) != 58:
@@ -255,25 +337,24 @@ def validate_catalog_v2() -> dict[str, Any]:
         "repair_kit_count": len(kit_codes),
         "repair_kit_component_count": len(kit_rows),
         "verified_hotspot_count": sum(bool(row.get("is_verified")) for row in hotspots),
-        "hotspot_count": len(hotspots),
-        "diagram_position_count": sum(
-            item["mapped_position_count"] for item in coverage_by_source.values()
-        ),
-        "duplicate_callout_count": sum(
-            item["duplicate_callout_count"] for item in coverage_by_source.values()
-        ),
-        "unresolved_position_count": sum(
-            item["unresolved_position_count"] for item in coverage_by_source.values()
-        ),
-        "positions_not_drawn_count": len(not_drawn),
+        "hotspot_count": actual_mapping_totals["hotspot_occurrence_count"],
+        "diagram_position_count": actual_mapping_totals["mapped_position_count"],
+        "auto_matched_occurrence_count": actual_mapping_totals[
+            "auto_matched_occurrence_count"
+        ],
+        "manually_confirmed_occurrence_count": actual_mapping_totals[
+            "manually_confirmed_occurrence_count"
+        ],
+        "duplicate_callout_count": actual_mapping_totals["duplicate_callout_count"],
+        "unresolved_position_count": actual_mapping_totals["unresolved_position_count"],
+        "positions_not_drawn_count": actual_mapping_totals[
+            "positions_not_drawn_count"
+        ],
         "false_numeric_candidate_count": mapping_report.get("totals", {}).get(
             "false_numeric_candidate_count", 0
         ),
         "pdf_text_geometry_verified_count": mapping_report.get("totals", {}).get(
             "pdf_text_geometry_verified_count", 0
-        ),
-        "manual_visual_verification_count": mapping_report.get("totals", {}).get(
-            "manual_visual_verification_count", 0
         ),
         "position_mapping_by_source": coverage_by_source,
         "blank_part_number_count": len(blank_codes),

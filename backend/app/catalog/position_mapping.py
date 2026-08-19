@@ -8,11 +8,37 @@ from typing import Any, Iterable
 
 import fitz
 
-PDF_TEXT_GEOMETRY_VERIFIED = "PDF_TEXT_GEOMETRY_VERIFIED"
-MANUAL_VISUAL_VERIFICATION = "MANUAL_VISUAL_VERIFICATION"
+AUTO_MATCHED = "AUTO_MATCHED"
+MANUALLY_CONFIRMED = "MANUALLY_CONFIRMED"
+ALLOWED_POSITION_PROVENANCE = frozenset({AUTO_MATCHED, MANUALLY_CONFIRMED})
+_LEGACY_ADMIN_CORRECTION_MARKER = "Административна проверка:"
 
 _TOKEN_EDGE = re.compile(r"^[\s\[\](){},.:;]+|[\s\[\](){},.:;]+$")
 _ANNOTATION_UNITS = {"nm", "n·m", "n-m", "bar", "mm"}
+
+
+def is_manually_confirmed(provenance: str | None) -> bool:
+    """Return whether an exact occurrence has explicit manual evidence.
+
+    The legacy marker is accepted only during importer normalization so a real
+    pre-correction QA edit is not lost. Generic legacy page-review provenance
+    deliberately does not qualify.
+    """
+
+    return provenance == MANUALLY_CONFIRMED or (
+        provenance is not None and _LEGACY_ADMIN_CORRECTION_MARKER in provenance
+    )
+
+
+def occurrence_identity(item: dict[str, Any]) -> tuple[Any, ...]:
+    """Build the stable exact-occurrence key used by review and validation."""
+
+    return (
+        item["source_id"],
+        int(item["page"]),
+        str(item["position"]),
+        *(round(float(item[name]), 6) for name in ("x", "y", "width", "height")),
+    )
 
 
 @dataclass(frozen=True)

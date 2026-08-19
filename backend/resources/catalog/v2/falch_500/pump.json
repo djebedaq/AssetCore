@@ -2193,8 +2193,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2208,7 +2208,7 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен векторен етикет №1.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2223,8 +2223,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2238,7 +2238,7 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен векторен етикет №3.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2253,8 +2253,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2268,8 +2268,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2283,8 +2283,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2298,8 +2298,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2313,8 +2313,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2328,7 +2328,7 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверено повторение №9 в детайлния изглед.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2343,7 +2343,7 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен етикет №9 в основния изглед.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2358,8 +2358,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2373,8 +2373,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2388,8 +2388,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2403,8 +2403,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2418,8 +2418,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2433,8 +2433,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2448,8 +2448,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2463,8 +2463,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2478,7 +2478,7 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверено повторение №14 в детайлния изглед.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2493,7 +2493,7 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен етикет №14 в основния изглед.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2508,8 +2508,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2523,8 +2523,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2538,8 +2538,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2553,8 +2553,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2568,8 +2568,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2583,8 +2583,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2598,8 +2598,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2613,8 +2613,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2628,8 +2628,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2643,8 +2643,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2658,8 +2658,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2673,8 +2673,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2688,8 +2688,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2703,8 +2703,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2718,8 +2718,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2733,8 +2733,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2748,8 +2748,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2763,8 +2763,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2778,8 +2778,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2793,8 +2793,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2808,8 +2808,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2823,8 +2823,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2838,8 +2838,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2853,8 +2853,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2868,8 +2868,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2883,8 +2883,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2898,8 +2898,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2913,8 +2913,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2928,8 +2928,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2943,8 +2943,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2958,8 +2958,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2973,8 +2973,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -2988,8 +2988,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3003,8 +3003,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3018,8 +3018,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3033,8 +3033,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3048,8 +3048,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3063,8 +3063,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3078,8 +3078,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3093,8 +3093,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3108,8 +3108,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3123,8 +3123,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3138,8 +3138,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3153,8 +3153,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3168,8 +3168,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3183,8 +3183,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3198,8 +3198,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -3213,8 +3213,8 @@
       "family": "FALCH_500",
       "assembly": "PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     }
   ]
 }

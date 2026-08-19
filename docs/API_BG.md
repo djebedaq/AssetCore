@@ -67,11 +67,11 @@
 | `GET` | `/api/catalog/v2/machines/{machine_id}` | exact family mapping, налични възли, схеми и бройки; unsupported модел връща празен контекст |
 | `GET` | `/api/catalog/v2/assemblies/{source_id}?machine_id=...` | focused source възел с всички source variants и diagram metadata |
 | `GET` | `/api/catalog/v2/search?machine_id=...&q=...` | търсене по Part No., replaced number, описание, позиция, Valid for и repair kit |
-| `GET` | `/api/catalog/v2/diagrams/{diagram_id}/hotspots?machine_id=...&verified_only=true` | съвместими position-centric области и всички variants на позицията; `false` изисква `parts.manage` |
+| `GET` | `/api/catalog/v2/diagrams/{diagram_id}/hotspots?machine_id=...&verified_only=true` | съвместими position-centric области и всички variants; и `AUTO_MATCHED`, и `MANUALLY_CONFIRMED` са активни за mechanic; `false` изисква `parts.manage` |
 | `GET` | `/api/catalog/v2/repair-kits?machine_id=...&source_id=...` | active, approved, source-scoped комплекти и точните им компоненти |
 | `GET` | `/api/catalog/v2/repair-kits/{kit_id}?machine_id=...` | един комплект с source quantity/provenance за всеки компонент |
-| `PATCH` | `/api/catalog/v2/hotspots/{hotspot_id}` | admin/`parts.manage` корекция с причина и audit |
-| `GET` | `/api/catalog/v2/position-mapping/coverage` | admin отчет за 12-те проверени страници, покритие, повторения и отхвърлени числови кандидати |
+| `PATCH` | `/api/catalog/v2/hotspots/{hotspot_id}` | admin/`parts.manage` корекция с причина; exact occurrence става `MANUALLY_CONFIRMED`, а предишни/нови provenance и geometry се audit-ват |
+| `GET` | `/api/catalog/v2/position-mapping/coverage` | admin отчет за 12-те страници, 581 позиции/818 области и реалната `AUTO_MATCHED`/`MANUALLY_CONFIRMED` разбивка |
 | `GET/POST` | `/api/catalog/parts` | проверим каталог с provenance |
 | `POST` | `/api/catalog/parts/{id}/verify` | човешко потвърждение на каталожна част |
 | `GET/POST` | `/api/catalog/parts/{id}/images` | списък/качване на проверено каталожно изображение |

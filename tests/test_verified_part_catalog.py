@@ -6,6 +6,7 @@ from collections import Counter
 from pathlib import Path
 
 from app.catalog.importer import import_authoritative_catalog
+from app.catalog.position_mapping import AUTO_MATCHED, MANUALLY_CONFIRMED
 from app.catalog.sources import CATALOG_VERSION, dataset_sources, source_relative_path
 from app.catalog.validation import validate_catalog_v2
 from app.models import (
@@ -32,6 +33,29 @@ def _machine_ids(session_factory) -> dict[str, int]:
             machine.inventory_number: machine.id
             for machine in session.scalars(select(Machine))
         }
+
+
+def _catalog_mechanic_headers(client, session_factory, suffix: str) -> dict[str, str]:
+    from app.security import hash_password
+
+    email = f"mapping-mechanic-{suffix}@assetcore.test"
+    password = "MappingMechanic123!"
+    with session_factory() as session:
+        session.add(
+            User(
+                email=email,
+                full_name="Тестов каталожен механик",
+                password_hash=hash_password(password),
+                role="mechanic",
+            )
+        )
+        session.commit()
+    login = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert login.status_code == 200
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 
 def test_authoritative_catalog_import_preserves_all_source_rows_and_traceability(
@@ -209,6 +233,16 @@ def test_repeated_positions_replacements_kits_and_hotspots_remain_source_exact(
                 CatalogPositionHotspot.is_verified.is_(True)
             )
         ) == 818
+        assert session.scalar(
+            select(func.count(CatalogPositionHotspot.id)).where(
+                CatalogPositionHotspot.provenance == AUTO_MATCHED
+            )
+        ) == 774
+        assert session.scalar(
+            select(func.count(CatalogPositionHotspot.id)).where(
+                CatalogPositionHotspot.provenance == MANUALLY_CONFIRMED
+            )
+        ) == 44
         assert all(
             kit.is_active and kit.is_approved and kit.source_version == CATALOG_VERSION
             for kit in session.scalars(select(RepairKit))
@@ -346,8 +380,8 @@ def test_diagram_position_api_returns_exact_hydwin_position_34(
     assert response.status_code == 200, response.text
     hotspot = next(item for item in response.json() if item["position"] == "34")
     assert hotspot["is_verified"] is True
-    assert hotspot["provenance"]
-    assert hotspot["confidence"] == 1.0
+    assert hotspot["provenance"] == AUTO_MATCHED
+    assert hotspot["confidence"] is None
     assert len(hotspot["variants"]) == 1
     part = hotspot["variants"][0]
     assert part["part_number"] == "7.906-007.11"
@@ -390,9 +424,21 @@ def test_repair_kit_api_is_source_scoped_and_authorized(
 
 def test_admin_hotspot_correction_is_audited(client, auth_headers, session_factory):
     with session_factory() as session:
-        hotspot = session.scalar(select(CatalogPositionHotspot))
+        hotspot = session.scalar(
+            select(CatalogPositionHotspot).where(
+                CatalogPositionHotspot.provenance == AUTO_MATCHED
+            )
+        )
         hotspot_id = hotspot.id
-        old_x = hotspot.x
+        before_state = {
+            "x": hotspot.x,
+            "y": hotspot.y,
+            "width": hotspot.width,
+            "height": hotspot.height,
+            "is_verified": hotspot.is_verified,
+            "provenance": hotspot.provenance,
+            "confidence": hotspot.confidence,
+        }
         audit_before = session.scalar(
             select(func.count(AuditLog.id)).where(
                 AuditLog.entity_type == "catalog_position_hotspot"
@@ -401,19 +447,51 @@ def test_admin_hotspot_correction_is_audited(client, auth_headers, session_facto
     response = client.patch(
         f"/api/catalog/v2/hotspots/{hotspot_id}",
         headers=auth_headers,
-        json={"x": min(old_x + 0.001, 0.97), "y": 0.5, "width": 0.03, "height": 0.03, "is_verified": True, "reason": "Тестова визуална повторна проверка"},
+        json={
+            "x": min(before_state["x"] + 0.001, 1 - before_state["width"]),
+            "y": before_state["y"],
+            "width": before_state["width"],
+            "height": before_state["height"],
+            "is_verified": True,
+            "reason": "Тестова визуална повторна проверка",
+        },
     )
     assert response.status_code == 200, response.text
+    assert response.json()["provenance"] == MANUALLY_CONFIRMED
     with session_factory() as session:
         audits = list(
             session.scalars(
                 select(AuditLog).where(
                     AuditLog.entity_type == "catalog_position_hotspot"
-                )
+                ).order_by(AuditLog.id)
             )
         )
         assert len(audits) == audit_before + 1
-        assert json.loads(audits[-1].details)["reason"] == "Тестова визуална повторна проверка"
+        details = json.loads(audits[-1].details)
+        assert details["reason"] == "Тестова визуална повторна проверка"
+        assert details["before"] == before_state
+        assert details["after"]["provenance"] == MANUALLY_CONFIRMED
+        assert details["after"]["confidence"] == 1.0
+        corrected = session.get(CatalogPositionHotspot, hotspot_id)
+        corrected_geometry = (
+            corrected.x,
+            corrected.y,
+            corrected.width,
+            corrected.height,
+        )
+        verifier = session.scalar(
+            select(User).where(User.email == "admin@assetcore.local")
+        )
+        import_authoritative_catalog(session, verifier)
+        session.commit()
+        session.refresh(corrected)
+        assert corrected.provenance == MANUALLY_CONFIRMED
+        assert (
+            corrected.x,
+            corrected.y,
+            corrected.width,
+            corrected.height,
+        ) == corrected_geometry
 
 
 def test_position_mapping_is_complete_traceable_and_allows_repeat_occurrences():
@@ -427,7 +505,71 @@ def test_position_mapping_is_complete_traceable_and_allows_repeat_occurrences():
     assert result["positions_not_drawn_count"] == 2
     assert result["false_numeric_candidate_count"] == 28
     assert result["pdf_text_geometry_verified_count"] == 0
-    assert result["manual_visual_verification_count"] == 818
+    assert result["auto_matched_occurrence_count"] == 774
+    assert result["manually_confirmed_occurrence_count"] == 44
+    assert (
+        result["auto_matched_occurrence_count"]
+        + result["manually_confirmed_occurrence_count"]
+        == result["hotspot_count"]
+    )
+
+
+def test_auto_matched_hotspot_remains_visible_and_usable_for_mechanic(
+    client, session_factory
+):
+    headers = _catalog_mechanic_headers(client, session_factory, "auto")
+    machine_id = _machine_ids(session_factory)["9"]
+    with session_factory() as session:
+        diagram = session.scalar(
+            select(CatalogDiagram).where(
+                CatalogDiagram.source_id == "falch_500_valve_500bar"
+            )
+        )
+        hotspot = session.scalar(
+            select(CatalogPositionHotspot).where(
+                CatalogPositionHotspot.diagram_id == diagram.id,
+                CatalogPositionHotspot.provenance == AUTO_MATCHED,
+            )
+        )
+        hotspot_id = hotspot.id
+    response = client.get(
+        f"/api/catalog/v2/diagrams/{diagram.id}/hotspots?machine_id={machine_id}",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    visible = next(item for item in response.json() if item["id"] == hotspot_id)
+    assert visible["provenance"] == AUTO_MATCHED
+    assert visible["is_verified"] is True
+    assert visible["variants"]
+
+
+def test_manually_confirmed_hotspot_remains_visible_and_usable_for_mechanic(
+    client, session_factory
+):
+    headers = _catalog_mechanic_headers(client, session_factory, "manual")
+    machine_id = _machine_ids(session_factory)["9"]
+    with session_factory() as session:
+        diagram = session.scalar(
+            select(CatalogDiagram).where(
+                CatalogDiagram.source_id == "falch_500_pump"
+            )
+        )
+        hotspot = session.scalar(
+            select(CatalogPositionHotspot).where(
+                CatalogPositionHotspot.diagram_id == diagram.id,
+                CatalogPositionHotspot.provenance == MANUALLY_CONFIRMED,
+            )
+        )
+        hotspot_id = hotspot.id
+    response = client.get(
+        f"/api/catalog/v2/diagrams/{diagram.id}/hotspots?machine_id={machine_id}",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    visible = next(item for item in response.json() if item["id"] == hotspot_id)
+    assert visible["provenance"] == MANUALLY_CONFIRMED
+    assert visible["is_verified"] is True
+    assert visible["variants"]
 
 
 def test_position_mapping_coverage_endpoint_is_admin_only(
@@ -449,18 +591,8 @@ def test_position_mapping_coverage_endpoint_is_admin_only(
 def test_unverified_qa_geometry_is_not_exposed_to_standard_catalog_users(
     client, session_factory
 ):
-    from app.security import hash_password
-
+    headers = _catalog_mechanic_headers(client, session_factory, "unverified")
     with session_factory() as session:
-        session.add(
-            User(
-                email="mapping-mechanic@assetcore.test",
-                full_name="Тестов каталожен механик",
-                password_hash=hash_password("MappingMechanic123!"),
-                role="mechanic",
-            )
-        )
-        session.commit()
         machine_id = session.scalar(
             select(Machine.id).where(Machine.inventory_number == "9")
         )
@@ -469,15 +601,6 @@ def test_unverified_qa_geometry_is_not_exposed_to_standard_catalog_users(
                 CatalogDiagram.source_id == "falch_500_valve_500bar"
             )
         )
-    login = client.post(
-        "/api/auth/login",
-        json={
-            "email": "mapping-mechanic@assetcore.test",
-            "password": "MappingMechanic123!",
-        },
-    )
-    assert login.status_code == 200
-    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
     verified = client.get(
         f"/api/catalog/v2/diagrams/{diagram_id}/hotspots?machine_id={machine_id}&verified_only=true",
         headers=headers,

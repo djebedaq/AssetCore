@@ -9,6 +9,7 @@ from ..database import get_db
 from ..models import CatalogPositionHotspot, User, utcnow
 from ..permissions import Permission, ensure_permission, require_permission
 from . import service
+from .position_mapping import MANUALLY_CONFIRMED
 from .schemas import (
     AssemblyDetailsOut,
     CatalogPartOut,
@@ -132,6 +133,8 @@ def update_hotspot(
         "width": hotspot.width,
         "height": hotspot.height,
         "is_verified": hotspot.is_verified,
+        "provenance": hotspot.provenance,
+        "confidence": hotspot.confidence,
     }
     hotspot.x = payload.x
     hotspot.y = payload.y
@@ -140,9 +143,13 @@ def update_hotspot(
     hotspot.is_verified = payload.is_verified
     hotspot.verified_by_id = user.id if payload.is_verified else None
     hotspot.verified_at = utcnow() if payload.is_verified else None
-    hotspot.provenance = (
-        f"{hotspot.provenance}\nАдминистративна проверка: {payload.reason}"
-    )
+    hotspot.provenance = MANUALLY_CONFIRMED
+    hotspot.confidence = 1.0
+    after = {
+        **payload.model_dump(exclude={"reason"}),
+        "provenance": hotspot.provenance,
+        "confidence": hotspot.confidence,
+    }
     add_audit_log(
         db,
         user,
@@ -155,7 +162,7 @@ def update_hotspot(
             "source_id": hotspot.diagram.source_id,
             "source_page": hotspot.diagram.page_number,
             "before": before,
-            "after": payload.model_dump(exclude={"reason"}),
+            "after": after,
             "reason": payload.reason,
         },
         hotspot.hotspot_key,
@@ -171,4 +178,5 @@ def update_hotspot(
         "width": hotspot.width,
         "height": hotspot.height,
         "provenance": hotspot.provenance,
+        "confidence": hotspot.confidence,
     }

@@ -12,13 +12,12 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.catalog.sources import CATALOG_ROOT, dataset_sources, load_source_dataset  # noqa: E402
-
-PROVENANCE = (
-    "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е "
-    "съпоставен визуално с контролираната оригинална PDF страница; OCR не е "
-    "използван като самостоятелно доказателство."
+from app.catalog.position_mapping import (  # noqa: E402
+    AUTO_MATCHED,
+    MANUALLY_CONFIRMED,
+    occurrence_identity,
 )
+from app.catalog.sources import CATALOG_ROOT, dataset_sources, load_source_dataset  # noqa: E402
 
 
 def _position_sort(value: str) -> tuple[int, str]:
@@ -54,6 +53,52 @@ def _same_occurrence(left: dict[str, Any], right: dict[str, Any]) -> bool:
         right["y"] + right["height"] / 2,
     )
     return math.dist(left_center, right_center) <= 0.012
+
+
+def relabel_existing_hotspots(*, review_path: Path, write: bool) -> dict[str, int]:
+    """Correct provenance without changing occurrence identity or geometry."""
+
+    review = json.loads(review_path.read_text(encoding="utf-8"))
+    manual_occurrences = {
+        occurrence_identity(item)
+        for item in review.get("manual_occurrences") or []
+    }
+    matched_manual: set[tuple[Any, ...]] = set()
+    counts = {AUTO_MATCHED: 0, MANUALLY_CONFIRMED: 0}
+
+    for source in dataset_sources():
+        if not source.get("records_file") or not source.get("diagram_pages"):
+            continue
+        payload = load_source_dataset(source)
+        for hotspot in payload.get("hotspots") or []:
+            identity = occurrence_identity(hotspot)
+            provenance = (
+                MANUALLY_CONFIRMED if identity in manual_occurrences else AUTO_MATCHED
+            )
+            if provenance == MANUALLY_CONFIRMED:
+                if identity in matched_manual:
+                    raise RuntimeError(f"Duplicate manual occurrence evidence: {identity}")
+                matched_manual.add(identity)
+            hotspot["provenance"] = provenance
+            hotspot["confidence"] = (
+                1.0 if provenance == MANUALLY_CONFIRMED else None
+            )
+            counts[provenance] += 1
+        if write:
+            dataset_path = CATALOG_ROOT / str(source["records_file"])
+            dataset_path.write_text(
+                f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n",
+                encoding="utf-8",
+            )
+
+    unmatched = manual_occurrences - matched_manual
+    if unmatched:
+        raise RuntimeError(f"Manual occurrence evidence not found in datasets: {unmatched}")
+    return {
+        "hotspot_occurrence_count": sum(counts.values()),
+        "auto_matched_occurrence_count": counts[AUTO_MATCHED],
+        "manually_confirmed_occurrence_count": counts[MANUALLY_CONFIRMED],
+    }
 
 
 def _load_ocr_candidates(paths: list[Path]) -> tuple[list[dict[str, Any]], int]:
@@ -120,7 +165,7 @@ def finalize(
             **item,
             "position": str(item["position"]),
             "ocr_confidence": 1.0,
-            "verification_method": "MANUAL_VISUAL_VERIFICATION",
+            "verification_method": MANUALLY_CONFIRMED,
         }
         duplicate = next((value for value in accepted if _same_occurrence(value, candidate)), None)
         if duplicate:
@@ -139,6 +184,8 @@ def finalize(
     total_occurrences = 0
     total_positions = 0
     unresolved_total = 0
+    total_auto_matched = 0
+    total_manually_confirmed = 0
 
     for source in dataset_sources():
         if not source.get("records_file") or not source.get("diagram_pages"):
@@ -170,6 +217,11 @@ def finalize(
                 if occurrence <= len(preserved)
                 else f"{source['source_id']}:p{candidate['page']}:pos{candidate['position']}:occ{occurrence:02d}"
             )
+            provenance = (
+                MANUALLY_CONFIRMED
+                if candidate.get("verification_method") == MANUALLY_CONFIRMED
+                else AUTO_MATCHED
+            )
             hotspots.append(
                 {
                     "page": candidate["page"],
@@ -183,8 +235,8 @@ def finalize(
                     "family": source["family"],
                     "assembly": source["assembly"],
                     "is_verified": True,
-                    "provenance": f"{PROVENANCE} {candidate.get('reason', '')}".strip(),
-                    "confidence": 1.0,
+                    "provenance": provenance,
+                    "confidence": 1.0 if provenance == MANUALLY_CONFIRMED else None,
                 }
             )
         bom_positions = {str(record["position"]) for record in payload.get("records") or []}
@@ -216,12 +268,18 @@ def finalize(
                 f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n",
                 encoding="utf-8",
             )
+        manually_confirmed_count = sum(
+            item["provenance"] == MANUALLY_CONFIRMED for item in hotspots
+        )
+        auto_matched_count = len(hotspots) - manually_confirmed_count
         source_summary = {
             "source_id": source["source_id"],
             "diagram_pages": source["diagram_pages"],
             "bom_position_count": len(bom_positions),
             "mapped_position_count": len(mapped_positions),
             "hotspot_occurrence_count": len(hotspots),
+            "auto_matched_occurrence_count": auto_matched_count,
+            "manually_confirmed_occurrence_count": manually_confirmed_count,
             "duplicate_callout_count": len(hotspots) - len(mapped_positions),
             "positions_not_drawn": expected_not_drawn,
             "unresolved_position_count": len(unresolved),
@@ -230,6 +288,8 @@ def finalize(
         total_occurrences += len(hotspots)
         total_positions += len(mapped_positions)
         unresolved_total += len(unresolved)
+        total_auto_matched += auto_matched_count
+        total_manually_confirmed += manually_confirmed_count
 
     return {
         "review_version": review["review_version"],
@@ -240,12 +300,13 @@ def finalize(
         "totals": {
             "mapped_position_count": total_positions,
             "hotspot_occurrence_count": total_occurrences,
+            "auto_matched_occurrence_count": total_auto_matched,
+            "manually_confirmed_occurrence_count": total_manually_confirmed,
             "duplicate_callout_count": total_occurrences - total_positions,
             "unresolved_position_count": unresolved_total,
             "positions_not_drawn_count": len(not_drawn),
             "false_numeric_candidate_count": pdf_false_count + len(excluded),
             "pdf_text_geometry_verified_count": 0,
-            "manual_visual_verification_count": total_occurrences,
         },
     }
 
@@ -254,7 +315,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Finalize visually reviewed position geometry into catalog datasets."
     )
-    parser.add_argument("--audit", action="append", type=Path, required=True)
+    parser.add_argument("--audit", action="append", type=Path)
     parser.add_argument(
         "--review",
         type=Path,
@@ -262,12 +323,25 @@ def main() -> int:
     )
     parser.add_argument("--report", type=Path)
     parser.add_argument("--write", action="store_true")
-    arguments = parser.parse_args()
-    report = finalize(
-        audit_paths=arguments.audit,
-        review_path=arguments.review,
-        write=arguments.write,
+    parser.add_argument(
+        "--relabel-existing",
+        action="store_true",
+        help="Update provenance only; preserve every existing hotspot geometry value.",
     )
+    arguments = parser.parse_args()
+    if arguments.relabel_existing:
+        report = relabel_existing_hotspots(
+            review_path=arguments.review,
+            write=arguments.write,
+        )
+    else:
+        if not arguments.audit:
+            parser.error("--audit is required unless --relabel-existing is used")
+        report = finalize(
+            audit_paths=arguments.audit,
+            review_path=arguments.review,
+            write=arguments.write,
+        )
     output = f"{json.dumps(report, ensure_ascii=False, indent=2)}\n"
     if arguments.report:
         arguments.report.write_text(output, encoding="utf-8")

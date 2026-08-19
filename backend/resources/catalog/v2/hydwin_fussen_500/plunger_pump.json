@@ -1998,7 +1998,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №1.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2013,7 +2013,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №2.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2028,7 +2028,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №3.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2043,7 +2043,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №4.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2058,8 +2058,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2073,7 +2073,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №6.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2088,7 +2088,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №7.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2103,7 +2103,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №8.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2118,7 +2118,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №9.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2133,8 +2133,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2148,7 +2148,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №11.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2163,8 +2163,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2178,8 +2178,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2193,7 +2193,7 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен вертикален етикет №14.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -2208,8 +2208,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2223,8 +2223,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2238,8 +2238,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2253,8 +2253,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2268,8 +2268,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2283,8 +2283,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2298,8 +2298,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2313,8 +2313,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2328,8 +2328,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2343,8 +2343,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2358,8 +2358,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2373,8 +2373,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2388,8 +2388,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2403,8 +2403,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2418,8 +2418,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2433,8 +2433,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2448,8 +2448,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2463,8 +2463,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2478,8 +2478,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2493,8 +2493,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2508,8 +2508,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2523,8 +2523,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2538,8 +2538,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2553,8 +2553,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2568,8 +2568,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2583,8 +2583,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2598,8 +2598,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2613,8 +2613,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2628,8 +2628,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2643,8 +2643,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2658,8 +2658,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2673,8 +2673,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2688,8 +2688,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2703,8 +2703,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2718,8 +2718,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2733,8 +2733,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2748,8 +2748,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2763,8 +2763,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2778,8 +2778,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2793,8 +2793,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2808,8 +2808,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2823,8 +2823,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2838,8 +2838,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2853,8 +2853,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2868,8 +2868,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2883,8 +2883,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2898,8 +2898,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2913,8 +2913,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2928,8 +2928,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2943,8 +2943,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 21,
@@ -2958,8 +2958,8 @@
       "family": "HYDWIN_FUSSEN_500",
       "assembly": "PLUNGER_PUMP",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     }
   ]
 }

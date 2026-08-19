@@ -155,6 +155,7 @@ class HotspotUpdateOut(BaseModel):
     width: float
     height: float
     provenance: str
+    confidence: float | None = None
 
 
 class PositionMappingCoverageOut(BaseModel):

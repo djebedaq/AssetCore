@@ -4887,7 +4887,7 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен векторен етикет №1.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -4902,8 +4902,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -4917,7 +4917,7 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен векторен етикет №3.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -4932,8 +4932,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -4947,8 +4947,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -4962,8 +4962,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -4977,8 +4977,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -4992,8 +4992,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5007,8 +5007,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5022,8 +5022,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5037,8 +5037,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5052,8 +5052,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5067,8 +5067,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5082,8 +5082,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5097,8 +5097,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5112,8 +5112,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5127,8 +5127,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5142,8 +5142,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5157,8 +5157,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5172,8 +5172,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5187,8 +5187,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5202,8 +5202,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5217,8 +5217,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5232,8 +5232,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5247,8 +5247,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5262,8 +5262,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5277,8 +5277,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5292,8 +5292,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5307,8 +5307,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5322,8 +5322,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5337,8 +5337,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5352,8 +5352,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5367,8 +5367,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5382,8 +5382,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5397,8 +5397,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5412,8 +5412,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5427,8 +5427,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5442,8 +5442,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 1,
@@ -5457,7 +5457,7 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Ръчно разделен и визуално проверен OCR фрагмент „-125“.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -5472,8 +5472,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5487,8 +5487,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5502,8 +5502,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5517,8 +5517,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5532,8 +5532,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5547,8 +5547,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5562,8 +5562,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5577,8 +5577,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5592,8 +5592,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5607,7 +5607,7 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Ръчно разделен и визуално проверен OCR фрагмент „41-“.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -5622,8 +5622,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5637,8 +5637,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5652,8 +5652,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5667,8 +5667,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5682,8 +5682,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5697,8 +5697,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5712,8 +5712,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5727,8 +5727,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5742,8 +5742,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5757,8 +5757,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5772,8 +5772,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5787,8 +5787,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5802,8 +5802,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5817,8 +5817,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5832,8 +5832,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5847,8 +5847,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5862,8 +5862,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5877,8 +5877,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5892,8 +5892,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5907,8 +5907,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5922,8 +5922,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5937,8 +5937,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5952,8 +5952,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5967,8 +5967,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5982,8 +5982,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -5997,8 +5997,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6012,8 +6012,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6027,8 +6027,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6042,8 +6042,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6057,8 +6057,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6072,8 +6072,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6087,8 +6087,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6102,8 +6102,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6117,8 +6117,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6132,8 +6132,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6147,8 +6147,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6162,8 +6162,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6177,8 +6177,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6192,8 +6192,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6207,8 +6207,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6222,8 +6222,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6237,8 +6237,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6252,8 +6252,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6267,8 +6267,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6282,8 +6282,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6297,8 +6297,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6312,8 +6312,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6327,8 +6327,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6342,8 +6342,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6357,8 +6357,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6372,8 +6372,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6387,8 +6387,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6402,8 +6402,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6417,8 +6417,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6432,8 +6432,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6447,8 +6447,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6462,8 +6462,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 2,
@@ -6477,8 +6477,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6492,7 +6492,7 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство. Визуално проверен векторен етикет №21.",
+      "provenance": "MANUALLY_CONFIRMED",
       "confidence": 1.0
     },
     {
@@ -6507,8 +6507,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6522,8 +6522,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6537,8 +6537,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6552,8 +6552,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6567,8 +6567,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6582,8 +6582,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6597,8 +6597,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6612,8 +6612,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6627,8 +6627,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6642,8 +6642,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6657,8 +6657,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6672,8 +6672,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6687,8 +6687,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6702,8 +6702,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6717,8 +6717,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6732,8 +6732,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6747,8 +6747,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6762,8 +6762,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6777,8 +6777,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6792,8 +6792,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6807,8 +6807,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6822,8 +6822,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6837,8 +6837,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6852,8 +6852,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6867,8 +6867,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6882,8 +6882,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6897,8 +6897,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6912,8 +6912,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6927,8 +6927,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6942,8 +6942,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6957,8 +6957,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6972,8 +6972,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -6987,8 +6987,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7002,8 +7002,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7017,8 +7017,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7032,8 +7032,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7047,8 +7047,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7062,8 +7062,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7077,8 +7077,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7092,8 +7092,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7107,8 +7107,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7122,8 +7122,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7137,8 +7137,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7152,8 +7152,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7167,8 +7167,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7182,8 +7182,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7197,8 +7197,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7212,8 +7212,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7227,8 +7227,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7242,8 +7242,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7257,8 +7257,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7272,8 +7272,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7287,8 +7287,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7302,8 +7302,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7317,8 +7317,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7332,8 +7332,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7347,8 +7347,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7362,8 +7362,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7377,8 +7377,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7392,8 +7392,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7407,8 +7407,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7422,8 +7422,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7437,8 +7437,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7452,8 +7452,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7467,8 +7467,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7482,8 +7482,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7497,8 +7497,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7512,8 +7512,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7527,8 +7527,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7542,8 +7542,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7557,8 +7557,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7572,8 +7572,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7587,8 +7587,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7602,8 +7602,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7617,8 +7617,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7632,8 +7632,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7647,8 +7647,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7662,8 +7662,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7677,8 +7677,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7692,8 +7692,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     },
     {
       "page": 3,
@@ -7707,8 +7707,8 @@
       "family": "FALCH_500",
       "assembly": "WHEEL_JET",
       "is_verified": true,
-      "provenance": "MANUAL_VISUAL_VERIFICATION: геометричен кандидат от векторния етикет е съпоставен визуално с контролираната оригинална PDF страница; OCR не е използван като самостоятелно доказателство.",
-      "confidence": 1.0
+      "provenance": "AUTO_MATCHED",
+      "confidence": null
     }
   ]
 }

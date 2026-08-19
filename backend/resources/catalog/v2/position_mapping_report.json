@@ -12,6 +12,8 @@
       "bom_position_count": 142,
       "mapped_position_count": 142,
       "hotspot_occurrence_count": 189,
+      "auto_matched_occurrence_count": 184,
+      "manually_confirmed_occurrence_count": 5,
       "duplicate_callout_count": 47,
       "positions_not_drawn": [],
       "unresolved_position_count": 0
@@ -24,6 +26,8 @@
       "bom_position_count": 55,
       "mapped_position_count": 55,
       "hotspot_occurrence_count": 69,
+      "auto_matched_occurrence_count": 63,
+      "manually_confirmed_occurrence_count": 6,
       "duplicate_callout_count": 14,
       "positions_not_drawn": [],
       "unresolved_position_count": 0
@@ -36,6 +40,8 @@
       "bom_position_count": 63,
       "mapped_position_count": 62,
       "hotspot_occurrence_count": 108,
+      "auto_matched_occurrence_count": 105,
+      "manually_confirmed_occurrence_count": 3,
       "duplicate_callout_count": 46,
       "positions_not_drawn": [
         "0"
@@ -50,6 +56,8 @@
       "bom_position_count": 29,
       "mapped_position_count": 29,
       "hotspot_occurrence_count": 56,
+      "auto_matched_occurrence_count": 56,
+      "manually_confirmed_occurrence_count": 0,
       "duplicate_callout_count": 27,
       "positions_not_drawn": [],
       "unresolved_position_count": 0
@@ -64,6 +72,8 @@
       "bom_position_count": 161,
       "mapped_position_count": 161,
       "hotspot_occurrence_count": 222,
+      "auto_matched_occurrence_count": 204,
+      "manually_confirmed_occurrence_count": 18,
       "duplicate_callout_count": 61,
       "positions_not_drawn": [],
       "unresolved_position_count": 0
@@ -76,6 +86,8 @@
       "bom_position_count": 31,
       "mapped_position_count": 30,
       "hotspot_occurrence_count": 36,
+      "auto_matched_occurrence_count": 34,
+      "manually_confirmed_occurrence_count": 2,
       "duplicate_callout_count": 6,
       "positions_not_drawn": [
         "0"
@@ -90,6 +102,8 @@
       "bom_position_count": 44,
       "mapped_position_count": 44,
       "hotspot_occurrence_count": 73,
+      "auto_matched_occurrence_count": 73,
+      "manually_confirmed_occurrence_count": 0,
       "duplicate_callout_count": 29,
       "positions_not_drawn": [],
       "unresolved_position_count": 0
@@ -102,6 +116,8 @@
       "bom_position_count": 58,
       "mapped_position_count": 58,
       "hotspot_occurrence_count": 65,
+      "auto_matched_occurrence_count": 55,
+      "manually_confirmed_occurrence_count": 10,
       "duplicate_callout_count": 7,
       "positions_not_drawn": [],
       "unresolved_position_count": 0
@@ -110,11 +126,12 @@
   "totals": {
     "mapped_position_count": 581,
     "hotspot_occurrence_count": 818,
+    "auto_matched_occurrence_count": 774,
+    "manually_confirmed_occurrence_count": 44,
     "duplicate_callout_count": 237,
     "unresolved_position_count": 0,
     "positions_not_drawn_count": 2,
     "false_numeric_candidate_count": 28,
-    "pdf_text_geometry_verified_count": 0,
-    "manual_visual_verification_count": 818
+    "pdf_text_geometry_verified_count": 0
   }
 }
