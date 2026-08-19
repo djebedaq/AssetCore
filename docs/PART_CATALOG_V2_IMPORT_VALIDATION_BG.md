@@ -29,10 +29,10 @@ Falch anchors са проверени за Valve 500 bar позиции 3/4 и L
 - Repair kits: **7**.
 - Source-linked kit components: **84**.
 - Exploded diagram pages: **12**.
-- Визуално проверени position-centric hotspots: **6**.
-- Distinct source positions без проверена координата: **577** от общо 583.
+- Production-approved position-centric области: **818** за **581** отпечатани позиции върху **12** diagram страници — **774** `AUTO_MATCHED` и **44** exact `MANUALLY_CONFIRMED`.
+- Нерешени отпечатани позиции: **0**; два BOM реда позиция `0` за цели възли проверено не са отпечатани.
 
-Непроверените координати не са предполагани. Всички 611 реда остават достъпни чрез официалната позиционна таблица, а hotspot се показва само когато координатата е ръчно потвърдена.
+PDF text geometry е проверена първо, но отпечатаните callout номера са векторни контури. OCR и останалите автоматични правила създават `AUTO_MATCHED` области; page-level review не се представя като индивидуално ръчно потвърждение. Само 44 exact occurrences с explicit review evidence са `MANUALLY_CONFIRMED`. И двата типа остават активни, без approval burden. Подробности: [CATALOG_POSITION_MAPPING_VALIDATION_BG.md](CATALOG_POSITION_MAPPING_VALIDATION_BG.md).
 
 ## Възпроизводима проверка
 

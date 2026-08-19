@@ -7,8 +7,9 @@ from ..application_errors import ApplicationError
 from ..audit import add_audit_log
 from ..database import get_db
 from ..models import CatalogPositionHotspot, User, utcnow
-from ..permissions import Permission, require_permission
+from ..permissions import Permission, ensure_permission, require_permission
 from . import service
+from .position_mapping import MANUALLY_CONFIRMED
 from .schemas import (
     AssemblyDetailsOut,
     CatalogPartOut,
@@ -16,6 +17,7 @@ from .schemas import (
     HotspotUpdateOut,
     MachineCatalogOut,
     PositionHotspotOut,
+    PositionMappingCoverageOut,
     RepairKitOut,
 )
 
@@ -68,15 +70,24 @@ def get_diagram_hotspots(
     diagram_id: int,
     machine_id: int = Query(gt=0),
     verified_only: bool = True,
-    _: User = Depends(require_catalog_viewer),
+    user: User = Depends(require_catalog_viewer),
     db: Session = Depends(get_db),
 ) -> list[dict]:
+    if not verified_only:
+        ensure_permission(user, Permission.PARTS_MANAGE)
     return service.diagram_hotspots(
         db,
         diagram_id=diagram_id,
         machine_id=machine_id,
         verified_only=verified_only,
     )
+
+
+@router.get("/position-mapping/coverage", response_model=PositionMappingCoverageOut)
+def get_position_mapping_coverage(
+    _: User = Depends(require_catalog_manager),
+) -> dict:
+    return service.mapping_coverage()
 
 
 @router.get("/repair-kits", response_model=list[RepairKitOut])
@@ -122,6 +133,8 @@ def update_hotspot(
         "width": hotspot.width,
         "height": hotspot.height,
         "is_verified": hotspot.is_verified,
+        "provenance": hotspot.provenance,
+        "confidence": hotspot.confidence,
     }
     hotspot.x = payload.x
     hotspot.y = payload.y
@@ -130,9 +143,13 @@ def update_hotspot(
     hotspot.is_verified = payload.is_verified
     hotspot.verified_by_id = user.id if payload.is_verified else None
     hotspot.verified_at = utcnow() if payload.is_verified else None
-    hotspot.provenance = (
-        f"{hotspot.provenance}\nАдминистративна проверка: {payload.reason}"
-    )
+    hotspot.provenance = MANUALLY_CONFIRMED
+    hotspot.confidence = 1.0
+    after = {
+        **payload.model_dump(exclude={"reason"}),
+        "provenance": hotspot.provenance,
+        "confidence": hotspot.confidence,
+    }
     add_audit_log(
         db,
         user,
@@ -145,7 +162,7 @@ def update_hotspot(
             "source_id": hotspot.diagram.source_id,
             "source_page": hotspot.diagram.page_number,
             "before": before,
-            "after": payload.model_dump(exclude={"reason"}),
+            "after": after,
             "reason": payload.reason,
         },
         hotspot.hotspot_key,
@@ -156,4 +173,10 @@ def update_hotspot(
         "id": hotspot.id,
         "is_verified": hotspot.is_verified,
         "verified_at": hotspot.verified_at,
+        "x": hotspot.x,
+        "y": hotspot.y,
+        "width": hotspot.width,
+        "height": hotspot.height,
+        "provenance": hotspot.provenance,
+        "confidence": hotspot.confidence,
     }

@@ -1,0 +1,90 @@
+{
+  "review_version": "POSITION_MAPPING_REVIEW_V1",
+  "reviewed_pages": [
+    {"source_id": "falch_500_wheel_jet", "pages": [1, 2, 3]},
+    {"source_id": "falch_500_pump", "pages": [1]},
+    {"source_id": "falch_500_unloader_valve", "pages": [1]},
+    {"source_id": "falch_500_valve_500bar", "pages": [1]},
+    {"source_id": "falch_1000_wheel_jet", "pages": [1, 2, 3]},
+    {"source_id": "falch_1000_drive_pump", "pages": [1]},
+    {"source_id": "falch_1000_liquid_part", "pages": [1]},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "pages": [21]}
+  ],
+  "exclusion_zones": [
+    {
+      "source_id": "*",
+      "y_min": 0.88,
+      "reason": "Долен номер на страница или служебна колонтитулна препратка."
+    },
+    {
+      "source_id": "falch_1000_liquid_part",
+      "page": 1,
+      "positions": ["1", "2", "3", "4"],
+      "x_min": 0.86,
+      "y_min": 0.23,
+      "y_max": 0.33,
+      "reason": "Стъпки 1–4 от инструкцията за момент на затягане, не BOM указатели."
+    }
+  ],
+  "rotation_policy": {
+    "hydwin_fussen_500_plunger_pump": {
+      "primary": 270,
+      "fallback": 90
+    }
+  },
+  "manual_occurrences": [
+    {"source_id": "falch_500_wheel_jet", "page": 1, "position": "1", "x": 0.601, "y": 0.226, "width": 0.021, "height": 0.032, "reason": "Визуално проверен векторен етикет №1."},
+    {"source_id": "falch_500_wheel_jet", "page": 1, "position": "3", "x": 0.380, "y": 0.360, "width": 0.020, "height": 0.032, "reason": "Визуално проверен векторен етикет №3."},
+    {"source_id": "falch_500_wheel_jet", "page": 1, "position": "125", "x": 0.391, "y": 0.563, "width": 0.048, "height": 0.029, "reason": "Ръчно разделен и визуално проверен OCR фрагмент „-125“."},
+    {"source_id": "falch_500_wheel_jet", "page": 2, "position": "41", "x": 0.216, "y": 0.625, "width": 0.036, "height": 0.033, "reason": "Ръчно разделен и визуално проверен OCR фрагмент „41-“."},
+    {"source_id": "falch_500_wheel_jet", "page": 3, "position": "21", "x": 0.431, "y": 0.249, "width": 0.023, "height": 0.030, "reason": "Визуално проверен векторен етикет №21."},
+
+    {"source_id": "falch_500_pump", "page": 1, "position": "1", "x": 0.300, "y": 0.224, "width": 0.018, "height": 0.032, "reason": "Визуално проверен векторен етикет №1."},
+    {"source_id": "falch_500_pump", "page": 1, "position": "3", "x": 0.210, "y": 0.189, "width": 0.018, "height": 0.032, "reason": "Визуално проверен векторен етикет №3."},
+    {"source_id": "falch_500_pump", "page": 1, "position": "9", "x": 0.177, "y": 0.731, "width": 0.018, "height": 0.032, "reason": "Визуално проверен етикет №9 в основния изглед."},
+    {"source_id": "falch_500_pump", "page": 1, "position": "9", "x": 0.856, "y": 0.421, "width": 0.019, "height": 0.032, "reason": "Визуално проверено повторение №9 в детайлния изглед."},
+    {"source_id": "falch_500_pump", "page": 1, "position": "14", "x": 0.136, "y": 0.570, "width": 0.023, "height": 0.032, "reason": "Визуално проверен етикет №14 в основния изглед."},
+    {"source_id": "falch_500_pump", "page": 1, "position": "14", "x": 0.803, "y": 0.284, "width": 0.024, "height": 0.032, "reason": "Визуално проверено повторение №14 в детайлния изглед."},
+
+    {"source_id": "falch_500_unloader_valve", "page": 1, "position": "9", "x": 0.319, "y": 0.220, "width": 0.020, "height": 0.032, "reason": "Визуално проверен етикет №9 в основния изглед."},
+    {"source_id": "falch_500_unloader_valve", "page": 1, "position": "9", "x": 0.708, "y": 0.324, "width": 0.020, "height": 0.032, "reason": "Визуално проверено повторение №9 в сечението."},
+    {"source_id": "falch_500_unloader_valve", "page": 1, "position": "11", "x": 0.430, "y": 0.383, "width": 0.027, "height": 0.032, "reason": "Визуално проверен векторен етикет №11."},
+
+    {"source_id": "falch_1000_wheel_jet", "page": 1, "position": "94", "x": 0.250, "y": 0.343, "width": 0.027, "height": 0.028, "reason": "Визуално проверен етикет №94."},
+    {"source_id": "falch_1000_wheel_jet", "page": 1, "position": "95", "x": 0.276, "y": 0.343, "width": 0.027, "height": 0.028, "reason": "Визуално проверен етикет №95."},
+    {"source_id": "falch_1000_wheel_jet", "page": 1, "position": "110", "x": 0.335, "y": 0.656, "width": 0.032, "height": 0.030, "reason": "Ръчно разделен и визуално проверен OCR фрагмент „110-“."},
+    {"source_id": "falch_1000_wheel_jet", "page": 1, "position": "72", "x": 0.397, "y": 0.663, "width": 0.019, "height": 0.030, "reason": "Ръчно разделен и визуално проверен групиран етикет „72 71 70“."},
+    {"source_id": "falch_1000_wheel_jet", "page": 1, "position": "71", "x": 0.420, "y": 0.663, "width": 0.019, "height": 0.030, "reason": "Ръчно разделен и визуално проверен групиран етикет „72 71 70“."},
+    {"source_id": "falch_1000_wheel_jet", "page": 1, "position": "70", "x": 0.443, "y": 0.663, "width": 0.019, "height": 0.030, "reason": "Ръчно разделен и визуално проверен групиран етикет „72 71 70“."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "4", "x": 0.537, "y": 0.232, "width": 0.016, "height": 0.028, "reason": "Визуално проверен етикет №4."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "2", "x": 0.430, "y": 0.419, "width": 0.016, "height": 0.028, "reason": "Визуално проверен етикет №2."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "121", "x": 0.391, "y": 0.738, "width": 0.025, "height": 0.028, "reason": "Визуално проверен групиран етикет №121."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "125", "x": 0.414, "y": 0.738, "width": 0.025, "height": 0.028, "reason": "Визуално проверен групиран етикет №125."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "27", "x": 0.437, "y": 0.738, "width": 0.020, "height": 0.028, "reason": "Визуално проверен групиран етикет №27."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "141", "x": 0.585, "y": 0.811, "width": 0.026, "height": 0.028, "reason": "Визуално проверен групиран етикет №141."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "140", "x": 0.605, "y": 0.811, "width": 0.026, "height": 0.028, "reason": "Визуално проверен групиран етикет №140."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "86", "x": 0.625, "y": 0.811, "width": 0.020, "height": 0.028, "reason": "Визуално проверен групиран етикет №86."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "7", "x": 0.642, "y": 0.811, "width": 0.016, "height": 0.028, "reason": "Визуално проверен групиран етикет №7."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "113", "x": 0.670, "y": 0.811, "width": 0.027, "height": 0.028, "reason": "Визуално проверен групиран етикет №113."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "150", "x": 0.734, "y": 0.642, "width": 0.026, "height": 0.028, "reason": "Визуално проверен групиран етикет №150."},
+    {"source_id": "falch_1000_wheel_jet", "page": 3, "position": "147", "x": 0.757, "y": 0.642, "width": 0.026, "height": 0.028, "reason": "Визуално проверен групиран етикет №147."},
+
+    {"source_id": "falch_1000_drive_pump", "page": 1, "position": "1", "x": 0.351, "y": 0.378, "width": 0.021, "height": 0.032, "reason": "Визуално проверен векторен етикет №1."},
+    {"source_id": "falch_1000_drive_pump", "page": 1, "position": "27", "x": 0.394, "y": 0.704, "width": 0.027, "height": 0.032, "reason": "Ръчно разделен и визуално проверен OCR фрагмент „27-“."},
+
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "1", "x": 0.236, "y": 0.119, "width": 0.032, "height": 0.026, "reason": "Визуално проверен вертикален етикет №1."},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "2", "x": 0.185, "y": 0.146, "width": 0.032, "height": 0.026, "reason": "Визуално проверен вертикален етикет №2."},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "3", "x": 0.163, "y": 0.187, "width": 0.032, "height": 0.026, "reason": "Визуално проверен вертикален етикет №3."},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "4", "x": 0.750, "y": 0.640, "width": 0.032, "height": 0.026, "reason": "Визуално проверен вертикален етикет №4."},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "6", "x": 0.137, "y": 0.151, "width": 0.032, "height": 0.026, "reason": "Визуално проверен вертикален етикет №6."},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "7", "x": 0.833, "y": 0.779, "width": 0.032, "height": 0.026, "reason": "Визуално проверен вертикален етикет №7."},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "8", "x": 0.253, "y": 0.854, "width": 0.032, "height": 0.026, "reason": "Визуално проверен вертикален етикет №8."},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "9", "x": 0.170, "y": 0.256, "width": 0.032, "height": 0.026, "reason": "Визуално проверен вертикален етикет №9."},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "11", "x": 0.238, "y": 0.307, "width": 0.037, "height": 0.026, "reason": "Визуално проверен вертикален етикет №11."},
+    {"source_id": "hydwin_fussen_500_plunger_pump", "page": 21, "position": "14", "x": 0.326, "y": 0.430, "width": 0.037, "height": 0.026, "reason": "Визуално проверен вертикален етикет №14."}
+  ],
+  "positions_not_drawn": [
+    {"source_id": "falch_500_unloader_valve", "position": "0", "reason": "BOM ред за цял възел; позиция 0 не е отпечатана като указател в схема 1."},
+    {"source_id": "falch_1000_drive_pump", "position": "0", "reason": "BOM ред за цял възел; позиция 0 не е отпечатана като указател в схема 1."}
+  ]
+}

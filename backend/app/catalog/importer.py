@@ -21,6 +21,7 @@ from ..models import (
     User,
     utcnow,
 )
+from .position_mapping import MANUALLY_CONFIRMED, is_manually_confirmed
 from .sources import (
     CATALOG_VERSION,
     dataset_sources,
@@ -304,6 +305,9 @@ def _upsert_diagrams_and_hotspots(
                     CatalogPositionHotspot.hotspot_key == data["hotspot_key"]
                 )
             )
+            preserve_manual_correction = hotspot is not None and is_manually_confirmed(
+                hotspot.provenance
+            )
             if hotspot is None:
                 hotspot = CatalogPositionHotspot(
                     hotspot_key=data["hotspot_key"],
@@ -322,15 +326,22 @@ def _upsert_diagrams_and_hotspots(
             else:
                 hotspot.diagram_id = diagrams[data["page"]].id
                 hotspot.position = data["position"]
-                hotspot.x = data["x"]
-                hotspot.y = data["y"]
-                hotspot.width = data["width"]
-                hotspot.height = data["height"]
-                hotspot.provenance = data["provenance"]
-                hotspot.confidence = data.get("confidence")
+                if preserve_manual_correction:
+                    hotspot.provenance = MANUALLY_CONFIRMED
+                    hotspot.confidence = 1.0
+                else:
+                    hotspot.x = data["x"]
+                    hotspot.y = data["y"]
+                    hotspot.width = data["width"]
+                    hotspot.height = data["height"]
+                    hotspot.provenance = data["provenance"]
+                    hotspot.confidence = data.get("confidence")
             hotspot.is_verified = bool(data.get("is_verified"))
-            hotspot.verified_by_id = verifier.id if hotspot.is_verified else None
-            hotspot.verified_at = (hotspot.verified_at or utcnow()) if hotspot.is_verified else None
+            if not preserve_manual_correction:
+                hotspot.verified_by_id = verifier.id if hotspot.is_verified else None
+                hotspot.verified_at = (
+                    hotspot.verified_at or utcnow()
+                ) if hotspot.is_verified else None
 
 
 def _upsert_repair_kits(

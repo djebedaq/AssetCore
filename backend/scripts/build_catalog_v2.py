@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,11 @@ from typing import Any
 import pdfplumber
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.catalog.position_mapping import MANUALLY_CONFIRMED  # noqa: E402
+
 SOURCE_ROOT = ROOT / "resources" / "technical_docs" / "PARTS_CATALOG"
 OUTPUT_ROOT = ROOT / "resources" / "catalog" / "v2"
 DATASET_VERSION = "PARTS_CATALOG_V2"
@@ -402,7 +408,7 @@ def build() -> dict[str, Any]:
                 "family": source["family"],
                 "assembly": source["assembly"],
                 "is_verified": True,
-                "provenance": "Визуално проверен етикет върху контролираната PDF схема.",
+                "provenance": MANUALLY_CONFIRMED,
                 "confidence": 1.0,
             }
             for index, hotspot in enumerate(

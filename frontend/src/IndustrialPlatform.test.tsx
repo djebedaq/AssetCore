@@ -85,7 +85,7 @@ describe('индустриален каталог', () => {
       if (path.includes('/api/catalog/v2/diagrams/12/hotspots?')) return jsonResponse([{
         id: 34, hotspot_key: 'hydwin-34', diagram_id: 12, page_number: 21, position: '34',
         x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true,
-        provenance: 'manual_visual_verification', confidence: 1, variants: [part],
+        provenance: 'AUTO_MATCHED', confidence: null, variants: [part],
       }])
       if (path.includes('/api/technical-library/9/preview?page=21')) return new Response(new Blob(['preview'], { type: 'image/png' }))
       throw new Error(`Unexpected request: ${path}`)
@@ -102,11 +102,13 @@ describe('индустриален каталог', () => {
         <IndustrialCatalog defaultMachineId={machineId} />
       </I18nProvider>,
     )
-    await userEvent.click(await screen.findByRole('button', { name: 'Поз. 34' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Поз. 34:/ }))
 
     expect((await screen.findAllByText('Main water seal')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('Количество по схема').length).toBeGreaterThan(0)
     expect(screen.getAllByText('3').length).toBeGreaterThan(0)
+    expect(screen.queryByLabelText('Заявено количество 7.906-007.11')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Добави към заявка' }))
     expect(screen.getByLabelText('Заявено количество 7.906-007.11')).toHaveValue(1)
   })
 
