@@ -89,7 +89,25 @@ export type PositionHotspot = {
   is_verified: boolean
   provenance: string
   confidence?: number | null
+  verified_at?: string | null
   variants: CatalogPart[]
+}
+
+export type HotspotUpdate = Pick<
+  PositionHotspot,
+  'x' | 'y' | 'width' | 'height' | 'is_verified'
+> & { reason: string }
+
+export type HotspotUpdateResult = Pick<
+  PositionHotspot,
+  'id' | 'x' | 'y' | 'width' | 'height' | 'is_verified' | 'verified_at' | 'provenance'
+>
+
+export type PositionMappingCoverage = {
+  review_version: string
+  reviewed_diagram_page_count: number
+  sources: Array<Record<string, unknown>>
+  totals: Record<string, number>
 }
 
 export type RepairKitComponent = {

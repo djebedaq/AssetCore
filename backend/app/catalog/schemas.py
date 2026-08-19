@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class CatalogPartOut(BaseModel):
@@ -96,6 +96,7 @@ class PositionHotspotOut(BaseModel):
     is_verified: bool
     provenance: str
     confidence: float | None = None
+    verified_at: datetime | None = None
     variants: list[CatalogPartOut]
 
 
@@ -138,8 +139,26 @@ class HotspotUpdate(BaseModel):
     is_verified: bool
     reason: str = Field(min_length=5, max_length=1000)
 
+    @model_validator(mode="after")
+    def geometry_stays_on_page(self) -> "HotspotUpdate":
+        if self.x + self.width > 1 or self.y + self.height > 1:
+            raise ValueError("Областта трябва да остане изцяло в границите на схемата.")
+        return self
+
 
 class HotspotUpdateOut(BaseModel):
     id: int
     is_verified: bool
     verified_at: datetime | None = None
+    x: float
+    y: float
+    width: float
+    height: float
+    provenance: str
+
+
+class PositionMappingCoverageOut(BaseModel):
+    review_version: str
+    reviewed_diagram_page_count: int
+    sources: list[dict]
+    totals: dict

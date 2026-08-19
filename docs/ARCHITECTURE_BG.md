@@ -28,7 +28,7 @@
 
 `PartCatalog.source_record_key` е уникалната identity на source реда. Тя пази repeated positions/applicability variants, които старият ключ `brand + model + assembly + position + part_number` не можеше да представи без overwrite. Оригиналният номер, `Replaced by`, `quantity_raw`, `Valid for`, repair-kit code, source page/version/hash и anomaly codes остават отделни полета.
 
-`CatalogDiagram` свързва exact PDF page с контролиран `TechnicalDocument`. `CatalogPositionHotspot` е position-centric, а не `hotspot → part`: една позиция може безопасно да върне няколко source variants. Само шест ръчно проверени координати са активни; останалите позиции се избират от пълната source таблица. Административна корекция изисква `parts.manage`, причина и audit запис.
+`CatalogDiagram` свързва exact PDF page с контролиран `TechnicalDocument`. `CatalogPositionHotspot` е position-centric, а не `hotspot → part`: една позиция може безопасно да върне няколко source variants, а повторен указател има собствена област. Всички 581 действително отпечатани BOM позиции върху 12-те diagram страници са представени с 818 ръчно визуално проверени области. Два BOM реда `0` за цели възли проверено не са отпечатани. Административна корекция изисква `parts.manage`, причина и audit запис.
 
 `RepairKit`/`RepairKitComponent` се използват повторно, но active/approved records се rebuild-ват само от изричната Falch колона `Repair kit`. Source quantity за kit component не се смесва с order quantity при единичен избор. Старите каталог, kit и technical-document DB записи се деактивират, вместо да се изтриват, за да останат четими историческите ремонти и заявки.
 

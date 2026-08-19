@@ -7,7 +7,7 @@ from ..application_errors import ApplicationError
 from ..audit import add_audit_log
 from ..database import get_db
 from ..models import CatalogPositionHotspot, User, utcnow
-from ..permissions import Permission, require_permission
+from ..permissions import Permission, ensure_permission, require_permission
 from . import service
 from .schemas import (
     AssemblyDetailsOut,
@@ -16,6 +16,7 @@ from .schemas import (
     HotspotUpdateOut,
     MachineCatalogOut,
     PositionHotspotOut,
+    PositionMappingCoverageOut,
     RepairKitOut,
 )
 
@@ -68,15 +69,24 @@ def get_diagram_hotspots(
     diagram_id: int,
     machine_id: int = Query(gt=0),
     verified_only: bool = True,
-    _: User = Depends(require_catalog_viewer),
+    user: User = Depends(require_catalog_viewer),
     db: Session = Depends(get_db),
 ) -> list[dict]:
+    if not verified_only:
+        ensure_permission(user, Permission.PARTS_MANAGE)
     return service.diagram_hotspots(
         db,
         diagram_id=diagram_id,
         machine_id=machine_id,
         verified_only=verified_only,
     )
+
+
+@router.get("/position-mapping/coverage", response_model=PositionMappingCoverageOut)
+def get_position_mapping_coverage(
+    _: User = Depends(require_catalog_manager),
+) -> dict:
+    return service.mapping_coverage()
 
 
 @router.get("/repair-kits", response_model=list[RepairKitOut])
@@ -156,4 +166,9 @@ def update_hotspot(
         "id": hotspot.id,
         "is_verified": hotspot.is_verified,
         "verified_at": hotspot.verified_at,
+        "x": hotspot.x,
+        "y": hotspot.y,
+        "width": hotspot.width,
+        "height": hotspot.height,
+        "provenance": hotspot.provenance,
     }

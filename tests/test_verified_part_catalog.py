@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.catalog.importer import import_authoritative_catalog
 from app.catalog.sources import CATALOG_VERSION, dataset_sources, source_relative_path
+from app.catalog.validation import validate_catalog_v2
 from app.models import (
     AuditLog,
     CatalogDiagram,
@@ -207,7 +208,7 @@ def test_repeated_positions_replacements_kits_and_hotspots_remain_source_exact(
             select(func.count(CatalogPositionHotspot.id)).where(
                 CatalogPositionHotspot.is_verified.is_(True)
             )
-        ) == 6
+        ) == 818
         assert all(
             kit.is_active and kit.is_approved and kit.source_version == CATALOG_VERSION
             for kit in session.scalars(select(RepairKit))
@@ -400,7 +401,7 @@ def test_admin_hotspot_correction_is_audited(client, auth_headers, session_facto
     response = client.patch(
         f"/api/catalog/v2/hotspots/{hotspot_id}",
         headers=auth_headers,
-        json={"x": min(old_x + 0.001, 0.999), "y": 0.5, "width": 0.03, "height": 0.03, "is_verified": True, "reason": "Тестова визуална повторна проверка"},
+        json={"x": min(old_x + 0.001, 0.97), "y": 0.5, "width": 0.03, "height": 0.03, "is_verified": True, "reason": "Тестова визуална повторна проверка"},
     )
     assert response.status_code == 200, response.text
     with session_factory() as session:
@@ -413,6 +414,112 @@ def test_admin_hotspot_correction_is_audited(client, auth_headers, session_facto
         )
         assert len(audits) == audit_before + 1
         assert json.loads(audits[-1].details)["reason"] == "Тестова визуална повторна проверка"
+
+
+def test_position_mapping_is_complete_traceable_and_allows_repeat_occurrences():
+    result = validate_catalog_v2()
+    assert result["valid"] is True, result["errors"]
+    assert result["record_count"] == 611
+    assert result["diagram_position_count"] == 581
+    assert result["hotspot_count"] == 818
+    assert result["duplicate_callout_count"] == 237
+    assert result["unresolved_position_count"] == 0
+    assert result["positions_not_drawn_count"] == 2
+    assert result["false_numeric_candidate_count"] == 28
+    assert result["pdf_text_geometry_verified_count"] == 0
+    assert result["manual_visual_verification_count"] == 818
+
+
+def test_position_mapping_coverage_endpoint_is_admin_only(
+    client, auth_headers, viewer_headers
+):
+    response = client.get(
+        "/api/catalog/v2/position-mapping/coverage", headers=auth_headers
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["reviewed_diagram_page_count"] == 12
+    assert response.json()["totals"]["mapped_position_count"] == 581
+
+    forbidden = client.get(
+        "/api/catalog/v2/position-mapping/coverage", headers=viewer_headers
+    )
+    assert forbidden.status_code == 403
+
+
+def test_unverified_qa_geometry_is_not_exposed_to_standard_catalog_users(
+    client, session_factory
+):
+    from app.security import hash_password
+
+    with session_factory() as session:
+        session.add(
+            User(
+                email="mapping-mechanic@assetcore.test",
+                full_name="Тестов каталожен механик",
+                password_hash=hash_password("MappingMechanic123!"),
+                role="mechanic",
+            )
+        )
+        session.commit()
+        machine_id = session.scalar(
+            select(Machine.id).where(Machine.inventory_number == "9")
+        )
+        diagram_id = session.scalar(
+            select(CatalogDiagram.id).where(
+                CatalogDiagram.source_id == "falch_500_valve_500bar"
+            )
+        )
+    login = client.post(
+        "/api/auth/login",
+        json={
+            "email": "mapping-mechanic@assetcore.test",
+            "password": "MappingMechanic123!",
+        },
+    )
+    assert login.status_code == 200
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    verified = client.get(
+        f"/api/catalog/v2/diagrams/{diagram_id}/hotspots?machine_id={machine_id}&verified_only=true",
+        headers=headers,
+    )
+    assert verified.status_code == 200
+    unverified = client.get(
+        f"/api/catalog/v2/diagrams/{diagram_id}/hotspots?machine_id={machine_id}&verified_only=false",
+        headers=headers,
+    )
+    assert unverified.status_code == 403
+
+
+def test_hotspot_geometry_cannot_leave_the_pdf_page(
+    client, auth_headers, session_factory
+):
+    with session_factory() as session:
+        hotspot_id = session.scalar(select(CatalogPositionHotspot.id))
+        before = session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.entity_type == "catalog_position_hotspot"
+            )
+        )
+    response = client.patch(
+        f"/api/catalog/v2/hotspots/{hotspot_id}",
+        headers=auth_headers,
+        json={
+            "x": 0.99,
+            "y": 0.99,
+            "width": 0.03,
+            "height": 0.03,
+            "is_verified": True,
+            "reason": "Невалидна тестова геометрия",
+        },
+    )
+    assert response.status_code == 422
+    with session_factory() as session:
+        after = session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.entity_type == "catalog_position_hotspot"
+            )
+        )
+    assert after == before
 
 
 def test_original_pdf_preview_and_download_are_available(

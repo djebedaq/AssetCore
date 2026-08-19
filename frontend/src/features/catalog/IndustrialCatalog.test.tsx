@@ -7,6 +7,7 @@ import { IndustrialCatalog } from './IndustrialCatalog'
 import type {
   CatalogDiagram,
   CatalogPart,
+  CatalogRepairKit,
   PositionHotspot,
 } from './catalogTypes'
 
@@ -83,11 +84,13 @@ function setupFetch(options: {
   falchDiagrams?: CatalogDiagram[]
   falchParts?: CatalogPart[]
   hotspots?: PositionHotspot[]
+  repairKits?: CatalogRepairKit[]
 } = {}) {
   const falchDiagrams = options.falchDiagrams || []
   const falchParts = options.falchParts || [falchPart]
   const hotspots = options.hotspots || []
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+  const repairKits = options.repairKits || []
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
     if (path.endsWith('/api/machines')) return jsonResponse([
       { id: FALCH_MACHINE_ID, inventory_number: '9', name: 'Test fixture Falch', brand: 'Falch', model: 'Test fixture', pressure_bar: 500, status: 'READY', created_at: '2026-01-01T00:00:00', updated_at: '2026-01-01T00:00:00' },
@@ -111,8 +114,9 @@ function setupFetch(options: {
       dataset_version: 'PARTS_CATALOG_V2', machine_id: HYDWIN_MACHINE_ID, machine_number: '20', family: 'HYDWIN_FUSSEN_500',
       source_id: HYDWIN_SOURCE_ID, assembly: 'TEST_ASSEMBLY', title: 'Test-only HYDWIN assembly', diagrams: [], parts: [hydwinPart],
     })
-    if (path.includes('/api/catalog/v2/repair-kits?')) return jsonResponse([])
+    if (path.includes('/api/catalog/v2/repair-kits?')) return jsonResponse(repairKits)
     if (path.includes('/api/catalog/v2/diagrams/991/hotspots?')) return jsonResponse(hotspots)
+    if (path.endsWith('/api/catalog/v2/hotspots/991') && init?.method === 'PATCH') return jsonResponse({ id: 991, x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'MANUAL_VISUAL_VERIFICATION: test-only audited correction' })
     if (path.includes('/api/technical-library/991/preview?page=1')) {
       return new Response(new Blob(['test-only-preview'], { type: 'image/png' }))
     }
@@ -205,7 +209,7 @@ describe('machine-bound catalog request cart', () => {
     expect(screen.queryByText(falchPart.description)).not.toBeInTheDocument()
   })
 
-  it('adds the exact chosen source variant after a multi-variant position click', async () => {
+  it('selects the exact source variant without adding it until the explicit action', async () => {
     const variantA = part({ source_record_key: 'test-only-variant-a', position: '0', part_number: 'TEST-VARIANT-A', order_part_number: 'TEST-VARIANT-A', description: 'Test-only variant A', valid_for_raw: 'Variant A' })
     const variantB = part({ id: 903, source_record_key: 'test-only-variant-b', position: '0', part_number: 'TEST-VARIANT-B', order_part_number: 'TEST-VARIANT-B', description: 'Test-only variant B', valid_for_raw: 'Variant B' })
     const testDiagram = diagram()
@@ -217,22 +221,60 @@ describe('machine-bound catalog request cart', () => {
     const user = userEvent.setup()
     render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
 
-    await user.click(await screen.findByRole('button', { name: 'Поз. 0' }))
+    await user.click(await screen.findByRole('button', { name: /Поз. 0:/ }))
     expect(screen.getByText('Избрани части: 0')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /TEST-VARIANT-B/ }))
 
+    expect(screen.getByText('Избрани части: 0')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Заявено количество TEST-VARIANT-B')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Добави към заявка' }))
     expect(screen.getByText('Избрани части: 1')).toBeInTheDocument()
     expect(screen.getByLabelText('Заявено количество TEST-VARIANT-B')).toHaveValue(1)
     expect(screen.queryByLabelText('Заявено количество TEST-VARIANT-A')).not.toBeInTheDocument()
   })
 
-  it('explains diagrams without verified clickable positions and keeps the official table usable', async () => {
+  it('keeps the official table usable when a diagram has no interactive positions', async () => {
     setupFetch({ falchDiagrams: [diagram()], hotspots: [] })
     const user = userEvent.setup()
     render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
 
-    expect(await screen.findByText('За тази схема все още няма визуално проверени кликаеми позиции. Изберете частта от официалния списък под схемата.')).toBeInTheDocument()
+    expect(await screen.findByText('Номерата в оригиналната схема са интерактивни. Областите се показват само при посочване, фокус или избор.')).toBeInTheDocument()
     await user.click(screen.getByText(falchPart.description))
     expect(await screen.findByRole('button', { name: 'Добави към заявка' })).toBeInTheDocument()
+  })
+
+  it('shows repair-kit positions without adding them to the request', async () => {
+    const testDiagram = diagram()
+    const hotspot = { id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'MANUAL_VISUAL_VERIFICATION: test-only', confidence: 1, variants: [falchPart] }
+    const kit: CatalogRepairKit = {
+      id: 81, code: 'TEST-KIT', name: 'Test-only kit', family: 'FALCH_500', source_id: FALCH_SOURCE_ID,
+      brand: 'Falch', model: 'Test fixture', assembly: 'TEST_ASSEMBLY', source_document: 'TEST_ONLY.pdf',
+      source_page: 1, source_document_sha256: 'a'.repeat(64), source_version: 'PARTS_CATALOG_V2', is_approved: true, is_active: true,
+      components: [{ id: 82, part_id: falchPart.id, source_record_key: falchPart.source_record_key, position: '3', part_number: falchPart.part_number, description: falchPart.description, quantity: 1, quantity_raw: '1', source_document: 'TEST_ONLY.pdf', source_page: 1 }],
+    }
+    setupFetch({ falchDiagrams: [testDiagram], hotspots: [hotspot], repairKits: [kit] })
+    const user = userEvent.setup()
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+
+    await user.click(await screen.findByRole('button', { name: /TEST-KIT/ }))
+    await user.click(screen.getByRole('button', { name: 'Покажи позициите от комплекта' }))
+    expect(screen.getByRole('button', { name: /Поз. 3:/ })).toHaveClass('kit-position')
+    expect(screen.getByText('Избрани части: 0')).toBeInTheDocument()
+  })
+
+  it('allows only an administrator UI session to save an audited QA correction', async () => {
+    localStorage.setItem('assetcore_user', JSON.stringify({ role: 'administrator', permissions: ['parts.view', 'parts.manage'] }))
+    const testDiagram = diagram()
+    const hotspot = { id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'MANUAL_VISUAL_VERIFICATION: test-only', confidence: 1, variants: [falchPart] }
+    const fetchMock = setupFetch({ falchDiagrams: [testDiagram], hotspots: [hotspot] })
+    const user = userEvent.setup()
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+
+    await user.click(await screen.findByRole('button', { name: 'QA на областите' }))
+    await user.click(await screen.findByRole('button', { name: /Поз. 3:/ }))
+    await user.type(screen.getByLabelText('Основание за корекцията'), 'Проверена тестова корекция')
+    await user.click(screen.getByRole('button', { name: 'Запази' }))
+
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/api/catalog/v2/hotspots/991') && init?.method === 'PATCH')).toBe(true)
   })
 })

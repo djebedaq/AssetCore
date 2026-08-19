@@ -102,11 +102,13 @@ describe('индустриален каталог', () => {
         <IndustrialCatalog defaultMachineId={machineId} />
       </I18nProvider>,
     )
-    await userEvent.click(await screen.findByRole('button', { name: 'Поз. 34' }))
+    await userEvent.click(await screen.findByRole('button', { name: /Поз. 34:/ }))
 
     expect((await screen.findAllByText('Main water seal')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('Количество по схема').length).toBeGreaterThan(0)
     expect(screen.getAllByText('3').length).toBeGreaterThan(0)
+    expect(screen.queryByLabelText('Заявено количество 7.906-007.11')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Добави към заявка' }))
     expect(screen.getByLabelText('Заявено количество 7.906-007.11')).toHaveValue(1)
   })
 

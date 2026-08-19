@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -8,6 +9,7 @@ from ..application_errors import ApplicationError
 from ..models import CatalogDiagram, Machine, PartCatalog, RepairKit
 from . import repository
 from .sources import (
+    CATALOG_ROOT,
     CATALOG_VERSION,
     CatalogSourceError,
     dataset_sources,
@@ -276,6 +278,7 @@ def diagram_hotspots(
             "is_verified": hotspot.is_verified,
             "provenance": hotspot.provenance,
             "confidence": hotspot.confidence,
+            "verified_at": hotspot.verified_at,
             "variants": [
                 serialize_part(part) for part in by_position.get(hotspot.position, [])
             ],
@@ -284,6 +287,12 @@ def diagram_hotspots(
             db, diagram_id, verified_only=verified_only
         )
     ]
+
+
+def mapping_coverage() -> dict[str, Any]:
+    return json.loads(
+        (CATALOG_ROOT / "position_mapping_report.json").read_text(encoding="utf-8")
+    )
 
 
 def serialize_kit(kit: RepairKit) -> dict[str, Any]:

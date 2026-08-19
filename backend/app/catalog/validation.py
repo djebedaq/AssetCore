@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from collections import Counter, defaultdict
 from typing import Any
 
 from pypdf import PdfReader
 
 from .sources import (
+    CATALOG_ROOT,
     CATALOG_VERSION,
     CatalogSourceError,
     dataset_sources,
@@ -37,6 +39,20 @@ def validate_catalog_v2() -> dict[str, Any]:
     records: list[dict[str, Any]] = []
     hotspots: list[dict[str, Any]] = []
     source_counts: dict[str, int] = {}
+    mapping_review = json.loads(
+        (CATALOG_ROOT / "position_mapping_review.json").read_text(encoding="utf-8")
+    )
+    mapping_report = json.loads(
+        (CATALOG_ROOT / "position_mapping_report.json").read_text(encoding="utf-8")
+    )
+    not_drawn = {
+        (item["source_id"], str(item["position"]))
+        for item in mapping_review.get("positions_not_drawn") or []
+    }
+    mapping_by_source = {
+        item["source_id"]: item for item in mapping_report.get("sources") or []
+    }
+    coverage_by_source: dict[str, dict[str, int]] = {}
 
     if manifest.get("dataset_version") != CATALOG_VERSION:
         errors.append("manifest: invalid dataset_version")
@@ -83,17 +99,79 @@ def validate_catalog_v2() -> dict[str, Any]:
             ):
                 errors.append(f"{row.get('source_record_key')}: undocumented blank code")
         positions = {str(row.get("position")) for row in source_records}
+        mapped_positions: set[str] = set()
         for hotspot in source_hotspots:
-            if hotspot.get("position") not in positions:
+            position = str(hotspot.get("position"))
+            if position not in positions:
                 errors.append(f"{hotspot.get('hotspot_key')}: orphan hotspot")
+            mapped_positions.add(position)
+            if hotspot.get("source_id") != source.get("source_id"):
+                errors.append(f"{hotspot.get('hotspot_key')}: source_id mismatch")
+            if hotspot.get("family") != source.get("family"):
+                errors.append(f"{hotspot.get('hotspot_key')}: family mismatch")
+            if hotspot.get("assembly") != source.get("assembly"):
+                errors.append(f"{hotspot.get('hotspot_key')}: assembly mismatch")
             if hotspot.get("page") not in set(source.get("diagram_pages") or []):
                 errors.append(f"{hotspot.get('hotspot_key')}: invalid diagram page")
             for coordinate in ("x", "y", "width", "height"):
                 value = hotspot.get(coordinate)
                 if not isinstance(value, (int, float)) or not 0 <= value <= 1:
                     errors.append(f"{hotspot.get('hotspot_key')}: invalid {coordinate}")
+            x = hotspot.get("x")
+            y = hotspot.get("y")
+            width = hotspot.get("width")
+            height = hotspot.get("height")
+            if isinstance(width, (int, float)) and not 0.003 <= width <= 0.2:
+                errors.append(f"{hotspot.get('hotspot_key')}: implausible width")
+            if isinstance(height, (int, float)) and not 0.003 <= height <= 0.2:
+                errors.append(f"{hotspot.get('hotspot_key')}: implausible height")
+            if all(isinstance(value, (int, float)) for value in (x, y, width, height)):
+                if x + width > 1.001 or y + height > 1.001:
+                    errors.append(f"{hotspot.get('hotspot_key')}: geometry outside page")
             if hotspot.get("is_verified") and not hotspot.get("provenance"):
                 errors.append(f"{hotspot.get('hotspot_key')}: verified without provenance")
+            if hotspot.get("is_verified") and not str(hotspot.get("provenance")).startswith(
+                "MANUAL_VISUAL_VERIFICATION:"
+            ):
+                errors.append(
+                    f"{hotspot.get('hotspot_key')}: unsupported verification method"
+                )
+        expected_drawn = {
+            position
+            for position in positions
+            if (source["source_id"], position) not in not_drawn
+        } if source.get("diagram_pages") else set()
+        missing_positions = sorted(expected_drawn - mapped_positions)
+        false_positions = sorted(
+            position
+            for position in mapped_positions
+            if (source["source_id"], position) in not_drawn
+        )
+        if missing_positions:
+            errors.append(
+                f"{source['source_id']}: missing verified diagram positions {missing_positions}"
+            )
+        if false_positions:
+            errors.append(
+                f"{source['source_id']}: hotspots for positions not drawn {false_positions}"
+            )
+        expected_report = mapping_by_source.get(source["source_id"])
+        if source.get("diagram_pages") and expected_report is None:
+            errors.append(f"{source['source_id']}: missing mapping report entry")
+        if source.get("diagram_pages"):
+            coverage_by_source[source["source_id"]] = {
+                "bom_position_count": len(positions),
+                "mapped_position_count": len(mapped_positions),
+                "hotspot_occurrence_count": len(source_hotspots),
+                "duplicate_callout_count": len(source_hotspots) - len(mapped_positions),
+                "unresolved_position_count": len(missing_positions),
+            }
+        if expected_report and source.get("diagram_pages"):
+            for metric, actual in coverage_by_source[source["source_id"]].items():
+                if expected_report.get(metric) != actual:
+                    errors.append(
+                        f"{source['source_id']}: mapping report {metric} mismatch"
+                    )
         records.extend(source_records)
         hotspots.extend(source_hotspots)
 
@@ -101,6 +179,12 @@ def validate_catalog_v2() -> dict[str, Any]:
     duplicate_keys = sorted(key for key, count in Counter(keys).items() if count > 1)
     if duplicate_keys:
         errors.append(f"duplicate source_record_key: {duplicate_keys}")
+    hotspot_keys = [row.get("hotspot_key") for row in hotspots]
+    duplicate_hotspot_keys = sorted(
+        key for key, count in Counter(hotspot_keys).items() if count > 1
+    )
+    if duplicate_hotspot_keys:
+        errors.append(f"duplicate hotspot_key: {duplicate_hotspot_keys}")
 
     hydwin = [row for row in records if row.get("family") == "HYDWIN_FUSSEN_500"]
     if len(hydwin) != 58:
@@ -172,6 +256,26 @@ def validate_catalog_v2() -> dict[str, Any]:
         "repair_kit_component_count": len(kit_rows),
         "verified_hotspot_count": sum(bool(row.get("is_verified")) for row in hotspots),
         "hotspot_count": len(hotspots),
+        "diagram_position_count": sum(
+            item["mapped_position_count"] for item in coverage_by_source.values()
+        ),
+        "duplicate_callout_count": sum(
+            item["duplicate_callout_count"] for item in coverage_by_source.values()
+        ),
+        "unresolved_position_count": sum(
+            item["unresolved_position_count"] for item in coverage_by_source.values()
+        ),
+        "positions_not_drawn_count": len(not_drawn),
+        "false_numeric_candidate_count": mapping_report.get("totals", {}).get(
+            "false_numeric_candidate_count", 0
+        ),
+        "pdf_text_geometry_verified_count": mapping_report.get("totals", {}).get(
+            "pdf_text_geometry_verified_count", 0
+        ),
+        "manual_visual_verification_count": mapping_report.get("totals", {}).get(
+            "manual_visual_verification_count", 0
+        ),
+        "position_mapping_by_source": coverage_by_source,
         "blank_part_number_count": len(blank_codes),
         "non_numeric_quantity_count": len(non_numeric),
         "replaced_by_count": sum(bool(row.get("replaced_by_part_number")) for row in records),
