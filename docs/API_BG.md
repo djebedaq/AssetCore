@@ -66,7 +66,7 @@
 | `POST` | `/api/part-requests/{id}/lines/{line_id}/link-catalog-part` | административно свързване с потвърдена съвместима каталожна част |
 | `GET` | `/api/catalog/v2/machines/{machine_id}` | exact family mapping, налични възли, схеми и бройки; unsupported модел връща празен контекст |
 | `GET` | `/api/catalog/v2/assemblies/{source_id}?machine_id=...` | focused source възел с всички source variants и diagram metadata |
-| `GET` | `/api/catalog/v2/search?machine_id=...&q=...` | търсене по Part No., replaced number, описание, позиция, Valid for и repair kit |
+| `GET` | `/api/catalog/v2/search?machine_id=...&q=...` | търсене по Part No., replaced number, source описание, EN/BG display име, позиция, Valid for и repair kit |
 | `GET` | `/api/catalog/v2/diagrams/{diagram_id}/hotspots?machine_id=...&verified_only=true` | съвместими position-centric области и всички variants; и `AUTO_MATCHED`, и `MANUALLY_CONFIRMED` са активни за mechanic; `false` изисква `parts.manage` |
 | `GET` | `/api/catalog/v2/repair-kits?machine_id=...&source_id=...` | active, approved, source-scoped комплекти и точните им компоненти |
 | `GET` | `/api/catalog/v2/repair-kits/{kit_id}?machine_id=...` | един комплект с source quantity/provenance за всеки компонент |
@@ -81,6 +81,8 @@
 | `POST` | `/api/catalog/hotspots/{id}/verify` | човешко потвърждение на визуална позиция |
 | `GET/POST` | `/api/repair-kits` | проследими ремонтни комплекти |
 | `GET/POST` | `/api/technical-library` | филтрирана, версионирана техническа библиотека |
+
+`CatalogPartOut` пази съществуващото `description` и добавя отделни `source_description`, `description_en`, `description_bg`, `translation_version` и `translation_qa_status`. `source_description` е точният manufacturer/source текст; display полетата са non-authoritative enrichment от `CATALOG_EN_BG_V1`. Същият договор важи за hotspot variants и repair-kit components. При липсващо/невалидно canonical обогатяване catalog read fail-ва затворено с `catalog_translation_integrity_failed`, без fallback към измислен превод.
 | `POST` | `/api/technical-library/{id}/revisions` | добавя нова версия без подмяна на старата |
 | `GET` | `/api/search?q=...` | групирано глобално търсене |
 | `GET` | `/api/departments` | справочни отдели за роли с `documents.view` |

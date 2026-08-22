@@ -11,6 +11,7 @@ import { CatalogPartsTable } from './CatalogPartsTable'
 import { CatalogRequestCart } from './CatalogRequestCart'
 import { CatalogPartDetails, CatalogRepairKitPreview, CatalogVariantDialog } from './CatalogSelectionPanels'
 import { catalogApi } from './catalogApi'
+import { catalogDisplayName, catalogSourceDescription } from './catalogNames'
 import { addPart, addRepairKit } from './catalogState'
 import type { AssemblyDetails, CatalogCartLine, CatalogPart, CatalogRepairKit, MachineCatalog, PositionHotspot } from './catalogTypes'
 
@@ -94,7 +95,7 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
   const filteredParts = useMemo(() => {
     const query = partsQuery.trim().toLocaleLowerCase()
     if (!query) return details?.parts || []
-    return (details?.parts || []).filter((part) => [part.position, part.part_number, part.replaced_by_part_number, part.description, part.original_name, part.description_2, part.repair_kit_code, part.valid_for_raw].some((value) => value?.toLocaleLowerCase().includes(query)))
+    return (details?.parts || []).filter((part) => [part.position, part.part_number, part.replaced_by_part_number, catalogDisplayName(part), catalogSourceDescription(part), part.description, part.description_2, part.repair_kit_code, part.valid_for_raw].some((value) => value?.toLocaleLowerCase().includes(query)))
   }, [details, partsQuery])
 
   function focusPartOnDiagram(part: CatalogPart) {

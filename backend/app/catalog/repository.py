@@ -41,6 +41,7 @@ def search_parts(
     query: str,
     family: str,
     source_id: str | None = None,
+    translated_source_record_keys: set[str] | None = None,
     limit: int = 100,
 ) -> list[PartCatalog]:
     statement = active_parts_statement().where(PartCatalog.family == family)
@@ -48,20 +49,25 @@ def search_parts(
         statement = statement.where(PartCatalog.source_id == source_id)
     if query.strip():
         term = f"%{query.strip()}%"
-        statement = statement.where(
-            or_(
-                PartCatalog.part_number.ilike(term),
-                PartCatalog.replaced_by_part_number.ilike(term),
-                PartCatalog.position.ilike(term),
-                PartCatalog.description.ilike(term),
-                PartCatalog.description_de.ilike(term),
-                PartCatalog.description_en.ilike(term),
-                PartCatalog.description_2.ilike(term),
-                PartCatalog.assembly.ilike(term),
-                PartCatalog.model.ilike(term),
-                PartCatalog.repair_kit_code.ilike(term),
-                PartCatalog.valid_for_raw.ilike(term),
+        conditions = [
+            PartCatalog.part_number.ilike(term),
+            PartCatalog.replaced_by_part_number.ilike(term),
+            PartCatalog.position.ilike(term),
+            PartCatalog.description.ilike(term),
+            PartCatalog.description_de.ilike(term),
+            PartCatalog.description_en.ilike(term),
+            PartCatalog.description_2.ilike(term),
+            PartCatalog.assembly.ilike(term),
+            PartCatalog.model.ilike(term),
+            PartCatalog.repair_kit_code.ilike(term),
+            PartCatalog.valid_for_raw.ilike(term),
+        ]
+        if translated_source_record_keys:
+            conditions.append(
+                PartCatalog.source_record_key.in_(translated_source_record_keys)
             )
+        statement = statement.where(
+            or_(*conditions)
         )
     return list(
         db.scalars(

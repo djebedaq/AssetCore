@@ -22,6 +22,7 @@ from .sources import (
     source_digest,
     source_path,
 )
+from .translations import CatalogTranslationError, validate_translation_payload
 
 HYDWIN_ANCHORS = {
     "13": ("Plunger rod", "FS C16/50 22*145.5", "7.906-002.1", 3.0),
@@ -310,6 +311,27 @@ def validate_catalog_v2() -> dict[str, Any]:
     if any(row.get("brand") == "CombiJet" for row in records):
         errors.append("CombiJet must not receive catalog rows without a source")
 
+    try:
+        translation_report = validate_translation_payload(source_records=records)
+    except CatalogTranslationError as exc:
+        translation_report = {
+            "valid": False,
+            "errors": [str(exc)],
+            "translation_record_count": 0,
+            "english_translation_coverage": 0,
+            "bulgarian_translation_coverage": 0,
+            "orphan_translation_count": 0,
+            "missing_translation_count": len(records),
+            "duplicate_translation_key_count": 0,
+            "needs_review_count": 0,
+            "needs_review_records": [],
+            "authoritative_source_fingerprint_count": 0,
+            "unchanged_authoritative_source_count": 0,
+        }
+    errors.extend(
+        f"translations: {message}" for message in translation_report["errors"]
+    )
+
     kit_rows = [row for row in records if row.get("repair_kit_code")]
     kit_codes = sorted({row["repair_kit_code"] for row in kit_rows})
     for row in kit_rows:
@@ -360,4 +382,32 @@ def validate_catalog_v2() -> dict[str, Any]:
         "blank_part_number_count": len(blank_codes),
         "non_numeric_quantity_count": len(non_numeric),
         "replaced_by_count": sum(bool(row.get("replaced_by_part_number")) for row in records),
+        "translation_record_count": translation_report["translation_record_count"],
+        "english_translation_coverage": translation_report[
+            "english_translation_coverage"
+        ],
+        "bulgarian_translation_coverage": translation_report[
+            "bulgarian_translation_coverage"
+        ],
+        "orphan_translation_count": translation_report[
+            "orphan_translation_count"
+        ],
+        "missing_translation_count": translation_report[
+            "missing_translation_count"
+        ],
+        "duplicate_translation_key_count": translation_report[
+            "duplicate_translation_key_count"
+        ],
+        "translation_needs_review_count": translation_report[
+            "needs_review_count"
+        ],
+        "translation_needs_review_records": translation_report[
+            "needs_review_records"
+        ],
+        "authoritative_source_fingerprint_count": translation_report[
+            "authoritative_source_fingerprint_count"
+        ],
+        "unchanged_authoritative_source_count": translation_report[
+            "unchanged_authoritative_source_count"
+        ],
     }

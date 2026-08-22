@@ -17,6 +17,9 @@ function part(overrides: Partial<CatalogPart> = {}): CatalogPart {
     part_number: '7.906-007.11',
     order_part_number: '7.906-007.11',
     description: 'Main water seal',
+    source_description: 'Main water seal',
+    description_en: 'Main water seal',
+    description_bg: 'Основно водно уплътнение',
     original_name: 'Main water seal',
     description_2: '15*24*9.3',
     quantity: 3,
@@ -28,6 +31,8 @@ function part(overrides: Partial<CatalogPart> = {}): CatalogPart {
     verification_status: 'VERIFIED',
     source_anomaly_codes: [],
     is_verified: true,
+    translation_version: 'CATALOG_EN_BG_V1',
+    translation_qa_status: 'VERIFIED',
     ...overrides,
   }
 }
@@ -88,8 +93,8 @@ describe('authoritative catalog cart', () => {
     const holder = part({ id: 4, source_record_key: 'valve-pos-4', position: '4', part_number: 'E1230059', order_part_number: 'E1230059', description: 'holder', quantity_raw: '2' })
     const unrelated = part({ id: 99, source_record_key: 'unrelated', position: '99' })
     const kit = repairKit([
-      { id: 1, part_id: 3, source_record_key: seat.source_record_key, position: '3', part_number: seat.part_number, description: seat.description, quantity: 1, quantity_raw: '1', source_document: seat.source_document, source_page: seat.source_page },
-      { id: 2, part_id: 4, source_record_key: holder.source_record_key, position: '4', part_number: holder.part_number, description: holder.description, quantity: 2, quantity_raw: '2', source_document: holder.source_document, source_page: holder.source_page },
+      { id: 1, part_id: 3, source_record_key: seat.source_record_key, position: '3', part_number: seat.part_number, description: seat.description, source_description: seat.source_description, description_en: seat.description_en, description_bg: seat.description_bg, quantity: 1, quantity_raw: '1', source_document: seat.source_document, source_page: seat.source_page, translation_version: seat.translation_version, translation_qa_status: seat.translation_qa_status },
+      { id: 2, part_id: 4, source_record_key: holder.source_record_key, position: '4', part_number: holder.part_number, description: holder.description, source_description: holder.source_description, description_en: holder.description_en, description_bg: holder.description_bg, quantity: 2, quantity_raw: '2', source_document: holder.source_document, source_page: holder.source_page, translation_version: holder.translation_version, translation_qa_status: holder.translation_qa_status },
     ])
 
     const cart = addRepairKit([], kit, [seat, holder, unrelated])
