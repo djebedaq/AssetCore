@@ -9,7 +9,7 @@ import type { Machine } from '../../types'
 import { CatalogDiagramViewer, type DiagramFocus } from './CatalogDiagramViewer'
 import { CatalogPartsTable } from './CatalogPartsTable'
 import { CatalogRequestCart } from './CatalogRequestCart'
-import { CatalogPartDetails, CatalogRepairKitPreview } from './CatalogSelectionPanels'
+import { CatalogPartDetails, CatalogRepairKitPreview, CatalogVariantDialog } from './CatalogSelectionPanels'
 import { catalogApi } from './catalogApi'
 import { addPart, addRepairKit } from './catalogState'
 import type { AssemblyDetails, CatalogCartLine, CatalogPart, CatalogRepairKit, MachineCatalog, PositionHotspot } from './catalogTypes'
@@ -31,6 +31,7 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
   const [hotspotsByDiagram, setHotspotsByDiagram] = useState<Record<number, PositionHotspot[]>>({})
   const [focus, setFocus] = useState<DiagramFocus>(null)
   const [partsQuery, setPartsQuery] = useState('')
+  const [selectedPosition, setSelectedPosition] = useState<string | null>(null)
   const [selectedPart, setSelectedPart] = useState<CatalogPart | null>(null)
   const [variantChoice, setVariantChoice] = useState<{ position: string; variants: CatalogPart[] } | null>(null)
   const [kits, setKits] = useState<CatalogRepairKit[]>([])
@@ -43,7 +44,7 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
   const [error, setError] = useState('')
 
   const applyMachineSelection = useCallback((nextMachineId: number | '') => {
-    setCart(EMPTY_MACHINE_CART); setUndoCart(null); setToast(''); setSelectedPart(null)
+    setCart(EMPTY_MACHINE_CART); setUndoCart(null); setToast(''); setSelectedPart(null); setSelectedPosition(null)
     setVariantChoice(null); setKitPreview(null); setKitPositions(new Set()); setContext(null)
     setDetails(null); setDiagramId(''); setHotspotsByDiagram({}); setFocus(null); setSourceId('')
     setPartsQuery(''); setKits([]); setError(''); setPendingMachineId(null); setMachineId(nextMachineId)
@@ -59,7 +60,7 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
   }, [applyMachineSelection, defaultMachineId, machineId])
   useEffect(() => {
     let active = true
-    setContext(null); setDetails(null); setSourceId(''); setSelectedPart(null); setKits([]); setError('')
+    setContext(null); setDetails(null); setSourceId(''); setSelectedPart(null); setSelectedPosition(null); setKits([]); setError('')
     if (!machineId) return
     setLoading(true)
     void catalogApi.machine(machineId).then((value) => {
@@ -70,7 +71,7 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
   }, [machineId, t])
   useEffect(() => {
     let active = true
-    setDetails(null); setSelectedPart(null); setVariantChoice(null); setKitPreview(null)
+    setDetails(null); setSelectedPart(null); setSelectedPosition(null); setVariantChoice(null); setKitPreview(null)
     setKitPositions(new Set()); setHotspotsByDiagram({})
     if (!machineId || !sourceId || context?.machine_id !== machineId || !context.assemblies.some((assembly) => assembly.source_id === sourceId)) return
     setLoading(true)
@@ -102,11 +103,16 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
     if (!match) { setError(t('catalog.positionNotOnDiagram', { position: part.position })); return }
     setDiagramId(match.diagramId); setFocus({ position: part.position, nonce: Date.now() }); setError('')
   }
-  function selectPartFromTable(part: CatalogPart) { setSelectedPart(part); focusPartOnDiagram(part) }
-  function selectDiagramPosition(position: string, variants: CatalogPart[]) {
+  function selectPartFromTable(part: CatalogPart) { setSelectedPosition(part.position); setSelectedPart(part); focusPartOnDiagram(part) }
+  function selectDiagramPosition(position: string) {
+    setSelectedPosition(position)
+    setSelectedPart(null)
+    setVariantChoice(null)
+  }
+  function openDiagramPosition(position: string, variants: CatalogPart[]) {
+    setSelectedPosition(position)
     if (variants.length === 1) { setSelectedPart(variants[0]); setVariantChoice(null) }
     else setVariantChoice({ position, variants })
-    setFocus({ position, nonce: Date.now() })
   }
   function addSelectedPart(part: CatalogPart) {
     if (!machineId) return
@@ -114,7 +120,11 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
     setCart((current) => ({ machineId, lines: addPart(current.lines, part) })); setUndoCart(null)
     setToast(t('catalog.positionAdded', { position: part.position }))
   }
-  function openKit(code: string) { setKitPreview(kits.find((kit) => kit.code === code) || null); setKitPositions(new Set()) }
+  function openKit(code: string) {
+    setKitPreview(kits.find((kit) => kit.code === code) || null)
+    setKitPositions(new Set())
+    setSelectedPart(null)
+  }
   function toggleKitPositions(kit: CatalogRepairKit) {
     if (kitPositions.size) { setKitPositions(new Set()); return }
     const positions = new Set(kit.components.map((component) => component.position))
@@ -152,11 +162,11 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
     {details && machineId && <div className="catalog-v2-layout">
       <main className="catalog-v2-workspace">
         <nav className="catalog-v2-diagram-tabs" aria-label={t('catalog.visualWorkspace')}>{details.diagrams.map((item) => <button className={item.id === diagramId ? 'active' : ''} key={item.id} onClick={() => setDiagramId(item.id)}>{t('common.page')} {item.page_number}</button>)}</nav>
-        {diagram && <CatalogDiagramViewer machineId={machineId} diagram={diagram} hotspots={currentHotspots} selectedPosition={selectedPart?.position || variantChoice?.position || null} focus={focus} kitPositions={kitPositions} onSelectPosition={selectDiagramPosition} onHotspotsChange={(items) => setHotspotsByDiagram((current) => ({ ...current, [diagram.id]: items }))} />}
+        {diagram && <CatalogDiagramViewer machineId={machineId} diagram={diagram} hotspots={currentHotspots} selectedPosition={selectedPosition} focus={focus} kitPositions={kitPositions} onSelectPosition={selectDiagramPosition} onOpenPosition={openDiagramPosition} onHotspotsChange={(items) => setHotspotsByDiagram((current) => ({ ...current, [diagram.id]: items }))} />}
         {!diagram && <div className="empty-state">{t('catalog.noVerifiedDiagram')}</div>}
-        {variantChoice && <div className="catalog-v2-variants panel" role="dialog" aria-label={t('catalog.variantChoice', { position: variantChoice.position })}><h3>{t('catalog.variantChoice', { position: variantChoice.position })}</h3>{variantChoice.variants.map((part) => <button key={part.source_record_key} onClick={() => { setSelectedPart(part); setVariantChoice(null) }}><span><b>{part.part_number || t('common.noValue')}</b><small>{part.description}</small><em>{part.valid_for_raw || t('common.noValue')}</em></span><ChevronRight size={17} /></button>)}<button className="secondary" onClick={() => setVariantChoice(null)}>{t('common.cancel')}</button></div>}
+        {variantChoice && <CatalogVariantDialog position={variantChoice.position} variants={variantChoice.variants} onSelect={(part) => { setSelectedPart(part); setVariantChoice(null) }} onClose={() => setVariantChoice(null)} />}
         <CatalogPartsTable parts={filteredParts} query={partsQuery} selectedPart={selectedPart} diagramPositions={diagramPositions} onQueryChange={setPartsQuery} onSelect={selectPartFromTable} onShowDiagram={focusPartOnDiagram} />
-        {selectedPart && <CatalogPartDetails part={selectedPart} onAdd={addSelectedPart} onKit={openKit} onClose={() => setSelectedPart(null)} />}
+        {selectedPart && <CatalogPartDetails key={selectedPart.source_record_key} part={selectedPart} onAdd={addSelectedPart} onKit={openKit} onClose={() => setSelectedPart(null)} />}
         <section className="catalog-v2-kits"><div className="toolbar"><div><h3>{t('catalog.kits')}</h3><p className="muted">{t('catalog.kitsHint')}</p></div></div><div>{kits.map((kit) => <button key={kit.id} onClick={() => { setKitPreview(kit); setKitPositions(new Set()) }}><span className="badge batch-complete">{t('catalog.verified')}</span><b>{kit.code}</b><small>{t('catalog.kitContains', { count: kit.components.length })}</small><ChevronRight size={17} /></button>)}</div>{!kits.length && <div className="empty-state">{t('catalog.noKits')}</div>}</section>
         {kitPreview && <CatalogRepairKitPreview kit={kitPreview} positionsVisible={kitPositions.size > 0} onTogglePositions={() => toggleKitPositions(kitPreview)} onClose={() => { setKitPreview(null); setKitPositions(new Set()) }} onConfirm={() => confirmKit(kitPreview)} />}
         {onUnknownPart && hasPermission('requests.create') && <button className="secondary catalog-v2-unknown" onClick={onUnknownPart}>{t('unknownPart.notFound')}</button>}

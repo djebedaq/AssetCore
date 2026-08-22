@@ -20,7 +20,7 @@
 - `frontend/src/i18n.tsx` съдържа централния BG/EN/RU речник, форматиране и status mapping.
 - `frontend/src/App.tsx`, `BulkTransfers.tsx` и `IndustrialPlatform.tsx` реализират responsive PWA екраните, глобалното търсене, каталога и цифровия паспорт; `industrialUi.tsx` съдържа повторно използваните modal/document/attachment presentation действия.
 - `frontend/src/features/repairs/IndustrialRepairs.tsx` е самостоятелният repair screen, `repairApi.ts` е типизираната му API граница, а `workflow.ts` пази stage/form/payload договора без React state.
-- `frontend/src/features/catalog/` е самостоятелният machine-first каталог screen. `catalogApi.ts` пази focused API calls, `catalogState.ts` — deterministic cart/kit merge правилата, а `IndustrialCatalog.tsx` — responsive diagram/table/cart workflow без hardcoded production URL или технически source данни.
+- `frontend/src/features/catalog/` е самостоятелният machine-first каталог screen. `catalogApi.ts` пази focused API calls, `catalogState.ts` — deterministic cart/kit merge правилата, `catalogInteraction.ts` — pointer/touch state machine-а и movement threshold-а, а `IndustrialCatalog.tsx` — responsive diagram/table/cart workflow без hardcoded production URL или технически source данни. `CatalogSelectionPanels.tsx` притежава достъпния focus-trapped desktop modal/mobile sheet договор.
 
 ## Authoritative каталог за резервни части
 

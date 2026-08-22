@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { I18nProvider } from './i18n'
@@ -40,7 +41,10 @@ function renderRole(user: UserSession) {
 
 describe('ролево меню', () => {
   beforeEach(() => localStorage.clear())
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
 
   it('не показва потребители и настройки на механика', async () => {
     renderRole(session('mechanic', ['assets.view', 'transfers.view', 'repairs.view', 'parts.view', 'requests.view', 'documents.view']))
@@ -72,5 +76,40 @@ describe('ролево меню', () => {
     expect(screen.queryByText('Сериен номер')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'История' })).not.toBeInTheDocument()
     expect(document.querySelector('img')).toBeNull()
+  })
+
+  it('заключва background scroll и пази отделна touch-scroll област за цялото mobile меню', async () => {
+    vi.spyOn(window, 'scrollX', 'get').mockReturnValue(0)
+    vi.spyOn(window, 'scrollY', 'get').mockReturnValue(480)
+    const scrollTo = vi.fn()
+    vi.stubGlobal('scrollTo', scrollTo)
+    const user = userEvent.setup()
+    renderRole(session('administrator', [
+      'assets.view', 'transfers.view', 'repairs.view', 'parts.view', 'requests.view',
+      'documents.view', 'documents.generate', 'audit.view_operational', 'users.view',
+      'settings.manage',
+    ]))
+
+    await user.click(await screen.findByRole('button', { name: 'Отвори' }))
+    const sidebar = document.querySelector<HTMLElement>('.sidebar') as HTMLElement
+    const navigation = document.querySelector<HTMLElement>('.sidebar-navigation') as HTMLElement
+
+    expect(sidebar).toHaveClass('open')
+    expect(document.body.style.position).toBe('fixed')
+    expect(document.body.style.top).toBe('-480px')
+    expect(navigation.contains(screen.getByRole('button', { name: 'Настройки' }))).toBe(true)
+
+    fireEvent.touchStart(navigation, { touches: [{ clientY: 700 }] })
+    navigation.scrollTop = 320
+    fireEvent.touchMove(navigation, { touches: [{ clientY: 200 }] })
+    fireEvent.scroll(navigation)
+    expect(navigation.scrollTop).toBe(320)
+    expect(document.body.style.top).toBe('-480px')
+
+    await user.click(document.querySelector<HTMLButtonElement>('.sidebar-backdrop') as HTMLButtonElement)
+    expect(sidebar).not.toHaveClass('open')
+    expect(document.body.style.position).toBe('')
+    await waitFor(() => expect(scrollTo).toHaveBeenCalledTimes(2))
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 480)
   })
 })

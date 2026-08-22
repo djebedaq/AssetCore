@@ -6,6 +6,11 @@ import { friendlyError } from '../../industrialUi'
 import { useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
 import { catalogApi } from './catalogApi'
+import {
+  exceedsTapMovementThreshold,
+  resolveHotspotActivation,
+  type DiagramPointerKind,
+} from './catalogInteraction'
 import type { CatalogDiagram, CatalogPart, PositionHotspot } from './catalogTypes'
 
 export type DiagramFocus = { position: string; nonce: number } | null
@@ -18,6 +23,16 @@ type DragState = {
   original: PositionHotspot
 }
 
+type PointerTrace = {
+  startX: number
+  startY: number
+  x: number
+  y: number
+  pointerType: DiagramPointerKind
+  hotspot: PositionHotspot | null
+  trigger: HTMLButtonElement | null
+}
+
 type Props = {
   machineId: number
   diagram: CatalogDiagram
@@ -25,7 +40,12 @@ type Props = {
   selectedPosition: string | null
   focus: DiagramFocus
   kitPositions: Set<string>
-  onSelectPosition: (position: string, variants: CatalogPart[]) => void
+  onSelectPosition: (position: string) => void
+  onOpenPosition: (
+    position: string,
+    variants: CatalogPart[],
+    trigger: HTMLButtonElement,
+  ) => void
   onHotspotsChange: (items: PositionHotspot[]) => void
 }
 
@@ -41,6 +61,7 @@ export function CatalogDiagramViewer({
   focus,
   kitPositions,
   onSelectPosition,
+  onOpenPosition,
   onHotspotsChange,
 }: Props) {
   const { t } = useI18n()
@@ -53,8 +74,9 @@ export function CatalogDiagramViewer({
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
   const [drag, setDrag] = useState<DragState | null>(null)
-  const [panStart, setPanStart] = useState<{ x: number; y: number; left: number; top: number } | null>(null)
-  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const pointers = useRef(new Map<number, PointerTrace>())
+  const panStart = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
+  const gesture = useRef({ moved: false, pinched: false })
   const pinchDistance = useRef<number | null>(null)
   const viewport = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLDivElement>(null)
@@ -177,13 +199,30 @@ export function CatalogDiagramViewer({
   }
 
   function pointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (qaMode || (event.target as HTMLElement).closest('button')) return
-    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (qaMode) return
+    const trigger = (event.target as HTMLElement).closest<HTMLButtonElement>('.catalog-v2-hotspot')
+    const hotspotId = trigger?.dataset.hotspotId
+    const hotspot = hotspotId
+      ? visibleHotspots.find((item) => item.id === Number(hotspotId)) || null
+      : null
+    if (pointers.current.size === 0) gesture.current = { moved: false, pinched: false }
+    pointers.current.set(event.pointerId, {
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      pointerType: event.pointerType as DiagramPointerKind,
+      hotspot,
+      trigger,
+    })
     if (typeof event.currentTarget.setPointerCapture === 'function') {
       event.currentTarget.setPointerCapture(event.pointerId)
     }
     if (pointers.current.size === 1 && viewport.current) {
-      setPanStart({ x: event.clientX, y: event.clientY, left: viewport.current.scrollLeft, top: viewport.current.scrollTop })
+      panStart.current = { x: event.clientX, y: event.clientY, left: viewport.current.scrollLeft, top: viewport.current.scrollTop }
+    } else if (pointers.current.size > 1) {
+      gesture.current.pinched = true
+      panStart.current = null
     }
   }
 
@@ -192,27 +231,48 @@ export function CatalogDiagramViewer({
       moveHotspot(event)
       return
     }
-    if (!pointers.current.has(event.pointerId)) return
-    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const trace = pointers.current.get(event.pointerId)
+    if (!trace) return
+    trace.x = event.clientX
+    trace.y = event.clientY
+    if (exceedsTapMovementThreshold(trace.startX, trace.startY, trace.x, trace.y)) {
+      gesture.current.moved = true
+    }
     const values = [...pointers.current.values()]
     if (values.length === 2) {
+      gesture.current.pinched = true
       const distance = Math.hypot(values[0].x - values[1].x, values[0].y - values[1].y)
       if (pinchDistance.current) {
         const ratio = distance / pinchDistance.current
         setZoom((current) => clamp(Math.round(current * ratio), 75, 300))
       }
       pinchDistance.current = distance
-    } else if (values.length === 1 && panStart && viewport.current) {
-      viewport.current.scrollLeft = panStart.left - (event.clientX - panStart.x)
-      viewport.current.scrollTop = panStart.top - (event.clientY - panStart.y)
+    } else if (values.length === 1 && gesture.current.moved && panStart.current && viewport.current) {
+      viewport.current.scrollLeft = panStart.current.left - (event.clientX - panStart.current.x)
+      viewport.current.scrollTop = panStart.current.top - (event.clientY - panStart.current.y)
     }
   }
 
-  function pointerUp(event: React.PointerEvent<HTMLDivElement>) {
+  function pointerUp(event: React.PointerEvent<HTMLDivElement>, cancelled = false) {
+    const trace = pointers.current.get(event.pointerId)
+    const isFinalPointer = pointers.current.size === 1
     pointers.current.delete(event.pointerId)
     if (pointers.current.size < 2) pinchDistance.current = null
-    if (!pointers.current.size) setPanStart(null)
+    if (!pointers.current.size) panStart.current = null
     setDrag(null)
+    if (!trace?.hotspot || !trace.trigger || !isFinalPointer) return
+    const activation = resolveHotspotActivation({
+      pointerType: trace.pointerType,
+      selectedPosition,
+      targetPosition: trace.hotspot.position,
+      moved: gesture.current.moved,
+      pinched: gesture.current.pinched,
+      cancelled,
+    })
+    if (activation === 'ignore') return
+    trace.trigger.focus({ preventScroll: true })
+    if (activation === 'select') onSelectPosition(trace.hotspot.position)
+    else onOpenPosition(trace.hotspot.position, trace.hotspot.variants, trace.trigger)
   }
 
   return <section className={`catalog-v2-diagram-panel ${qaMode ? 'qa-mode' : ''}`}>
@@ -234,7 +294,7 @@ export function CatalogDiagramViewer({
       onPointerDown={pointerDown}
       onPointerMove={pointerMove}
       onPointerUp={pointerUp}
-      onPointerCancel={pointerUp}
+      onPointerCancel={(event) => pointerUp(event, true)}
     >
       <div className="catalog-v2-diagram-canvas" ref={canvas} style={{ width: `${zoom}%` }}>
         {!url && !error && <div className="diagram-loading">{t('common.loading')}</div>}
@@ -246,6 +306,7 @@ export function CatalogDiagramViewer({
             key={hotspot.id}
             type="button"
             data-position={hotspot.position}
+            data-hotspot-id={hotspot.id}
             className={[
               'catalog-v2-hotspot',
               selectedPosition === hotspot.position ? 'selected' : '',
@@ -256,7 +317,10 @@ export function CatalogDiagramViewer({
             style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%`, width: `${hotspot.width * 100}%`, height: `${hotspot.height * 100}%` }}
             title={`${t('catalog.position')} ${hotspot.position} · ${description}`}
             aria-label={`${t('catalog.position')} ${hotspot.position}: ${description}`}
-            onClick={() => qaMode ? setEditingId(hotspot.id) : onSelectPosition(hotspot.position, variants)}
+            onClick={(event) => {
+              if (qaMode) setEditingId(hotspot.id)
+              else if (event.detail === 0) onOpenPosition(hotspot.position, variants, event.currentTarget)
+            }}
             onPointerDown={(event) => startHotspotDrag(event, hotspot, 'move')}
           >
             <span className="sr-only">{t('catalog.position')} {hotspot.position}</span>
