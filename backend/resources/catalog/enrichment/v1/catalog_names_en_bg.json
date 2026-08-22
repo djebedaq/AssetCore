@@ -1,0 +1,3692 @@
+{
+  "translation_version": "CATALOG_EN_BG_V1",
+  "catalog_dataset_version": "PARTS_CATALOG_V2",
+  "identity_field": "source_record_key",
+  "authoritative_source_fingerprints": {
+    "falch_500_wheel_jet": "baab518592c770457ba493d056e7e7112ddfa15d45d8db93214fe339ec36af85",
+    "falch_500_pump": "0f9d3e8d178272b7e65a57a37f495a448fc24c31730ac2c107e5d50f29a317c4",
+    "falch_500_unloader_valve": "5382954ff92c616622b0d4cfdc3a2a12581f442c209c6329d8d2e50cb40fc1d5",
+    "falch_500_valve_500bar": "ff4a643c60109636e6ebc619551d46ab57b05542fca32a46e3390dec130d14af",
+    "falch_1000_wheel_jet": "acc612f796ec891cf8aeb0bc86b7150630f7b4874ea370d0c4f5503aff73675d",
+    "falch_1000_drive_pump": "81eb5c94e2c2c2a2b8e868acb3721dddfecd642c2744093046fe34fdf9213c82",
+    "falch_1000_liquid_part": "a238920e0392b9c5be56452eef1da9187e530d8dea6925b721784b06418a5278",
+    "hydwin_fussen_500_scope_instruction": "a3b2978236b8a6c3418fe1738a76edec368ed2c88f6779cb4f57bf4fececdad9",
+    "hydwin_fussen_500_plunger_pump": "5b5d89b5ebcd71dc8f203d7a6ef419e9f131eaf7f95a1cbe3221992d5c6b7056"
+  },
+  "records": [
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r001:0:E0112004",
+      "description_en": "Drive pump",
+      "description_bg": "Задвижваща помпа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r002:1:E0113661",
+      "description_en": "Housing",
+      "description_bg": "Корпус",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r003:2:E0111047",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r004:3:E0111136",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r005:4:E0111177",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r006:5:E0111034",
+      "description_en": "Oil-level indicator",
+      "description_bg": "Индикатор за ниво на маслото",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r007:6:E0111082",
+      "description_en": "Oil dipstick",
+      "description_bg": "Масломерна щека",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r008:7:E0600024",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r009:8:X9120026",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r010:9:X1270003",
+      "description_en": "Spring washer",
+      "description_bg": "Пружинна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r011:10:E0111284",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r012:11:D104",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r013:12:E0111114",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r014:13:E0112549",
+      "description_en": "Shaft seal",
+      "description_bg": "Маншетно уплътнение на вал",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r015:14:E0111178",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r016:15:X9330026",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r017:15:X1270003",
+      "description_en": "Spring washer",
+      "description_bg": "Пружинна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r018:16:E0111149",
+      "description_en": "Bearing",
+      "description_bg": "Лагер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r019:17:E0112008",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r020:18:E0111571",
+      "description_en": "Crankshaft",
+      "description_bg": "Колянов вал",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r021:19:E0111502",
+      "description_en": "Parallel key",
+      "description_bg": "Призматична шпонка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r022:20:E0111079",
+      "description_en": "Connecting rod",
+      "description_bg": "Мотовилка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r023:21:E0111080",
+      "description_en": "Crosshead",
+      "description_bg": "Кръстата глава (крейцкопф)",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r024:22:E0111572",
+      "description_en": "Bolt",
+      "description_bg": "Болт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r025:25:E0111290",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r026:25:E0111474",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r027:26:E0111202",
+      "description_en": "Shaft seal",
+      "description_bg": "Маншетно уплътнение на вал",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r028:27:E1210044",
+      "description_en": "Protective guard",
+      "description_bg": "Защитен кожух",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r029:28:X1270002",
+      "description_en": "Spring washer",
+      "description_bg": "Пружинна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p2:r030:28:X1250005",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p3:r001:29:X9330014",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p3:r002:30:E0112007",
+      "description_en": "Protective guard",
+      "description_bg": "Защитен кожух",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p3:r003:800:Z0000587",
+      "description_en": "Special tools",
+      "description_bg": "Специални инструменти",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_drive_pump:p3:r004:900:F0000034",
+      "description_en": "Oil",
+      "description_bg": "Масло",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r001:0:E0113679",
+      "description_en": "Fluid end",
+      "description_bg": "Течностна част",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r002:1:E1230188",
+      "description_en": "Housing",
+      "description_bg": "Корпус",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r003:2:E0500137",
+      "description_en": "Disc spring",
+      "description_bg": "Тарелкова пружина",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r004:3:X9120050",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r005:4:E1230187",
+      "description_en": "Connecting piece",
+      "description_bg": "Свързващ елемент",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r006:5:X9120049",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r007:6:X4720000",
+      "description_en": "Circlip",
+      "description_bg": "Стопорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r008:7:X1250008",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r009:8:E0600327",
+      "description_en": "Seal set",
+      "description_bg": "Комплект уплътнения",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r010:9:E1230970",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r011:10:E0600112",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r012:11:E1230185",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r013:12:E1230180",
+      "description_en": "Guide bushing",
+      "description_bg": "Направляваща втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r014:13:E0600328",
+      "description_en": "Seal set",
+      "description_bg": "Комплект уплътнения",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r015:14:E1230969",
+      "description_en": "Guide bushing",
+      "description_bg": "Направляваща втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r016:15:E0500389",
+      "description_en": "Compression spring",
+      "description_bg": "Натискателна пружина",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r017:16:E1230967",
+      "description_en": "Valve guide",
+      "description_bg": "Направляваща на клапана",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r018:17:E0500388",
+      "description_en": "Compression spring Vacu Spring Light, d=0.63, De=8.63, L0=24.50, if=5.50, 1.4310",
+      "description_bg": "Натискателна пружина Vacu Spring Light, d=0,63, De=8,63, L0=24,50, if=5,50, 1.4310",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r019:18:E1230968",
+      "description_en": "Valve",
+      "description_bg": "Клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r020:19:E0600111",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r021:20:E0600160",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r022:21:E1230186",
+      "description_en": "Valve seat",
+      "description_bg": "Седло на клапана",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r023:22:E1230178",
+      "description_en": "Valve",
+      "description_bg": "Клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r024:23:E0500408",
+      "description_en": "Compression spring",
+      "description_bg": "Натискателна пружина",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r025:24:E1230966",
+      "description_en": "Valve guide",
+      "description_bg": "Направляваща на клапана",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r026:25:E1230177",
+      "description_en": "Bolt",
+      "description_bg": "Болт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r027:26:E1230971",
+      "description_en": "Complete plunger",
+      "description_bg": "Плунжер в комплект",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r028:27:E0500096",
+      "description_en": "Disc spring",
+      "description_bg": "Тарелкова пружина",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r029:28:E1230182",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p2:r030:29:N100",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r001:30:N132",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r002:31:E0990076",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r003:32:E1190124",
+      "description_en": "Threaded fitting",
+      "description_bg": "Резбов фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r004:33:D104",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r005:34:E1231097",
+      "description_en": "Reducer fitting",
+      "description_bg": "Редукционен фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r006:35:D101",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r007:36:E1000105",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r008:36:E1000105",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r009:36:E1000105",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r010:40:E1190119",
+      "description_en": "Threaded fitting",
+      "description_bg": "Резбов фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r011:700:E0113687",
+      "description_en": "Valve repair kit",
+      "description_bg": "Ремонтен комплект за клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r012:701:E1800040",
+      "description_en": "Repair kit",
+      "description_bg": "Ремонтен комплект",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r013:800:E0510088",
+      "description_en": "Special tools",
+      "description_bg": "Специални инструменти",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r014:801:Z0000578",
+      "description_en": "Special tools",
+      "description_bg": "Специални инструменти",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r015:802:E0510987",
+      "description_en": "Special tools",
+      "description_bg": "Специални инструменти",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_liquid_part:p3:r016:803:E1230608",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r001:1:E1220042",
+      "description_en": "Tubular frame",
+      "description_bg": "Тръбна рама",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r002:2:E1210904",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r003:3:E1210986",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r004:4:E1210903",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r005:5:E1210588",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r006:6:E1210589",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r007:7:E1210600",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r008:8:E1210591",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r009:9:E0710029",
+      "description_en": "Wheel",
+      "description_bg": "Колело",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r010:10:E0710031",
+      "description_en": "Wheel",
+      "description_bg": "Колело",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r011:11:E0910004",
+      "description_en": "Cap",
+      "description_bg": "Капачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r012:12:E1211300",
+      "description_en": "Brake",
+      "description_bg": "Спирачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r013:13:E1210906",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r014:14:E0230125",
+      "description_en": "Electric motor",
+      "description_bg": "Електродвигател",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r015:15:E0113678",
+      "description_en": "Pump",
+      "description_bg": "Помпа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r016:16:A299",
+      "description_en": "Pump support",
+      "description_bg": "Опора на помпата",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r017:17:E1210907",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r018:18:E0430010",
+      "description_en": "Bearing bushing",
+      "description_bg": "Лагерна втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r019:19:E0410020",
+      "description_en": "Timing-belt pulley",
+      "description_bg": "Зъбноремъчна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r020:20:E0420049",
+      "description_en": "Toothed belt",
+      "description_bg": "Зъбен ремък",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r021:20:E0420014",
+      "description_en": "Toothed belt",
+      "description_bg": "Зъбен ремък",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r022:21:K110",
+      "description_en": "Bearing bushing",
+      "description_bg": "Лагерна втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r023:22:K027",
+      "description_en": "Timing-belt pulley",
+      "description_bg": "Зъбноремъчна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r024:22:E0410006",
+      "description_en": "Timing-belt pulley",
+      "description_bg": "Зъбноремъчна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r025:23:E1210905",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r026:24:E1500161",
+      "description_en": "Complete switch box",
+      "description_bg": "Електрическо табло в комплект",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r027:25:E1211437",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r028:26:E1211438",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r029:27:E1000070",
+      "description_en": "Rubber element",
+      "description_bg": "Гумен елемент",
+      "qa_status": "NEEDS_REVIEW",
+      "qa_note": "The source identifies only rubber material and dimensions, without the element's function."
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p4:r030:28:E1600083",
+      "description_en": "Filter housing for Filter Unit 30",
+      "description_bg": "Корпус на филтъра за Filter Unit 30",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r001:29:E1600082",
+      "description_en": "Filter cartridge for Filter Unit 30 Nano",
+      "description_bg": "Филтърен патрон за Filter Unit 30 Nano",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r002:30:E1211435",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r003:31:E1110057",
+      "description_en": "Valve",
+      "description_bg": "Клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r004:32:E1230614",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r005:33:E1700096",
+      "description_en": "Pressure gauge",
+      "description_bg": "Манометър",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r006:34:E1230768",
+      "description_en": "Ring",
+      "description_bg": "Пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r007:35:E1300360",
+      "description_en": "Double nipple",
+      "description_bg": "Двоен нипел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r008:36:E1300336",
+      "description_en": "Elbow fitting",
+      "description_bg": "Коляно",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r009:37:D104",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r010:38:N086",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r011:39:S155",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r012:40:E1300113",
+      "description_en": "Nipple",
+      "description_bg": "Нипел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r013:41:E1300109",
+      "description_en": "Coupling",
+      "description_bg": "Съединител",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r014:42:N065",
+      "description_en": "Reducer fitting",
+      "description_bg": "Редукционен фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r015:43:D106",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r016:44:N391",
+      "description_en": "Cross fitting",
+      "description_bg": "Кръстат фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r017:45:N069",
+      "description_en": "Double nipple",
+      "description_bg": "Двоен нипел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r018:46:N017",
+      "description_en": "Coupling",
+      "description_bg": "Съединител",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r019:47:Z0000748",
+      "description_en": "Coupling",
+      "description_bg": "Съединител",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r020:48:N196",
+      "description_en": "Elbow fitting",
+      "description_bg": "Коляно",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r021:49:E1300272",
+      "description_en": "Double nipple",
+      "description_bg": "Двоен нипел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r022:50:E1180017",
+      "description_en": "Safety valve",
+      "description_bg": "Предпазен клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r023:51:N026",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r024:52:E0600285",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r025:53:S156",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r026:54:N279",
+      "description_en": "Elbow fitting",
+      "description_bg": "Коляно",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r027:55:N324",
+      "description_en": "Double nipple",
+      "description_bg": "Двоен нипел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r028:56:N249",
+      "description_en": "Threaded elbow",
+      "description_bg": "Резбово коляно",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r029:57:E1120027",
+      "description_en": "Solenoid valve",
+      "description_bg": "Електромагнитен клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p5:r030:58:E1300091",
+      "description_en": "Reducer fitting",
+      "description_bg": "Редукционен фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r001:59:E0111181",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r002:60:E1700153",
+      "description_en": "Pressure switch",
+      "description_bg": "Пресостат",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r003:61:E1700042",
+      "description_en": "Thermostat",
+      "description_bg": "Термостат",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r004:62:E1000009",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r005:63:E1300189",
+      "description_en": "T-piece",
+      "description_bg": "Тройник",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r006:64:N079",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r007:65:S155",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r008:66:N087",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r009:67:D103",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r010:68:E1300188",
+      "description_en": "Distributor",
+      "description_bg": "Разпределител",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r011:69:E1300450",
+      "description_en": "Threaded fitting",
+      "description_bg": "Резбов фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r012:70:E1000105",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r013:71:E1000105",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r014:72:E1000105",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r015:73:N064",
+      "description_en": "Reducer fitting",
+      "description_bg": "Редукционен фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r016:74:E1000105",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r017:75:N055",
+      "description_en": "Reducer fitting",
+      "description_bg": "Редукционен фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r018:76:N032",
+      "description_en": "Elbow fitting",
+      "description_bg": "Коляно",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r019:77:E1300166",
+      "description_en": "T-distributor 3000 bar, 3 × M26×1.5 female, DN 8",
+      "description_bg": "Т-разпределител 3000 bar, 3 × M26×1,5 вътрешна резба, DN 8",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r020:78:E1230608",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r021:79:E1300037",
+      "description_en": "Pressure screw 3000 bar, M26 male × inner Ø14.6, anti-vibration",
+      "description_bg": "Притискателен винт 3000 bar, M26 външна резба × вътрешен Ø14,6, антивибрационен",
+      "qa_status": "NEEDS_REVIEW",
+      "qa_note": "The source English name states 24 mm while the German name and separate specification state 19 mm; the display name omits the conflicting length."
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p6:r022:80:E1300038",
+      "description_en": "Pressure ring 3000 bar, 9/16\" UNF-LH female, Ø19×24 mm anti-vibration, for pressure screw E1300037/E1190135, tube Ø14.3",
+      "description_bg": "Притискателен пръстен 3000 bar, 9/16\" UNF-LH вътрешна резба, Ø19×24 mm антивибрационен, за притискателен винт E1300037/E1190135, тръба Ø14,3",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r001:81:E1300199",
+      "description_en": "Lance 30, 3000 bar, 70 °C, DN 4.8, Ø14.3 mm, 9/16\" UNF-LH male × 9/16\" UNF-LH male, 75 mm",
+      "description_bg": "Ланс 30, 3000 bar, 70 °C, DN 4,8, Ø14,3 mm, 9/16\" UNF-LH външна × 9/16\" UNF-LH външна резба, 75 mm",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r002:82:E1300165",
+      "description_en": "Elbow 3000 bar, M26×1.5 female × M26×1.5 female, DN 8",
+      "description_bg": "Коляно 3000 bar, M26×1,5 вътрешна × M26×1,5 вътрешна резба, DN 8",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r003:83:E1230717",
+      "description_en": "Double nipple 1500 bar, M26 male × M24 male DKO",
+      "description_bg": "Двоен нипел 1500 bar, M26 външна × M24 външна резба DKO",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r004:84:E0990112",
+      "description_en": "Cap",
+      "description_bg": "Капачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r005:85:S270",
+      "description_en": "Rubber element",
+      "description_bg": "Гумен елемент",
+      "qa_status": "NEEDS_REVIEW",
+      "qa_note": "The source identifies only rubber material and dimensions, without the element's function."
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r006:86:E0990059",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r007:87:E0500241",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r008:88:S201",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r009:89:S204",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r010:90:E1401155",
+      "description_en": "Cable tie",
+      "description_bg": "Кабелна превръзка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r011:91:E1401156",
+      "description_en": "Cable tie",
+      "description_bg": "Кабелна превръзка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r012:95:N085",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r013:93:S717",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r014:94:N130",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r015:95:N132",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r016:96:A323",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r017:97:S205",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r018:98:S200",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r019:99:S215",
+      "description_en": "Strainer",
+      "description_bg": "Цедка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r020:100:W0500724",
+      "description_en": "HPMS adhesive label 80 × 50 mm – use nano filter",
+      "description_bg": "Самозалепващ етикет HPMS 80 × 50 mm – използвай nano филтър",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r021:101:E0990065",
+      "description_en": "Cap",
+      "description_bg": "Капачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r022:102:E0990018",
+      "description_en": "Cap",
+      "description_bg": "Капачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r023:103:E0500059",
+      "description_en": "Nut",
+      "description_bg": "Гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r024:104:X9400002",
+      "description_en": "Split pin",
+      "description_bg": "Шплент",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p7:r025:105:X7976004",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r001:106:X9330012",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r002:107:X9330017",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r003:108:X9120019",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r004:109:X9330016",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r005:110:X9330020",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r006:111:X9330026",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r007:112:X9330027",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r008:113:X9310007",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r009:114:X9330043",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r010:115:X9330053",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r011:116:X9330055",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r012:117:X9330068",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r013:118:X9120021",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r014:119:X9120020",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r015:120:X9120028",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r016:121:X7985011",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r017:122:X9880013",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r018:123:X9340001",
+      "description_en": "Hexagon nut",
+      "description_bg": "Шестостенна гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r019:124:X9850005",
+      "description_en": "Hexagon nut",
+      "description_bg": "Шестостенна гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r020:125:X1250004",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r021:126:X1250005",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r022:127:X1250006",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r023:128:X9021003",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r024:129:X1250008",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r025:130:X7349000",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r026:131:X1260001",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r027:132:X9021002",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r028:133:X1250007",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r029:134:X9021005",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r030:135:X9120013",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r031:136:X9850003",
+      "description_en": "Hexagon nut",
+      "description_bg": "Шестостенна гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r032:137:X9021000",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r033:138:X1250002",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p8:r034:139:X1270003",
+      "description_en": "Spring washer",
+      "description_bg": "Пружинна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r001:140:W0500228",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r002:141:W0500229",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r003:142:W0500269",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r004:143:W0500352",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r005:144:W0500557",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r006:145:W0500559",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r007:146:W0500561",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r008:147:W0500566",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r009:148:W0500574",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r010:149:W0500575",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r011:150:W0500477",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r012:151:W0500713",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r013:152:W0500727",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r014:154:E1401000",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r015:155:A0100046",
+      "description_en": "Printed sticker",
+      "description_bg": "Печатен стикер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r016:156:W0500421",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r017:157:A0100084",
+      "description_en": "Printed sticker",
+      "description_bg": "Печатен стикер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r018:158:E1600140",
+      "description_en": "Filter housing for Filter Unit 30",
+      "description_bg": "Корпус на филтъра за Filter Unit 30",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r019:159:E1190111",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r020:600:E1120041",
+      "description_en": "Solenoid coil",
+      "description_bg": "Бобина на електромагнитен клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r021:601:E0500392",
+      "description_en": "Stroke limiter",
+      "description_bg": "Ограничител на хода",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r022:602:X7991006",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_1000_wheel_jet:p9:r023:603:E1210650",
+      "description_en": "Ring",
+      "description_bg": "Пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r001:0:E0110044",
+      "description_en": "Pump",
+      "description_bg": "Помпа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r002:0:E0110045",
+      "description_en": "Pump",
+      "description_bg": "Помпа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r003:0:E0110045",
+      "description_en": "Pump",
+      "description_bg": "Помпа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r004:0:E0110045",
+      "description_en": "Pump",
+      "description_bg": "Помпа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r005:0:E0112917",
+      "description_en": "Drive pump",
+      "description_bg": "Задвижваща помпа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r006:0:E0113553",
+      "description_en": "Gasket repair kit",
+      "description_bg": "Ремонтен комплект уплътнения",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r007:0:E0113554",
+      "description_en": "Valve repair kit",
+      "description_bg": "Ремонтен комплект за клапани",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r008:1:E0111104",
+      "description_en": "Housing",
+      "description_bg": "Корпус",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r009:2:E0111056",
+      "description_en": "Oil dipstick",
+      "description_bg": "Масломерна щека",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r010:3:E0111129",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r011:4:E0111242",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r012:5:D106",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r013:5:E0111083",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r014:6:X9120026",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r015:8:E0113530",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r016:9:E0111168",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r017:10:X1270003",
+      "description_en": "Spring washer",
+      "description_bg": "Пружинна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r018:10:X9330026",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r019:11:E0111211",
+      "description_en": "Shaft seal",
+      "description_bg": "Маншетно уплътнение на вал",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r020:12:E0113555",
+      "description_en": "Bearing",
+      "description_bg": "Лагер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r021:13:E0111569-R",
+      "description_en": "Crankshaft",
+      "description_bg": "Колянов вал",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r022:14:E0111990",
+      "description_en": "Parallel key",
+      "description_bg": "Призматична шпонка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r023:15:E0111040",
+      "description_en": "Connecting rod",
+      "description_bg": "Мотовилка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r024:16:E0113533",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r025:17:E0112003",
+      "description_en": "Bolt",
+      "description_bg": "Болт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r026:18:E0600425",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r027:19:E0113536",
+      "description_en": "Shaft seal",
+      "description_bg": "Маншетно уплътнение на вал",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r028:20:E0113537",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r029:21:E0113538",
+      "description_en": "Housing",
+      "description_bg": "Корпус",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p2:r030:22:E0111453",
+      "description_en": "Ring",
+      "description_bg": "Пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r001:23:E0113541",
+      "description_en": "U-cup seal",
+      "description_bg": "Маншетно уплътнение",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r002:24:E0113557",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r003:25:E0113540",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r004:26:E0113545",
+      "description_en": "Valve housing",
+      "description_bg": "Корпус на клапана",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r005:32:E0113550",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r006:32:E0113550",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r007:33:E0113552",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r008:34:X9120056",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r009:36:E1300512",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r010:37:E0111247",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r011:38:E0111284",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r012:39:D104",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r013:40:E0113531",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r014:40:E0113532",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r015:41:E0113534",
+      "description_en": "Plunger tube",
+      "description_bg": "Плунжерна тръба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r016:42:E0113535",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r017:43:E0111217",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r018:44:E0112840",
+      "description_en": "Ring",
+      "description_bg": "Пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r019:45:E0111206",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r020:46:E0113542",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r021:47:E0113543",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r022:48:E0111231",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r023:49:E0113544",
+      "description_en": "Sleeve",
+      "description_bg": "Втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r024:50:X1270003",
+      "description_en": "Spring washer",
+      "description_bg": "Пружинна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r025:51:E0113549",
+      "description_en": "Valve repair kit",
+      "description_bg": "Ремонтен комплект за клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r026:54:E0113563",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r027:55:E0113662",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r028:56:E0112546",
+      "description_en": "Crankshaft",
+      "description_bg": "Колянов вал",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r029:57:E0113663",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r030:60:E0113722",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p3:r031:61:E0111406",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p4:r001:800:E0510795",
+      "description_en": "Special tools",
+      "description_bg": "Специални инструменти",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p4:r002:801:E0510796",
+      "description_en": "Special tools",
+      "description_bg": "Специални инструменти",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p4:r003:802:E0510006",
+      "description_en": "Internal valve extractor",
+      "description_bg": "Вътрешен изтегляч за клапани",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_pump:p4:r004:900:F0000034",
+      "description_en": "Oil",
+      "description_bg": "Масло",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r001:0:E1110080",
+      "description_en": "Unloader valve",
+      "description_bg": "Разтоварващ клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r002:0:E1110081",
+      "description_en": "Unloader valve",
+      "description_bg": "Разтоварващ клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r003:0:E1800065",
+      "description_en": "Repair kit",
+      "description_bg": "Ремонтен комплект",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r004:1:H0010001",
+      "description_en": "Housing",
+      "description_bg": "Корпус",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r005:2:E0600025",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r006:3:E0600024",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r007:4:E0600035",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r008:5:E0600036",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r009:6:E1230058",
+      "description_en": "Valve seat",
+      "description_bg": "Седло на клапана",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r010:7:E0810089",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r011:8:E1230059",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r012:9:E1700014",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r013:10:E0600394",
+      "description_en": "Seal set",
+      "description_bg": "Комплект уплътнения",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r014:11:E1231174",
+      "description_en": "Piston",
+      "description_bg": "Бутало",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r015:12:E0600027",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r016:13:E0600032",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r017:14:E0500043",
+      "description_en": "Compression spring",
+      "description_bg": "Натискателна пружина",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r018:15:E1230469",
+      "description_en": "Threaded plug",
+      "description_bg": "Резбова тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r019:16:E0600393",
+      "description_en": "Seal set",
+      "description_bg": "Комплект уплътнения",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r020:17:E0113007",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r021:18:E0600021",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r022:19:X9120030",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r023:20:E1230079",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r024:21:E0500046",
+      "description_en": "Disc spring",
+      "description_bg": "Тарелкова пружина",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r025:22:E1231067",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r026:23:E0520006",
+      "description_en": "Bearing",
+      "description_bg": "Лагер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r027:24:E0520005",
+      "description_en": "Bearing",
+      "description_bg": "Лагер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r028:25:E1230075",
+      "description_en": "Press-control nut",
+      "description_bg": "Гайка на press-control",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r029:26:E1230076",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p2:r030:27:X7991000",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r001:28:E0990027",
+      "description_en": "Control knob",
+      "description_bg": "Регулираща ръкохватка",
+      "qa_status": "NEEDS_REVIEW",
+      "qa_note": "The source terms Griff/knob do not specify whether this is a knob or lever-type handle."
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r002:29:E0990025",
+      "description_en": "Cap",
+      "description_bg": "Капачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r003:30:X9330016",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r004:31:E0111986",
+      "description_en": "Ring",
+      "description_bg": "Пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r005:32:E1230226",
+      "description_en": "Piston rod",
+      "description_bg": "Бутален прът",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r006:33:E1211629",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r007:34:E0111857",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r008:35:E1230355",
+      "description_en": "Valve cone",
+      "description_bg": "Клапанен конус",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r009:36:E1231184",
+      "description_en": "Valve housing",
+      "description_bg": "Корпус на клапана",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r010:37:E0600276",
+      "description_en": "Gasket",
+      "description_bg": "Уплътнение",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r011:38:E1180010",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r012:39:E0600060",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r013:40:E0500109",
+      "description_en": "Compression spring",
+      "description_bg": "Натискателна пружина",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r014:41:E1230217",
+      "description_en": "Guide bushing",
+      "description_bg": "Направляваща втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r015:42:X4720006",
+      "description_en": "Circlip",
+      "description_bg": "Стопорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r016:43:E1230224",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r017:44:E0600126",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r018:45:E1230223",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r019:46:E1231185",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r020:47:E1230222",
+      "description_en": "Piston",
+      "description_bg": "Бутало",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r021:48:E1230221",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r022:49:E1230225",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r023:50:E1231186",
+      "description_en": "Nut",
+      "description_bg": "Гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r024:51:E0600125",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r025:52:E0600124",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r026:53:E0520023",
+      "description_en": "Bearing",
+      "description_bg": "Лагер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r027:54:X9120055",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r028:55:E0600101",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r029:56:E0600288",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r030:57:E0113027",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r031:58:E1230464",
+      "description_en": "Bearing bushing",
+      "description_bg": "Лагерна втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r032:59:E1230256",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p3:r033:60:E0111577",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p4:r001:61:E1700154",
+      "description_en": "Pressure switch",
+      "description_bg": "Пресостат",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_unloader_valve:p4:r002:800:E0510737",
+      "description_en": "I-Torx socket",
+      "description_bg": "Вложка I-Torx",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r001:1:E1230748",
+      "description_en": "Housing",
+      "description_bg": "Корпус",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r002:2:E1230745",
+      "description_en": "Thrust piece",
+      "description_bg": "Натискателен елемент",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r003:3:E1230058",
+      "description_en": "Valve seat",
+      "description_bg": "Седло на клапана",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r004:4:E1230059",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r005:5:E0600291",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r006:6:E1230743",
+      "description_en": "Control piston",
+      "description_bg": "Управляващо бутало",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r007:7:E0810089",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r008:8:E0600036",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r009:9:E0600032",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r010:10:E0600021",
+      "description_en": "Support ring",
+      "description_bg": "Опорен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r011:11:E0600394",
+      "description_en": "Seal set",
+      "description_bg": "Комплект уплътнения",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r012:12:E0500286",
+      "description_en": "Compression spring",
+      "description_bg": "Натискателна пружина",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r013:13:E1230744",
+      "description_en": "Spacer",
+      "description_bg": "Дистанционер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r014:14:E0600393",
+      "description_en": "Seal set",
+      "description_bg": "Комплект уплътнения",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r015:15:E0111181",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r016:16:D103",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r017:17:E1231304",
+      "description_en": "Strainer",
+      "description_bg": "Цедка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r018:18:E1230747",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r019:19:E1230746",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r020:20:N268",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r021:21:N269",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r022:22:E0810016",
+      "description_en": "Valve ball",
+      "description_bg": "Клапанна сачма",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r023:23:E0800545",
+      "description_en": "Point-jet nozzle 0°, M4 male, nozzle size 0004/0.15 mm, sapphire style 8",
+      "description_bg": "Точкова дюза 0°, M4 външна резба, размер 0004/0,15 mm, сапфир style 8",
+      "qa_status": "NEEDS_REVIEW",
+      "qa_note": "The source German name states 500 bar while its English column states 3000 bar; the display name does not choose between the conflicting pressure values."
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r024:24:E1230278",
+      "description_en": "Pin",
+      "description_bg": "Щифт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r025:25:X9120029",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r026:26:E0600024",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r027:700:E1800023",
+      "description_en": "Repair kit",
+      "description_bg": "Ремонтен комплект",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r028:800:E1230749",
+      "description_en": "Throttle",
+      "description_bg": "Дросел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p2:r029:800:E1230765",
+      "description_en": "Throttle",
+      "description_bg": "Дросел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p3:r001:800:E1230766",
+      "description_en": "Throttle",
+      "description_bg": "Дросел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p3:r002:800:E1230767",
+      "description_en": "Throttle",
+      "description_bg": "Дросел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_valve_500bar:p3:r003:801:E0510890",
+      "description_en": "Internal valve extractor",
+      "description_bg": "Вътрешен изтегляч за клапани",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r001:1:E1210953",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r002:2:E0410030",
+      "description_en": "Timing-belt pulley",
+      "description_bg": "Зъбноремъчна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r003:2:E0410024",
+      "description_en": "Timing-belt pulley",
+      "description_bg": "Зъбноремъчна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r004:3:E0430005",
+      "description_en": "Bearing bushing",
+      "description_bg": "Лагерна втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r005:4:E0420039",
+      "description_en": "Toothed belt",
+      "description_bg": "Зъбен ремък",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r006:4:E0420043",
+      "description_en": "Toothed belt",
+      "description_bg": "Зъбен ремък",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r007:5:E0430001",
+      "description_en": "Bearing bushing",
+      "description_bg": "Лагерна втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r008:6:E0410016",
+      "description_en": "Timing-belt pulley",
+      "description_bg": "Зъбноремъчна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r009:7:E1401000",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r010:8:W0500269",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r011:9:E0230027",
+      "description_en": "Electric motor",
+      "description_bg": "Електродвигател",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r012:10:E0230124",
+      "description_en": "Parallel key",
+      "description_bg": "Призматична шпонка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r013:11:E1211039",
+      "description_en": "Pump support",
+      "description_bg": "Опора на помпата",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r014:12:A323",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r015:13:S205",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r016:14:S200",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r017:15:N130",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r018:16:N132",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r019:17:S717",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r020:18:N085",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r021:19:D104",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r022:20:N032",
+      "description_en": "Elbow fitting",
+      "description_bg": "Коляно",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r023:21:E1210946",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r024:22:E1401155",
+      "description_en": "Cable tie",
+      "description_bg": "Кабелна превръзка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r025:23:S270",
+      "description_en": "Rubber element",
+      "description_bg": "Гумен елемент",
+      "qa_status": "NEEDS_REVIEW",
+      "qa_note": "The source identifies only rubber material and dimensions, without the element's function."
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r026:24:E1210950",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r027:25:E0500059",
+      "description_en": "Nut",
+      "description_bg": "Гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r028:26:S212",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r029:27:E1500162",
+      "description_en": "Complete switch box",
+      "description_bg": "Електрическо табло в комплект",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p4:r030:28:E0710031",
+      "description_en": "Wheel",
+      "description_bg": "Колело",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r001:29:E1211300",
+      "description_en": "Brake",
+      "description_bg": "Спирачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r002:29:E1211300",
+      "description_en": "Brake",
+      "description_bg": "Спирачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r003:30:W0500553",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r004:31:E1210908",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r005:32:E1210987",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r006:33:E1210949",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r007:34:W0500560",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r008:35:W0500558",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r009:36:W0500141",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r010:37:E1211106",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r011:38:E1300513",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r012:39:E1300512",
+      "description_en": "Plug",
+      "description_bg": "Тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r013:40:E0990009",
+      "description_en": "Cap",
+      "description_bg": "Капачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r014:41:E0600003",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r015:42:N075",
+      "description_en": "Double nipple 500 bar, M22 male × 1/2\" male, V2A",
+      "description_bg": "Двоен нипел 500 bar, M22 външна × 1/2\" външна резба, V2A",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r016:43:E0600092",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r017:44:E1300515",
+      "description_en": "Threaded fitting",
+      "description_bg": "Резбов фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r018:45:E1300516",
+      "description_en": "Elbow fitting",
+      "description_bg": "Коляно",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r019:46:E1300519",
+      "description_en": "Threaded fitting",
+      "description_bg": "Резбов фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r020:47:E1700060",
+      "description_en": "Pressure gauge",
+      "description_bg": "Манометър",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r021:48:E1010205",
+      "description_en": "High-pressure hose",
+      "description_bg": "Шланг за високо налягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r022:49:N201",
+      "description_en": "Reducer fitting",
+      "description_bg": "Редукционен фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r023:50:P076",
+      "description_en": "Overpressure protection",
+      "description_bg": "Защита от свръхналягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r024:51:E1231355",
+      "description_en": "Distributor",
+      "description_bg": "Разпределител",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r025:52:E1300514",
+      "description_en": "Threaded fitting",
+      "description_bg": "Резбов фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r026:53:E1190100",
+      "description_en": "Valve",
+      "description_bg": "Клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r027:54:D103",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r028:55:E1230749",
+      "description_en": "Throttle",
+      "description_bg": "Дросел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r029:56:N030",
+      "description_en": "Elbow fitting",
+      "description_bg": "Коляно",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p5:r030:57:E0111181",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r001:58:N088",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r002:59:S201",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r003:60:S155",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r004:61:E1300113",
+      "description_en": "Nipple",
+      "description_bg": "Нипел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r005:62:E1300109",
+      "description_en": "Coupling",
+      "description_bg": "Съединител",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r006:63:N026",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r007:64:D106",
+      "description_en": "Sealing washer",
+      "description_bg": "Уплътнителна шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r008:65:E1180017",
+      "description_en": "Safety valve",
+      "description_bg": "Предпазен клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r009:66:E1300317",
+      "description_en": "Double nipple",
+      "description_bg": "Двоен нипел",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r010:67:N065",
+      "description_en": "Reducer fitting",
+      "description_bg": "Редукционен фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r011:68:N017",
+      "description_en": "Coupling",
+      "description_bg": "Съединител",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r012:69:N282",
+      "description_en": "T-piece",
+      "description_bg": "Тройник",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r013:70:X7976004",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r014:71:E1600082",
+      "description_en": "Filter cartridge for Filter Unit 30 Nano",
+      "description_bg": "Филтърен патрон за Filter Unit 30 Nano",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r015:72:E1000009",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r016:73:E1700042",
+      "description_en": "Thermostat",
+      "description_bg": "Термостат",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r017:74:E1700153",
+      "description_en": "Pressure switch",
+      "description_bg": "Пресостат",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r018:75:N062",
+      "description_en": "Reducer fitting",
+      "description_bg": "Редукционен фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r019:76:N392",
+      "description_en": "Cross fitting",
+      "description_bg": "Кръстат фитинг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r020:77:N090",
+      "description_en": "Hose barb",
+      "description_bg": "Щуцер за шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r021:78:S204",
+      "description_en": "Clamp",
+      "description_bg": "Скоба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r022:79:S156",
+      "description_en": "Hose",
+      "description_bg": "Шланг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r023:80:N196",
+      "description_en": "Elbow fitting",
+      "description_bg": "Коляно",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r024:81:W0500713",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r025:82:E1220041",
+      "description_en": "Tubular frame",
+      "description_bg": "Тръбна рама",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r026:82:E1220041",
+      "description_en": "Tubular frame",
+      "description_bg": "Тръбна рама",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r027:82:E1220030-R",
+      "description_en": "Tubular frame",
+      "description_bg": "Тръбна рама",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r028:83:W0500575",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r029:84:W0500574",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p6:r030:85:W0500352",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r001:86:E0990089",
+      "description_en": "Cap",
+      "description_bg": "Капачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r002:87:E0990112",
+      "description_en": "Cap",
+      "description_bg": "Капачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r003:88:W0500229",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r004:89:W0500228",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r005:90:W0500477",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r006:91:W0500563",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r007:92:E1210948",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r008:93:E1210947",
+      "description_en": "Cover",
+      "description_bg": "Капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r009:94:E1210600",
+      "description_en": "Holder",
+      "description_bg": "Държач",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r010:95:E0710029",
+      "description_en": "Wheel",
+      "description_bg": "Колело",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r011:96:X9880013",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r012:97:E0910004",
+      "description_en": "Cap",
+      "description_bg": "Капачка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r013:98:S215",
+      "description_en": "Strainer",
+      "description_bg": "Цедка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r014:99:A0100046",
+      "description_en": "Printed sticker",
+      "description_bg": "Печатен стикер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r015:101:E0110045",
+      "description_en": "Pump",
+      "description_bg": "Помпа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r016:102:W0500727",
+      "description_en": "Adhesive label",
+      "description_bg": "Самозалепващ етикет",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r017:103:Z0000748",
+      "description_en": "Coupling",
+      "description_bg": "Съединител",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r018:104:E1401156",
+      "description_en": "Cable tie",
+      "description_bg": "Кабелна превръзка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r019:105:E1600077",
+      "description_en": "Filter housing for Filter Unit 30",
+      "description_bg": "Корпус на филтъра за Filter Unit 30",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r020:106:E1110081",
+      "description_en": "Unloader valve",
+      "description_bg": "Разтоварващ клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r021:107:X1250005",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r022:108:X9120019",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r023:109:X9021003",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r024:110:X9330026",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r025:111:X1250006",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r026:112:X9310007",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r027:113:X9120021",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r028:114:X9120026",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r029:115:X9330043",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p7:r030:116:X9021005",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r001:117:X9310017",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r002:118:X1250008",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r003:119:X1250007",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r004:120:X9330041",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r005:121:X9330084",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r006:122:X9340001",
+      "description_en": "Hexagon nut",
+      "description_bg": "Шестостенна гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r007:123:X9850003",
+      "description_en": "Hexagon nut",
+      "description_bg": "Шестостенна гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r008:124:X9021000",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r009:125:X9120013",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r010:126:X9330012",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r011:127:X9120020",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r012:128:X1250002",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r013:129:X9021002",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r014:130:X1260001",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r015:131:X9400002",
+      "description_en": "Split pin",
+      "description_bg": "Шплент",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r016:600:E0500008",
+      "description_en": "Extension spring",
+      "description_bg": "Опънова пружина",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r017:601:X9650019",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r018:602:X9650010",
+      "description_en": "Screw",
+      "description_bg": "Винт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r019:603:X9880004",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r020:604:E1210884",
+      "description_en": "Plate",
+      "description_bg": "Планка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r021:605:X1250006",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r022:606:X9850006",
+      "description_en": "Hexagon nut",
+      "description_bg": "Шестостенна гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r023:607:E1210882",
+      "description_en": "Lever",
+      "description_bg": "Лост",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r024:608:X9880002",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r025:609:E1210885",
+      "description_en": "Plate",
+      "description_bg": "Планка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r026:610:X1250005",
+      "description_en": "Washer",
+      "description_bg": "Шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "falch_500_wheel_jet:p8:r027:611:X9850005",
+      "description_en": "Hexagon nut",
+      "description_bg": "Шестостенна гайка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r001",
+      "description_en": "Hexagonal oil sight glass with flat washer",
+      "description_bg": "Шестостенно маслоуказателно стъкло с плоска шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r002",
+      "description_en": "End cap",
+      "description_bg": "Крайна тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r003",
+      "description_en": "Oil dipstick",
+      "description_bg": "Масломерна щека",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r004",
+      "description_en": "End cap",
+      "description_bg": "Крайна тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r005",
+      "description_en": "Hex head screw",
+      "description_bg": "Винт с шестостенна глава",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r006",
+      "description_en": "Double-sided serrated washer",
+      "description_bg": "Двустранно назъбена шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r007",
+      "description_en": "End cap",
+      "description_bg": "Крайна тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r008",
+      "description_en": "Low-pressure cover",
+      "description_bg": "Капак за ниско налягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r009",
+      "description_en": "Back cover",
+      "description_bg": "Заден капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r010",
+      "description_en": "Rubber gasket",
+      "description_bg": "Гумено уплътнение",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r011",
+      "description_en": "Connecting rod",
+      "description_bg": "Мотовилка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r012",
+      "description_en": "Piston pin",
+      "description_bg": "Бутален болт",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r013",
+      "description_en": "Plunger rod",
+      "description_bg": "Плунжерен прът",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r014",
+      "description_en": "Air cap gasket",
+      "description_bg": "Уплътнение на въздушната капачка",
+      "qa_status": "NEEDS_REVIEW",
+      "qa_note": "The HYDWIN source gives only 'Air cap gasket'; the exact cap function is not specified."
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r015",
+      "description_en": "Ceramic tube",
+      "description_bg": "Керамична тръба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r016",
+      "description_en": "Copper gasket",
+      "description_bg": "Медно уплътнение",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r017",
+      "description_en": "Ceramic tube lock nut",
+      "description_bg": "Контрагайка на керамичната тръба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r018",
+      "description_en": "Flat key",
+      "description_bg": "Плоска шпонка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r019",
+      "description_en": "Crankshaft",
+      "description_bg": "Колянов вал",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r020",
+      "description_en": "Tapered roller bearing",
+      "description_bg": "Конусно-ролков лагер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r021",
+      "description_en": "End-cap O-ring",
+      "description_bg": "О-пръстен на крайната тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r022",
+      "description_en": "Adjusting shim",
+      "description_bg": "Регулираща подложка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r023",
+      "description_en": "Closed bearing cover",
+      "description_bg": "Затворен лагерен капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r024",
+      "description_en": "Double-sided serrated washer",
+      "description_bg": "Двустранно назъбена шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r025",
+      "description_en": "Hex head screw",
+      "description_bg": "Винт с шестостенна глава",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r026",
+      "description_en": "Open bearing cover",
+      "description_bg": "Отворен лагерен капак",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r027",
+      "description_en": "Oil seal",
+      "description_bg": "Семеринг",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r028",
+      "description_en": "Crankcase",
+      "description_bg": "Картер",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r029",
+      "description_en": "Housing oil seal",
+      "description_bg": "Семеринг на корпуса",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r030",
+      "description_en": "Bronze guide bushing O-ring",
+      "description_bg": "О-пръстен на бронзовата направляваща втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r031",
+      "description_en": "Bronze guide bushing",
+      "description_bg": "Бронзова направляваща втулка",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r032",
+      "description_en": "Secondary water seal",
+      "description_bg": "Вторично водно уплътнение",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r033",
+      "description_en": "Brass pressure ring",
+      "description_bg": "Месингов притискателен пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r034",
+      "description_en": "Main water seal",
+      "description_bg": "Основно водно уплътнение",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r035",
+      "description_en": "Pump head",
+      "description_bg": "Глава на помпата",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r036",
+      "description_en": "Cooling-water O-ring",
+      "description_bg": "О-пръстен на охлаждащата вода",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r037",
+      "description_en": "Double-sided serrated washer",
+      "description_bg": "Двустранно назъбена шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r038",
+      "description_en": "M10 hex head screw",
+      "description_bg": "Винт M10 с шестостенна глава",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r039",
+      "description_en": "M6 hex head screw",
+      "description_bg": "Винт M6 с шестостенна глава",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r040",
+      "description_en": "Bonded seal",
+      "description_bg": "Метало-гумено уплътнение",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r041",
+      "description_en": "Low-pressure cover O-ring",
+      "description_bg": "О-пръстен на капака за ниско налягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r042",
+      "description_en": "Retaining ring",
+      "description_bg": "Задържащ пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r043",
+      "description_en": "O-ring",
+      "description_bg": "О-пръстен",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r044",
+      "description_en": "Low-pressure valve",
+      "description_bg": "Клапан за ниско налягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r045",
+      "description_en": "Check-valve copper support",
+      "description_bg": "Медна опора на възвратния клапан",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r046",
+      "description_en": "High-pressure valve retaining ring",
+      "description_bg": "Задържащ пръстен на клапана за високо налягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r047",
+      "description_en": "High-pressure valve O-ring",
+      "description_bg": "О-пръстен на клапана за високо налягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r048",
+      "description_en": "High-pressure valve",
+      "description_bg": "Клапан за високо налягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r049",
+      "description_en": "Copper seat for high-pressure valve",
+      "description_bg": "Медно седло за клапана за високо налягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r050",
+      "description_en": "High-pressure valve cover",
+      "description_bg": "Капак на клапана за високо налягане",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r051",
+      "description_en": "Double-sided serrated washer",
+      "description_bg": "Двустранно назъбена шайба",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r052",
+      "description_en": "304 stainless-steel hex head screw",
+      "description_bg": "Винт с шестостенна глава от неръждаема стомана 304",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r053",
+      "description_en": "End cap",
+      "description_bg": "Крайна тапа",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r054",
+      "description_en": "Oil sight glass sealing ring",
+      "description_bg": "Уплътнителен пръстен на маслоуказателното стъкло",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r055",
+      "description_en": "Oil sight glass",
+      "description_bg": "Маслоуказателно стъкло",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r056",
+      "description_en": "Oil sight glass retaining ring",
+      "description_bg": "Задържащ пръстен на маслоуказателното стъкло",
+      "qa_status": "VERIFIED"
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r057",
+      "description_en": "45-degree open washer",
+      "description_bg": "Отворена шайба 45°",
+      "qa_status": "NEEDS_REVIEW",
+      "qa_note": "Source wording does not identify the washer standard; the display name preserves the stated geometry without inferring a standard."
+    },
+    {
+      "source_record_key": "hydwin_fussen_500_plunger_pump:p22:r058",
+      "description_en": "Plunger rod O-ring",
+      "description_bg": "О-пръстен на плунжерния прът",
+      "qa_status": "VERIFIED"
+    }
+  ]
+}

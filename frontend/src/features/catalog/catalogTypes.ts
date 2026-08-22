@@ -12,6 +12,9 @@ export type CatalogPart = {
   order_part_number: string
   replaced_by_part_number?: string | null
   description: string
+  source_description: string
+  description_en: string
+  description_bg: string
   original_name?: string | null
   description_2?: string | null
   quantity?: number | null
@@ -26,6 +29,8 @@ export type CatalogPart = {
   verification_status: string
   source_anomaly_codes: string[]
   is_verified: boolean
+  translation_version: string
+  translation_qa_status: 'VERIFIED' | 'NEEDS_REVIEW'
 }
 
 export type CatalogDiagram = {
@@ -119,10 +124,15 @@ export type RepairKitComponent = {
   position: string
   part_number: string
   description: string
+  source_description: string
+  description_en: string
+  description_bg: string
   quantity: number
   quantity_raw: string
   source_document: string
   source_page: number
+  translation_version: string
+  translation_qa_status: 'VERIFIED' | 'NEEDS_REVIEW'
 }
 
 export type CatalogRepairKit = {

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '../../i18n'
 import { IndustrialCatalog } from './IndustrialCatalog'
+import { catalogDisplayName } from './catalogNames'
 import type {
   CatalogDiagram,
   CatalogPart,
@@ -37,6 +38,9 @@ function part(overrides: Partial<CatalogPart> = {}): CatalogPart {
     part_number: 'TEST-FALCH-3',
     order_part_number: 'TEST-FALCH-3',
     description: 'Falch test-only seal',
+    source_description: 'Falch test-only seal',
+    description_en: 'Falch test-only seal',
+    description_bg: 'Тестово уплътнение Falch',
     original_name: 'Falch test-only seal',
     quantity: 1,
     quantity_raw: '1',
@@ -49,6 +53,8 @@ function part(overrides: Partial<CatalogPart> = {}): CatalogPart {
     verification_status: 'VERIFIED',
     source_anomaly_codes: [],
     is_verified: true,
+    translation_version: 'CATALOG_EN_BG_V1',
+    translation_qa_status: 'VERIFIED',
     ...overrides,
   }
 }
@@ -64,6 +70,9 @@ const hydwinPart = part({
   part_number: 'TEST-HY-34',
   order_part_number: 'TEST-HY-34',
   description: 'HYDWIN test-only seal',
+  source_description: 'HYDWIN test-only seal',
+  description_en: 'HYDWIN test-only seal',
+  description_bg: 'Тестово уплътнение HYDWIN',
 })
 
 function diagram(id = 991): CatalogDiagram {
@@ -133,7 +142,7 @@ function CatalogHarness({ defaultMachineId }: { defaultMachineId?: number }) {
 }
 
 async function addFalchPart(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByText(falchPart.description))
+  await user.click(await screen.findByText(catalogDisplayName(falchPart)))
   await user.click(await screen.findByRole('button', { name: 'Добави към заявка' }))
   expect(screen.getByText('Избрани части: 1')).toBeInTheDocument()
 }
@@ -194,11 +203,11 @@ describe('machine-bound catalog request cart', () => {
 
     await user.selectOptions(machineSelect, String(HYDWIN_MACHINE_ID))
     await user.click(await screen.findByRole('button', { name: 'Смени машината и изчисти заявката' }))
-    await screen.findByText(hydwinPart.description)
+    await screen.findByText(catalogDisplayName(hydwinPart))
     expect(machineSelect).toHaveValue(String(HYDWIN_MACHINE_ID))
     expect(screen.getByText('Избрани части: 0')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Отмени добавянето на комплекта' })).not.toBeInTheDocument()
-    expect(screen.queryByText(falchPart.description)).not.toBeInTheDocument()
+    expect(screen.queryByText(catalogDisplayName(falchPart))).not.toBeInTheDocument()
   })
 
   it('switches immediately without confirmation when the cart is empty', async () => {
@@ -208,10 +217,10 @@ describe('machine-bound catalog request cart', () => {
     const machineSelect = await screen.findByLabelText('Избери машина')
 
     await user.selectOptions(machineSelect, String(FALCH_MACHINE_ID))
-    await screen.findByText(falchPart.description)
+    await screen.findByText(catalogDisplayName(falchPart))
     await user.selectOptions(machineSelect, String(HYDWIN_MACHINE_ID))
 
-    await screen.findByText(hydwinPart.description)
+    await screen.findByText(catalogDisplayName(hydwinPart))
     expect(machineSelect).toHaveValue(String(HYDWIN_MACHINE_ID))
     expect(screen.queryByRole('dialog', { name: 'Смяна на машината' })).not.toBeInTheDocument()
   })
@@ -224,11 +233,11 @@ describe('machine-bound catalog request cart', () => {
 
     view.rerender(<CatalogHarness defaultMachineId={HYDWIN_MACHINE_ID} />)
 
-    await screen.findByText(hydwinPart.description)
+    await screen.findByText(catalogDisplayName(hydwinPart))
     expect(screen.getByLabelText('Избери машина')).toHaveValue(String(HYDWIN_MACHINE_ID))
     expect(screen.getByText('Избрани части: 0')).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: 'Смяна на машината' })).not.toBeInTheDocument()
-    expect(screen.queryByText(falchPart.description)).not.toBeInTheDocument()
+    expect(screen.queryByText(catalogDisplayName(falchPart))).not.toBeInTheDocument()
   })
 
   it('selects the exact source variant without adding it until the explicit action', async () => {
@@ -261,7 +270,7 @@ describe('machine-bound catalog request cart', () => {
     render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
 
     expect(await screen.findByText('Номерата в оригиналната схема са интерактивни. Областите се показват само при посочване, фокус или избор.')).toBeInTheDocument()
-    await user.click(screen.getByText(falchPart.description))
+    await user.click(screen.getByText(catalogDisplayName(falchPart)))
     expect(await screen.findByRole('button', { name: 'Добави към заявка' })).toBeInTheDocument()
   })
 
@@ -287,6 +296,27 @@ describe('machine-bound catalog request cart', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Поз. 3/ })).not.toBeInTheDocument())
     expect(hotspot).toHaveFocus()
+  })
+
+  it('shows English / Bulgarian and keeps the manufacturer description separate', async () => {
+    const translatedPart = part({
+      description: 'hose',
+      source_description: 'schlauch',
+      original_name: 'schlauch',
+      description_en: 'Hose',
+      description_bg: 'Шланг',
+    })
+    setupFetch({ falchParts: [translatedPart] })
+    const user = userEvent.setup()
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+
+    await user.click(await screen.findByText('Hose / Шланг'))
+    const dialog = await screen.findByRole('dialog', { name: /Поз. 3/ })
+
+    expect(dialog).toHaveTextContent('Наименование')
+    expect(dialog).toHaveTextContent('Hose / Шланг')
+    expect(dialog).toHaveTextContent('Оригинално описание от производителя')
+    expect(dialog).toHaveTextContent('schlauch')
   })
 
   it('uses stateful first-touch select and second-touch open behavior', async () => {
@@ -395,7 +425,7 @@ describe('machine-bound catalog request cart', () => {
       id: 81, code: 'TEST-KIT', name: 'Test-only kit', family: 'FALCH_500', source_id: FALCH_SOURCE_ID,
       brand: 'Falch', model: 'Test fixture', assembly: 'TEST_ASSEMBLY', source_document: 'TEST_ONLY.pdf',
       source_page: 1, source_document_sha256: 'a'.repeat(64), source_version: 'PARTS_CATALOG_V2', is_approved: true, is_active: true,
-      components: [{ id: 82, part_id: falchPart.id, source_record_key: falchPart.source_record_key, position: '3', part_number: falchPart.part_number, description: falchPart.description, quantity: 1, quantity_raw: '1', source_document: 'TEST_ONLY.pdf', source_page: 1 }],
+      components: [{ id: 82, part_id: falchPart.id, source_record_key: falchPart.source_record_key, position: '3', part_number: falchPart.part_number, description: falchPart.description, source_description: falchPart.source_description, description_en: falchPart.description_en, description_bg: falchPart.description_bg, quantity: 1, quantity_raw: '1', source_document: 'TEST_ONLY.pdf', source_page: 1, translation_version: falchPart.translation_version, translation_qa_status: falchPart.translation_qa_status }],
     }
     setupFetch({ falchDiagrams: [testDiagram], hotspots: [hotspot], repairKits: [kit] })
     const user = userEvent.setup()

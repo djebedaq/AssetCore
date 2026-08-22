@@ -232,6 +232,23 @@ def run(output: Path) -> Verification:
                 f"sources={catalog_validation['source_count']}"
             ),
         )
+        verification.check(
+            "EN/BG каталогът покрива точно 611 canonical source идентичности",
+            catalog_validation["translation_record_count"] == 611
+            and catalog_validation["english_translation_coverage"] == 611
+            and catalog_validation["bulgarian_translation_coverage"] == 611
+            and catalog_validation["orphan_translation_count"] == 0
+            and catalog_validation["missing_translation_count"] == 0
+            and catalog_validation["duplicate_translation_key_count"] == 0
+            and catalog_validation["unchanged_authoritative_source_count"] == 9,
+            (
+                f"translations={catalog_validation['translation_record_count']}, "
+                f"en={catalog_validation['english_translation_coverage']}, "
+                f"bg={catalog_validation['bulgarian_translation_coverage']}, "
+                f"needs_review={catalog_validation['translation_needs_review_count']}, "
+                f"source_hashes={catalog_validation['unchanged_authoritative_source_count']}"
+            ),
+        )
         licence = evaluate_license(db)
         verification.check("License validation връща контролиран статус", licence.state in {"NOT_INSTALLED", "ACTIVE", "GRACE_PERIOD", "READ_ONLY", "INVALID", "NOT_YET_VALID"})
     engine.dispose()

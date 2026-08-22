@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LocateFixed, Search } from 'lucide-react'
 
 import { useI18n } from '../../i18n'
+import { catalogDisplayName } from './catalogNames'
 import type { CatalogPart } from './catalogTypes'
 
 export function CatalogPartsTable({
@@ -55,7 +56,7 @@ export function CatalogPartsTable({
       </div>
     </div>
     {navigatorError && <div className="error">{navigatorError}</div>}
-    <div className="table-card"><table><thead><tr><th>{t('catalog.position')}</th><th>{t('common.partNumber')}</th><th>{t('catalog.description')}</th><th>{t('catalog.sourceQuantity')}</th><th>{t('catalog.repairKit')}</th><th><span className="sr-only">{t('catalog.showOnDiagram')}</span></th></tr></thead><tbody>{parts.map((part) => <tr
+    <div className="table-card"><table><thead><tr><th>{t('catalog.position')}</th><th>{t('common.partNumber')}</th><th>{t('catalog.displayName')}</th><th>{t('catalog.sourceQuantity')}</th><th>{t('catalog.repairKit')}</th><th><span className="sr-only">{t('catalog.showOnDiagram')}</span></th></tr></thead><tbody>{parts.map((part) => <tr
       ref={(element) => { if (element) rows.current.set(part.source_record_key, element); else rows.current.delete(part.source_record_key) }}
       className={selectedPart?.source_record_key === part.source_record_key ? 'selected-catalog-row' : ''}
       key={part.source_record_key}
@@ -65,7 +66,7 @@ export function CatalogPartsTable({
     >
       <td><b>{part.position}</b></td>
       <td><code>{part.part_number || t('common.noValue')}</code>{part.replaced_by_part_number && <small>→ {part.replaced_by_part_number}</small>}</td>
-      <td>{part.description}<small>{part.valid_for_raw}</small></td>
+      <td>{catalogDisplayName(part)}<small>{part.valid_for_raw}</small></td>
       <td>{part.quantity_raw || t('common.noValue')}</td>
       <td>{part.repair_kit_code || t('common.noValue')}</td>
       <td>{diagramPositions.has(part.position) && <button className="link" aria-label={`${t('catalog.showOnDiagram')} ${part.position}`} onClick={(event) => { event.stopPropagation(); onSelect(part); onShowDiagram(part) }}><LocateFixed size={17} /><span>{t('catalog.showOnDiagram')}</span></button>}</td>

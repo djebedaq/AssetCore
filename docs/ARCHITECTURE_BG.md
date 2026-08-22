@@ -14,6 +14,7 @@
 - `backend/app/application_errors.py` дефинира общия безопасен production error договор, diagnostic ID и структуриран log context.
 - `backend/app/catalog/` е отделният authoritative каталог domain: `routes.py` пази HTTP/permission договора, `service.py` прилага family/source integrity правилата, `repository.py` ограничава активните заявки, `importer.py` извършва идемпотентно архивиране/upsert, а `validation.py` проверява immutable source manifest и dataset.
 - `backend/resources/catalog/v2/manifest.json` и разделените JSON файлове са versioned immutable projection на точно деветте файла под `backend/resources/technical_docs/PARTS_CATALOG/`; `backend/scripts/build_catalog_v2.py` е възпроизводимият extractor, а `catalog_v2_validation.py` е release gate.
+- `backend/resources/catalog/enrichment/v1/` е отделен non-authoritative EN/BG display слой. Генерираният record map е keyed единствено по canonical `source_record_key`; `translations.py` валидира пълно 611-record coverage и source fingerprint binding, без да записва translation текст в source projection или PDF fingerprint.
 - `backend/app/localization.py` локализира backend съобщения и статусни етикети без промяна на съхранените стойности.
 - `backend/alembic` е единственият поддържан път за промяна на схемата.
 - `frontend/src/api.ts` е удостовереният API клиент и изпраща `Accept-Language`.
@@ -21,6 +22,7 @@
 - `frontend/src/App.tsx`, `BulkTransfers.tsx` и `IndustrialPlatform.tsx` реализират responsive PWA екраните, глобалното търсене, каталога и цифровия паспорт; `industrialUi.tsx` съдържа повторно използваните modal/document/attachment presentation действия.
 - `frontend/src/features/repairs/IndustrialRepairs.tsx` е самостоятелният repair screen, `repairApi.ts` е типизираната му API граница, а `workflow.ts` пази stage/form/payload договора без React state.
 - `frontend/src/features/catalog/` е самостоятелният machine-first каталог screen. `catalogApi.ts` пази focused API calls, `catalogState.ts` — deterministic cart/kit merge правилата, `catalogInteraction.ts` — pointer/touch state machine-а и movement threshold-а, а `IndustrialCatalog.tsx` — responsive diagram/table/cart workflow без hardcoded production URL или технически source данни. `CatalogSelectionPanels.tsx` притежава достъпния focus-trapped desktop modal/mobile sheet договор.
+- `frontend/src/features/catalog/catalogNames.ts` е единствената presentation функция за `English / Български` и отделния manufacturer source текст; table, hotspots, variants, repair kits, modal/sheet и request cart не дублират translation логика.
 
 ## Authoritative каталог за резервни части
 

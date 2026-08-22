@@ -3,6 +3,7 @@ import { ChevronRight, Layers3, PackagePlus, X } from 'lucide-react'
 
 import { useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
+import { catalogDisplayName, catalogSourceDescription } from './catalogNames'
 import type { CatalogPart, CatalogRepairKit } from './catalogTypes'
 
 const FOCUSABLE_ELEMENTS = [
@@ -111,7 +112,7 @@ export function CatalogPartDetails({
     <article className="catalog-v2-part-details" aria-live="polite">
     <header>
       <span className="badge batch-complete">{t('catalog.verified')}</span>
-      <p>{part.description}</p>
+      <p>{catalogDisplayName(part)}</p>
     </header>
     {part.replaced_by_part_number && <div className="catalog-v2-replacement" role="status">
       <b>{t('catalog.oldNumber')}: {part.part_number}</b>
@@ -119,8 +120,8 @@ export function CatalogPartDetails({
       <small>{t('catalog.replacementRequestNotice', { number: part.replaced_by_part_number })}</small>
     </div>}
     <dl className="detail-grid">
-      <div><dt>{t('catalog.description')}</dt><dd>{part.description}</dd></div>
-      <div><dt>{t('catalog.originalDescription')}</dt><dd>{part.original_name || part.description}</dd></div>
+      <div><dt>{t('catalog.displayName')}</dt><dd>{catalogDisplayName(part)}</dd></div>
+      <div><dt>{t('catalog.originalDescription')}</dt><dd>{catalogSourceDescription(part)}</dd></div>
       <div><dt>{t('catalog.specification')}</dt><dd>{part.description_2 || t('common.noValue')}</dd></div>
       <div><dt>{t('catalog.sourceQuantity')}</dt><dd>{part.quantity_raw || t('common.noValue')}</dd></div>
       <div><dt>{t('catalog.assembly')}</dt><dd>{part.assembly}</dd></div>
@@ -134,6 +135,7 @@ export function CatalogPartDetails({
       <code>SHA-256 {part.source_document_sha256}</code>
       <span>{part.source_version} · {part.source_record_key}</span>
       <span>{part.verification_status}</span>
+      <span>{part.translation_version} · {t(part.translation_qa_status === 'VERIFIED' ? 'catalog.translationVerified' : 'catalog.translationNeedsReview')}</span>
     </details>
     {hasPermission('requests.create') && <button className="primary" onClick={() => onAdd(part)}><PackagePlus size={17} />{t('catalog.addToRequest')}</button>}
     </article>
@@ -155,7 +157,7 @@ export function CatalogVariantDialog({
   return <CatalogDialog title={t('catalog.variantChoice', { position })} onClose={onClose} contentClassName="catalog-v2-variants-dialog">
     <div className="catalog-v2-variants-list">
       {variants.map((part) => <button key={part.source_record_key} onClick={() => onSelect(part)}>
-        <span><b>{part.part_number || t('common.noValue')}</b><small>{part.description}</small><em>{part.valid_for_raw || t('common.noValue')}</em></span>
+        <span><b>{part.part_number || t('common.noValue')}</b><small>{catalogDisplayName(part)}</small><em>{part.valid_for_raw || t('common.noValue')}</em></span>
         <ChevronRight size={17} />
       </button>)}
     </div>
@@ -180,7 +182,7 @@ export function CatalogRepairKitPreview({
     <div className="catalog-v2-kit-preview">
     <div className="toolbar"><div><span className="badge batch-complete">{t('catalog.verified')}</span><h3>{t('catalog.repairKit')} {kit.code}</h3><p>{t('catalog.kitContains', { count: kit.components.length })}</p></div></div>
     <button className={`secondary ${positionsVisible ? 'active' : ''}`} aria-pressed={positionsVisible} onClick={onTogglePositions}><Layers3 size={17} />{positionsVisible ? t('catalog.hideKitPositions') : t('catalog.showKitPositions')}</button>
-    <div className="catalog-v2-kit-components">{kit.components.map((component) => <div key={component.id}><b>{t('catalog.position')} {component.position} · {component.part_number || t('common.noValue')}</b><span>{component.description}</span><em>{t('catalog.sourceQuantity')}: {component.quantity_raw}</em></div>)}</div>
+    <div className="catalog-v2-kit-components">{kit.components.map((component) => <div key={component.id}><b>{t('catalog.position')} {component.position} · {component.part_number || t('common.noValue')}</b><span>{catalogDisplayName(component)}</span><em>{t('catalog.sourceQuantity')}: {component.quantity_raw}</em></div>)}</div>
     <div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" onClick={onConfirm}><PackagePlus size={17} />{t('catalog.addWholeKit')}</button></div>
     </div>
   </CatalogDialog>

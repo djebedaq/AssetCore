@@ -106,7 +106,7 @@ Seed-ът регистрира машинно използваеми BG/EN/RU DO
 
 Ремонтът може да стане `COMPLETED` и машината — `READY` само след проблем и начално състояние, диагноза, необходима и извършена работа, реални времена, успешен изискан тест, краен резултат/състояние и успешно създаден задължителен ремонтен DOCX/PDF. Финалната визуална стъпка се отваря изрично, но DB статусът остава `REPAIRING` до действието „Завърши ремонта и създай протокол“. Документите, `COMPLETED`, `READY` и активното местоположение `Цех` се записват атомарно. Грешка в генератора връща цялата транзакция и оставя машината `REPAIR`; при неочакван production отказ UI показва безопасен диагностичен код за търсене в server logs. След успешен commit машината е налична за ново издаване без допълнителна ръчна стъпка. Правилото е backend-authoritative и важи и за стария съвместим маршрут.
 
-Активният каталог е versioned dataset `PARTS_CATALOG_V2` с 611 source реда, извлечени единствено от деветте контролирани файла в `PARTS_CATALOG.zip`. При всяко импортиране и четене се проверяват manifest, SHA-256, page count, допустими страници, family mapping и regression anchors. HYDWIN/Fussen използва само Plunger Pump схема/BOM на PDF страници 21/22. Техническите описания не са превеждани или допълвани с предположения.
+Активният каталог е versioned dataset `PARTS_CATALOG_V2` с 611 source реда, извлечени единствено от деветте контролирани файла в `PARTS_CATALOG.zip`. При всяко импортиране и четене се проверяват manifest, SHA-256, page count, допустими страници, family mapping и regression anchors. HYDWIN/Fussen използва само Plunger Pump схема/BOM на PDF страници 21/22. Source описанията не се променят. Отделният `CATALOG_EN_BG_V1` display слой дава пълни `English / Български` имена по canonical `source_record_key`, като реалните двусмислия остават маркирани `NEEDS_REVIEW`.
 
 Ремонтите са вътрешни: потребителят, приел картата, допълнителните участници и реалният потребител, завършил ремонта, се пазят отделно и audit-able. При completion се създава заключен repair DOCX/PDF с приемане, диагностика, извършена работа, верифицирани вложени части, приложения, реални продължителности и тест. Корекция изисква причина и създава нова версия, без overwrite на старата.
 
@@ -146,6 +146,7 @@ pnpm build
 - [операторски инструкции за паспорти, ремонти, части и библиотека](docs/OPERATIONS_INDUSTRIAL_PLATFORM_BG.md)
 - [операторски инструкции за ремонтния workflow](docs/OPERATIONS_REPAIRS_BG.md)
 - [операторски инструкции за authoritative parts catalog](docs/OPERATIONS_PART_CATALOG_BG.md)
+- [QA на EN/BG каталожните наименования](docs/CATALOG_TRANSLATION_VALIDATION_BG.md)
 - [валидация на `PARTS_CATALOG_V2`](docs/PART_CATALOG_V2_IMPORT_VALIDATION_BG.md)
 - [source anomalies в `PARTS_CATALOG_V2`](docs/PART_CATALOG_V2_SOURCE_ANOMALIES_BG.md)
 - [документни шаблони и визуална QA](docs/DOCUMENT_TEMPLATES_BG.md)

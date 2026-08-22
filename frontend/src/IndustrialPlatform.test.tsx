@@ -40,6 +40,9 @@ describe('индустриален каталог', () => {
       part_number: '7.906-007.11',
       order_part_number: '7.906-007.11',
       description: 'Main water seal',
+      source_description: 'Main water seal',
+      description_en: 'Main water seal',
+      description_bg: 'Основно водно уплътнение',
       original_name: 'Main water seal',
       description_2: '15*24*9.3',
       quantity: 3,
@@ -54,6 +57,8 @@ describe('индустриален каталог', () => {
       verification_status: 'VERIFIED',
       source_anomaly_codes: [],
       is_verified: true,
+      translation_version: 'CATALOG_EN_BG_V1',
+      translation_qa_status: 'VERIFIED',
     }
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input)
@@ -104,7 +109,9 @@ describe('индустриален каталог', () => {
     )
     await userEvent.click(await screen.findByRole('button', { name: /Поз. 34:/ }))
 
-    expect((await screen.findAllByText('Main water seal')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Main water seal / Основно водно уплътнение')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Оригинално описание от производителя').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Main water seal').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Количество по схема').length).toBeGreaterThan(0)
     expect(screen.getAllByText('3').length).toBeGreaterThan(0)
     expect(screen.queryByLabelText('Заявено количество 7.906-007.11')).not.toBeInTheDocument()

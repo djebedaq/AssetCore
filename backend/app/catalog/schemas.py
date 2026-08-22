@@ -19,6 +19,9 @@ class CatalogPartOut(BaseModel):
     order_part_number: str
     replaced_by_part_number: str | None = None
     description: str
+    source_description: str
+    description_en: str
+    description_bg: str
     original_name: str | None = None
     description_2: str | None = None
     quantity: float | None = None
@@ -33,6 +36,8 @@ class CatalogPartOut(BaseModel):
     verification_status: str
     source_anomaly_codes: list[str] = Field(default_factory=list)
     is_verified: bool
+    translation_version: str
+    translation_qa_status: str
 
 
 class CatalogDiagramOut(BaseModel):
@@ -107,10 +112,15 @@ class RepairKitComponentOut(BaseModel):
     position: str
     part_number: str
     description: str
+    source_description: str
+    description_en: str
+    description_bg: str
     quantity: float
     quantity_raw: str
     source_document: str
     source_page: int
+    translation_version: str
+    translation_qa_status: str
 
 
 class RepairKitOut(BaseModel):

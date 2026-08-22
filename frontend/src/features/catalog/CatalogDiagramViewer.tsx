@@ -6,6 +6,7 @@ import { friendlyError } from '../../industrialUi'
 import { useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
 import { catalogApi } from './catalogApi'
+import { catalogDisplayName } from './catalogNames'
 import {
   exceedsTapMovementThreshold,
   resolveHotspotActivation,
@@ -301,7 +302,9 @@ export function CatalogDiagramViewer({
         {url && <img src={url} alt={diagram.title} draggable={false} />}
         {visibleHotspots.map((hotspot) => {
           const variants = hotspot.variants
-          const description = variants[0]?.description || t('common.noValue')
+          const description = variants[0]
+            ? catalogDisplayName(variants[0])
+            : t('common.noValue')
           return <button
             key={hotspot.id}
             type="button"

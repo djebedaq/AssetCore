@@ -17,6 +17,12 @@ from .sources import (
     load_manifest,
     source_by_id,
 )
+from .translations import (
+    TRANSLATION_VERSION,
+    CatalogTranslationError,
+    matching_source_record_keys,
+    translation_for,
+)
 
 UNSUPPORTED_MESSAGE = "Няма потвърдена каталожна документация за този модел."
 
@@ -40,6 +46,19 @@ def ensure_integrity(source_id: str) -> dict[str, Any]:
         return ensure_source_integrity(source_id)
     except CatalogSourceError as exc:
         raise _source_error(exc, source_id=source_id) from exc
+
+
+def _translation_error(exc: CatalogTranslationError) -> ApplicationError:
+    return ApplicationError(
+        status_code=503,
+        code="catalog_translation_integrity_failed",
+        message=(
+            "Каталогът е временно недостъпен, защото EN/BG имената "
+            "не преминаха проверката за цялост."
+        ),
+        operation="catalog_read",
+        stage="translation_integrity",
+    )
 
 
 def machine_family(machine: Machine) -> str | None:
@@ -67,6 +86,10 @@ def require_machine(db: Session, machine_id: int) -> Machine:
 
 
 def serialize_part(part: PartCatalog) -> dict[str, Any]:
+    try:
+        translation = translation_for(part.source_record_key)
+    except CatalogTranslationError as exc:
+        raise _translation_error(exc) from exc
     return {
         "id": part.id,
         "source_record_key": part.source_record_key,
@@ -81,6 +104,9 @@ def serialize_part(part: PartCatalog) -> dict[str, Any]:
         "order_part_number": part.replaced_by_part_number or part.part_number,
         "replaced_by_part_number": part.replaced_by_part_number,
         "description": part.description,
+        "source_description": part.original_name or part.description,
+        "description_en": translation["description_en"],
+        "description_bg": translation["description_bg"],
         "original_name": part.original_name,
         "description_2": part.description_2,
         "quantity": part.quantity,
@@ -95,6 +121,8 @@ def serialize_part(part: PartCatalog) -> dict[str, Any]:
         "verification_status": part.verification_status,
         "source_anomaly_codes": part.source_anomaly_codes or [],
         "is_verified": part.is_verified,
+        "translation_version": TRANSLATION_VERSION,
+        "translation_qa_status": translation["qa_status"],
     }
 
 
@@ -239,10 +267,19 @@ def search(
         for source in dataset_sources():
             if source.get("family") == family and source.get("records_file"):
                 ensure_integrity(source["source_id"])
+    try:
+        translated_source_record_keys = matching_source_record_keys(query)
+    except CatalogTranslationError as exc:
+        raise _translation_error(exc) from exc
     return [
         serialize_part(part)
         for part in repository.search_parts(
-            db, query=query, family=family, source_id=source_id, limit=limit
+            db,
+            query=query,
+            family=family,
+            source_id=source_id,
+            translated_source_record_keys=translated_source_record_keys,
+            limit=limit,
         )
     ]
 
@@ -295,6 +332,31 @@ def mapping_coverage() -> dict[str, Any]:
     )
 
 
+def _serialize_kit_component(component: Any) -> dict[str, Any]:
+    try:
+        translation = translation_for(component.source_record_key)
+    except CatalogTranslationError as exc:
+        raise _translation_error(exc) from exc
+    return {
+        "id": component.id,
+        "part_id": component.part_id,
+        "source_record_key": component.source_record_key,
+        "position": component.part.position,
+        "part_number": component.part.part_number,
+        "description": component.part.description,
+        "source_description": component.part.original_name
+        or component.part.description,
+        "description_en": translation["description_en"],
+        "description_bg": translation["description_bg"],
+        "quantity": component.quantity,
+        "quantity_raw": component.quantity_raw or "",
+        "source_document": component.source_document,
+        "source_page": component.source_page,
+        "translation_version": TRANSLATION_VERSION,
+        "translation_qa_status": translation["qa_status"],
+    }
+
+
 def serialize_kit(kit: RepairKit) -> dict[str, Any]:
     return {
         "id": kit.id,
@@ -312,18 +374,7 @@ def serialize_kit(kit: RepairKit) -> dict[str, Any]:
         "is_approved": kit.is_approved,
         "is_active": kit.is_active,
         "components": [
-            {
-                "id": component.id,
-                "part_id": component.part_id,
-                "source_record_key": component.source_record_key,
-                "position": component.part.position,
-                "part_number": component.part.part_number,
-                "description": component.part.description,
-                "quantity": component.quantity,
-                "quantity_raw": component.quantity_raw or "",
-                "source_document": component.source_document,
-                "source_page": component.source_page,
-            }
+            _serialize_kit_component(component)
             for component in sorted(
                 kit.components,
                 key=lambda item: (

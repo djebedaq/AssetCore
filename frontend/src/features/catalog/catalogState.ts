@@ -3,6 +3,7 @@ import type {
   CatalogPart,
   CatalogRepairKit,
 } from './catalogTypes'
+import { catalogDisplayName } from './catalogNames'
 
 export function partToCartLine(part: CatalogPart, quantity = 1): CatalogCartLine {
   return {
@@ -11,7 +12,7 @@ export function partToCartLine(part: CatalogPart, quantity = 1): CatalogCartLine
     position: part.position,
     part_number: part.order_part_number,
     source_part_number: part.part_number,
-    description: part.description,
+    description: catalogDisplayName(part),
     quantity,
     source_quantity_raw: part.quantity_raw,
     assembly: part.assembly,
