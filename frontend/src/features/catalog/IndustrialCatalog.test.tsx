@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -138,9 +138,31 @@ async function addFalchPart(user: ReturnType<typeof userEvent.setup>) {
   expect(screen.getByText('Избрани части: 1')).toBeInTheDocument()
 }
 
+function pointerTap(
+  element: HTMLElement,
+  pointerType: 'mouse' | 'touch',
+  pointerId = 1,
+  x = 100,
+  y = 100,
+) {
+  fireEvent.pointerDown(element, { pointerId, pointerType, clientX: x, clientY: y })
+  fireEvent.pointerUp(element, { pointerId, pointerType, clientX: x, clientY: y })
+}
+
 describe('machine-bound catalog request cart', () => {
   beforeEach(() => {
     localStorage.clear()
+    class TestPointerEvent extends MouseEvent {
+      readonly pointerId: number
+      readonly pointerType: string
+
+      constructor(type: string, init: PointerEventInit = {}) {
+        super(type, init)
+        this.pointerId = init.pointerId ?? 0
+        this.pointerType = init.pointerType ?? ''
+      }
+    }
+    vi.stubGlobal('PointerEvent', TestPointerEvent)
     localStorage.setItem('assetcore_user', JSON.stringify({
       role: 'mechanic',
       permissions: ['assets.view', 'requests.view', 'requests.create', 'parts.view'],
@@ -241,6 +263,129 @@ describe('machine-bound catalog request cart', () => {
     expect(await screen.findByText('Номерата в оригиналната схема са интерактивни. Областите се показват само при посочване, фокус или избор.')).toBeInTheDocument()
     await user.click(screen.getByText(falchPart.description))
     expect(await screen.findByRole('button', { name: 'Добави към заявка' })).toBeInTheDocument()
+  })
+
+  it('opens the desktop part-details modal with one hotspot click and restores focus after Escape', async () => {
+    const testDiagram = diagram()
+    setupFetch({
+      falchDiagrams: [testDiagram],
+      hotspots: [{ id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [falchPart] }],
+    })
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+
+    const hotspot = await screen.findByRole('button', { name: /Поз. 3:/ })
+    pointerTap(hotspot, 'mouse')
+
+    expect(await screen.findByRole('dialog', { name: /Поз. 3 · TEST-FALCH-3/ })).toBeInTheDocument()
+    const close = screen.getByRole('button', { name: 'Затвори' })
+    const add = screen.getByRole('button', { name: 'Добави към заявка' })
+    expect(close).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(add).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(close).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Поз. 3/ })).not.toBeInTheDocument())
+    expect(hotspot).toHaveFocus()
+  })
+
+  it('uses stateful first-touch select and second-touch open behavior', async () => {
+    const testDiagram = diagram()
+    setupFetch({
+      falchDiagrams: [testDiagram],
+      hotspots: [{ id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [falchPart] }],
+    })
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+
+    const hotspot = await screen.findByRole('button', { name: /Поз. 3:/ })
+    pointerTap(hotspot, 'touch')
+    expect(hotspot).toHaveClass('selected')
+    expect(screen.queryByRole('dialog', { name: /Поз. 3/ })).not.toBeInTheDocument()
+
+    pointerTap(hotspot, 'touch', 2)
+    expect(await screen.findByRole('dialog', { name: /Поз. 3 · TEST-FALCH-3/ })).toBeInTheDocument()
+    expect(screen.getByText('Избрани части: 0')).toBeInTheDocument()
+  })
+
+  it('changes the touch selection without opening when a different position is tapped', async () => {
+    const otherPart = part({ id: 904, source_record_key: 'test-only-position-4', position: '4', part_number: 'TEST-FALCH-4', order_part_number: 'TEST-FALCH-4', description: 'Falch test-only valve' })
+    setupFetch({
+      falchDiagrams: [diagram()],
+      falchParts: [falchPart, otherPart],
+      hotspots: [
+        { id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [falchPart] },
+        { id: 992, hotspot_key: 'test-only-position-4', diagram_id: 991, page_number: 1, position: '4', x: 0.6, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [otherPart] },
+      ],
+    })
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+
+    const position3 = await screen.findByRole('button', { name: /Поз. 3:/ })
+    const position4 = screen.getByRole('button', { name: /Поз. 4:/ })
+    pointerTap(position3, 'touch')
+    pointerTap(position4, 'touch', 2)
+
+    expect(position3).not.toHaveClass('selected')
+    expect(position4).toHaveClass('selected')
+    expect(screen.queryByRole('dialog', { name: /Поз. 4/ })).not.toBeInTheDocument()
+    pointerTap(position4, 'touch', 3)
+    expect(await screen.findByRole('dialog', { name: /Поз. 4 · TEST-FALCH-4/ })).toBeInTheDocument()
+  })
+
+  it('does not open details after touch drag or pan movement', async () => {
+    setupFetch({
+      falchDiagrams: [diagram()],
+      hotspots: [{ id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [falchPart] }],
+    })
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+
+    const hotspot = await screen.findByRole('button', { name: /Поз. 3:/ })
+    const viewport = document.querySelector<HTMLElement>('.catalog-v2-diagram-viewport') as HTMLElement
+    fireEvent.pointerDown(hotspot, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(viewport, { pointerId: 1, pointerType: 'touch', clientX: 120, clientY: 100 })
+    fireEvent.pointerUp(viewport, { pointerId: 1, pointerType: 'touch', clientX: 120, clientY: 100 })
+
+    expect(screen.queryByRole('dialog', { name: /Поз. 3/ })).not.toBeInTheDocument()
+    expect(hotspot).not.toHaveClass('selected')
+  })
+
+  it('does not open details after a pinch gesture', async () => {
+    setupFetch({
+      falchDiagrams: [diagram()],
+      hotspots: [{ id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [falchPart] }],
+    })
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+
+    const hotspot = await screen.findByRole('button', { name: /Поз. 3:/ })
+    const viewport = document.querySelector<HTMLElement>('.catalog-v2-diagram-viewport') as HTMLElement
+    fireEvent.pointerDown(hotspot, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    fireEvent.pointerDown(viewport, { pointerId: 2, pointerType: 'touch', clientX: 160, clientY: 100 })
+    fireEvent.pointerMove(viewport, { pointerId: 2, pointerType: 'touch', clientX: 180, clientY: 100 })
+    fireEvent.pointerUp(viewport, { pointerId: 2, pointerType: 'touch', clientX: 180, clientY: 100 })
+    fireEvent.pointerUp(viewport, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+
+    expect(screen.queryByRole('dialog', { name: /Поз. 3/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps the mobile sheet close action in a dedicated header and requires explicit Add', async () => {
+    setupFetch({
+      falchDiagrams: [diagram()],
+      hotspots: [{ id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [falchPart] }],
+    })
+    const user = userEvent.setup()
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+
+    const hotspot = await screen.findByRole('button', { name: /Поз. 3:/ })
+    pointerTap(hotspot, 'touch')
+    pointerTap(hotspot, 'touch', 2)
+    const dialog = await screen.findByRole('dialog', { name: /Поз. 3/ })
+    const close = screen.getByRole('button', { name: 'Затвори' })
+
+    expect(close).toHaveClass('catalog-v2-part-dialog-close')
+    expect(close.closest('.catalog-v2-part-dialog-header')).not.toBeNull()
+    expect(dialog.querySelector('.catalog-v2-part-dialog-content')).not.toBeNull()
+    expect(screen.getByText('Избрани части: 0')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Добави към заявка' }))
+    expect(screen.getByText('Избрани части: 1')).toBeInTheDocument()
   })
 
   it('shows repair-kit positions without adding them to the request', async () => {

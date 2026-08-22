@@ -44,6 +44,7 @@ import GovernancePanel from './GovernancePanel'
 import OfficialDocuments from './OfficialDocuments'
 import ProfileCompletion from './ProfileCompletion'
 import SignaturePage from './SignaturePage'
+import { useMobileNavigationLock } from './useMobileNavigationLock'
 
 type Page =
   | 'dashboard'
@@ -238,6 +239,8 @@ function App() {
     return match ? Number(match[1]) : null
   })
 
+  useMobileNavigationLock(mobileMenu && authenticated && Boolean(session))
+
   useEffect(() => {
     if (!authenticated || !session) {
       setEmergencyAccess(null)
@@ -282,12 +285,13 @@ function App() {
 
   return (
     <div className="app-shell">
+      {mobileMenu && <button className="sidebar-backdrop" aria-label={t('common.close')} onClick={() => setMobileMenu(false)} />}
       <aside className={mobileMenu ? 'sidebar open' : 'sidebar'}>
         <div className="brand">
           <div className="brand-mark small"><ShieldCheck size={22} /></div>
           <div><strong>AssetCore</strong><span>{t('app.brandSubtitle')}</span></div>
         </div>
-        <nav>
+        <nav className="sidebar-navigation">
           {nav.map(([id, label, Icon]) => (
             <button
               key={id}
@@ -302,17 +306,20 @@ function App() {
             </button>
           ))}
         </nav>
-        <button className="logout" onClick={() => setPage('password')}><UserRoundCog size={18} />{t('password.title')}</button>
-        <button
-          className="logout"
-          onClick={() => {
-            logout()
-            setSession(null)
-            setAuthenticated(false)
-          }}
-        >
-          <LogOut size={18} />{t('app.logout')}
-        </button>
+        <div className="sidebar-actions">
+          <button className="logout" onClick={() => { setPage('password'); setMobileMenu(false) }}><UserRoundCog size={18} />{t('password.title')}</button>
+          <button
+            className="logout"
+            onClick={() => {
+              logout()
+              setSession(null)
+              setAuthenticated(false)
+              setMobileMenu(false)
+            }}
+          >
+            <LogOut size={18} />{t('app.logout')}
+          </button>
+        </div>
       </aside>
       <main>
         <header>
