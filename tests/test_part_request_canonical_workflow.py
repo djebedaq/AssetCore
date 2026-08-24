@@ -413,7 +413,9 @@ def test_official_part_request_documents_require_approval_and_are_registered(
         item["id"] for item in body["documents"]
     }
     for document in listed_request["documents"]:
-        downloaded = client.get(document["download_endpoint"], headers=auth_headers)
+        downloaded = client.get(
+            f"/api{document['download_endpoint']}", headers=auth_headers
+        )
         assert downloaded.status_code == 200, downloaded.text
     after_cancellation = client.post(
         f"/api/part-requests/{request_id}/documents?language=bg",
