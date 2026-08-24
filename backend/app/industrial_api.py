@@ -67,6 +67,7 @@ from .models import (
     Department,
     DocumentTemplate,
     DocumentTemplateVersion,
+    DocumentType,
     FieldType,
     GeneratedDocument,
     Location,
@@ -106,6 +107,7 @@ from .part_requests import (
     OFFICIAL_DOCUMENT_STATUSES,
     decide_request,
     load_request,
+    part_request_document_generation_guard,
     pending_action_count,
     submit_for_approval,
 )
@@ -2428,71 +2430,108 @@ def generate_part_request_documents(
     user: User = Depends(require_document_generator),
     db: Session = Depends(get_db),
 ) -> dict:
-    item = db.scalar(
-        select(PartRequest)
-        .options(
-            joinedload(PartRequest.machine),
-            joinedload(PartRequest.requested_by),
-            joinedload(PartRequest.decided_by),
-            selectinload(PartRequest.lines),
-            selectinload(PartRequest.approvals),
+    with part_request_document_generation_guard(db):
+        item = load_request(db, request_id, lock=True)
+        if item is None:
+            raise HTTPException(404, "Заявката не е намерена.")
+        canonical_number = item.request_reference or f"PR-{item.id:06d}"
+        existing_documents = db.scalars(
+            select(GeneratedDocument)
+            .where(
+                GeneratedDocument.part_request_id == item.id,
+                GeneratedDocument.document_type == DocumentType.PART_REQUEST.value,
+            )
+            .order_by(GeneratedDocument.id)
+        ).all()
+        existing_official = db.scalar(
+            select(OfficialDocument).where(
+                OfficialDocument.document_number == canonical_number
+            )
         )
-        .where(PartRequest.id == request_id)
-    )
-    if item is None:
-        raise HTTPException(404, "Заявката не е намерена.")
-    if item.status not in OFFICIAL_DOCUMENT_STATUSES:
-        raise business_conflict(
-            "part_request_not_approved",
-            "Официален документ може да бъде създаден само след одобрение на заявката.",
-            request_reference=item.request_reference,
-            current_status=item.status,
-        )
-    document_language = language or item.language
-    try:
-        documents = make_part_request_documents(db, item, user.id, document_language)
-    except ConfirmedTemplateUnavailableError as exc:
-        raise business_conflict(
-            "document_template_unavailable",
-            exc.message,
-            document_type=exc.document_type,
-            requested_language=exc.language,
-            fallback_language="bg",
-        ) from exc
-    except TemplateValidationError as exc:
-        raise business_conflict(
-            "document_generation_validation_failed", str(exc)
-        ) from exc
-    db.add_all(documents)
-    db.flush()
-    add_audit_log(
-        db,
-        user,
-        "part_request",
-        item.id,
-        "Генериран документ за заявка за части",
-        {
-            "request_reference": item.request_reference,
-            "language": document_language,
-            "generated_document_ids": [document.id for document in documents],
-            "document_number": documents[0].document_number,
-        },
-        item.request_reference,
-    )
-    _commit(db)
-    return {
-        "document_number": documents[0].document_number,
-        "documents": [
+        if existing_documents or existing_official is not None:
+            raise business_conflict(
+                "part_request_protocol_already_generated",
+                "Официалният протокол за тази заявка вече е генериран.",
+                request_reference=item.request_reference,
+                document_number=(
+                    existing_documents[0].document_number
+                    if existing_documents
+                    else canonical_number
+                ),
+                documents=[
+                    {
+                        "id": document.id,
+                        "format": document.format,
+                        "filename": document.filename,
+                        "download_endpoint": f"/generated-documents/{document.id}/download",
+                    }
+                    for document in existing_documents
+                ],
+                official_document_id=(
+                    existing_official.id if existing_official is not None else None
+                ),
+            )
+        if item.status == PartRequestStatus.CANCELLED.value:
+            raise business_conflict(
+                "part_request_cancelled_no_protocol_generation",
+                "За отказана заявка не може да бъде създаден нов официален протокол.",
+                request_reference=item.request_reference,
+                current_status=item.status,
+            )
+        if item.status not in OFFICIAL_DOCUMENT_STATUSES:
+            raise business_conflict(
+                "part_request_not_approved",
+                "Официален документ може да бъде създаден само след одобрение на заявката.",
+                request_reference=item.request_reference,
+                current_status=item.status,
+            )
+        document_language = language or item.language
+        try:
+            documents = make_part_request_documents(
+                db, item, user.id, document_language
+            )
+        except ConfirmedTemplateUnavailableError as exc:
+            raise business_conflict(
+                "document_template_unavailable",
+                exc.message,
+                document_type=exc.document_type,
+                requested_language=exc.language,
+                fallback_language="bg",
+            ) from exc
+        except TemplateValidationError as exc:
+            raise business_conflict(
+                "document_generation_validation_failed", str(exc)
+            ) from exc
+        db.add_all(documents)
+        db.flush()
+        add_audit_log(
+            db,
+            user,
+            "part_request",
+            item.id,
+            "Генериран документ за заявка за части",
             {
-                "id": document.id,
-                "format": document.format,
-                "filename": document.filename,
-                "sha256": document.sha256,
-                "download_endpoint": f"/generated-documents/{document.id}/download",
-            }
-            for document in documents
-        ],
-    }
+                "request_reference": item.request_reference,
+                "language": document_language,
+                "generated_document_ids": [document.id for document in documents],
+                "document_number": documents[0].document_number,
+            },
+            item.request_reference,
+        )
+        _commit(db)
+        return {
+            "document_number": documents[0].document_number,
+            "documents": [
+                {
+                    "id": document.id,
+                    "format": document.format,
+                    "filename": document.filename,
+                    "sha256": document.sha256,
+                    "download_endpoint": f"/generated-documents/{document.id}/download",
+                }
+                for document in documents
+            ],
+        }
 
 
 def _matching_catalog_part_id(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from types import SimpleNamespace
 
 from app.models import (
@@ -85,6 +87,19 @@ def _catalog_payload(client, headers, machine_id: int, *, submit: bool) -> tuple
         ],
     }
     return part, payload
+
+
+def _create_approved_request(client, headers, machine_id: int) -> tuple[dict, dict, dict]:
+    part, payload = _catalog_payload(client, headers, machine_id, submit=True)
+    created = client.post("/api/part-requests/multi", headers=headers, json=payload)
+    assert created.status_code == 201, created.text
+    approved = client.post(
+        f"/api/part-requests/{created.json()['id']}/decision",
+        headers=headers,
+        json={"decision": "APPROVED", "note": "test-only approval"},
+    )
+    assert approved.status_code == 200, approved.text
+    return part, payload, created.json()
 
 
 def test_catalog_create_and_submit_is_atomic_and_preserves_exact_line(
@@ -265,7 +280,7 @@ def test_official_part_request_documents_require_approval_and_are_registered(
     )
     assert generated.status_code == 201, generated.text
     body = generated.json()
-    assert body["document_number"].startswith(created.json()["request_reference"])
+    assert body["document_number"] == created.json()["request_reference"]
     assert {item["format"] for item in body["documents"]} == {"docx", "pdf"}
     assert all(
         item["download_endpoint"]
@@ -297,6 +312,27 @@ def test_official_part_request_documents_require_approval_and_are_registered(
         )
         assert official is not None
         version = session.get(OfficialDocumentVersion, official.current_version_id)
+        assert version is not None
+        canonical_state = {
+            "documents": sorted(
+                (
+                    document.id,
+                    document.document_number,
+                    document.format,
+                    document.sha256,
+                    json.dumps(document.snapshot, ensure_ascii=False, sort_keys=True),
+                )
+                for document in documents
+            ),
+            "official_id": official.id,
+            "official_number": official.document_number,
+            "version_id": version.id,
+            "version_number": version.version,
+            "snapshot_sha256": version.snapshot_sha256,
+            "docx_sha256": version.docx_sha256,
+            "pdf_sha256": version.pdf_sha256,
+            "snapshot": json.dumps(version.snapshot, ensure_ascii=False, sort_keys=True),
+        }
         assert version.snapshot["request_id"] == request_id
         assert version.snapshot["status"] == "APPROVED"
         assert version.snapshot["lines"][0]["catalog_part_id"] == part["id"]
@@ -308,3 +344,160 @@ def test_official_part_request_documents_require_approval_and_are_registered(
             )
         )
         assert json.loads(decision_audit.details)["new_status"] == "APPROVED"
+
+    repeated = client.post(
+        f"/api/part-requests/{request_id}/documents?language=bg",
+        headers=auth_headers,
+    )
+    assert repeated.status_code == 409, repeated.text
+    assert repeated.json()["detail"]["code"] == "part_request_protocol_already_generated"
+    assert repeated.json()["detail"]["document_number"] == body["document_number"]
+    assert {item["format"] for item in repeated.json()["detail"]["documents"]} == {
+        "docx",
+        "pdf",
+    }
+
+    with session_factory() as session:
+        documents = session.scalars(
+            select(GeneratedDocument)
+            .where(GeneratedDocument.part_request_id == request_id)
+            .order_by(GeneratedDocument.id)
+        ).all()
+        official_documents = session.scalars(
+            select(OfficialDocument).where(
+                OfficialDocument.document_type == "PART_REQUEST",
+                OfficialDocument.document_number == body["document_number"],
+            )
+        ).all()
+        assert len(official_documents) == 1
+        versions = session.scalars(
+            select(OfficialDocumentVersion).where(
+                OfficialDocumentVersion.document_id == official_documents[0].id
+            )
+        ).all()
+        version = versions[0]
+        repeated_state = {
+            "documents": sorted(
+                (
+                    document.id,
+                    document.document_number,
+                    document.format,
+                    document.sha256,
+                    json.dumps(document.snapshot, ensure_ascii=False, sort_keys=True),
+                )
+                for document in documents
+            ),
+            "official_id": official_documents[0].id,
+            "official_number": official_documents[0].document_number,
+            "version_id": version.id,
+            "version_number": version.version,
+            "snapshot_sha256": version.snapshot_sha256,
+            "docx_sha256": version.docx_sha256,
+            "pdf_sha256": version.pdf_sha256,
+            "snapshot": json.dumps(version.snapshot, ensure_ascii=False, sort_keys=True),
+        }
+        assert len(documents) == 2
+        assert len(versions) == 1
+        assert repeated_state == canonical_state
+        assert not any("-V2" in document.document_number for document in documents)
+
+    cancelled = client.patch(
+        f"/api/part-requests/{request_id}/fulfillment",
+        headers=auth_headers,
+        json={"status": "CANCELLED", "lines": []},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    listed = client.get("/api/part-requests/multi", headers=auth_headers)
+    listed_request = next(item for item in listed.json() if item["id"] == request_id)
+    assert {item["id"] for item in listed_request["documents"]} == {
+        item["id"] for item in body["documents"]
+    }
+    for document in listed_request["documents"]:
+        downloaded = client.get(document["download_endpoint"], headers=auth_headers)
+        assert downloaded.status_code == 200, downloaded.text
+    after_cancellation = client.post(
+        f"/api/part-requests/{request_id}/documents?language=bg",
+        headers=auth_headers,
+    )
+    assert after_cancellation.status_code == 409, after_cancellation.text
+    assert after_cancellation.json()["detail"]["code"] == (
+        "part_request_protocol_already_generated"
+    )
+
+
+def test_concurrent_part_request_generation_creates_one_canonical_protocol(
+    client, auth_headers, machine_ids, session_factory
+):
+    _, _, created = _create_approved_request(
+        client, auth_headers, machine_ids["9"]
+    )
+    barrier = Barrier(2)
+
+    def generate() -> int:
+        barrier.wait()
+        return client.post(
+            f"/api/part-requests/{created['id']}/documents?language=bg",
+            headers=auth_headers,
+        ).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        statuses = sorted(executor.map(lambda _: generate(), range(2)))
+    assert statuses == [201, 409]
+
+    with session_factory() as session:
+        documents = session.scalars(
+            select(GeneratedDocument).where(
+                GeneratedDocument.part_request_id == created["id"]
+            )
+        ).all()
+        official_documents = session.scalars(
+            select(OfficialDocument).where(
+                OfficialDocument.document_type == "PART_REQUEST",
+                OfficialDocument.document_number == created["request_reference"],
+            )
+        ).all()
+        assert len(official_documents) == 1
+        versions = session.scalars(
+            select(OfficialDocumentVersion).where(
+                OfficialDocumentVersion.document_id == official_documents[0].id
+            )
+        ).all()
+        assert len(documents) == 2
+        assert {document.format for document in documents} == {"docx", "pdf"}
+        assert {document.document_number for document in documents} == {
+            created["request_reference"]
+        }
+        assert len(versions) == 1
+
+
+def test_cancelled_part_request_cannot_create_first_protocol(
+    client, auth_headers, machine_ids, session_factory
+):
+    _, _, created = _create_approved_request(
+        client, auth_headers, machine_ids["9"]
+    )
+    cancelled = client.patch(
+        f"/api/part-requests/{created['id']}/fulfillment",
+        headers=auth_headers,
+        json={"status": "CANCELLED", "lines": []},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    generated = client.post(
+        f"/api/part-requests/{created['id']}/documents?language=bg",
+        headers=auth_headers,
+    )
+    assert generated.status_code == 409, generated.text
+    assert generated.json()["detail"]["code"] == (
+        "part_request_cancelled_no_protocol_generation"
+    )
+    with session_factory() as session:
+        assert session.scalar(
+            select(func.count(GeneratedDocument.id)).where(
+                GeneratedDocument.part_request_id == created["id"]
+            )
+        ) == 0
+        assert session.scalar(
+            select(func.count(OfficialDocument.id)).where(
+                OfficialDocument.document_number == created["request_reference"]
+            )
+        ) == 0

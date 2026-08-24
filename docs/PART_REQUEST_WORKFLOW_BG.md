@@ -37,4 +37,6 @@ Production PostgreSQL заключва съществуващия request row п
 
 ## Официални документи
 
-Официален „Протокол за заявка за части“ се създава само след `APPROVED` (или последващ fulfillment статус). Генерираните DOCX/PDF и `OfficialDocumentVersion` пазят canonical number, template/version/hash, actor, request/machine IDs, reason и точните редове с `catalog_part_id`, Part No., количество и provenance. Повторното разрешено генериране създава следващ version suffix и не презаписва историята.
+Официален „Протокол за заявка за части“ се създава само след `APPROVED` (или последващ допустим fulfillment статус). Първото успешно генериране използва `request_reference` като canonical number. Генерираните DOCX/PDF и `OfficialDocumentVersion` пазят canonical number, template/version/hash, actor, request/machine IDs, reason и точните редове с `catalog_part_id`, Part No., количество и provenance.
+
+Обикновеното действие „Генерирай“ е защитено от повторно създаване: при вече съществуващ canonical protocol API връща structured `part_request_protocol_already_generated` conflict с наличните download actions и не създава `-V2`/`-V3`, нов `OfficialDocument` или нова версия. Корекция може да се прави само чрез отделен контролиран workflow с `OfficialDocumentVersion`; такъв workflow не се задейства от повторно натискане на „Генерирай“. След `CANCELLED` не може да се създава първи нов официален протокол, а вече съществуващият остава достъпен.

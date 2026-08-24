@@ -2181,8 +2181,7 @@ def make_part_request_documents(
     db: Session, request: PartRequest, created_by_id: int, language: str = "bg"
 ) -> list[GeneratedDocument]:
     template = _template_version(db, DocumentType.PART_REQUEST.value, language)
-    base = request.request_reference or f"PR-{request.id:06d}"
-    number = _next_generated_number(db, base)
+    number = request.request_reference or f"PR-{request.id:06d}"
     machine = request.machine
     values: dict[str, object] = {
         "DOCUMENT_NUMBER": number,

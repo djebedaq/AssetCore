@@ -88,4 +88,21 @@ describe('Заявени части tracking', () => {
     await waitFor(() => expect(screen.getByText('Поръчване или отказ на одобрената заявка')).toBeInTheDocument())
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/api/part-requests/12/decision') && init?.method === 'POST')).toBe(true)
   })
+
+  it('hides normal Generate when the canonical protocol exists and keeps document actions', async () => {
+    localStorage.setItem('assetcore_user', JSON.stringify({ role: 'director', permissions: ['requests.view', 'requests.create', 'requests.approve', 'parts.view', 'documents.view', 'documents.generate'] }))
+    vi.stubGlobal('fetch', vi.fn(async () => response([{
+      ...request,
+      status: 'CANCELLED',
+      documents: [
+        { id: 43, format: 'docx', filename: 'safe.docx', download_endpoint: '/generated-documents/43/download' },
+        { id: 44, format: 'pdf', filename: 'safe.pdf', download_endpoint: '/generated-documents/44/download' },
+      ],
+    }])))
+    render(<I18nProvider initialLocale="bg"><PartRequestsTracking /></I18nProvider>)
+    expect(await screen.findByRole('heading', { name: 'Заявени части' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Генерирай/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'DOCX' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeInTheDocument()
+  })
 })

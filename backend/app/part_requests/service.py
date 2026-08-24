@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from threading import RLock
+from typing import Iterator
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -22,9 +26,10 @@ OFFICIAL_DOCUMENT_STATUSES = frozenset(
         PartRequestStatus.ORDERED.value,
         PartRequestStatus.PARTIALLY_DELIVERED.value,
         PartRequestStatus.DELIVERED.value,
-        PartRequestStatus.CANCELLED.value,
     }
 )
+
+_sqlite_document_generation_lock = RLock()
 
 
 def _request_statement(request_id: int):
@@ -54,6 +59,16 @@ def load_request(
     if lock and db.bind is not None and db.bind.dialect.name == "postgresql":
         statement = statement.with_for_update(of=PartRequest)
     return db.scalar(statement)
+
+
+@contextmanager
+def part_request_document_generation_guard(db: Session) -> Iterator[None]:
+    """Serialize local SQLite generation while PostgreSQL uses the request row lock."""
+    if db.bind is not None and db.bind.dialect.name == "sqlite":
+        with _sqlite_document_generation_lock:
+            yield
+        return
+    yield
 
 
 def submit_for_approval(
