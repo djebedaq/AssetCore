@@ -379,7 +379,7 @@ def test_complete_repair_workflow_requires_inspection_and_successful_test(
         ) == 2
 
 
-def test_multiline_part_request_approval_and_versioned_documents(
+def test_multiline_part_request_approval_and_canonical_document(
     client, auth_headers, machine_ids, session_factory
 ):
     catalog = client.get("/api/catalog/parts", headers=auth_headers)
@@ -497,8 +497,13 @@ def test_multiline_part_request_approval_and_versioned_documents(
         headers=auth_headers,
     )
     assert first_docs.status_code == 201, first_docs.text
-    assert second_docs.status_code == 201, second_docs.text
-    assert second_docs.json()["document_number"].endswith("-V2")
+    assert second_docs.status_code == 409, second_docs.text
+    assert second_docs.json()["detail"]["code"] == (
+        "part_request_protocol_already_generated"
+    )
+    assert second_docs.json()["detail"]["document_number"] == (
+        first_docs.json()["document_number"]
+    )
 
     with session_factory() as session:
         request_item = session.get(PartRequest, request_id)
@@ -512,7 +517,7 @@ def test_multiline_part_request_approval_and_versioned_documents(
             select(func.count(GeneratedDocument.id)).where(
                 GeneratedDocument.part_request_id == request_id
             )
-        ) == 4
+        ) == 2
 
 
 def test_return_generates_individual_protocols_and_batch_zip(

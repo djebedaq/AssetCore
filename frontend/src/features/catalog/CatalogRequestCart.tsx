@@ -6,6 +6,7 @@ import { friendlyError } from '../../industrialUi'
 import { useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
 import type { MultiPartRequest } from '../../types'
+import { notifyPartRequestsChanged } from '../partRequests/partRequestEvents'
 import { updateCartQuantity } from './catalogState'
 import type { CatalogCartLine } from './catalogTypes'
 
@@ -46,6 +47,7 @@ export function CatalogRequestCart({
           priority: 'NORMAL',
           language: locale,
           reason: reason || null,
+          submit_for_approval: true,
           lines: lines.map((line) => ({
             catalog_part_id: line.catalog_part_id,
             position: line.position,
@@ -59,6 +61,7 @@ export function CatalogRequestCart({
         }),
       })
       setCreated(request.request_reference)
+      notifyPartRequestsChanged()
       setConfirming(false)
       onChange([])
     } catch (caught) {

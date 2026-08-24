@@ -56,10 +56,11 @@
 | `POST` | `/api/repair-cases/{repair_id}/documents` | индивидуален ремонтен DOCX/PDF |
 | `POST` | `/api/repair-cases/{repair_id}/documents/corrections` | нова заключена repair версия с задължително основание |
 | `GET/POST` | `/api/part-requests/multi` | многоредови заявки за части |
+| `GET` | `/api/part-requests/pending-action-count` | permission-aware брой заявки, по които текущият потребител може да вземе решение |
 | `POST` | `/api/part-requests/{id}/submit` | подава чернова за одобрение |
 | `POST` | `/api/part-requests/{id}/decision` | проследимо решение от одобряващ |
 | `PATCH` | `/api/part-requests/{id}/fulfillment` | поръчване, частична/пълна доставка или отказ с количества по редове |
-| `POST` | `/api/part-requests/{id}/documents` | immutable Word/PDF версия на заявката |
+| `POST` | `/api/part-requests/{id}/documents` | еднократно създаване на canonical Word/PDF протокол |
 | `POST` | `/api/part-requests/{id}/attachments` | добавя хеширано приложение към заявката |
 | `GET` | `/api/part-request-attachments/{id}/download` | удостоверено изтегляне на приложение |
 | `POST` | `/api/part-requests/unknown` | заявка за част без потвърден part number със снимка |
@@ -217,6 +218,12 @@ Password policy: минимум 10 знака, поне една малка и �
 
 ## Изпълнение на заявка за части
 
+Catalog cart изпраща `POST /api/part-requests/multi` с `submit_for_approval=true`. Backend валидира machine/catalog/repair-kit редовете, създава заявката и изпълнява каноничния `DRAFT → WAITING_APPROVAL` transition преди единствения commit. Неуспехът връща цялата транзакция. `false` остава съвместим договор за historical/administrative clients; потребителският create flow е само в каталога.
+
+`GET /api/part-requests/pending-action-count` изисква `requests.view` и връща `{ "pending_action_count": N }`. `N` брои `WAITING_APPROVAL` само ако actor-ът има `requests.approve`; прегледът не го намалява.
+
+`POST /api/part-requests/{id}/documents` изисква `documents.generate` и допуска само одобрена или последваща допустима fulfillment фаза. `DRAFT`, `WAITING_APPROVAL` и `REJECTED` връщат HTTP 409 `part_request_not_approved`, а `CANCELLED` без съществуващ протокол връща `part_request_cancelled_no_protocol_generation`. Първото успешно генериране регистрира точно един canonical `OfficialDocument`, DOCX/PDF и version 1 с immutable request snapshot. Повторно normal Generate връща HTTP 409 `part_request_protocol_already_generated` с наличните download endpoints и не създава `-V2`/`-V3` или нов official record. Вече съществуващ протокол остава достъпен и след `CANCELLED`.
+
 `PATCH /api/part-requests/{id}/fulfillment` приема статус `ORDERED`, `PARTIALLY_DELIVERED`, `DELIVERED` или `CANCELLED`, доставчик, бележка и `lines[]` с `line_id` и натрупано `delivered_quantity`. Количеството не може да намалява или да надвишава заявеното. `DELIVERED` изисква всички редове да са изпълнени, а всяка промяна се записва в одита.
 
 ## Структурирани грешки
@@ -298,7 +305,7 @@ backdoor. Всички успешни и отхвърлени опити се о
 
 ## Файлове и версии
 
-Upload endpoint-ите приемат base64 content, ограничен размер, безопасно име и whitelist media type. Сървърът записва SHA-256. Нов revision или повторно генериране създава нов immutable запис (`-V2`, `-V3`), без overwrite на по-стар документ. Download отговорът съдържа само безопасно име и payload — никога вътрешна файлова система.
+Upload endpoint-ите приемат base64 content, ограничен размер, безопасно име и whitelist media type. Сървърът записва SHA-256. Само workflow, който изрично поддържа revision/version операция, може да създаде следващ immutable запис, без overwrite на по-стар документ. Обикновеното Generate за canonical parts protocol не е version операция и не създава `-V2`/`-V3`. Download отговорът съдържа само безопасно име и payload — никога вътрешна файлова система.
 
 ## Административни справочници
 

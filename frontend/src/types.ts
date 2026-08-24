@@ -266,9 +266,10 @@ export type MultiPartRequest = {
   priority: string; status: string; language: 'bg' | 'en' | 'ru'; reason?: string | null;
   department?: string | null; supplier?: string | null; delivery_note?: string | null;
   ordered_at?: string | null; delivered_at?: string | null;
-  requested_by_id?: number | null; submitted_at?: string | null; decided_at?: string | null;
+  requested_by_id?: number | null; requested_by_name?: string | null; submitted_at?: string | null; decided_at?: string | null;
+  decided_by_name?: string | null;
   decision_note?: string | null; created_at: string; lines: MultiPartRequestLine[];
-  approvals: Array<{ id: number; decision: string; note?: string | null; decided_by_id: number; decided_at: string }>;
+  approvals: Array<{ id: number; decision: string; note?: string | null; decided_by_id: number; decided_by_name?: string | null; decided_at: string }>;
   attachments: StoredAttachment[];
   documents: ProtocolDocument[]
 }

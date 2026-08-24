@@ -4,7 +4,6 @@ import { BookOpen, CheckCircle2, ChevronRight } from 'lucide-react'
 import { api } from '../../api'
 import { friendlyError } from '../../industrialUi'
 import { statusText, useI18n } from '../../i18n'
-import { hasPermission } from '../../permissions'
 import type { Machine } from '../../types'
 import { CatalogDiagramViewer, type DiagramFocus } from './CatalogDiagramViewer'
 import { CatalogPartsTable } from './CatalogPartsTable'
@@ -15,11 +14,11 @@ import { catalogDisplayName, catalogSourceDescription } from './catalogNames'
 import { addPart, addRepairKit } from './catalogState'
 import type { AssemblyDetails, CatalogCartLine, CatalogPart, CatalogRepairKit, MachineCatalog, PositionHotspot } from './catalogTypes'
 
-type Props = { defaultMachineId?: number; onUnknownPart?: () => void }
+type Props = { defaultMachineId?: number }
 type MachineCartState = { machineId: number | null; lines: CatalogCartLine[] }
 const EMPTY_MACHINE_CART: MachineCartState = { machineId: null, lines: [] }
 
-export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {}) {
+export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
   const { t } = useI18n()
   const [machines, setMachines] = useState<Machine[]>([])
   const [machineId, setMachineId] = useState<number | ''>(defaultMachineId || '')
@@ -159,7 +158,7 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
     {pendingMachineId !== null && <div className="catalog-v2-machine-switch panel" role="dialog" aria-modal="true" aria-labelledby="catalog-machine-switch-title"><h3 id="catalog-machine-switch-title">{t('catalog.changeMachineTitle')}</h3><p>{t('catalog.changeMachineWarning')}</p><div className="actions"><button className="secondary" onClick={() => setPendingMachineId(null)}>{t('common.cancel')}</button><button className="primary" onClick={() => applyMachineSelection(pendingMachineId)}>{t('catalog.changeMachineConfirm')}</button></div></div>}
     {loading && <div className="empty-state">{t('common.loading')}</div>}
     {!machineId && !loading && <div className="empty-state visual-catalog-empty"><BookOpen size={36} /><h3>{t('catalog.chooseMachineTitle')}</h3><p>{t('catalog.chooseMachineExplanation')}</p></div>}
-    {context && !context.supported && <div className="empty-state visual-catalog-empty"><BookOpen size={36} /><h3>{context.message}</h3>{onUnknownPart && hasPermission('requests.create') && <button className="secondary" onClick={onUnknownPart}>{t('unknownPart.new')}</button>}</div>}
+    {context && !context.supported && <div className="empty-state visual-catalog-empty"><BookOpen size={36} /><h3>{context.message}</h3></div>}
     {details && machineId && <div className="catalog-v2-layout">
       <main className="catalog-v2-workspace">
         <nav className="catalog-v2-diagram-tabs" aria-label={t('catalog.visualWorkspace')}>{details.diagrams.map((item) => <button className={item.id === diagramId ? 'active' : ''} key={item.id} onClick={() => setDiagramId(item.id)}>{t('common.page')} {item.page_number}</button>)}</nav>
@@ -170,7 +169,6 @@ export function IndustrialCatalog({ defaultMachineId, onUnknownPart }: Props = {
         {selectedPart && <CatalogPartDetails key={selectedPart.source_record_key} part={selectedPart} onAdd={addSelectedPart} onKit={openKit} onClose={() => setSelectedPart(null)} />}
         <section className="catalog-v2-kits"><div className="toolbar"><div><h3>{t('catalog.kits')}</h3><p className="muted">{t('catalog.kitsHint')}</p></div></div><div>{kits.map((kit) => <button key={kit.id} onClick={() => { setKitPreview(kit); setKitPositions(new Set()) }}><span className="badge batch-complete">{t('catalog.verified')}</span><b>{kit.code}</b><small>{t('catalog.kitContains', { count: kit.components.length })}</small><ChevronRight size={17} /></button>)}</div>{!kits.length && <div className="empty-state">{t('catalog.noKits')}</div>}</section>
         {kitPreview && <CatalogRepairKitPreview kit={kitPreview} positionsVisible={kitPositions.size > 0} onTogglePositions={() => toggleKitPositions(kitPreview)} onClose={() => { setKitPreview(null); setKitPositions(new Set()) }} onConfirm={() => confirmKit(kitPreview)} />}
-        {onUnknownPart && hasPermission('requests.create') && <button className="secondary catalog-v2-unknown" onClick={onUnknownPart}>{t('unknownPart.notFound')}</button>}
       </main>
       <CatalogRequestCart key={machineId} machineId={machineId} cartMachineId={cart.machineId} lines={cart.lines} onChange={changeCart} undoAvailable={undoCart !== null} onUndo={() => { if (undoCart) setCart(undoCart); setUndoCart(null); setToast(t('catalog.kitAdditionUndone')) }} />
     </div>}

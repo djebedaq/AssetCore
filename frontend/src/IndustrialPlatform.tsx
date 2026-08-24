@@ -2,10 +2,8 @@ import { type FormEvent, useEffect, useRef, useState } from 'react'
 import {
   Archive,
   BookOpen,
-  CheckCircle2,
   ChevronRight,
   Download,
-  FilePlus2,
   FileText,
   ImagePlus,
   PackageCheck,
@@ -34,14 +32,10 @@ import type { Locale } from './locale'
 import { hasPermission } from './permissions'
 import type {
   AssetCategory,
-  CatalogPartEnhanced,
   Department,
   GlobalSearchResults,
   Location,
-  Machine,
   MachinePassport,
-  MultiPartRequest,
-  RepairCase,
   TechnicalLibraryDocument,
 } from './types'
 
@@ -219,157 +213,7 @@ export function MachinePassportModal({ machineId, onClose, onOpenCatalog }: { ma
 }
 
 
-type RequestDraftLine = { catalog_part_id?: number; position: string; part_number: string; description: string; quantity: number; unit: string; source_document?: string; source_page?: number; is_unknown_part?: boolean; assembly?: string; note?: string }
-
-function PartRequestCreateModal({ machines, repairs, catalog, onClose, onSaved }: { machines: Machine[]; repairs: RepairCase[]; catalog: CatalogPartEnhanced[]; onClose: () => void; onSaved: () => void }) {
-  const { locale, t } = useI18n()
-  const [machineId, setMachineId] = useState<number | ''>('')
-  const [repairId, setRepairId] = useState<number | ''>('')
-  const [priority, setPriority] = useState('NORMAL')
-  const [department, setDepartment] = useState('')
-  const [reason, setReason] = useState('')
-  const [lines, setLines] = useState<RequestDraftLine[]>([{ position: '', part_number: '', description: '', quantity: 1, unit: '' }])
-  const [step, setStep] = useState<'edit' | 'confirm'>('edit')
-  const [error, setError] = useState('')
-  const updateLine = (index: number, changes: Partial<RequestDraftLine>) => setLines((current) => current.map((line, itemIndex) => itemIndex === index ? { ...line, ...changes } : line))
-  const chooseCatalog = (index: number, id: number) => {
-    const part = catalog.find((item) => item.id === id)
-    if (!part) return
-    updateLine(index, { catalog_part_id: part.id, position: part.position || '', part_number: part.part_number, description: part.description, unit: part.unit || '', source_document: part.source_document || undefined, source_page: part.source_page || undefined })
-  }
-  async function submit() {
-    try {
-      const result = await api<MultiPartRequest>('/part-requests/multi', { method: 'POST', body: JSON.stringify({ machine_id: machineId || null, repair_id: repairId || null, priority, language: locale, department: department || null, reason: reason || null, lines }) })
-      await api(`/part-requests/${result.id}/submit`, { method: 'POST' })
-      onSaved()
-    } catch (caught) { setError(friendlyError(caught, t('requests.saveError'))) }
-  }
-  const invalid = lines.some((line) => !line.description.trim() || line.quantity <= 0)
-  return <Modal title={t('requests.new')} onClose={onClose} wide>{error && <div className="error">{error}</div>}{step === 'edit' ? <>
-    <div className="form-grid"><label>{t('parts.machine')}<select value={machineId} onChange={(event) => { setMachineId(event.target.value ? Number(event.target.value) : ''); setRepairId('') }}><option value="">{t('parts.general')}</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}</option>)}</select></label><label>{t('requests.linkedRepair')}<select value={repairId} onChange={(event) => { const value = event.target.value ? Number(event.target.value) : ''; setRepairId(value); if (value) { const repair = repairs.find((item) => item.id === value); if (repair) setMachineId(repair.machine_id) } }}><option value="">{t('common.notSpecified')}</option>{repairs.filter((repair) => !machineId || repair.machine_id === machineId).map((repair) => <option value={repair.id} key={repair.id}>{repair.repair_reference} · №{repair.machine_number}</option>)}</select></label><label>{t('parts.priority')}<select value={priority} onChange={(event) => setPriority(event.target.value)}>{['LOW', 'NORMAL', 'URGENT'].map((value) => <option value={value} key={value}>{statusText(t, value, 'part')}</option>)}</select></label><label>{t('requests.department')}<input value={department} onChange={(event) => setDepartment(event.target.value)} /></label><label className="wide">{t('parts.reason')}<textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label></div>
-    <div className="request-lines"><div className="request-lines-head"><h4>{t('requests.lines', { count: lines.length })}</h4><button className="secondary compact" onClick={() => setLines((current) => [...current, { position: '', part_number: '', description: '', quantity: 1, unit: '' }])}><Plus size={15} />{t('requests.addLine')}</button></div>{lines.map((line, index) => <div className="request-line" key={index}><label>{t('requests.catalogPart')}<select value={line.catalog_part_id || ''} onChange={(event) => chooseCatalog(index, Number(event.target.value))}><option value="">{t('requests.manualLine')}</option>{catalog.map((part) => <option key={part.id} value={part.id}>{part.part_number} · {part.description}</option>)}</select></label><label>{t('catalog.position')}<input value={line.position} onChange={(event) => updateLine(index, { position: event.target.value })} /></label><label>{t('common.partNumber')}<input value={line.part_number} onChange={(event) => updateLine(index, { part_number: event.target.value })} /></label><label>{t('catalog.description')}<input required value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} /></label><label>{t('common.quantity')}<input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })} /></label><label>{t('requests.unit')}<input value={line.unit} onChange={(event) => updateLine(index, { unit: event.target.value })} /></label>{lines.length > 1 && <button className="link remove-line" onClick={() => setLines((current) => current.filter((_, itemIndex) => itemIndex !== index))}>{t('requests.removeLine')}</button>}</div>)}</div>
-    <div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" disabled={invalid} onClick={() => setStep('confirm')}>{t('bulk.reviewConfirm')}</button></div>
-  </> : <><div className="confirmation-summary"><h4>{t('requests.confirm')}</h4><p>{t('requests.confirmSummary', { count: lines.length })}</p>{lines.map((line, index) => <div className="summary-line" key={index}><b>{line.part_number || t('common.noValue')}</b><span>{line.description}</span><em>{line.quantity} {line.unit}</em></div>)}</div><div className="actions"><button className="secondary" onClick={() => setStep('edit')}>{t('common.back')}</button><button className="primary" onClick={() => void submit()}>{t('requests.submit')}</button></div></>}
-  </Modal>
-}
-
-function UnknownPartRequestModal({ machines, repairs, onClose, onSaved }: { machines: Machine[]; repairs: RepairCase[]; onClose: () => void; onSaved: () => void }) {
-  const { locale, t } = useI18n()
-  const [machineId, setMachineId] = useState<number | ''>('')
-  const [repairId, setRepairId] = useState<number | ''>('')
-  const [assembly, setAssembly] = useState('')
-  const [description, setDescription] = useState('')
-  const [quantity, setQuantity] = useState(1)
-  const [unit, setUnit] = useState('')
-  const [note, setNote] = useState('')
-  const [priority, setPriority] = useState('NORMAL')
-  const [photo, setPhoto] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState('')
-  const [step, setStep] = useState<'edit' | 'confirm' | 'done'>('edit')
-  const [reference, setReference] = useState('')
-  const [error, setError] = useState('')
-  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
-  function choosePhoto(file?: File) {
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
-    setPreviewUrl('')
-    if (!file) { setPhoto(null); return }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setError(t('unknownPart.photoFormatError'))
-      setPhoto(null)
-      return
-    }
-    setError('')
-    setPhoto(file)
-    setPreviewUrl(URL.createObjectURL(file))
-  }
-  async function submit() {
-    if (!photo || !machineId) return
-    try {
-      const created = await api<MultiPartRequest>('/part-requests/unknown', {
-        method: 'POST',
-        body: JSON.stringify({ machine_id: machineId, repair_id: repairId || null, assembly, description, quantity, unit: unit || null, note: note || null, priority, language: locale, photo: await filePayload(photo) }),
-      })
-      await api(`/part-requests/${created.id}/submit`, { method: 'POST' })
-      setReference(created.request_reference)
-      setStep('done')
-      onSaved()
-    } catch (caught) { setError(friendlyError(caught, t('unknownPart.saveError'))) }
-  }
-  const invalid = !machineId || !assembly.trim() || !description.trim() || quantity <= 0 || !photo
-  return <Modal title={t('unknownPart.new')} onClose={onClose} wide>{error && <div className="error">{error}</div>}{step === 'edit' && <>
-    <div className="unknown-part-banner"><b>{t('unknownPart.label')}</b><span>{t('unknownPart.catalogWarning')}</span></div>
-    <div className="form-grid"><label>{t('parts.machine')}<select required value={machineId} onChange={(event) => { setMachineId(event.target.value ? Number(event.target.value) : ''); setRepairId('') }}><option value="">{t('unknownPart.chooseMachine')}</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}</option>)}</select></label><label>{t('requests.linkedRepair')}<select value={repairId} onChange={(event) => setRepairId(event.target.value ? Number(event.target.value) : '')}><option value="">{t('common.notSpecified')}</option>{repairs.filter((repair) => !machineId || repair.machine_id === machineId).map((repair) => <option value={repair.id} key={repair.id}>{repair.repair_reference} · №{repair.machine_number}</option>)}</select></label><label>{t('unknownPart.assembly')}<input required value={assembly} onChange={(event) => setAssembly(event.target.value)} /></label><label>{t('parts.priority')}<select value={priority} onChange={(event) => setPriority(event.target.value)}>{['LOW', 'NORMAL', 'URGENT'].map((value) => <option value={value} key={value}>{statusText(t, value, 'part')}</option>)}</select></label><label className="wide">{t('unknownPart.description')}<textarea required value={description} onChange={(event) => setDescription(event.target.value)} /></label><label>{t('common.quantity')}<input type="number" min="0.01" step="0.01" value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label><label>{t('requests.unit')}<input value={unit} onChange={(event) => setUnit(event.target.value)} /></label><label className="wide">{t('unknownPart.note')}<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label><label className="wide unknown-part-photo-field">{t('unknownPart.photo')}<input required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} />{previewUrl && <img src={previewUrl} alt={t('unknownPart.photoPreview')} />}</label></div>
-    <div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" disabled={invalid} onClick={() => setStep('confirm')}>{t('bulk.reviewConfirm')}</button></div>
-  </>}{step === 'confirm' && <><div className="confirmation-summary"><h4>{t('requests.confirm')}</h4><div className="summary-line"><b>{t('unknownPart.label')}</b><span>{assembly} · {description}</span><em>{quantity} {unit}</em></div>{photo && <p>{t('unknownPart.photo')}: {photo.name}</p>}<p>{t('unknownPart.confirmWarning')}</p></div><div className="actions"><button className="secondary" onClick={() => setStep('edit')}>{t('common.back')}</button><button className="primary" onClick={() => void submit()}>{t('requests.submit')}</button></div></>}{step === 'done' && <div className="operation-result" role="status"><CheckCircle2 size={36} /><h4>{t('unknownPart.created')}</h4><p>{reference}</p><button className="primary" onClick={onClose}>{t('common.done')}</button></div>}</Modal>
-}
-
-function UnknownPartLinkModal({ request, line, catalog, onClose, onSaved }: { request: MultiPartRequest; line: MultiPartRequest['lines'][number]; catalog: CatalogPartEnhanced[]; onClose: () => void; onSaved: () => void }) {
-  const { t } = useI18n()
-  const compatible = catalog.filter((part) => part.is_verified && part.is_active !== false && (!request.machine_number || (part.compatible_machine_numbers || []).map(String).includes(String(request.machine_number))))
-  const [catalogPartId, setCatalogPartId] = useState<number | ''>('')
-  const [note, setNote] = useState('')
-  const [error, setError] = useState('')
-  async function submit() {
-    if (!catalogPartId) return
-    try {
-      await api(`/part-requests/${request.id}/lines/${line.id}/link-catalog-part`, { method: 'POST', body: JSON.stringify({ catalog_part_id: catalogPartId, note: note || null }) })
-      onSaved()
-    } catch (caught) { setError(friendlyError(caught, t('unknownPart.linkError'))) }
-  }
-  return <Modal title={t('unknownPart.linkTitle')} onClose={onClose} wide>{error && <div className="error">{error}</div>}<div className="unknown-part-banner"><b>{t('unknownPart.label')}</b><span>{line.assembly} · {line.description}</span></div><div className="form-grid"><label className="wide">{t('unknownPart.verifiedCatalogPart')}<select value={catalogPartId} onChange={(event) => setCatalogPartId(event.target.value ? Number(event.target.value) : '')}><option value="">{t('unknownPart.chooseVerifiedPart')}</option>{compatible.map((part) => <option value={part.id} key={part.id}>{part.part_number} · {part.description}</option>)}</select></label><label className="wide">{t('unknownPart.linkNote')}<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label></div>{!compatible.length && <div className="error">{t('unknownPart.noCompatibleVerifiedParts')}</div>}<div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" disabled={!catalogPartId} onClick={() => void submit()}>{t('unknownPart.linkAction')}</button></div></Modal>
-}
-
-function PartRequestFulfillmentModal({ request, onClose, onSaved }: { request: MultiPartRequest; onClose: () => void; onSaved: () => void }) {
-  const { t } = useI18n()
-  const statuses = request.status === 'APPROVED'
-    ? ['ORDERED', 'CANCELLED']
-    : ['PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED']
-  const [nextStatus, setNextStatus] = useState(statuses[0])
-  const [supplier, setSupplier] = useState(request.supplier || '')
-  const [note, setNote] = useState(request.delivery_note || '')
-  const [quantities, setQuantities] = useState<Record<number, number>>(Object.fromEntries(request.lines.map((line) => [line.id, line.delivered_quantity])))
-  const [error, setError] = useState('')
-  async function submit(event: FormEvent) {
-    event.preventDefault()
-    if (!window.confirm(t('requests.fulfillmentConfirm'))) return
-    try {
-      await api(`/part-requests/${request.id}/fulfillment`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, supplier: supplier || null, note: note || null, lines: request.lines.map((line) => ({ line_id: line.id, delivered_quantity: quantities[line.id] || 0 })) }) })
-      onSaved()
-    } catch (caught) { setError(friendlyError(caught, t('requests.fulfillmentError'))) }
-  }
-  return <Modal title={t('requests.fulfillmentTitle')} onClose={onClose} wide><form className="form-grid" onSubmit={submit}><label>{t('common.status')}<select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>{statuses.map((status) => <option value={status} key={status}>{statusText(t, status, 'part')}</option>)}</select></label><label>{t('catalog.supplier')}<input value={supplier} onChange={(event) => setSupplier(event.target.value)} /></label><label className="wide">{t('common.notes')}<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label><div className="wide request-line-list">{request.lines.map((line) => <div key={line.id}><span><b>{line.part_number || t('common.noValue')}</b><small>{line.description}</small></span><label>{t('requests.deliveredQuantity')}<input disabled={nextStatus === 'ORDERED' || nextStatus === 'CANCELLED'} type="number" min={line.delivered_quantity} max={line.quantity} step="0.01" value={quantities[line.id] || 0} onChange={(event) => setQuantities((current) => ({ ...current, [line.id]: Number(event.target.value) }))} /></label><em>/ {line.quantity} {line.unit}</em></div>)}</div>{error && <div className="error wide">{error}</div>}<div className="actions wide"><button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary">{t('requests.saveFulfillment')}</button></div></form></Modal>
-}
-
-export function IndustrialPartRequests() {
-  const { date, t } = useI18n()
-  const [items, setItems] = useState<MultiPartRequest[]>([])
-  const [machines, setMachines] = useState<Machine[]>([])
-  const [catalog, setCatalog] = useState<CatalogPartEnhanced[]>([])
-  const [repairs, setRepairs] = useState<RepairCase[]>([])
-  const [create, setCreate] = useState(false)
-  const [fulfillment, setFulfillment] = useState<MultiPartRequest | null>(null)
-  const [unknownCreate, setUnknownCreate] = useState(false)
-  const [unknownLink, setUnknownLink] = useState<{ request: MultiPartRequest; line: MultiPartRequest['lines'][number] } | null>(null)
-  const [error, setError] = useState('')
-  const load = () => Promise.all([api<MultiPartRequest[]>('/part-requests/multi'), api<Machine[]>('/machines'), api<CatalogPartEnhanced[]>('/catalog/parts'), api<RepairCase[]>('/repair-cases')]).then(([requestItems, machineItems, catalogItems, repairItems]) => { setItems(requestItems); setMachines(machineItems); setCatalog(catalogItems); setRepairs(repairItems); setError('') }).catch((caught) => setError(friendlyError(caught, t('requests.loadError'))))
-  useEffect(() => { void load() }, [])
-  async function decide(id: number, decision: 'APPROVED' | 'REJECTED') {
-    if (!window.confirm(t(decision === 'APPROVED' ? 'requests.approveConfirm' : 'requests.rejectConfirm'))) return
-    try { await api(`/part-requests/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision }) }); await load() } catch (caught) { setError(friendlyError(caught, t('requests.decisionError'))) }
-  }
-  async function generate(request: MultiPartRequest) {
-    if (!window.confirm(t('documents.confirmLanguage', { language: t(`language.${request.language}` as TranslationKey) }))) return
-    try { await api(`/part-requests/${request.id}/documents?language=${request.language}`, { method: 'POST' }); await load() } catch (caught) { setError(friendlyError(caught, t('requests.documentError'))) }
-  }
-  async function attach(request: MultiPartRequest, file?: File) {
-    if (!file) return
-    try {
-      await api(`/part-requests/${request.id}/attachments`, { method: 'POST', body: JSON.stringify({ ...(await filePayload(file)), description: file.name }) })
-      await load()
-    } catch (caught) { setError(friendlyError(caught, t('requests.attachmentError'))) }
-  }
-  return <><div className="toolbar"><div><h3>{t('parts.title')}</h3><p className="muted">{t('requests.subtitle')}</p></div><div className="toolbar-actions">{hasPermission('requests.create') && <button className="secondary" onClick={() => setUnknownCreate(true)}><ImagePlus size={18} />{t('unknownPart.new')}</button>}{hasPermission('requests.create') && <button className="primary" onClick={() => setCreate(true)}><Plus size={18} />{t('requests.new')}</button>}</div></div>{error && <div className="error">{error}</div>}<div className="cards-list">{items.map((request) => <article className="panel request-card" key={request.id}><div className="request-card-head"><div><span className="badge">{statusText(t, request.status, 'part')}</span><h3>{request.request_reference}</h3><small>{date(request.created_at)} · {request.machine_number ? t('passport.title', { number: request.machine_number }) : t('parts.general')}</small>{request.repair_reference && <small>{t('requests.linkedRepair')}: {request.repair_reference}</small>}{request.department && <small>{t('requests.department')}: {request.department}</small>}{request.supplier && <small>{t('catalog.supplier')}: {request.supplier}</small>}</div><b>{statusText(t, request.priority, 'part')}</b></div><div className="request-line-list">{request.lines.map((line) => <div className={line.is_unknown_part ? 'unknown-part-request-line' : ''} key={line.id}><span><b>{line.is_unknown_part ? t('unknownPart.label') : line.part_number || t('common.noValue')}</b><small>{line.is_unknown_part && line.assembly ? `${t('unknownPart.assembly')}: ${line.assembly} · ` : ''}{line.description}</small>{line.linked_part_number && <small className="verified">{t('unknownPart.linkedTo')}: {line.linked_part_number} · {line.linked_part_description}</small>}</span><span className="request-line-side"><em>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${line.delivered_quantity} / ` : ''}{line.quantity} {line.unit}</em>{line.is_unknown_part && !line.linked_catalog_part_id && hasPermission('settings.manage') && <button className="secondary compact" onClick={() => setUnknownLink({ request, line })}><ShieldCheck size={14} />{t('unknownPart.linkAction')}</button>}</span></div>)}</div>{request.attachments.length > 0 && <details><summary>{t('requests.attachments')} ({request.attachments.length})</summary><AttachmentList items={request.attachments} /></details>}<div className="request-actions">{request.status === 'WAITING_APPROVAL' && hasPermission('requests.approve') && <><button className="primary" onClick={() => void decide(request.id, 'APPROVED')}><CheckCircle2 size={16} />{t('requests.approve')}</button><button className="secondary" onClick={() => void decide(request.id, 'REJECTED')}>{t('requests.reject')}</button></>}{['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.create') && <button className="secondary" onClick={() => setFulfillment(request)}><PackageCheck size={16} />{t('requests.updateFulfillment')}</button>}{hasPermission('requests.create') && <label className="secondary compact file-button"><Upload size={15} />{t('requests.addAttachment')}<input hidden type="file" accept="application/pdf,.docx,.xlsx,image/png,image/jpeg,image/webp" onChange={(event) => { void attach(request, event.target.files?.[0]); event.currentTarget.value = '' }} /></label>}{request.status !== 'DRAFT' && hasPermission('requests.create') && <button className="secondary" onClick={() => void generate(request)}><FilePlus2 size={16} />{t('requests.generate')} ({t(`language.${request.language}` as TranslationKey)})</button>}{request.documents.map((document) => <DocumentButtons key={document.id} path={document.download_endpoint} filename={document.filename} format={document.format} />)}</div></article>)}{!items.length && <div className="empty-state">{t('parts.empty')}</div>}</div>{create && <PartRequestCreateModal machines={machines} repairs={repairs} catalog={catalog} onClose={() => setCreate(false)} onSaved={() => { setCreate(false); void load() }} />}{unknownCreate && <UnknownPartRequestModal machines={machines} repairs={repairs} onClose={() => setUnknownCreate(false)} onSaved={() => void load()} />}{unknownLink && <UnknownPartLinkModal request={unknownLink.request} line={unknownLink.line} catalog={catalog} onClose={() => setUnknownLink(null)} onSaved={() => { setUnknownLink(null); void load() }} />}{fulfillment && <PartRequestFulfillmentModal request={fulfillment} onClose={() => setFulfillment(null)} onSaved={() => { setFulfillment(null); void load() }} />}</>
-}
+export { PartRequestsTracking as IndustrialPartRequests } from './features/partRequests/PartRequestsTracking'
 
 export function TechnicalLibrary() {
   const { t } = useI18n()

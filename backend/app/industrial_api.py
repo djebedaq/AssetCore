@@ -46,6 +46,7 @@ from .industrial_schemas import (
     MultiPartRequestCreate,
     PartRequestDecision,
     PartRequestFulfillmentUpdate,
+    PartRequestPendingActionCountOut,
     RepairCaseCreate,
     RepairCaseUpdate,
     RepairEventCreate,
@@ -60,13 +61,13 @@ from .industrial_schemas import (
     UnknownPartRequestCreate,
 )
 from .models import (
-    ApprovalDecision,
     AssetCategory,
     AuditLog,
     CategoryFieldDefinition,
     Department,
     DocumentTemplate,
     DocumentTemplateVersion,
+    DocumentType,
     FieldType,
     GeneratedDocument,
     Location,
@@ -101,6 +102,14 @@ from .models import (
     TransferProtocol,
     User,
     utcnow,
+)
+from .part_requests import (
+    OFFICIAL_DOCUMENT_STATUSES,
+    decide_request,
+    load_request,
+    part_request_document_generation_guard,
+    pending_action_count,
+    submit_for_approval,
 )
 from .permissions import (
     Permission,
@@ -441,6 +450,8 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
         "language": item.language,
         "reason": item.reason,
         "requested_by_id": item.requested_by_id,
+        "requested_by_name": item.requested_by.full_name if item.requested_by else None,
+        "decided_by_name": item.decided_by.full_name if item.decided_by else None,
         "submitted_at": item.submitted_at,
         "decided_at": item.decided_at,
         "decision_note": item.decision_note,
@@ -482,6 +493,7 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
                 "decision": approval.decision,
                 "note": approval.note,
                 "decided_by_id": approval.decided_by_id,
+                "decided_by_name": approval.decided_by.full_name if approval.decided_by else None,
                 "decided_at": approval.decided_at,
             }
             for approval in item.approvals
@@ -1853,7 +1865,7 @@ def list_multi_part_requests(
 ) -> list[dict]:
     requests = db.scalars(
         select(PartRequest)
-        .options(joinedload(PartRequest.machine), joinedload(PartRequest.repair), selectinload(PartRequest.lines).selectinload(PartRequestLine.linked_catalog_part), selectinload(PartRequest.approvals), selectinload(PartRequest.attachments))
+        .options(joinedload(PartRequest.machine), joinedload(PartRequest.repair), joinedload(PartRequest.requested_by), joinedload(PartRequest.decided_by), selectinload(PartRequest.lines).selectinload(PartRequestLine.linked_catalog_part), selectinload(PartRequest.approvals).joinedload(PartRequestApproval.decided_by), selectinload(PartRequest.attachments))
         .order_by(PartRequest.created_at.desc())
     ).all()
     documents = db.scalars(select(GeneratedDocument).where(GeneratedDocument.part_request_id.in_([item.id for item in requests]))) .all() if requests else []
@@ -1861,6 +1873,16 @@ def list_multi_part_requests(
     for document in documents:
         by_request.setdefault(document.part_request_id or 0, []).append(document)
     return [_part_request_dict(item, by_request.get(item.id, [])) for item in requests]
+
+
+@router.get(
+    "/part-requests/pending-action-count",
+    response_model=PartRequestPendingActionCountOut,
+)
+def get_part_request_pending_action_count(
+    user: User = Depends(require_request_viewer), db: Session = Depends(get_db)
+) -> dict[str, int]:
+    return {"pending_action_count": pending_action_count(db, user)}
 
 
 @router.post("/part-requests/multi", status_code=201)
@@ -2005,8 +2027,12 @@ def create_multi_part_request(
             )
         db.add(PartRequestLine(request_id=request_item.id, **values))
     add_audit_log(db, user, "part_request", request_item.id, "Създадена многоредова заявка за части", {"request_reference": request_item.request_reference, "machine_number": machine.inventory_number if machine else None, "repair_id": payload.repair_id, "repair_reference": repair.repair_reference if repair else None, "repair_kit_id": payload.repair_kit_id, "line_count": len(payload.lines), "catalog_part_ids": sorted(catalog_ids), "priority": request_item.priority})
+    if payload.submit_for_approval:
+        submit_for_approval(
+            db, request_item, user, line_count=len(payload.lines)
+        )
     _commit(db)
-    item = db.scalar(select(PartRequest).options(joinedload(PartRequest.machine), joinedload(PartRequest.repair), selectinload(PartRequest.lines).selectinload(PartRequestLine.linked_catalog_part), selectinload(PartRequest.approvals), selectinload(PartRequest.attachments)).where(PartRequest.id == request_item.id))
+    item = load_request(db, request_item.id)
     assert item is not None
     return _part_request_dict(item, [])
 
@@ -2272,16 +2298,10 @@ def submit_part_request(
     user: User = Depends(require_parts_operator),
     db: Session = Depends(get_db),
 ) -> dict:
-    item = db.scalar(select(PartRequest).options(joinedload(PartRequest.machine), selectinload(PartRequest.lines), selectinload(PartRequest.approvals)).where(PartRequest.id == request_id))
+    item = load_request(db, request_id, lock=True)
     if item is None:
         raise HTTPException(404, "Заявката не е намерена.")
-    if item.status != PartRequestStatus.DRAFT.value:
-        raise business_conflict("part_request_not_draft", "Само чернова може да бъде изпратена за одобрение.")
-    if not item.lines:
-        raise business_conflict("part_request_has_no_lines", "Заявката няма редове с части.")
-    item.status = PartRequestStatus.WAITING_APPROVAL.value
-    item.submitted_at = utcnow()
-    add_audit_log(db, user, "part_request", item.id, "Заявката е изпратена за одобрение", {"request_reference": item.request_reference, "line_count": len(item.lines)})
+    submit_for_approval(db, item, user)
     _commit(db)
     return _part_request_dict(item, [])
 
@@ -2293,23 +2313,10 @@ def decide_part_request(
     user: User = Depends(require_request_approver),
     db: Session = Depends(get_db),
 ) -> dict:
-    item = db.scalar(select(PartRequest).options(joinedload(PartRequest.machine), selectinload(PartRequest.lines), selectinload(PartRequest.approvals)).where(PartRequest.id == request_id))
+    item = load_request(db, request_id, lock=True)
     if item is None:
         raise HTTPException(404, "Заявката не е намерена.")
-    if item.status != PartRequestStatus.WAITING_APPROVAL.value:
-        raise business_conflict("part_request_not_waiting_approval", "Заявката не очаква одобрение.")
-    if payload.decision == ApprovalDecision.APPROVED:
-        item.status = PartRequestStatus.APPROVED.value
-    elif payload.decision == ApprovalDecision.REJECTED:
-        item.status = PartRequestStatus.REJECTED.value
-    else:
-        item.status = PartRequestStatus.DRAFT.value
-    item.decided_at = utcnow()
-    item.decided_by_id = user.id
-    item.decision_note = payload.note
-    approval = PartRequestApproval(request_id=item.id, decision=payload.decision.value, note=payload.note, decided_by_id=user.id)
-    db.add(approval)
-    add_audit_log(db, user, "part_request", item.id, "Решение по заявка за части", {"request_reference": item.request_reference, "decision": payload.decision.value, "new_status": item.status})
+    decide_request(db, item, user, payload.decision, payload.note)
     _commit(db)
     db.refresh(item)
     return _part_request_dict(item, [])
@@ -2322,18 +2329,7 @@ def update_part_request_fulfillment(
     user: User = Depends(require_parts_operator),
     db: Session = Depends(get_db),
 ) -> dict:
-    statement = (
-        select(PartRequest)
-        .options(
-            joinedload(PartRequest.machine),
-            selectinload(PartRequest.lines),
-            selectinload(PartRequest.approvals),
-        )
-        .where(PartRequest.id == request_id)
-    )
-    if db.bind is not None and db.bind.dialect.name == "postgresql":
-        statement = statement.with_for_update()
-    item = db.scalar(statement)
+    item = load_request(db, request_id, lock=True)
     if item is None:
         raise HTTPException(404, "Заявката не е намерена.")
     allowed = {
@@ -2434,69 +2430,108 @@ def generate_part_request_documents(
     user: User = Depends(require_document_generator),
     db: Session = Depends(get_db),
 ) -> dict:
-    item = db.scalar(
-        select(PartRequest)
-        .options(
-            joinedload(PartRequest.machine),
-            joinedload(PartRequest.requested_by),
-            joinedload(PartRequest.decided_by),
-            selectinload(PartRequest.lines),
-            selectinload(PartRequest.approvals),
+    with part_request_document_generation_guard(db):
+        item = load_request(db, request_id, lock=True)
+        if item is None:
+            raise HTTPException(404, "Заявката не е намерена.")
+        canonical_number = item.request_reference or f"PR-{item.id:06d}"
+        existing_documents = db.scalars(
+            select(GeneratedDocument)
+            .where(
+                GeneratedDocument.part_request_id == item.id,
+                GeneratedDocument.document_type == DocumentType.PART_REQUEST.value,
+            )
+            .order_by(GeneratedDocument.id)
+        ).all()
+        existing_official = db.scalar(
+            select(OfficialDocument).where(
+                OfficialDocument.document_number == canonical_number
+            )
         )
-        .where(PartRequest.id == request_id)
-    )
-    if item is None:
-        raise HTTPException(404, "Заявката не е намерена.")
-    if item.status == PartRequestStatus.DRAFT.value:
-        raise business_conflict(
-            "part_request_is_draft",
-            "Чернова не може да бъде издадена като официална заявка.",
-        )
-    document_language = language or item.language
-    try:
-        documents = make_part_request_documents(db, item, user.id, document_language)
-    except ConfirmedTemplateUnavailableError as exc:
-        raise business_conflict(
-            "document_template_unavailable",
-            exc.message,
-            document_type=exc.document_type,
-            requested_language=exc.language,
-            fallback_language="bg",
-        ) from exc
-    except TemplateValidationError as exc:
-        raise business_conflict(
-            "document_generation_validation_failed", str(exc)
-        ) from exc
-    db.add_all(documents)
-    db.flush()
-    add_audit_log(
-        db,
-        user,
-        "part_request",
-        item.id,
-        "Генериран документ за заявка за части",
-        {
-            "request_reference": item.request_reference,
-            "language": document_language,
-            "generated_document_ids": [document.id for document in documents],
-            "document_number": documents[0].document_number,
-        },
-        item.request_reference,
-    )
-    _commit(db)
-    return {
-        "document_number": documents[0].document_number,
-        "documents": [
+        if existing_documents or existing_official is not None:
+            raise business_conflict(
+                "part_request_protocol_already_generated",
+                "Официалният протокол за тази заявка вече е генериран.",
+                request_reference=item.request_reference,
+                document_number=(
+                    existing_documents[0].document_number
+                    if existing_documents
+                    else canonical_number
+                ),
+                documents=[
+                    {
+                        "id": document.id,
+                        "format": document.format,
+                        "filename": document.filename,
+                        "download_endpoint": f"/generated-documents/{document.id}/download",
+                    }
+                    for document in existing_documents
+                ],
+                official_document_id=(
+                    existing_official.id if existing_official is not None else None
+                ),
+            )
+        if item.status == PartRequestStatus.CANCELLED.value:
+            raise business_conflict(
+                "part_request_cancelled_no_protocol_generation",
+                "За отказана заявка не може да бъде създаден нов официален протокол.",
+                request_reference=item.request_reference,
+                current_status=item.status,
+            )
+        if item.status not in OFFICIAL_DOCUMENT_STATUSES:
+            raise business_conflict(
+                "part_request_not_approved",
+                "Официален документ може да бъде създаден само след одобрение на заявката.",
+                request_reference=item.request_reference,
+                current_status=item.status,
+            )
+        document_language = language or item.language
+        try:
+            documents = make_part_request_documents(
+                db, item, user.id, document_language
+            )
+        except ConfirmedTemplateUnavailableError as exc:
+            raise business_conflict(
+                "document_template_unavailable",
+                exc.message,
+                document_type=exc.document_type,
+                requested_language=exc.language,
+                fallback_language="bg",
+            ) from exc
+        except TemplateValidationError as exc:
+            raise business_conflict(
+                "document_generation_validation_failed", str(exc)
+            ) from exc
+        db.add_all(documents)
+        db.flush()
+        add_audit_log(
+            db,
+            user,
+            "part_request",
+            item.id,
+            "Генериран документ за заявка за части",
             {
-                "id": document.id,
-                "format": document.format,
-                "filename": document.filename,
-                "sha256": document.sha256,
-                "download_endpoint": f"/generated-documents/{document.id}/download",
-            }
-            for document in documents
-        ],
-    }
+                "request_reference": item.request_reference,
+                "language": document_language,
+                "generated_document_ids": [document.id for document in documents],
+                "document_number": documents[0].document_number,
+            },
+            item.request_reference,
+        )
+        _commit(db)
+        return {
+            "document_number": documents[0].document_number,
+            "documents": [
+                {
+                    "id": document.id,
+                    "format": document.format,
+                    "filename": document.filename,
+                    "sha256": document.sha256,
+                    "download_endpoint": f"/generated-documents/{document.id}/download",
+                }
+                for document in documents
+            ],
+        }
 
 
 def _matching_catalog_part_id(

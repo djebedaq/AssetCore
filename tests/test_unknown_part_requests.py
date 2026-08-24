@@ -192,11 +192,17 @@ def test_unknown_part_rejects_non_image_and_unverified_link(
     assert rejected.json()["detail"]["code"] == "catalog_part_not_verified_for_link"
 
 
-def test_unknown_part_frontend_has_dedicated_safe_workflow():
-    source = open("frontend/src/IndustrialPlatform.tsx", encoding="utf-8").read()
-    assert "/part-requests/unknown" in source
-    assert "UnknownPartRequestModal" in source
-    assert "unknownPart.catalogWarning" in source
-    assert "image/jpeg,image/png,image/webp" in source
-    assert "link-catalog-part" in source
-    assert "unknownPart.noCompatibleVerifiedParts" in source
+def test_unknown_part_history_is_preserved_but_new_frontend_creation_is_retired():
+    platform = open("frontend/src/IndustrialPlatform.tsx", encoding="utf-8").read()
+    tracking = open(
+        "frontend/src/features/partRequests/PartRequestsTracking.tsx",
+        encoding="utf-8",
+    ).read()
+    catalog = open(
+        "frontend/src/features/catalog/IndustrialCatalog.tsx", encoding="utf-8"
+    ).read()
+    assert "/part-requests/unknown" not in platform
+    assert "UnknownPartRequestModal" not in platform
+    assert "onUnknownPart" not in catalog
+    assert "link-catalog-part" in tracking
+    assert "unknownPart.noCompatibleVerifiedParts" in tracking
