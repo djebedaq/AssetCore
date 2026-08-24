@@ -1243,6 +1243,7 @@ def _request_snapshot(request: PartRequest) -> dict:
         "decision_note": request.decision_note,
         "lines": [
             {
+                "catalog_part_id": line.catalog_part_id,
                 "position": line.position,
                 "part_number": line.part_number,
                 "description": line.description,

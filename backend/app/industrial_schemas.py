@@ -353,6 +353,7 @@ class MultiPartRequestCreate(BaseModel):
     language: LanguageCode = LanguageCode.BG
     reason: str | None = None
     department: str | None = Field(default=None, max_length=255)
+    submit_for_approval: bool = False
     lines: list[PartRequestLineCreate] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -380,6 +381,7 @@ class PartRequestApprovalOut(BaseModel):
     decision: str
     note: str | None = None
     decided_by_id: int
+    decided_by_name: str | None = None
     decided_at: datetime
 
 
@@ -397,6 +399,8 @@ class MultiPartRequestOut(BaseModel):
     language: str
     reason: str | None = None
     requested_by_id: int | None = None
+    requested_by_name: str | None = None
+    decided_by_name: str | None = None
     submitted_at: datetime | None = None
     decided_at: datetime | None = None
     decision_note: str | None = None
@@ -405,6 +409,10 @@ class MultiPartRequestOut(BaseModel):
     approvals: list[PartRequestApprovalOut]
     attachments: list[AttachmentOut]
     documents: list[dict]
+
+
+class PartRequestPendingActionCountOut(BaseModel):
+    pending_action_count: int
 
 
 class PartRequestDecision(BaseModel):

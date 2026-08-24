@@ -38,13 +38,14 @@ import {
 import { statusText, useI18n, type TranslationKey } from './i18n'
 import { SUPPORTED_LOCALES, type Locale } from './locale'
 import { hasPermission, storedUser } from './permissions'
-import type { AssetCategory, Department, EmergencyAccessStatus, Location, Machine, PartRequest, PermissionCode, UserSession } from './types'
+import type { AssetCategory, Department, EmergencyAccessStatus, Location, Machine, PermissionCode, UserSession } from './types'
 import UserAdministration from './UserAdministration'
 import GovernancePanel from './GovernancePanel'
 import OfficialDocuments from './OfficialDocuments'
 import ProfileCompletion from './ProfileCompletion'
 import SignaturePage from './SignaturePage'
 import { useMobileNavigationLock } from './useMobileNavigationLock'
+import { PendingPartsBadge } from './features/partRequests/PendingPartsBadge'
 
 type Page =
   | 'dashboard'
@@ -127,20 +128,6 @@ const MACHINE_STATUS_CODES = [
   'ISSUED',
   'REPAIR',
 ]
-
-const PART_STATUS_CODES = [
-  'DRAFT',
-  'SUBMITTED',
-  'WAITING_APPROVAL',
-  'APPROVED',
-  'REJECTED',
-  'ORDERED',
-  'PARTIALLY_DELIVERED',
-  'DELIVERED',
-  'CANCELLED',
-]
-
-const PART_PRIORITY_CODES = ['LOW', 'NORMAL', 'URGENT']
 
 export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   const { locale, setLocale, t } = useI18n()
@@ -302,7 +289,7 @@ function App() {
                 setMobileMenu(false)
               }}
             >
-              <Icon size={19} />{t(label)}
+              <Icon size={19} /><span className="nav-label">{t(label)}</span>{id === 'parts' && <PendingPartsBadge canApprove={session.permissions.includes('requests.approve')} revalidationKey={page} />}
             </button>
           ))}
         </nav>
@@ -344,7 +331,7 @@ function App() {
           {page === 'machines' && <Machines onOpenCatalog={(machineId) => { setCatalogMachineId(machineId); setPage('catalog') }} />}
           {page === 'transfers' && <Transfers />}
           {page === 'repairs' && <IndustrialRepairs />}
-          {page === 'catalog' && <IndustrialCatalog defaultMachineId={catalogMachineId || undefined} onUnknownPart={() => setPage('parts')} />}
+          {page === 'catalog' && <IndustrialCatalog defaultMachineId={catalogMachineId || undefined} />}
           {page === 'parts' && <IndustrialPartRequests />}
           {page === 'documents' && <TechnicalLibrary />}
           {page === 'official' && <OfficialDocuments />}
@@ -648,95 +635,6 @@ function MachineModal({ machine, locations, departments, categories, onClose, on
 
 export function Repairs() {
   return <IndustrialRepairs />
-}
-
-export function Parts() {
-  const { t } = useI18n()
-  const [items, setItems] = useState<PartRequest[]>([])
-  const [machines, setMachines] = useState<Machine[]>([])
-  const [show, setShow] = useState(false)
-  const [error, setError] = useState(false)
-
-  const load = () => Promise.all([api<PartRequest[]>('/parts'), api<Machine[]>('/machines')])
-    .then(([requests, machineItems]) => {
-      setItems(requests)
-      setMachines(machineItems)
-      setError(false)
-    })
-    .catch(() => setError(true))
-
-  useEffect(() => { void load() }, [])
-
-  return (
-    <>
-      <div className="toolbar">
-        <div><h3>{t('parts.title')}</h3><p className="muted">{t('parts.subtitle')}</p></div>
-        {hasPermission('requests.create') && <button className="primary" onClick={() => setShow(true)}><Plus size={18} />{t('parts.new')}</button>}
-      </div>
-      {error && <div className="error" role="alert">{t('errors.generic')}</div>}
-      <div className="table-card">
-        <table>
-          <thead><tr><th>{t('parts.part')}</th><th>{t('common.partNumber')}</th><th>{t('parts.machine')}</th><th>{t('common.quantity')}</th><th>{t('parts.priority')}</th><th>{t('common.status')}</th></tr></thead>
-          <tbody>{items.map((request) => (
-            <tr key={request.id}>
-              <td><strong>{request.part_name}</strong><small>{request.reason}</small></td>
-              <td>{request.part_number || t('common.noValue')}</td>
-              <td>{request.machine?.name || t('parts.general')}</td>
-              <td>{request.quantity}</td>
-              <td>{statusText(t, request.priority, 'part')}</td>
-              <td><span className="badge">{statusText(t, request.status, 'part')}</span></td>
-            </tr>
-          ))}</tbody>
-        </table>
-        {!items.length && <div className="empty-state">{t('parts.empty')}</div>}
-      </div>
-      {show && <PartModal machines={machines} onClose={() => setShow(false)} onSaved={() => { setShow(false); void load() }} />}
-    </>
-  )
-}
-
-function PartModal({ machines, onClose, onSaved }: { machines: Machine[]; onClose: () => void; onSaved: () => void }) {
-  const { t } = useI18n()
-  const [form, setForm] = useState({
-    machine_id: machines[0]?.id,
-    part_name: '',
-    part_number: '',
-    quantity: 1,
-    reason: '',
-    priority: 'NORMAL',
-    status: 'DRAFT',
-  })
-  const [error, setError] = useState('')
-
-  async function save(event: FormEvent) {
-    event.preventDefault()
-    setError('')
-    try {
-      await api('/parts', { method: 'POST', body: JSON.stringify(form) })
-      onSaved()
-    } catch {
-      setError(t('parts.saveError'))
-    }
-  }
-
-  return (
-    <div className="modal-bg">
-      <div className="modal" role="dialog" aria-modal="true" aria-label={t('parts.newTitle')}>
-        <div className="modal-head"><h3>{t('parts.newTitle')}</h3><button onClick={onClose} aria-label={t('common.close')}><X /></button></div>
-        <form onSubmit={save} className="form-grid">
-          <label>{t('parts.part')}<input required value={form.part_name} onChange={(event) => setForm({ ...form, part_name: event.target.value })} /></label>
-          <label>{t('common.partNumber')}<input value={form.part_number} onChange={(event) => setForm({ ...form, part_number: event.target.value })} /></label>
-          <label>{t('parts.machine')}<select value={form.machine_id} onChange={(event) => setForm({ ...form, machine_id: Number(event.target.value) })}>{machines.map((machine) => <option value={machine.id} key={machine.id}>{machine.name}</option>)}</select></label>
-          <label>{t('common.quantity')}<input type="number" min="1" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: Number(event.target.value) })} /></label>
-          <label>{t('parts.priority')}<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}>{PART_PRIORITY_CODES.map((priority) => <option key={priority} value={priority}>{statusText(t, priority, 'part')}</option>)}</select></label>
-          <label>{t('common.status')}<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{PART_STATUS_CODES.map((status) => <option key={status} value={status}>{statusText(t, status, 'part')}</option>)}</select></label>
-          <label className="wide">{t('parts.reason')}<textarea value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} /></label>
-          {error && <div className="error wide" role="alert">{error}</div>}
-          <div className="actions wide"><button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary">{t('common.save')}</button></div>
-        </form>
-      </div>
-    </div>
-  )
 }
 
 function Reports() {

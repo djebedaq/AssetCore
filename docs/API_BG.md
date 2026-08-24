@@ -56,6 +56,7 @@
 | `POST` | `/api/repair-cases/{repair_id}/documents` | индивидуален ремонтен DOCX/PDF |
 | `POST` | `/api/repair-cases/{repair_id}/documents/corrections` | нова заключена repair версия с задължително основание |
 | `GET/POST` | `/api/part-requests/multi` | многоредови заявки за части |
+| `GET` | `/api/part-requests/pending-action-count` | permission-aware брой заявки, по които текущият потребител може да вземе решение |
 | `POST` | `/api/part-requests/{id}/submit` | подава чернова за одобрение |
 | `POST` | `/api/part-requests/{id}/decision` | проследимо решение от одобряващ |
 | `PATCH` | `/api/part-requests/{id}/fulfillment` | поръчване, частична/пълна доставка или отказ с количества по редове |
@@ -216,6 +217,12 @@ Password policy: минимум 10 знака, поне една малка и �
 Новата версия приема `language`, проверен `filename`/`media_type`/`content_base64`, `layout_contract`, `effective_from`, `effective_to`, `required_fields`, `numbering_rule`, `department` и задължително `change_note`. Тя остава чернова. Само administrator с `templates.manage` може отделно да я изтегли за проверка и да извика publish endpoint-а. При генериране backend-ът избира само публикувана версия за точния език, чийто период на валидност е активен; иначе връща HTTP 409 `document_template_unavailable` и цялата бизнес операция се отменя.
 
 ## Изпълнение на заявка за части
+
+Catalog cart изпраща `POST /api/part-requests/multi` с `submit_for_approval=true`. Backend валидира machine/catalog/repair-kit редовете, създава заявката и изпълнява каноничния `DRAFT → WAITING_APPROVAL` transition преди единствения commit. Неуспехът връща цялата транзакция. `false` остава съвместим договор за historical/administrative clients; потребителският create flow е само в каталога.
+
+`GET /api/part-requests/pending-action-count` изисква `requests.view` и връща `{ "pending_action_count": N }`. `N` брои `WAITING_APPROVAL` само ако actor-ът има `requests.approve`; прегледът не го намалява.
+
+`POST /api/part-requests/{id}/documents` изисква `documents.generate` и допуска само одобрена или последваща fulfillment фаза. `DRAFT`, `WAITING_APPROVAL` и `REJECTED` връщат HTTP 409 `part_request_not_approved`. Успешното генериране регистрира DOCX/PDF и official-document version с immutable request snapshot.
 
 `PATCH /api/part-requests/{id}/fulfillment` приема статус `ORDERED`, `PARTIALLY_DELIVERED`, `DELIVERED` или `CANCELLED`, доставчик, бележка и `lines[]` с `line_id` и натрупано `delivered_quantity`. Количеството не може да намалява или да надвишава заявеното. `DELIVERED` изисква всички редове да са изпълнени, а всяка промяна се записва в одита.
 
