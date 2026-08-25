@@ -892,6 +892,15 @@ export const bg = {
   'official.statusSigned': 'Подписан', 'official.statusSuperseded': 'Заменен с нова версия', 'official.statusCancelled': 'Отказан',
   'official.slotHandover': 'Предал', 'official.slotAcceptance': 'Приел', 'official.slotReturned': 'Върнал',
   'official.slotReturnAcceptance': 'Приел връщането', 'official.slotMechanic': 'Изпълнил ремонта',
+  'official.registrySubtitle': 'Централен регистър само за преглед на съществуващите канонични протоколи.',
+  'official.sectionTransfers': 'Приемане / предаване', 'official.sectionRepairs': 'Ремонти', 'official.sectionParts': 'Заявени части',
+  'official.sectionCount': 'Документи в секцията: {{count}}',
+  'official.emptyTransfers': 'Няма създадени протоколи за приемане / предаване.', 'official.emptyRepairs': 'Няма създадени ремонтни протоколи.', 'official.emptyParts': 'Няма създадени протоколи за заявени части.',
+  'official.typeTransferLifecycle': 'Приемане / предаване', 'official.typeRepair': 'Ремонт', 'official.typeParts': 'Резервни части',
+  'official.lifecycleComplete': 'Завършен', 'official.lifecycleIncomplete': 'Незавършен',
+  'official.signatureSigned': 'Подписан', 'official.signaturePartial': 'Частично подписан', 'official.signatureUnsigned': 'Неподписан', 'official.signatureNotRequired': 'Не се изисква', 'official.signatureUnknown': 'Няма данни',
+  'official.issueProtocol': 'Протокол предаване', 'official.returnProtocol': 'Протокол приемане', 'official.repairProtocol': 'Ремонтен протокол', 'official.partRequestProtocol': 'Протокол за заявка за части',
+  'official.machineNumber': 'Машина №{{number}}', 'official.startedAt': 'Начало: {{date}}',
   'catalog.machineFirstHint': 'Избери конкретна машина, след това възел и позиция от официалната схема или таблица.',
   'catalog.chooseMachine': 'Избери машина', 'catalog.chooseMachinePlaceholder': 'Избери машина от регистъра…',
   'catalog.chooseAssembly': 'Избери възел…', 'catalog.chooseMachineTitle': 'Започни с избор на машина',
@@ -1253,6 +1262,15 @@ Object.assign(en, {
   'official.statusDraft': 'Draft', 'official.statusReady': 'Ready for signature', 'official.statusPartial': 'Partially signed', 'official.statusSigned': 'Signed', 'official.statusSuperseded': 'Superseded', 'official.statusCancelled': 'Cancelled',
   'official.slotHandover': 'Handed over by', 'official.slotAcceptance': 'Accepted by', 'official.slotReturned': 'Returned by', 'official.slotReturnAcceptance': 'Return accepted by',
   'official.slotMechanic': 'Repair performed by', 'official.slotRequester': 'Requested by', 'official.slotApprover': 'Approved by',
+  'official.registrySubtitle': 'Central read-only registry of existing canonical protocols.',
+  'official.sectionTransfers': 'Acceptance / handover', 'official.sectionRepairs': 'Repairs', 'official.sectionParts': 'Requested parts',
+  'official.sectionCount': 'Documents in this section: {{count}}',
+  'official.emptyTransfers': 'No acceptance / handover protocols have been created.', 'official.emptyRepairs': 'No repair protocols have been created.', 'official.emptyParts': 'No requested-parts protocols have been created.',
+  'official.typeTransferLifecycle': 'Acceptance / handover', 'official.typeRepair': 'Repair', 'official.typeParts': 'Spare parts',
+  'official.lifecycleComplete': 'Completed', 'official.lifecycleIncomplete': 'Incomplete',
+  'official.signatureSigned': 'Signed', 'official.signaturePartial': 'Partially signed', 'official.signatureUnsigned': 'Unsigned', 'official.signatureNotRequired': 'Not required', 'official.signatureUnknown': 'No data',
+  'official.issueProtocol': 'Handover protocol', 'official.returnProtocol': 'Acceptance protocol', 'official.repairProtocol': 'Repair protocol', 'official.partRequestProtocol': 'Parts request protocol',
+  'official.machineNumber': 'Machine No. {{number}}', 'official.startedAt': 'Started: {{date}}',
 } satisfies Partial<Catalog>)
 
 export const ru: Catalog = Object.fromEntries(
@@ -1585,6 +1603,15 @@ Object.assign(ru, {
   'official.statusDraft': 'Черновик', 'official.statusReady': 'Готов к подписи', 'official.statusPartial': 'Подписан частично', 'official.statusSigned': 'Подписан', 'official.statusSuperseded': 'Заменён новой версией', 'official.statusCancelled': 'Отменён',
   'official.slotHandover': 'Передал', 'official.slotAcceptance': 'Принял', 'official.slotReturned': 'Вернул', 'official.slotReturnAcceptance': 'Принял возврат',
   'official.slotMechanic': 'Выполнил ремонт', 'official.slotRequester': 'Заявил', 'official.slotApprover': 'Утвердил',
+  'official.registrySubtitle': 'Центральный реестр только для просмотра существующих канонических протоколов.',
+  'official.sectionTransfers': 'Приём / передача', 'official.sectionRepairs': 'Ремонты', 'official.sectionParts': 'Запрошенные детали',
+  'official.sectionCount': 'Документов в разделе: {{count}}',
+  'official.emptyTransfers': 'Протоколы приёма / передачи не созданы.', 'official.emptyRepairs': 'Ремонтные протоколы не созданы.', 'official.emptyParts': 'Протоколы запрошенных деталей не созданы.',
+  'official.typeTransferLifecycle': 'Приём / передача', 'official.typeRepair': 'Ремонт', 'official.typeParts': 'Запасные части',
+  'official.lifecycleComplete': 'Завершён', 'official.lifecycleIncomplete': 'Не завершён',
+  'official.signatureSigned': 'Подписан', 'official.signaturePartial': 'Подписан частично', 'official.signatureUnsigned': 'Не подписан', 'official.signatureNotRequired': 'Не требуется', 'official.signatureUnknown': 'Нет данных',
+  'official.issueProtocol': 'Протокол передачи', 'official.returnProtocol': 'Протокол приёма', 'official.repairProtocol': 'Ремонтный протокол', 'official.partRequestProtocol': 'Протокол заявки на детали',
+  'official.machineNumber': 'Машина №{{number}}', 'official.startedAt': 'Начало: {{date}}',
 } satisfies Partial<Catalog>)
 
 export const catalogs: Record<Locale, Catalog> = { bg, en, ru }

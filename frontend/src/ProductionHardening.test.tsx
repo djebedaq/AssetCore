@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from './i18n'
@@ -70,49 +70,75 @@ describe('production hardening workflows', () => {
     )
   })
 
-  it('shows partial signature progress and loads every eligible internal participant', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input)
-      if (url.endsWith('/external-signers')) return response([])
-      if (url.endsWith('/document-participants/internal-candidates')) {
-        return response([{ id: 3, display_name: 'Test Internal Signer', job_title: 'QA', role: 'mechanic' }])
-      }
-      return response([
-        {
-          id: 1,
-          document_number: 'QA-DOC-001',
-          document_type: 'TRANSFER_ISSUE',
-          created_at: '2026-08-01T10:00:00Z',
-          current_version: {
-            id: 2,
-            version: 1,
-            status: 'PARTIALLY_SIGNED',
-            language: 'bg',
-            snapshot_sha256: 'a'.repeat(64),
-            docx_sha256: 'b'.repeat(64),
-            pdf_sha256: 'c'.repeat(64),
-            created_at: '2026-08-01T10:00:00Z',
+  it('renders the three read-only registry sections with lifecycle and document actions', async () => {
+    const registry = {
+      transfers: {
+        count: 2,
+        items: [
+          {
+            registry_key: 'transfer:1', domain_id: 1, machine_number: '9', status: 'INCOMPLETE', signature_status: 'SIGNED', created_at: null, started_at: '2026-08-20T09:00:00Z',
+            documents: [{ document_type: 'TRANSFER_ISSUE', document_number: 'TR-REG-009', official_document_id: 1, version: 1, version_status: 'SIGNED', files: [{ format: 'docx', download_endpoint: '/issue.docx', preview_endpoint: '/issue-preview.docx' }, { format: 'pdf', download_endpoint: '/issue.pdf', preview_endpoint: '/issue-preview.pdf' }] }],
           },
-          signed_count: 1,
-          required_count: 2,
-          participants: [
-            { id: 9, slot_code: 'HANDOVER', participant_kind: 'INTERNAL', operation_role: 'HANDOVER', identity_snapshot: { display_name: 'Test Internal Signer', job_title: 'QA' }, signed: true },
-            { id: 10, slot_code: 'ACCEPTANCE', participant_kind: 'EXTERNAL', operation_role: 'ACCEPTANCE', identity_snapshot: { display_name: 'Test External Signer', job_title: 'QA' }, signed: false },
-          ],
-        },
-      ])
+          {
+            registry_key: 'transfer:2', domain_id: 2, machine_number: '10', status: 'COMPLETE', signature_status: 'PARTIALLY_SIGNED', created_at: '2026-08-22T11:00:00Z', started_at: '2026-08-21T09:00:00Z',
+            documents: [
+              { document_type: 'TRANSFER_ISSUE', document_number: 'TR-REG-010', official_document_id: 2, version: 1, version_status: 'SIGNED', files: [{ format: 'pdf', download_endpoint: '/issue-10.pdf', preview_endpoint: '/issue-10-preview.pdf' }] },
+              { document_type: 'TRANSFER_RETURN', document_number: 'TR-REG-010-R', official_document_id: 3, version: 1, version_status: 'PARTIALLY_SIGNED', files: [{ format: 'pdf', download_endpoint: '/return-10.pdf', preview_endpoint: '/return-10-preview.pdf' }] },
+            ],
+          },
+        ],
+      },
+      repairs: { count: 1, items: [{ registry_key: 'repair:1', domain_id: 1, machine_number: '11', status: 'COMPLETE', signature_status: 'NOT_REQUIRED', created_at: '2026-08-19T16:00:00Z', documents: [{ document_type: 'REPAIR_PROTOCOL', document_number: 'REP-REG-011', official_document_id: 4, version: 1, version_status: 'FINALIZED', files: [{ format: 'pdf', download_endpoint: '/repair.pdf', preview_endpoint: '/repair-preview.pdf' }] }] }] },
+      parts: { count: 1, items: [{ registry_key: 'part-request:1', domain_id: 1, machine_number: '13', status: 'COMPLETE', signature_status: 'UNSIGNED', created_at: '2026-08-23T10:00:00Z', documents: [{ document_type: 'PART_REQUEST', document_number: 'PR-REG-013', official_document_id: 5, version: 1, version_status: 'DRAFT', files: [{ format: 'docx', download_endpoint: '/parts.docx', preview_endpoint: '/parts-preview.docx' }, { format: 'pdf', download_endpoint: '/parts.pdf', preview_endpoint: '/parts-preview.pdf' }] }] }] },
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain('/official-documents/registry')
+      return response(registry)
     })
     vi.stubGlobal('fetch', fetchMock)
     render(<I18nProvider initialLocale="bg"><OfficialDocuments /></I18nProvider>)
 
-    await userEvent.click(await screen.findByText('QA-DOC-001'))
-    expect(screen.getByText('1 / 2')).toBeVisible()
-    expect(screen.getByText(/Частично подписан документ/)).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Създай еднократна връзка' })).toBeVisible()
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/document-participants/internal-candidates'),
-      expect.anything(),
-    )
+    expect(await screen.findByRole('heading', { name: 'Приемане / предаване' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Ремонти' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Заявени части' })).toBeVisible()
+    expect(screen.getByLabelText('Документи в секцията: 2')).toBeVisible()
+    expect(screen.getAllByLabelText('Документи в секцията: 1')).toHaveLength(2)
+
+    const incompleteRow = screen.getByText('TR-REG-009').closest('tr')
+    expect(incompleteRow).not.toBeNull()
+    expect(within(incompleteRow!).getByText('Незавършен')).toBeVisible()
+    expect(within(incompleteRow!).getByText('Подписан')).toBeVisible()
+    expect(within(incompleteRow!).getByText('Протокол предаване')).toBeVisible()
+    expect(within(incompleteRow!).queryByText('Протокол приемане')).not.toBeInTheDocument()
+    expect(within(incompleteRow!).getByRole('button', { name: 'Word' })).toBeVisible()
+    expect(within(incompleteRow!).getByRole('button', { name: 'PDF' })).toBeVisible()
+
+    const completedRow = screen.getByText('TR-REG-010-R').closest('tr')
+    expect(completedRow).not.toBeNull()
+    expect(within(completedRow!).getByText('Завършен')).toBeVisible()
+    expect(within(completedRow!).getByText('Частично подписан')).toBeVisible()
+    expect(within(completedRow!).getAllByText('Протокол предаване')).toHaveLength(2)
+    expect(within(completedRow!).getAllByText('Протокол приемане')).toHaveLength(2)
+    expect(screen.getByText('Ремонтен протокол')).toBeVisible()
+    expect(screen.getByText('Протокол за заявка за части')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Нов външен подписващ' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Създай еднократна връзка' })).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a separate empty state and zero count for every registry section', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response({
+      transfers: { count: 0, items: [] },
+      repairs: { count: 0, items: [] },
+      parts: { count: 0, items: [] },
+    })))
+
+    render(<I18nProvider initialLocale="bg"><OfficialDocuments /></I18nProvider>)
+
+    expect(await screen.findByText('Няма създадени протоколи за приемане / предаване.')).toBeVisible()
+    expect(screen.getByText('Няма създадени ремонтни протоколи.')).toBeVisible()
+    expect(screen.getByText('Няма създадени протоколи за заявени части.')).toBeVisible()
+    expect(screen.getAllByLabelText('Документи в секцията: 0')).toHaveLength(3)
   })
 
   it('requires review and explicit confirmation for the mobile signature', async () => {
