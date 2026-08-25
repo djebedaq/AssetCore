@@ -390,6 +390,52 @@ def test_registry_groups_canonical_and_historical_documents_without_duplicates(
     ) == 1
 
 
+def test_registry_does_not_complete_return_only_transfer_lifecycle(
+    client, auth_headers, session_factory, machine_ids
+):
+    with session_factory() as session:
+        actor = session.scalar(select(User).where(User.email == "admin@assetcore.local"))
+        transfer = TransferProtocol(
+            machine_id=machine_ids["16"],
+            protocol_number="TR-REG-RETURN-ONLY-016",
+            protocol_type="Предаване",
+            is_active=False,
+            issue_status="COMPLETED",
+            return_status="COMPLETED",
+            returned_by_id=actor.id,
+            returned_at=datetime(2026, 8, 24, 11, 0),
+            created_at=datetime(2026, 8, 23, 8, 30),
+        )
+        session.add(transfer)
+        session.flush()
+        _add_official_document(
+            session,
+            number="TR-REG-RETURN-ONLY-016-R",
+            document_type=DocumentType.TRANSFER_RETURN.value,
+            actor_id=actor.id,
+            created_at=datetime(2026, 8, 24, 11, 0),
+            machine_id=machine_ids["16"],
+            transfer_id=transfer.id,
+            status="FINALIZED",
+        )
+        session.commit()
+
+    response = client.get("/api/official-documents/registry", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    transfers = response.json()["transfers"]
+    assert transfers["count"] == 1
+    lifecycle = transfers["items"][0]
+    assert lifecycle["machine_number"] == "16"
+    assert lifecycle["status"] == "INCOMPLETE"
+    assert lifecycle["created_at"] is None
+    assert [document["document_type"] for document in lifecycle["documents"]] == [
+        "TRANSFER_RETURN"
+    ]
+    assert lifecycle["documents"][0]["document_number"] == (
+        "TR-REG-RETURN-ONLY-016-R"
+    )
+
+
 def test_registry_and_preview_are_read_only_and_legacy_orphan_does_not_break_list(
     client, auth_headers, session_factory, machine_ids
 ):

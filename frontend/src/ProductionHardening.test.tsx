@@ -73,7 +73,7 @@ describe('production hardening workflows', () => {
   it('renders the three read-only registry sections with lifecycle and document actions', async () => {
     const registry = {
       transfers: {
-        count: 2,
+        count: 3,
         items: [
           {
             registry_key: 'transfer:1', domain_id: 1, machine_number: '9', status: 'INCOMPLETE', signature_status: 'SIGNED', created_at: null, started_at: '2026-08-20T09:00:00Z',
@@ -85,6 +85,10 @@ describe('production hardening workflows', () => {
               { document_type: 'TRANSFER_ISSUE', document_number: 'TR-REG-010', official_document_id: 2, version: 1, version_status: 'SIGNED', files: [{ format: 'pdf', download_endpoint: '/issue-10.pdf', preview_endpoint: '/issue-10-preview.pdf' }] },
               { document_type: 'TRANSFER_RETURN', document_number: 'TR-REG-010-R', official_document_id: 3, version: 1, version_status: 'PARTIALLY_SIGNED', files: [{ format: 'pdf', download_endpoint: '/return-10.pdf', preview_endpoint: '/return-10-preview.pdf' }] },
             ],
+          },
+          {
+            registry_key: 'transfer:3', domain_id: 3, machine_number: '16', status: 'INCOMPLETE', signature_status: 'NOT_REQUIRED', created_at: null, started_at: null,
+            documents: [{ document_type: 'TRANSFER_RETURN', document_number: 'TR-REG-RETURN-ONLY-016-R', official_document_id: 6, version: 1, version_status: 'FINALIZED', files: [{ format: 'pdf', download_endpoint: '/return-only-16.pdf', preview_endpoint: '/return-only-16-preview.pdf' }] }],
           },
         ],
       },
@@ -101,7 +105,7 @@ describe('production hardening workflows', () => {
     expect(await screen.findByRole('heading', { name: 'Приемане / предаване' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Ремонти' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Заявени части' })).toBeVisible()
-    expect(screen.getByLabelText('Документи в секцията: 2')).toBeVisible()
+    expect(screen.getByLabelText('Документи в секцията: 3')).toBeVisible()
     expect(screen.getAllByLabelText('Документи в секцията: 1')).toHaveLength(2)
 
     const incompleteRow = screen.getByText('TR-REG-009').closest('tr')
@@ -119,6 +123,14 @@ describe('production hardening workflows', () => {
     expect(within(completedRow!).getByText('Частично подписан')).toBeVisible()
     expect(within(completedRow!).getAllByText('Протокол предаване')).toHaveLength(2)
     expect(within(completedRow!).getAllByText('Протокол приемане')).toHaveLength(2)
+
+    const returnOnlyRow = screen.getByText('TR-REG-RETURN-ONLY-016-R').closest('tr')
+    expect(returnOnlyRow).not.toBeNull()
+    expect(within(returnOnlyRow!).getByText('Незавършен')).toBeVisible()
+    expect(within(returnOnlyRow!).getByText('Протокол приемане')).toBeVisible()
+    expect(within(returnOnlyRow!).queryByText('Протокол предаване')).not.toBeInTheDocument()
+    expect(within(returnOnlyRow!).getByRole('button', { name: 'PDF' })).toBeVisible()
+    expect(within(returnOnlyRow!).queryByRole('button', { name: 'Word' })).not.toBeInTheDocument()
     expect(screen.getByText('Ремонтен протокол')).toBeVisible()
     expect(screen.getByText('Протокол за заявка за части')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Нов външен подписващ' })).not.toBeInTheDocument()

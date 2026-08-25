@@ -413,7 +413,7 @@ def _transfer_items(db: Session, records: list[_DocumentRecord]) -> list[dict[st
             for record in unique_records
             if record.document_type == DocumentType.TRANSFER_RETURN.value
         ]
-        completed = bool(return_records) and (
+        completed = bool(issue_records) and bool(return_records) and (
             transfer.return_status == TransferOperationStatus.COMPLETED.value
             or transfer.returned_at is not None
         )
