@@ -79,6 +79,8 @@ from .models import (
     UserRole,
     utcnow,
 )
+from .official_documents import build_official_document_registry
+from .official_documents.schemas import OfficialDocumentRegistryOut
 from .permissions import Permission, require_permission
 from .security import get_authenticated_user, get_current_active_user, verify_password
 from .settings import settings
@@ -934,6 +936,15 @@ def _version_out(db: Session, item: OfficialDocumentVersion) -> dict:
 
 def _document_out(db: Session, item: OfficialDocument) -> dict:
     version = db.get(OfficialDocumentVersion, item.current_version_id)
+    if version is None:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "official_document_version_missing",
+                "message": "Официалният документ няма достъпна канонична версия.",
+                "document_id": item.id,
+            },
+        )
     participants = list(db.scalars(select(DocumentParticipant).where(DocumentParticipant.document_version_id == version.id)))
     confirmed = db.scalar(select(func.count(DocumentSignature.id)).where(DocumentSignature.document_version_id == version.id, DocumentSignature.confirmed_at.is_not(None))) or 0
     required_codes = {slot.code for slot in db.scalars(select(SignatureSlot).where(SignatureSlot.document_type == item.document_type, SignatureSlot.required.is_(True), SignatureSlot.is_active.is_(True)))}
@@ -1004,6 +1015,16 @@ def create_official_document(
     return _document_out(db, document)
 
 
+@router.get(
+    "/official-documents/registry", response_model=OfficialDocumentRegistryOut
+)
+def official_document_registry(
+    _: User = Depends(require_permission(Permission.DOCUMENTS_VIEW)),
+    db: Session = Depends(get_db),
+) -> dict:
+    return build_official_document_registry(db)
+
+
 @router.get("/official-documents/{document_id}", response_model=OfficialDocumentOut)
 def get_official_document(document_id: int, _: User = Depends(require_permission(Permission.DOCUMENTS_VIEW)), db: Session = Depends(get_db)) -> dict:
     item = db.get(OfficialDocument, document_id)
@@ -1019,7 +1040,14 @@ def list_official_documents(
 ) -> list[dict]:
     return [
         _document_out(db, item)
-        for item in db.scalars(select(OfficialDocument).order_by(OfficialDocument.created_at.desc(), OfficialDocument.id.desc()))
+        for item in db.scalars(
+            select(OfficialDocument)
+            .join(
+                OfficialDocumentVersion,
+                OfficialDocumentVersion.id == OfficialDocument.current_version_id,
+            )
+            .order_by(OfficialDocument.created_at.desc(), OfficialDocument.id.desc())
+        )
     ]
 
 

@@ -10,6 +10,7 @@
 - `backend/app/workflow.py` централизира позволените машинни и ремонтни преходи и completion gates.
 - `backend/app/repairs/service.py` прилага ремонтните преходи и задължителното document persistence без commit; API маршрутът остава собственик на транзакцията.
 - `backend/app/part_requests/service.py` централизира заключените submit/decision преходи, action-required query-то и document-eligible статусите без собствен commit.
+- `backend/app/official_documents/registry.py` агрегира read-only каноничните и съвместимите historical transfer, repair и parts protocols. Той не генерира версии, не променя подписи/hash-ове и не записва audit; current official version има предимство пред legacy download редовете със същата domain identity.
 - `backend/app/transfer_service.py` е транзакционният домейн за издаване, връщане, партиди и документи.
 - `backend/app/document_generation.py` генерира индивидуалните DOCX/PDF snapshots и безопасни имена.
 - `backend/app/application_errors.py` дефинира общия безопасен production error договор, diagnostic ID и структуриран log context.
@@ -25,6 +26,7 @@
 - `frontend/src/features/catalog/` е самостоятелният machine-first каталог screen. `catalogApi.ts` пази focused API calls, `catalogState.ts` — deterministic cart/kit merge правилата, `catalogInteraction.ts` — pointer/touch state machine-а и movement threshold-а, а `IndustrialCatalog.tsx` — responsive diagram/table/cart workflow без hardcoded production URL или технически source данни. `CatalogSelectionPanels.tsx` притежава достъпния focus-trapped desktop modal/mobile sheet договор.
 - `frontend/src/features/catalog/catalogNames.ts` е единствената presentation функция за `English / Български` и отделния manufacturer source текст; table, hotspots, variants, repair kits, modal/sheet и request cart не дублират translation логика.
 - `frontend/src/features/partRequests/PartRequestsTracking.tsx` е history/action екранът „Заявени части“, а `PendingPartsBadge.tsx` визуализира permission-aware canonical count без unread/seen състояние.
+- `frontend/src/features/officialDocuments/OfficialDocumentSection.tsx` визуализира общата responsive структура на трите read-only registry секции; `OfficialDocuments.tsx` зарежда единствено агрегирания registry договор и не смесва прегледа със signing mutations.
 
 ## Authoritative каталог за резервни части
 

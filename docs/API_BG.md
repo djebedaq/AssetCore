@@ -22,6 +22,7 @@
 | `GET` | `/api/license/validate` | повторна криптографска проверка и enabled modules |
 | `GET/POST` | `/api/external-signers` | отделни външни участници без User акаунт |
 | `GET/POST` | `/api/official-documents` | неизменяеми официални документи и текущи версии |
+| `GET` | `/api/official-documents/registry` | read-only operational registry с отделни transfer, repair и parts секции |
 | `GET` | `/api/official-documents/{id}/versions` | пълна история на версиите |
 | `GET` | `/api/official-documents/{id}/versions/{v}/download/{docx|pdf}` | exact version download |
 | `POST` | `/api/official-documents/{id}/participants` | заключва участниците и отваря подписването |
@@ -215,6 +216,8 @@ Password policy: минимум 10 знака, поне една малка и �
 ## Шаблони и официални документи
 
 Новата версия приема `language`, проверен `filename`/`media_type`/`content_base64`, `layout_contract`, `effective_from`, `effective_to`, `required_fields`, `numbering_rule`, `department` и задължително `change_note`. Тя остава чернова. Само administrator с `templates.manage` може отделно да я изтегли за проверка и да извика publish endpoint-а. При генериране backend-ът избира само публикувана версия за точния език, чийто период на валидност е активен; иначе връща HTTP 409 `document_template_unavailable` и цялата бизнес операция се отменя.
+
+`GET /api/official-documents/registry` изисква `documents.view` и връща точно три секции: `transfers`, `repairs` и `parts`, всяка с реален `count` и собствен `items` списък, сортиран най-ново първо. Transfer редът е lifecycle по конкретно предаване и съдържа отделни actions с реалните номера за issue и return протокола; липсващ return protocol не се симулира. Signature status се изчислява от активните required slots и потвърдените подписи и е независим от lifecycle completion. Repair и parts редовете използват current canonical `OfficialDocumentVersion`, а съвместимите historical `GeneratedDocument`/`ProtocolDocument` записи се показват само когато няма съответстващ current official record. Endpoint-ът не генерира, не renumber-ва и не променя документи, версии, подписи, hash-ове или audit.
 
 ## Изпълнение на заявка за части
 
