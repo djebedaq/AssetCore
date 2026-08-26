@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from './i18n'
 import UserAdministration from './UserAdministration'
+import { setSessionUser } from './permissions'
 import type { ManagedUser, PermissionCode, UserRole } from './types'
 
 const ownerPermissions: PermissionCode[] = ['users.view', 'users.create', 'users.edit', 'users.activate', 'users.deactivate', 'users.reset_password']
@@ -30,7 +31,7 @@ function response(value: unknown, status = 200): Response {
 }
 
 function renderPage(session: ManagedUser, items: ManagedUser[], fetchMock?: ReturnType<typeof vi.fn>) {
-  localStorage.setItem('assetcore_user', JSON.stringify(session))
+  setSessionUser(session)
   vi.stubGlobal('fetch', fetchMock || vi.fn(async (input: RequestInfo | URL) => response(String(input).includes('/departments') ? [] : items)))
   return render(<I18nProvider initialLocale="bg"><UserAdministration /></I18nProvider>)
 }

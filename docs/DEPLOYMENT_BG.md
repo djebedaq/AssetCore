@@ -13,6 +13,17 @@ query, credentials или wildcard. Тези среди не добавят loca
 `http://localhost:4173`. За Render задайте реалния HTTPS app origin; локалният
 full-stack Docker може изрично да използва `http://localhost:10000`.
 
+Browser session policy се управлява чрез `SESSION_MINUTES` (default 720) и
+`SESSION_COOKIE_SAMESITE` (`lax` или `strict`). Staging/production автоматично
+добавят `Secure`; localhost development го изключва, за да работи през HTTP.
+`BEARER_COMPATIBILITY_ENABLED` трябва да остане `false` извън изрични локални
+CLI/tests и settings отказва staging/production старт при `true`.
+
+`TRUSTED_PROXY_IPS` е optional comma-separated IP/CIDR allowlist за
+непосредствения reverse proxy. Само от такъв peer се приема `X-Forwarded-For`
+за authentication throttling. Ако точните proxy мрежи не са потвърдени,
+оставете стойността празна; никога не използвайте broad allowlist.
+
 HSTS се изпраща само когато production request scope е HTTPS. Reverse proxy-то
 трябва надеждно да предава HTTPS scheme към ASGI сървъра; не симулирайте HTTPS
 чрез непроверен клиентски header. След deployment проверете CSP, HSTS, exact
@@ -20,7 +31,14 @@ CORS origin и отказа на непознат origin върху реални
 
 ## Миграция
 
-Текущият `head` е `20260826_0020`. Той добавя unique owner key за `OfficialDocumentVersion`, PostgreSQL composite FK `official_documents(id, current_version_id) → official_document_versions(document_id, id)` и version-side trigger, както и SQLite trigger еквивалент. Преди guard-а миграцията отчита само броя на NULL, missing, wrong-owner, shared и orphan historical състояния. Тя не променя pointer, snapshot, binary document, signature или hash данни; PostgreSQL constraint се добавя `NOT VALID` и се валидира автоматично само когато existing current pointers са съвместими. Новите writes се пазят и при tolerated historical anomalies.
+Текущият `head` е `20260826_0021`. Той добавя `auth_sessions` и
+`authentication_throttles` за durable hashed browser session, session-bound
+CSRF и bounded authentication backoff. Миграцията е съвместима с PostgreSQL и
+SQLite и отчита fresh-install поведението на historical revision 0001, без да
+променя публикуваните миграции 0001–0020. Downgrade до 0020 премахва само тези
+две таблици и прекратява всички browser сесии.
+
+Предходният `20260826_0020` добавя unique owner key за `OfficialDocumentVersion`, PostgreSQL composite FK `official_documents(id, current_version_id) → official_document_versions(document_id, id)` и version-side trigger, както и SQLite trigger еквивалент. Преди guard-а миграцията отчита само броя на NULL, missing, wrong-owner, shared и orphan historical състояния. Тя не променя pointer, snapshot, binary document, signature или hash данни; PostgreSQL constraint се добавя `NOT VALID` и се валидира автоматично само когато existing current pointers са съвместими. Новите writes се пазят и при tolerated historical anomalies.
 
 Предходният `20260818_0019` добавя source identity/metadata към `part_catalog`, active/source metadata към technical documents и repair kits, source metadata към kit components и position-centric таблиците `catalog_diagrams`/`catalog_position_hotspots`. Старият недостатъчен unique key за каталожна позиция се премахва, без да се изтриват исторически редове. Миграцията работи с PostgreSQL и SQLite. Guarded downgrade възстановява schema `0018` и `uq_part_catalog_source_position`, когато данните са съвместими; ако V2 source variants се сблъскват по legacy identity `brand/model/assembly/position/part_number`, downgrade отказва преди каквито и да е destructive промени, без merge, delete или загуба на history.
 

@@ -138,6 +138,10 @@ PUBLIC_ALLOWLIST = (
 # Keeping the exact method/path/name here makes each exception reviewable.
 AUTHENTICATED_SPECIAL_MUTATIONS = (
     AllowlistEntry(
+        _key("POST", "/api/auth/logout", "logout_session"),
+        "Authenticated browser-session logout with CSRF and server-side revocation.",
+    ),
+    AllowlistEntry(
         _key("POST", "/api/auth/change-password", "change_password"),
         "Authenticated self-service password change with current-password validation.",
     ),

@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IndustrialRepairs } from './IndustrialPlatform'
 import { I18nProvider } from './i18n'
-import type { RepairCase } from './types'
+import { setSessionUser } from './permissions'
+import type { RepairCase, UserSession } from './types'
 
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
@@ -54,10 +55,10 @@ function repair(overrides: Partial<RepairCase> = {}): RepairCase {
 describe('ремонтен работен процес', () => {
   beforeEach(() => {
     localStorage.clear()
-    localStorage.setItem('assetcore_user', JSON.stringify({
+    setSessionUser({
       role: 'mechanic',
       permissions: ['repairs.view', 'repairs.create', 'repairs.edit', 'repairs.complete', 'parts.view', 'documents.view'],
-    }))
+    } as UserSession)
   })
 
   afterEach(() => vi.unstubAllGlobals())

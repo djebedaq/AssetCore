@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from './i18n'
 import { IndustrialCatalog } from './IndustrialPlatform'
+import { setSessionUser } from './permissions'
+import type { UserSession } from './types'
 
 function jsonResponse(value: unknown): Response {
   return new Response(JSON.stringify(value), {
@@ -14,10 +16,10 @@ function jsonResponse(value: unknown): Response {
 describe('индустриален каталог', () => {
   beforeEach(() => {
     localStorage.clear()
-    localStorage.setItem('assetcore_user', JSON.stringify({
+    setSessionUser({
       role: 'mechanic',
       permissions: ['assets.view', 'transfers.view', 'transfers.create', 'transfers.return', 'repairs.view', 'repairs.create', 'repairs.edit', 'repairs.complete', 'requests.view', 'requests.create', 'parts.view', 'documents.view', 'documents.generate'],
-    }))
+    } as UserSession)
   })
 
   afterEach(() => {

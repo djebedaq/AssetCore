@@ -47,7 +47,10 @@ def test_current_protected_baseline_allows_a_future_revision(tmp_path: Path):
     assert report["valid"] is True
     assert report["missing"] == []
     assert report["mismatched"] == []
-    assert report["new_unprotected_migrations"] == [future_revision.name]
+    assert set(report["new_unprotected_migrations"]) == {
+        "20260826_0021_auth_session_hardening.py",
+        future_revision.name,
+    }
 
 
 def _manifest(path: Path, protected: dict[str, str]) -> Path:

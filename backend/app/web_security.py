@@ -14,6 +14,8 @@ ALLOWED_CORS_HEADERS = (
     "Accept-Language",
     "Authorization",
     "Content-Type",
+    "X-AssetCore-Auth-Mode",
+    "X-CSRF-Token",
     "X-Correlation-ID",
 )
 EXPOSED_CORS_HEADERS = (

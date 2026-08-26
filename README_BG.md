@@ -8,6 +8,8 @@ AssetCore е responsive PWA система за проследимо управ�
 
 - универсален регистър на индустриални активи с конфигурируеми категории, цифров паспорт, custom полета, снимки, файлове, QR и пълна хронология;
 - единично и групово издаване със защита от двойно издаване;
+- защитена server-managed browser сесия без bearer credential в
+  `localStorage`, session-bound CSRF и bounded login/reauth throttling;
 - атомарно пълно и частично връщане по конкретно активно предаване;
 - отделен DOCX и PDF протокол за всяка машина и ZIP за цялата партида;
 - четиристепенен ремонтен wizard „Приета → Диагностика → В ремонт → Завършена“, който не допуска преждевременно приключване или загуба на вече записани данни;
@@ -164,6 +166,7 @@ pnpm build
 - [модел за сигурност](docs/SECURITY_MODEL_BG.md)
 - [security policy](SECURITY.md)
 - [authorization и web security guardrails](docs/AUTHORIZATION_WEB_SECURITY_BG.md)
+- [browser authentication, session, CSRF и throttling](docs/AUTHENTICATION_SESSION_SECURITY_BG.md)
 - [release checklist](docs/RELEASE_CHECKLIST_BG.md)
 - [собственически лиценз](LICENSE_PROPRIETARY_BG.md)
 

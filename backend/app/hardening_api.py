@@ -25,6 +25,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .audit import add_audit_log
+from .auth_sessions import revoke_all_user_sessions
+from .auth_throttle import (
+    clear_rate_limit_failures,
+    enforce_rate_limit,
+    record_rate_limit_failure,
+    sensitive_rate_limit_keys,
+    throttled_error,
+)
 from .database import get_db
 from .hardening_schemas import (
     EmergencyAccessEnd,
@@ -476,7 +484,15 @@ def start_emergency_access(
                 "message": "Аварийна процедура може да започне само определеният собственик-администратор.",
             },
         )
+    throttle_keys = sensitive_rate_limit_keys(request, actor, "emergency_start")
+    enforce_rate_limit(db, throttle_keys)
     if not verify_password(data.current_password, actor.password_hash):
+        retry_after = record_rate_limit_failure(
+            db,
+            throttle_keys,
+            user=actor,
+            action="Ограничени неуспешни проверки за начало на аварийна процедура",
+        )
         add_audit_log(
             db,
             actor,
@@ -487,6 +503,8 @@ def start_emergency_access(
             _correlation_id(request),
         )
         db.commit()
+        if retry_after:
+            raise throttled_error(retry_after)
         raise HTTPException(
             403,
             detail={
@@ -495,6 +513,7 @@ def start_emergency_access(
                 "message": "Текущата парола е неправилна.",
             },
         )
+    clear_rate_limit_failures(db, throttle_keys)
 
     now = utcnow()
     expired_items = db.scalars(
@@ -592,10 +611,21 @@ def end_emergency_access(
     ownership = _ownership(db, lock=True)
     if actor.id != ownership.owner_user_id or actor.role != UserRole.ADMINISTRATOR.value:
         raise HTTPException(403, detail={"code": "owner_only", "message": "Само текущият собственик може да приключи аварийната процедура."})
+    throttle_keys = sensitive_rate_limit_keys(request, actor, "emergency_end")
+    enforce_rate_limit(db, throttle_keys)
     if not verify_password(data.current_password, actor.password_hash):
+        retry_after = record_rate_limit_failure(
+            db,
+            throttle_keys,
+            user=actor,
+            action="Ограничени неуспешни проверки за край на аварийна процедура",
+        )
         add_audit_log(db, actor, "emergency_access", session_id, "Отказано приключване на аварийна административна процедура", {"result": "rejected", "reason": "invalid_reauthentication"}, _correlation_id(request))
         db.commit()
+        if retry_after:
+            raise throttled_error(retry_after)
         raise HTTPException(403, detail={"code": "reauthentication_failed", "message": "Текущата парола е неправилна."})
+    clear_rate_limit_failures(db, throttle_keys)
     item = db.scalar(
         select(EmergencyAccessSession)
         .where(EmergencyAccessSession.id == session_id)
@@ -626,10 +656,21 @@ def transfer_owner(
     item = _ownership(db, lock=True)
     if actor.id != item.owner_user_id or not actor.is_system_owner:
         raise HTTPException(403, detail={"code": "owner_only", "message": "Само текущият собственик може да прехвърли собствеността."})
+    throttle_keys = sensitive_rate_limit_keys(request, actor, "owner_transfer")
+    enforce_rate_limit(db, throttle_keys)
     if not verify_password(data.current_password, actor.password_hash):
+        retry_after = record_rate_limit_failure(
+            db,
+            throttle_keys,
+            user=actor,
+            action="Ограничени неуспешни проверки за прехвърляне на собственост",
+        )
         add_audit_log(db, actor, "installation_owner", actor.id, "Отказано прехвърляне на собственост", {"result": "rejected", "target_user_id": data.target_user_id, "reason": "invalid_reauthentication"}, _correlation_id(request))
         db.commit()
+        if retry_after:
+            raise throttled_error(retry_after)
         raise HTTPException(403, detail={"code": "reauthentication_failed", "message": "Текущата парола е неправилна."})
+    clear_rate_limit_failures(db, throttle_keys)
     target = db.scalar(select(User).where(User.id == data.target_user_id).with_for_update())
     if target is None:
         raise HTTPException(404, detail={"code": "user_not_found", "message": "Новият собственик не е намерен."})
@@ -647,6 +688,8 @@ def transfer_owner(
     item.version += 1
     actor.token_version += 1
     target.token_version += 1
+    revoke_all_user_sessions(db, actor.id, "owner_transferred")
+    revoke_all_user_sessions(db, target.id, "owner_designated")
     add_audit_log(db, actor, "installation_owner", target.id, "Прехвърлена собственост на инсталацията", {"previous_owner_user_id": actor.id, "new_owner_user_id": target.id, "reason": data.reason.strip(), "designation_version": item.version}, _correlation_id(request))
     try:
         db.commit()

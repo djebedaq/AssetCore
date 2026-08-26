@@ -3,8 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '../../i18n'
+import { setSessionUser } from '../../permissions'
 import { CatalogRequestCart } from './CatalogRequestCart'
 import type { CatalogCartLine } from './catalogTypes'
+import type { UserSession } from '../../types'
 
 const line: CatalogCartLine = {
   catalog_part_id: 31,
@@ -24,7 +26,7 @@ const line: CatalogCartLine = {
 describe('catalog canonical request submit', () => {
   beforeEach(() => {
     localStorage.clear()
-    localStorage.setItem('assetcore_user', JSON.stringify({ permissions: ['requests.create'] }))
+    setSessionUser({ permissions: ['requests.create'] } as UserSession)
   })
   afterEach(() => {
     cleanup()

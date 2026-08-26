@@ -12,6 +12,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .auth_sessions import load_browser_session
 from .database import get_db
 from .localization import normalize_language, translate
 from .models import User
@@ -118,10 +119,25 @@ def get_authenticated_user(
     db: Session = Depends(get_db),
 ) -> User:
     language = normalize_language(request.headers.get("Accept-Language"))
+    browser_user = load_browser_session(
+        request,
+        db,
+        invalid_message=translate("auth.invalid_session", language),
+    )
+    if browser_user is not None:
+        return browser_user
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=translate("auth.required", language),
+        )
+    if not settings.bearer_compatibility_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "bearer_compatibility_disabled",
+                "message": translate("auth.invalid_session", language),
+            },
         )
     payload = _decode(credentials.credentials, language)
     try:
@@ -144,6 +160,8 @@ def get_authenticated_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=translate("auth.invalid_session", language),
         )
+    request.state.auth_method = "bearer"
+    request.state.auth_session = None
     return user
 
 

@@ -1,6 +1,8 @@
 import { getStoredLocale } from './locale'
 
 const BASE = '/api'
+const CSRF_COOKIE = 'assetcore_csrf'
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 function apiUrl(path: string): string {
   return path === BASE || path.startsWith(`${BASE}/`) ? path : `${BASE}${path}`
@@ -30,17 +32,19 @@ export class ApiError extends Error {
   }
 }
 
-export function getToken() {
-  return localStorage.getItem('assetcore_token')
-}
-
-export function setToken(token: string) {
-  localStorage.setItem('assetcore_token', token)
-}
-
-export function logout() {
+export function clearLegacyAuthStorage() {
   localStorage.removeItem('assetcore_token')
   localStorage.removeItem('assetcore_user')
+}
+
+function csrfToken(): string | null {
+  const prefix = `${encodeURIComponent(CSRF_COOKIE)}=`
+  const value = document.cookie.split(';').map(item => item.trim()).find(item => item.startsWith(prefix))
+  return value ? decodeURIComponent(value.slice(prefix.length)) : null
+}
+
+function notifyUnauthorized() {
+  window.dispatchEvent(new Event('assetcore:unauthorized'))
 }
 
 async function errorFromResponse(response: Response): Promise<ApiError> {
@@ -66,15 +70,20 @@ async function errorFromResponse(response: Response): Promise<ApiError> {
 function authenticatedHeaders(options: RequestInit): Headers {
   const headers = new Headers(options.headers)
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json')
-  const token = getToken()
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const method = (options.method || 'GET').toUpperCase()
+  const csrf = csrfToken()
+  if (csrf && MUTATING_METHODS.has(method)) headers.set('X-CSRF-Token', csrf)
   headers.set('Accept-Language', getStoredLocale())
   return headers
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(apiUrl(path), { ...options, headers: authenticatedHeaders(options) })
-  if (response.status === 401) logout()
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    credentials: 'same-origin',
+    headers: authenticatedHeaders(options),
+  })
+  if (response.status === 401) notifyUnauthorized()
   if (!response.ok) throw await errorFromResponse(response)
   if (response.status === 204) return undefined as T
   return response.json()
@@ -88,8 +97,11 @@ function responseFilename(response: Response, fallback: string): string {
 }
 
 export async function downloadApiFile(path: string, fallbackName: string): Promise<void> {
-  const response = await fetch(apiUrl(path), { headers: authenticatedHeaders({}) })
-  if (response.status === 401) logout()
+  const response = await fetch(apiUrl(path), {
+    credentials: 'same-origin',
+    headers: authenticatedHeaders({}),
+  })
+  if (response.status === 401) notifyUnauthorized()
   if (!response.ok) throw await errorFromResponse(response)
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)
@@ -103,12 +115,23 @@ export async function downloadApiFile(path: string, fallbackName: string): Promi
 }
 
 export async function createApiObjectUrl(path: string): Promise<{ url: string; mediaType: string }> {
-  const response = await fetch(apiUrl(path), { headers: authenticatedHeaders({}) })
-  if (response.status === 401) logout()
+  const response = await fetch(apiUrl(path), {
+    credentials: 'same-origin',
+    headers: authenticatedHeaders({}),
+  })
+  if (response.status === 401) notifyUnauthorized()
   if (!response.ok) throw await errorFromResponse(response)
   const blob = await response.blob()
   return {
     url: URL.createObjectURL(blob),
     mediaType: blob.type || response.headers.get('Content-Type') || 'application/octet-stream',
+  }
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await api<void>('/auth/logout', { method: 'POST' })
+  } catch {
+    // Local state is cleared by App even if the network is unavailable.
   }
 }

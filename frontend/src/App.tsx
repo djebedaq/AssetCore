@@ -22,7 +22,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react'
-import { api, downloadApiFile, getToken, logout, setToken } from './api'
+import { api, clearLegacyAuthStorage, downloadApiFile, logout } from './api'
 import AuthenticatedImage from './AuthenticatedImage'
 import BulkTransfers from './BulkTransfers'
 import ChangePassword from './ChangePassword'
@@ -37,7 +37,7 @@ import {
 } from './IndustrialPlatform'
 import { statusText, useI18n, type TranslationKey } from './i18n'
 import { SUPPORTED_LOCALES, type Locale } from './locale'
-import { hasPermission, storedUser } from './permissions'
+import { clearSessionUser, hasPermission, setSessionUser, storedUser } from './permissions'
 import type { AssetCategory, Department, EmergencyAccessStatus, Location, Machine, PermissionCode, UserSession } from './types'
 import UserAdministration from './UserAdministration'
 import GovernancePanel from './GovernancePanel'
@@ -160,12 +160,11 @@ function Login({ onLogin }: { onLogin: (user: UserSession) => void }) {
     setBusy(true)
     setError('')
     try {
-      const data = await api<{ access_token: string; user: UserSession }>('/auth/login', {
+      const data = await api<{ user: UserSession }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       })
-      setToken(data.access_token)
-      localStorage.setItem('assetcore_user', JSON.stringify(data.user))
+      setSessionUser(data.user)
       setLocale(data.user.preferred_language, false)
       onLogin(data.user)
     } catch {
@@ -214,10 +213,11 @@ function Login({ onLogin }: { onLogin: (user: UserSession) => void }) {
 }
 
 function App() {
-  const { date, t } = useI18n()
-  const [authenticated, setAuthenticated] = useState(Boolean(getToken()))
-  const [session, setSession] = useState<UserSession | null>(() => storedUser())
-  const [page, setPage] = useState<Page>(() => hasPermission('repairs.view') ? 'dashboard' : 'machines')
+  const { date, setLocale, t } = useI18n()
+  const [authenticated, setAuthenticated] = useState(false)
+  const [bootstrapping, setBootstrapping] = useState(true)
+  const [session, setSession] = useState<UserSession | null>(null)
+  const [page, setPage] = useState<Page>('dashboard')
   const [catalogMachineId, setCatalogMachineId] = useState<number | null>(null)
   const [mobileMenu, setMobileMenu] = useState(false)
   const [emergencyAccess, setEmergencyAccess] = useState<EmergencyAccessStatus | null>(null)
@@ -225,6 +225,46 @@ function App() {
     const match = window.location.pathname.match(/^\/machine\/(\d+)\/?$/)
     return match ? Number(match[1]) : null
   })
+  const signingMatch = window.location.pathname.match(/^\/sign\/([^/]+)\/?$/)
+
+  useEffect(() => {
+    clearLegacyAuthStorage()
+    if (signingMatch) {
+      setBootstrapping(false)
+      return
+    }
+    let active = true
+    void api<UserSession>('/auth/me')
+      .then((user) => {
+        if (!active) return
+        setSessionUser(user)
+        setSession(user)
+        setAuthenticated(true)
+        setLocale(user.preferred_language, false)
+        setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines')
+      })
+      .catch(() => {
+        if (!active) return
+        clearSessionUser()
+        setSession(null)
+        setAuthenticated(false)
+      })
+      .finally(() => {
+        if (active) setBootstrapping(false)
+      })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    const unauthenticated = () => {
+      clearSessionUser()
+      setSession(null)
+      setAuthenticated(false)
+      setMobileMenu(false)
+    }
+    window.addEventListener('assetcore:unauthorized', unauthenticated)
+    return () => window.removeEventListener('assetcore:unauthorized', unauthenticated)
+  }, [])
 
   useMobileNavigationLock(mobileMenu && authenticated && Boolean(session))
 
@@ -247,12 +287,12 @@ function App() {
     }
   }, [authenticated, session])
 
-  const signingMatch = window.location.pathname.match(/^\/sign\/([^/]+)\/?$/)
   if (signingMatch) return <SignaturePage token={decodeURIComponent(signingMatch[1])} />
 
-  if (!authenticated || !session) return <Login onLogin={(user) => { setSession(user); setAuthenticated(true); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
-  if (session.must_change_password) return <ChangePassword forced onChanged={(user) => { setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
-  if (session.profile_status === 'PROFILE_INCOMPLETE') return <ProfileCompletion user={session} onCompleted={(user) => { setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
+  if (bootstrapping) return <div className="login-shell"><div className="login-panel"><p>{t('common.loading')}</p></div></div>
+  if (!authenticated || !session) return <Login onLogin={(user) => { setSessionUser(user); setSession(user); setAuthenticated(true); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
+  if (session.must_change_password) return <ChangePassword forced onChanged={(user) => { setSessionUser(user); setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
+  if (session.profile_status === 'PROFILE_INCOMPLETE') return <ProfileCompletion user={session} onCompleted={(user) => { setSessionUser(user); setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
 
   const nav = ([
     ['dashboard', 'nav.dashboard', Gauge, 'repairs.view'],
@@ -298,10 +338,12 @@ function App() {
           <button
             className="logout"
             onClick={() => {
-              logout()
-              setSession(null)
-              setAuthenticated(false)
-              setMobileMenu(false)
+              void logout().finally(() => {
+                clearSessionUser()
+                setSession(null)
+                setAuthenticated(false)
+                setMobileMenu(false)
+              })
             }}
           >
             <LogOut size={18} />{t('app.logout')}
