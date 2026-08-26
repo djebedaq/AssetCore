@@ -6,6 +6,19 @@ from pathlib import Path
 from backend.scripts.migration_history import normalized_sha256, validate_migration_history
 
 
+def test_current_migration_history_baseline_protects_revision_0020():
+    report = validate_migration_history()
+
+    assert report == {
+        "valid": True,
+        "algorithm": "sha256-normalized-lf",
+        "protected_count": 20,
+        "missing": [],
+        "mismatched": [],
+        "new_unprotected_migrations": [],
+    }
+
+
 def _manifest(path: Path, protected: dict[str, str]) -> Path:
     manifest = path / "manifest.json"
     manifest.write_text(
