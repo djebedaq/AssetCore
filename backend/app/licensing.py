@@ -72,6 +72,15 @@ def _decode_public_key(value: str) -> Ed25519PublicKey:
         ) from exc
 
 
+def validate_public_key_configuration(value: str | None) -> None:
+    if not value:
+        raise LicenseValidationError(
+            "public_key_not_configured",
+            "Публичният ключ за проверка на лиценз не е конфигуриран.",
+        )
+    _decode_public_key(value)
+
+
 def _parse_datetime(value: object, field: str, required: bool = True) -> datetime | None:
     if value in (None, ""):
         if required:

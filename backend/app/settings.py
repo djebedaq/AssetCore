@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -46,28 +47,56 @@ class Settings(BaseSettings):
     deployment_environment: str = "development"
     signature_encryption_key: str | None = None
     production_mode: bool = False
+    migration_strategy: Literal["startup", "external"] = "startup"
+    migration_lock_timeout_seconds: int = Field(default=60, ge=1, le=600)
+    db_pool_pre_ping: bool = True
+    db_pool_size: int = Field(default=5, ge=1, le=100)
+    db_max_overflow: int = Field(default=10, ge=0, le=200)
+    db_pool_timeout_seconds: int = Field(default=30, ge=1, le=300)
+    db_pool_recycle_seconds: int = Field(default=1800, ge=0, le=86_400)
+    db_connect_timeout_seconds: int = Field(default=10, ge=1, le=120)
+    db_statement_timeout_ms: int = Field(default=0, ge=0, le=3_600_000)
+
+    @staticmethod
+    def _is_https_origin(value: str) -> bool:
+        parsed = urlsplit(value.strip())
+        return bool(
+            parsed.scheme == "https"
+            and parsed.hostname
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.path in {"", "/"}
+            and not parsed.query
+            and not parsed.fragment
+        )
 
     @model_validator(mode="after")
     def reject_unsafe_production_bootstrap(self):
         if self.deployment_environment not in {"development", "test", "staging", "production"}:
             raise ValueError("DEPLOYMENT_ENVIRONMENT is invalid")
-        if self.production_mode:
-            if self.secret_key == "change-me-before-production":
-                raise ValueError("SECRET_KEY must be configured in production")
-            if not self.owner_email and not self.assetcore_owner_email:
-                raise ValueError("OWNER_EMAIL must be configured in production")
-            if not self.signature_encryption_key:
-                raise ValueError("SIGNATURE_ENCRYPTION_KEY must be configured in production")
-            if self.license_enforcement_enabled and (
-                not self.license_public_key or not self.installation_id
-            ):
-                raise ValueError(
-                    "LICENSE_PUBLIC_KEY and INSTALLATION_ID are required when licence enforcement is enabled"
-                )
+        if self.production_mode != (self.deployment_environment == "production"):
+            raise ValueError(
+                "PRODUCTION_MODE must be true exactly when DEPLOYMENT_ENVIRONMENT is production"
+            )
         production_like = self.production_mode or self.deployment_environment in {
             "staging",
             "production",
         }
+        if production_like:
+            if self.secret_key == "change-me-before-production" or len(self.secret_key) < 32:
+                raise ValueError("SECRET_KEY must contain at least 32 characters")
+            if not self.owner_email and not self.assetcore_owner_email:
+                raise ValueError("OWNER_EMAIL must be configured for staging and production")
+            if not self.owner_job_title:
+                raise ValueError("OWNER_JOB_TITLE must be configured for staging and production")
+            if not self.signature_encryption_key or len(self.signature_encryption_key) < 32:
+                raise ValueError(
+                    "SIGNATURE_ENCRYPTION_KEY must contain at least 32 characters"
+                )
+            if not self.public_base_url or not self._is_https_origin(self.public_base_url):
+                raise ValueError(
+                    "PUBLIC_BASE_URL must be an explicit HTTPS origin for staging and production"
+                )
         explicitly_configured = bool(self.frontend_origins) or (
             "frontend_origin" in self.model_fields_set and bool(self.frontend_origin)
         )
@@ -76,9 +105,35 @@ class Settings(BaseSettings):
                 "FRONTEND_ORIGIN or FRONTEND_ORIGINS must be explicitly configured "
                 "for staging and production"
             )
+        if production_like:
+            configured_origins = [
+                item.strip()
+                for item in (self.frontend_origins or self.frontend_origin).split(",")
+                if item.strip()
+            ]
+            if not configured_origins or not all(
+                self._is_https_origin(origin) for origin in configured_origins
+            ):
+                raise ValueError(
+                    "FRONTEND_ORIGIN(S) must contain only explicit HTTPS origins "
+                    "for staging and production"
+                )
         if production_like and self.bearer_compatibility_enabled:
             raise ValueError(
                 "BEARER_COMPATIBILITY_ENABLED is restricted to development/test CLI compatibility"
+            )
+        if self.deployment_environment == "production":
+            if self.migration_strategy != "external":
+                raise ValueError("MIGRATION_STRATEGY must be external in production")
+            if not self.database_url.startswith("postgresql+psycopg://"):
+                raise ValueError("DATABASE_URL must use PostgreSQL in production")
+            if not self.license_enforcement_enabled:
+                raise ValueError("LICENSE_ENFORCEMENT_ENABLED must be true in production")
+        if self.license_enforcement_enabled and (
+            not self.license_public_key or not self.installation_id
+        ):
+            raise ValueError(
+                "LICENSE_PUBLIC_KEY and INSTALLATION_ID are required when licence enforcement is enabled"
             )
         if self.login_rate_limit_base_block_seconds > self.login_rate_limit_max_block_seconds:
             raise ValueError("Login rate-limit base block cannot exceed its maximum")

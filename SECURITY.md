@@ -45,6 +45,14 @@ SQLite е за development и автоматизирани тестове. Produ
   assets запазват immutable cache. HSTS се изпраща само за production HTTPS.
 - Staging/production CORS изисква explicit `FRONTEND_ORIGIN(S)`, не приема
   wildcard и не добавя автоматично localhost.
+- Production миграциите са отделна one-shot операция с bounded PostgreSQL
+  advisory lock; web процесите отказват старт при schema drift. `/api/health`
+  не проверява dependencies, а `/api/ready` връща само non-sensitive status
+  codes и fail-ва при DB/schema/startup проблем.
+- Runtime container-ът е непривилегирован (`10001:10001`) с immutable
+  application source. Production-style Compose не публикува PostgreSQL към
+  host, прилага `no-new-privileges`, премахва capabilities и ограничава writes
+  до explicit tmpfs.
 
 ## Преди production
 

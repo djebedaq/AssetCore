@@ -30,7 +30,7 @@ from .auth_throttle import (
     throttled_error,
 )
 from .catalog import router as catalog_router
-from .database import SessionLocal, get_db
+from .database import SessionLocal, engine, get_db
 from .document_generation import (
     build_daily_report_pdf,
     build_protocol_docx,
@@ -43,7 +43,6 @@ from .industrial_api import (
 )
 from .licensing import evaluate_license, serialize_license_state
 from .localization import normalize_language, translate
-from .migrations import run_migrations
 from .models import (
     AssetCategory,
     AuditLog,
@@ -75,6 +74,7 @@ from .repairs import (
     apply_repair_transition,
     generate_completion_documents_or_rollback,
 )
+from .runtime import initialize_runtime, readiness_report, runtime_state
 from .schemas import (
     AuditLogOut,
     AvailabilityOut,
@@ -113,7 +113,6 @@ from .security import (
     get_current_active_user,
     verify_password,
 )
-from .seed import seed_database
 from .settings import settings
 from .transfer_service import (
     TransferServiceError,
@@ -148,10 +147,12 @@ DOCS_DIR = RESOURCES / "technical_docs"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    run_migrations()
-    with SessionLocal() as db:
-        seed_database(db)
-    yield
+    initialize_runtime()
+    try:
+        yield
+    finally:
+        runtime_state.mark_stopping()
+        engine.dispose()
 
 app = FastAPI(
     title="AssetCore API",
@@ -298,6 +299,12 @@ def health() -> dict[str, str]:
         "service": "AssetCore",
         "version": "1.3.0-rc.2",
     }
+
+
+@app.get("/api/ready", response_model=None)
+def readiness() -> JSONResponse:
+    status_code, payload = readiness_report()
+    return JSONResponse(status_code=status_code, content=payload)
 
 
 @app.post(

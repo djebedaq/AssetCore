@@ -1,3 +1,34 @@
+x-assetcore-environment: &assetcore-environment
+  DATABASE_URL: ${DATABASE_URL:?Set a URL-encoded DATABASE_URL in .env}
+  SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+  OWNER_FIRST_NAME: ${OWNER_FIRST_NAME:-Евтим}
+  OWNER_MIDDLE_NAME: ${OWNER_MIDDLE_NAME:-Станиславов}
+  OWNER_LAST_NAME: ${OWNER_LAST_NAME:-Горанов}
+  OWNER_EMAIL: ${OWNER_EMAIL:?Set OWNER_EMAIL in .env}
+  OWNER_JOB_TITLE: ${OWNER_JOB_TITLE:?Set OWNER_JOB_TITLE in .env}
+  OWNER_INITIAL_PASSWORD: ${OWNER_INITIAL_PASSWORD:-}
+  INSTALLATION_ID: ${INSTALLATION_ID:?Set INSTALLATION_ID in .env}
+  LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:?Set LICENSE_PUBLIC_KEY in .env}
+  LICENSE_ENFORCEMENT_ENABLED: ${LICENSE_ENFORCEMENT_ENABLED:-true}
+  DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
+  PRODUCTION_MODE: ${PRODUCTION_MODE:-true}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set the HTTPS public origin in .env}
+  FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?Set the HTTPS frontend origin in .env}
+  SESSION_MINUTES: ${SESSION_MINUTES:-720}
+  SESSION_COOKIE_SAMESITE: ${SESSION_COOKIE_SAMESITE:-lax}
+  TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+  BEARER_COMPATIBILITY_ENABLED: "false"
+  SIGNATURE_ENCRYPTION_KEY: ${SIGNATURE_ENCRYPTION_KEY:?Set SIGNATURE_ENCRYPTION_KEY in .env}
+  MIGRATION_STRATEGY: external
+  MIGRATION_LOCK_TIMEOUT_SECONDS: ${MIGRATION_LOCK_TIMEOUT_SECONDS:-60}
+  DB_POOL_PRE_PING: ${DB_POOL_PRE_PING:-true}
+  DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+  DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+  DB_POOL_TIMEOUT_SECONDS: ${DB_POOL_TIMEOUT_SECONDS:-30}
+  DB_POOL_RECYCLE_SECONDS: ${DB_POOL_RECYCLE_SECONDS:-1800}
+  DB_CONNECT_TIMEOUT_SECONDS: ${DB_CONNECT_TIMEOUT_SECONDS:-10}
+  DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-0}
+
 services:
   db:
     image: postgres:16-alpine
@@ -5,8 +36,8 @@ services:
       POSTGRES_DB: assetcore
       POSTGRES_USER: assetcore
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - assetcore_pg:/var/lib/postgresql/data
     healthcheck:
@@ -15,34 +46,50 @@ services:
       timeout: 5s
       retries: 10
 
-  app:
+  migrate:
     build: .
-    ports:
-      - "10000:10000"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:?Set a URL-encoded DATABASE_URL in .env}
-      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
-      OWNER_FIRST_NAME: ${OWNER_FIRST_NAME:-Евтим}
-      OWNER_MIDDLE_NAME: ${OWNER_MIDDLE_NAME:-Станиславов}
-      OWNER_LAST_NAME: ${OWNER_LAST_NAME:-Горанов}
-      OWNER_EMAIL: ${OWNER_EMAIL:?Set OWNER_EMAIL in .env}
-      OWNER_JOB_TITLE: ${OWNER_JOB_TITLE:?Set OWNER_JOB_TITLE in .env}
-      OWNER_INITIAL_PASSWORD: ${OWNER_INITIAL_PASSWORD:-}
-      INSTALLATION_ID: ${INSTALLATION_ID:?Set INSTALLATION_ID in .env}
-      LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:?Set LICENSE_PUBLIC_KEY in .env}
-      LICENSE_ENFORCEMENT_ENABLED: ${LICENSE_ENFORCEMENT_ENABLED:-true}
-      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-production}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:10000}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:10000}
-      SESSION_MINUTES: ${SESSION_MINUTES:-720}
-      SESSION_COOKIE_SAMESITE: ${SESSION_COOKIE_SAMESITE:-lax}
-      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
-      BEARER_COMPATIBILITY_ENABLED: "false"
-      SIGNATURE_ENCRYPTION_KEY: ${SIGNATURE_ENCRYPTION_KEY:?Set SIGNATURE_ENCRYPTION_KEY in .env}
-      PRODUCTION_MODE: ${PRODUCTION_MODE:-true}
+    image: assetcore:local
+    command: ["python", "-m", "app.runtime", "prepare"]
+    environment: *assetcore-environment
     depends_on:
       db:
         condition: service_healthy
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  app:
+    build: .
+    image: assetcore:local
+    ports:
+      - "10000:10000"
+    environment: *assetcore-environment
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','10000')+'/api/ready', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
 volumes:
   assetcore_pg:

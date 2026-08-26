@@ -81,7 +81,14 @@ def _key(method: str, path: str, name: str) -> RouteKey:
 # This is intentionally an exact allowlist. New public routes must be reviewed
 # and added with a reason; a URL prefix alone can never grant public access.
 PUBLIC_ALLOWLIST = (
-    AllowlistEntry(_key("GET", "/api/health", "health"), "Read-only health probe."),
+    AllowlistEntry(
+        _key("GET", "/api/health", "health"),
+        "Process-only liveness probe; it does not inspect protected data.",
+    ),
+    AllowlistEntry(
+        _key("GET", "/api/ready", "readiness"),
+        "Dependency readiness probe with structured non-sensitive status codes.",
+    ),
     AllowlistEntry(
         _key("POST", "/api/auth/login", "login"),
         "Credential exchange must be reachable before authentication.",

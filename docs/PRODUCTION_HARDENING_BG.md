@@ -1,5 +1,28 @@
 # Production hardening на AssetCore
 
+## Runtime, readiness и deployment граница
+
+Production web процесът работи само с `MIGRATION_STRATEGY=external`. Отделната
+one-shot команда `python -m app.runtime prepare` взема bounded PostgreSQL
+advisory lock, мигрира до exact Alembic head и изпълнява idempotent canonical
+bootstrap преди новите web процеси. Ако lock, migration, DB, source catalog,
+crypto или critical configuration проверката е неуспешна, процесът fail-ва
+преди да приема трафик. Development/test запазват удобния `startup` режим, а
+staging може изрично да го използва под същия advisory lock.
+
+`/api/health` е process-only liveness. `/api/ready` връща non-2xx при
+неработеща DB, schema behind, незавършен startup или невалиден cached critical
+check и не включва exception, URL, path, ключ или друга конфигурационна
+стойност. DB pool има bounded connect/checkout настройки, но общ statement
+timeout не е включен по подразбиране, за да се запазят дългите контролирани
+document/backup операции.
+
+Production образът работи като UID/GID `10001:10001`; application source е
+неизменяем, а LibreOffice използва изолиран временен профил. Основният Compose
+не публикува PostgreSQL port към host и прилага read-only root, tmpfs `/tmp`,
+`no-new-privileges` и dropped capabilities. `render.yaml` остава изрично
+staging/free конфигурация, а не production deployment договор.
+
 ## Идентичност и собственик
 
 Ролите остават точно `administrator`, `director`, `mechanic` и `observer`.

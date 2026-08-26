@@ -1,11 +1,13 @@
 # AssetCore API
 
-Интерактивната OpenAPI документация е достъпна на `/docs`, а схемата — на `/openapi.json`. Всички описани endpoints, освен `/api/health` и `/api/auth/login`, изискват Bearer token. Авторизацията използва централизирани permission кодове; ролите са точно `administrator`, `director`, `mechanic` и `observer`. Издаване и връщане изискват съответно `transfers.create` и `transfers.return`.
+Интерактивната OpenAPI документация е достъпна на `/docs`, а схемата — на `/openapi.json`. Browser клиентът използва server-managed `HttpOnly` session и session-bound CSRF за пишещите операции; test/CLI bearer compatibility е изключена в staging/production. `/api/health`, `/api/ready`, login и exact capability-token signing маршрутите са изрично публично класифицирани, а останалите endpoints изискват удостоверяване и/или централизирано permission право. Ролите са точно `administrator`, `director`, `mechanic` и `observer`. Издаване и връщане изискват съответно `transfers.create` и `transfers.return`.
 
 ## Основни endpoints
 
 | Метод | Endpoint | Резултат |
 |---|---|---|
+| `GET` | `/api/health` | process-only liveness; не проверява dependencies |
+| `GET` | `/api/ready` | structured readiness; HTTP 503 при DB/schema/startup проблем, без sensitive стойности |
 | `GET` | `/api/auth/me` | безопасен текущ профил, owner знак и permission кодове |
 | `POST` | `/api/auth/change-password` | проверява текущата и задава новата парола; връща нов token |
 | `GET/POST` | `/api/users` | scoped списък/създаване на потребители |

@@ -2,16 +2,41 @@
 
 ## Конфигурация
 
-Задължителните продукционни environment variables са `DATABASE_URL`, `SECRET_KEY`, `OWNER_FIRST_NAME`, `OWNER_MIDDLE_NAME`, `OWNER_LAST_NAME`, `OWNER_EMAIL`, `OWNER_JOB_TITLE`, стабилен `INSTALLATION_ID`, `LICENSE_PUBLIC_KEY` и отделен `SIGNATURE_ENCRYPTION_KEY`. `OWNER_INITIAL_PASSWORD` е задължителна само при първия bootstrap върху база без потребители; след успешния вход и forced password change я премахнете от environment-а. Задайте `PRODUCTION_MODE=true` и `LICENSE_ENFORCEMENT_ENABLED=true`. Локалният Docker Compose изисква и `POSTGRES_PASSWORD`; паролата в `DATABASE_URL` трябва да е URL-encoded. Не поставяйте стойностите им в Git, issue, log или screenshot. `ASSETCORE_OWNER_EMAIL`/`ADMIN_*` остават само като legacy migration compatibility и не са новият bootstrap договор.
+Задължителните продукционни environment variables са `DATABASE_URL`, `SECRET_KEY` (минимум 32 знака), `OWNER_FIRST_NAME`, `OWNER_MIDDLE_NAME`, `OWNER_LAST_NAME`, `OWNER_EMAIL`, `OWNER_JOB_TITLE`, стабилен `INSTALLATION_ID`, `LICENSE_PUBLIC_KEY` и отделен `SIGNATURE_ENCRYPTION_KEY` (минимум 32 знака). `OWNER_INITIAL_PASSWORD` е задължителна само при първия bootstrap върху база без потребители; след успешния вход и forced password change я премахнете от environment-а. Production изисква едновременно `DEPLOYMENT_ENVIRONMENT=production`, `PRODUCTION_MODE=true`, `LICENSE_ENFORCEMENT_ENABLED=true`, `MIGRATION_STRATEGY=external`, PostgreSQL и изрични HTTPS `PUBLIC_BASE_URL`/`FRONTEND_ORIGIN(S)`. Несъответствие отказва старт. Локалният Docker Compose изисква и `POSTGRES_PASSWORD`; паролата в `DATABASE_URL` трябва да е URL-encoded. Не поставяйте стойностите им в Git, issue, log или screenshot. `ASSETCORE_OWNER_EMAIL`/`ADMIN_*` остават само като legacy migration compatibility и не са новият bootstrap договор.
 
 Generic Render URLs с `postgresql://` или legacy `postgres://` се нормализират към SQLAlchemy драйвера `postgresql+psycopg://`. SQLite URL остава непроменен.
 
 Production и staging изискват изричен `FRONTEND_ORIGIN` или comma-separated
-`FRONTEND_ORIGINS`. Стойността съдържа само `http(s)://host[:port]`, без path,
+`FRONTEND_ORIGINS`. Стойността съдържа само `https://host[:port]`, без path,
 query, credentials или wildcard. Тези среди не добавят localhost и отказват
 старт без explicit origin. Development/test добавя Vite preview
 `http://localhost:4173`. За Render задайте реалния HTTPS app origin; локалният
-full-stack Docker може изрично да използва `http://localhost:10000`.
+full-stack production-style Docker трябва да е зад HTTPS reverse proxy.
+
+### Матрица на средите
+
+| Среда | База | `PRODUCTION_MODE` | Миграции | Публични адреси | Лиценз |
+|---|---|---:|---|---|---|
+| development/test | SQLite или PostgreSQL | `false` | `startup` по подразбиране | localhost HTTP е допустим | по избор |
+| staging | PostgreSQL | `false` | `startup` със advisory lock или отделна стъпка | изрично HTTPS | може да е изключен |
+| production | PostgreSQL | `true` | само `external` | изрично HTTPS | задължително включен |
+
+`render.yaml` е означен само за staging (`plan: free`, `DEPLOYMENT_ENVIRONMENT=staging`). Free Render web услугата няма платена pre-deploy стъпка, затова staging използва bounded `startup` migration под PostgreSQL advisory lock и една инстанция. Това не е production профил. За production използвайте платена услуга с отделна pre-deploy команда `python -m app.runtime prepare`, след което стартирайте неизменения web `CMD`.
+
+### PostgreSQL pool и timeout настройки
+
+| Променлива | Default | Значение |
+|---|---:|---|
+| `DB_POOL_PRE_PING` | `true` | проверява connection преди reuse |
+| `DB_POOL_SIZE` | `5` | постоянни връзки на web процес |
+| `DB_MAX_OVERFLOW` | `10` | временни връзки над pool-а |
+| `DB_POOL_TIMEOUT_SECONDS` | `30` | bounded изчакване за connection |
+| `DB_POOL_RECYCLE_SECONDS` | `1800` | периодично рециклиране; `0` изключва |
+| `DB_CONNECT_TIMEOUT_SECONDS` | `10` | timeout при нова PostgreSQL връзка |
+| `DB_STATEMENT_TIMEOUT_MS` | `0` | `0` не налага общ statement timeout |
+| `MIGRATION_LOCK_TIMEOUT_SECONDS` | `60` | bounded изчакване за migration advisory lock |
+
+`DB_STATEMENT_TIMEOUT_MS` умишлено е изключен по подразбиране, за да не прекъсва легитимни дълги document/backup операции. Променяйте го само след измерване и отделна оперативна проверка.
 
 Browser session policy се управлява чрез `SESSION_MINUTES` (default 720) и
 `SESSION_COOKIE_SAMESITE` (`lax` или `strict`). Staging/production автоматично
@@ -54,33 +79,52 @@ Production Docker image включва LibreOffice Writer за PDF от exact fi
 
 Предходната `20260731_0002_i18n_status_roles` добавя `users.preferred_language`, преобразува само познатите legacy български статуси към стабилни кодове и оставя непознатите исторически стойности непроменени. И двете миграции са съвместими с PostgreSQL и SQLite и имат downgrade.
 
-```bash
-python -m alembic -c backend/alembic.ini upgrade head
-```
+Production release sequence:
+
+1. спрете/дренирайте пишещия трафик според платформата;
+2. направете и проверете encrypted backup в отделно хранилище;
+3. върху exact release image изпълнете еднократно `python -m app.runtime prepare`;
+4. командата взема bounded PostgreSQL advisory lock, изпълнява `upgrade head`, canonical idempotent seed и source проверки; при lock timeout или грешка завършва non-zero;
+5. стартирайте web процесите с `MIGRATION_STRATEGY=external`; те само проверяват schema/source/crypto/license state и не пишат миграции/seed;
+6. насочете трафик едва след успешен `GET /api/ready`.
+
+Само migration операция без bootstrap се изпълнява с `python -m app.migrations` или `python -m app.runtime migrate`. Не стартирайте паралелно гол Alembic CLI в production, защото заобикаля application advisory lock.
 
 Read-only диагностиката се изпълнява с `PYTHONPATH=backend python backend/scripts/validate_official_document_integrity.py`. По подразбиране тя fail-ва само за release-blocking schema/canonical ambiguity и отчита непоправимата historical аномалия като `TOLERATED_HISTORY`; `--strict-history` е за отделен контролиран одит.
 
-`backend/alembic/migration_history_manifest.json` пази normalized-LF SHA-256 за вече публикуваните revisions `0001…0019`. `backend/scripts/validate_migration_history.py` се изпълнява автоматично в CI и release verifier, отказва променен или липсващ protected файл и разрешава нова revision. След като нова миграция бъде merge-ната, приложена и обявена за released, нейният normalized-LF hash се добавя като нов protected entry в отделна контролирана промяна; съществуващ hash никога не се преизчислява, за да прикрие редакция.
+`backend/alembic/migration_history_manifest.json` пази normalized-LF SHA-256 за вече публикуваните revisions `0001…0021`. `backend/scripts/validate_migration_history.py` се изпълнява автоматично в CI и release verifier, отказва променен или липсващ protected файл и разрешава нова revision. След като нова миграция бъде merge-ната, приложена и обявена за released, нейният normalized-LF hash се добавя като нов protected entry в отделна контролирана промяна; съществуващ hash никога не се преизчислява, за да прикрие редакция.
 
 Миграцията `20260731_0001_bulk_transfers` добавя партиди, активна връзка, return данни, protocol document snapshots и audit препратки. За PostgreSQL и SQLite се създава partial unique index за едно активно предаване на машина. Legacy SQLite схемата се backfill-ва според последното предаване и текущия статус, без промяна на машинния регистър.
 
-Вграденото приложение изпълнява `upgrade head` в lifespan преди seed проверката. В production се препоръчва и отделна pre-deploy миграционна стъпка, когато платформата я поддържа, за да се вижда резултатът преди трафик.
+Web lifespan изпълнява migration/seed само при `MIGRATION_STRATEGY=startup` (development/test и изрично staging). Production валидирането допуска само `external`; web процесът fail-ва преди трафик, ако отделната стъпка не е достигнала текущия head или source/catalog/crypto проверката е неуспешна.
 
-Rollback е описан във всяка Alembic revision, но преди downgrade направете валидиран backup. `0019 → 0018` е guarded: при несъвместими source variants завършва с ясно `Cannot downgrade PARTS_CATALOG_V2 to 0018 safely` преди промяна на schema и изисква предварително archive/export или контролирана миграция на references. Downgrade на final-role migration връща `director` към `manager` и `observer` към `viewer` и премахва новите owner/session колони; не го използвайте като обикновена production операция. По-старите downgrade стъпки могат да премахнат нови таблици/полета и да загубят transfer/document история.
+Rollback е restore-first процедура: спрете пишещия трафик, запазете failed release log/code, върнете предходния application image и възстановете предварително проверения backup в отделна база за проверка. Alembic downgrade се допуска само след review на конкретната revision и втори backup. `0019 → 0018` е guarded: при несъвместими source variants завършва с ясно `Cannot downgrade PARTS_CATALOG_V2 to 0018 safely` преди промяна на schema и изисква предварително archive/export или контролирана миграция на references. Downgrade на final-role migration връща `director` към `manager` и `observer` към `viewer` и премахва новите owner/session колони; не го използвайте като обикновена production операция. По-старите downgrade стъпки могат да премахнат нови таблици/полета и да загубят transfer/document история.
 
 ## Docker
 
-Runtime image инсталира DejaVu шрифтове за коректен кирилски PDF. `docker-compose.yml` изисква secrets чрез `.env` и не съдържа работещи пароли по подразбиране.
+Runtime image работи с фиксиран непривилегирован UID/GID `10001:10001`, инсталира LibreOffice Writer, DejaVu и PostgreSQL client, а `/app` е read-only за runtime потребителя. LibreOffice използва изолиран профил под `/tmp`. Production-style Compose добавя `read_only`, tmpfs `/tmp`, `no-new-privileges` и `cap_drop: ALL`; CI доказва DOCX→PDF и readiness при тези ограничения.
+
+PostgreSQL няма host `ports` в основния Compose файл и е достъпен само по вътрешната Compose мрежа. Ако операторът изрично се нуждае от локален development достъп, използвайте loopback-only override:
 
 ```bash
 docker compose config
 docker compose build
 docker compose up
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
+
+Последната команда е само за development и публикува `127.0.0.1:5432`, не публичен интерфейс.
+
+## Liveness и readiness
+
+- `GET /api/health` е евтин liveness: доказва единствено, че ASGI процесът отговаря, и не докосва база, лиценз или source файлове.
+- `GET /api/ready` е readiness и връща `200` само при ready runtime, работеща DB връзка, exact Alembic head, валидна production конфигурация, успешна cached startup catalog/source проверка, работеща document/signature crypto конфигурация и изпълнима license evaluation за активния режим.
+- При проблем readiness връща `503` и само структурирани `status`/`code` стойности като `database_unavailable` или `database_schema_behind`; не връща URL, ключ, email, path или exception текст.
+- Невалиден/изтекъл лиценз остава достъпен в съществуващия read-only workflow; readiness проверява, че оценката работи, без да блокира разрешените login/export/backup/license операции.
 
 ## След deployment
 
-1. Проверете `/api/health` и приложената Alembic revision.
+1. Проверете отделно `/api/health` и `/api/ready`; deployment health check трябва да сочи readiness.
 2. Проверете чрез безопасен `/api/auth/me`, че има точно един активен `is_system_owner` с роля `administrator`; не отпечатвайте email или token в deployment log.
 3. Проверете, че регистърът съдържа точно проверените 19 HPWJ машини.
 4. Извършете контролирано издаване и връщане само с разрешени реални бизнес данни или в отделна тестова база.
