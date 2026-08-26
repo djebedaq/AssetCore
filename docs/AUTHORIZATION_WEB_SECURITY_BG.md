@@ -17,7 +17,8 @@ fallback. `OPTIONS` се обработва централизирано от CO
 
 ## Точно прегледан публичен allowlist
 
-- `GET /api/health` — read-only health probe.
+- `GET /api/health` — process-only liveness probe.
+- `GET /api/ready` — dependency readiness само с non-sensitive status codes.
 - `POST /api/auth/login` — credential exchange преди удостоверяване.
 - `GET /api/signing/{token}` — summary чрез ограничен capability token.
 - `POST /api/signing/{token}` — подаване на подпис чрез capability token.

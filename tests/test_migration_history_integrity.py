@@ -17,6 +17,10 @@ OFFICIAL_DOCUMENT_INTEGRITY_MIGRATION = (
 OFFICIAL_DOCUMENT_INTEGRITY_SHA256 = (
     "8129ca08d3c7c8717c3a563713c55e1478d4cd60812dac4d0e2bd90d9fbcb5f6"
 )
+AUTH_SESSION_MIGRATION = "20260826_0021_auth_session_hardening.py"
+AUTH_SESSION_SHA256 = (
+    "02d49643efc60b3bcf8da2831e11864f21e297e0cc40a32bd2a18b9d3e4bfeac"
+)
 
 
 def test_current_migration_history_baseline_protects_revision_0020():
@@ -31,6 +35,8 @@ def test_current_migration_history_baseline_protects_revision_0020():
         manifest["protected"][OFFICIAL_DOCUMENT_INTEGRITY_MIGRATION]
         == OFFICIAL_DOCUMENT_INTEGRITY_SHA256
     )
+    assert report["protected_count"] >= 21
+    assert manifest["protected"][AUTH_SESSION_MIGRATION] == AUTH_SESSION_SHA256
 
 
 def test_current_protected_baseline_allows_a_future_revision(tmp_path: Path):

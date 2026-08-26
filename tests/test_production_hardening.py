@@ -42,13 +42,19 @@ def test_production_restart_does_not_require_reusing_bootstrap_password():
     configured = Settings(
         _env_file=None,
         production_mode=True,
+        deployment_environment="production",
         database_url="postgresql+psycopg://assetcore@database/assetcore",
-        secret_key="release-test-secret-that-is-not-a-real-credential",
+        secret_key="release-test-secret-that-is-not-a-real-credential-0001",
         owner_email="owner@example.invalid",
+        owner_job_title="Test production owner",
         owner_initial_password=None,
-        signature_encryption_key="release-test-encryption-key",
-        license_enforcement_enabled=False,
+        signature_encryption_key="release-test-encryption-key-material-0001",
+        license_enforcement_enabled=True,
+        license_public_key="test-only-public-key",
+        installation_id="test-only-installation",
         frontend_origin="https://assetcore.example.invalid",
+        public_base_url="https://assetcore.example.invalid",
+        migration_strategy="external",
     )
     assert configured.owner_initial_password is None
 

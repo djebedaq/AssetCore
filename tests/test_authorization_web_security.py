@@ -30,11 +30,16 @@ def _production_settings(**overrides) -> Settings:
         "production_mode": True,
         "deployment_environment": "production",
         "database_url": "postgresql+psycopg://assetcore@database/assetcore",
-        "secret_key": "test-only-production-secret",
+        "secret_key": "test-only-production-secret-material-0001",
         "owner_email": "owner@example.invalid",
-        "signature_encryption_key": "test-only-signature-encryption-key",
-        "license_enforcement_enabled": False,
+        "owner_job_title": "Test production owner",
+        "signature_encryption_key": "test-only-signature-encryption-key-0001",
+        "license_enforcement_enabled": True,
+        "license_public_key": "test-only-public-key",
+        "installation_id": "test-only-installation",
         "frontend_origin": "https://assetcore.example.invalid",
+        "public_base_url": "https://assetcore.example.invalid",
+        "migration_strategy": "external",
     }
     values.update(overrides)
     return Settings(**values)
@@ -82,13 +87,13 @@ def test_complete_runtime_route_inventory_is_classified_and_deterministic():
     # The backend-only CI job intentionally has no compiled frontend/dist;
     # production/Docker has the mount plus SPA route. Both graphs are explicit.
     assert static_count in {0, 3}
-    assert summary["route_count"] == 163 + static_count
+    assert summary["route_count"] == 164 + static_count
     assert summary["mutating_route_count"] == 80
     assert summary["by_kind"] == {
         "authenticated": 6,
         "authenticated_special": 8,
         "permission": 135,
-        "public_exempt": 14,
+        "public_exempt": 15,
         **({"static_public": 3} if static_count else {}),
     }
     assert not [row for row in inventory.routes if row.kind == "unclassified"]
@@ -279,7 +284,12 @@ def test_development_preview_origin_is_not_injected_into_staging():
     staging = Settings(
         _env_file=None,
         deployment_environment="staging",
+        secret_key="test-only-staging-secret-material-0001",
+        owner_email="owner@example.invalid",
+        owner_job_title="Test staging owner",
+        signature_encryption_key="test-only-staging-signature-key-0001",
         frontend_origin="https://staging.example.invalid",
+        public_base_url="https://staging.example.invalid",
     )
     assert configured_cors_origins(development) == (
         "http://localhost:5173",
@@ -293,9 +303,16 @@ def test_invalid_or_implicit_production_origin_is_rejected():
         "_env_file": None,
         "production_mode": True,
         "deployment_environment": "production",
-        "secret_key": "test-production-secret",
+        "database_url": "postgresql+psycopg://assetcore@database/assetcore",
+        "secret_key": "test-production-secret-material-0000001",
         "owner_email": "owner@example.invalid",
-        "signature_encryption_key": "test-signature-key",
+        "owner_job_title": "Test production owner",
+        "signature_encryption_key": "test-signature-key-material-00000001",
+        "license_enforcement_enabled": True,
+        "license_public_key": "test-only-public-key",
+        "installation_id": "test-only-installation",
+        "public_base_url": "https://assetcore.example.invalid",
+        "migration_strategy": "external",
     }
     try:
         Settings(**values)

@@ -69,7 +69,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Интерфейсът е на `http://localhost:5173`, API документацията — на `http://localhost:8000/docs`. При старт backend-ът също прилага чакащите миграции преди seed проверката.
+Интерфейсът е на `http://localhost:5173`, API документацията — на `http://localhost:8000/docs`. Development/test използват удобния `MIGRATION_STRATEGY=startup`. Production изисква отделна `python -m app.runtime prepare` стъпка и `MIGRATION_STRATEGY=external`; web процесът само проверява exact Alembic head и отказва трафик при drift.
 
 ## Docker и PostgreSQL
 
@@ -79,7 +79,13 @@ pnpm dev
 docker compose up --build
 ```
 
-Приложението е на `http://localhost:10000`. В `docker-compose.yml` няма записани пароли по подразбиране; липсващите задължителни стойности прекратяват старта с ясна грешка.
+Основният Compose е production-style и трябва да стои зад HTTPS reverse proxy. PostgreSQL не публикува host port, migration/seed е отделна one-shot услуга, а web container-ът е non-root с read-only root filesystem. В `docker-compose.yml` няма записани пароли по подразбиране; липсващите задължителни стойности прекратяват старта с ясна грешка. `/api/health` е process-only liveness, а `/api/ready` проверява DB, exact Alembic head и critical startup state.
+
+За локална разработка публикувайте PostgreSQL само към loopback и стартирайте backend/frontend по горните development инструкции:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up db
+```
 
 ## Работа с групови предавания
 

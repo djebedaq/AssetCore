@@ -100,6 +100,58 @@ jobs:
           INSTALLATION_ID: assetcore-ci
           LICENSE_PUBLIC_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           SIGNATURE_ENCRYPTION_KEY: compose-validation-signature-key
+          PUBLIC_BASE_URL: https://assetcore.example.invalid
+          FRONTEND_ORIGIN: https://assetcore.example.invalid
         run: docker compose config --quiet
+      - name: Validate opt-in development database port override
+        env:
+          POSTGRES_PASSWORD: compose-validation-password
+          DATABASE_URL: postgresql+psycopg://assetcore:compose-validation-password@db:5432/assetcore
+          SECRET_KEY: compose-validation-secret-key-which-is-not-used
+          OWNER_EMAIL: ci-owner@assetcore.invalid
+          OWNER_JOB_TITLE: CI operator
+          INSTALLATION_ID: assetcore-ci
+          LICENSE_PUBLIC_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          SIGNATURE_ENCRYPTION_KEY: compose-validation-signature-key
+          PUBLIC_BASE_URL: https://assetcore.example.invalid
+          FRONTEND_ORIGIN: https://assetcore.example.invalid
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet
       - name: Build production image
         run: docker build --pull --tag assetcore:ci .
+      - name: Verify fixed non-root runtime identity
+        run: test "$(docker image inspect assetcore:ci --format '{{.Config.User}}')" = "10001:10001"
+      - name: Verify LibreOffice with read-only root filesystem
+        run: >-
+          docker run --rm --read-only
+          --tmpfs /tmp:rw,nosuid,noexec,size=512m
+          assetcore:ci python backend/scripts/container_runtime_smoke.py
+      - name: Run liveness and readiness smoke in the production image
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_secret="$(openssl rand -base64 48)"
+          runtime_signature_key="$(openssl rand -base64 48)"
+          runtime_owner_password="$(openssl rand -base64 36)"
+          docker run --detach --name assetcore-runtime-smoke \
+            --read-only --tmpfs /tmp:rw,nosuid,noexec,size=512m \
+            --publish 18080:10000 \
+            --env DATABASE_URL=sqlite:////tmp/assetcore-runtime.db \
+            --env SECRET_KEY="$runtime_secret" \
+            --env OWNER_EMAIL=runtime-owner@assetcore.invalid \
+            --env OWNER_JOB_TITLE='Container QA operator' \
+            --env OWNER_INITIAL_PASSWORD="$runtime_owner_password" \
+            --env SIGNATURE_ENCRYPTION_KEY="$runtime_signature_key" \
+            --env DEPLOYMENT_ENVIRONMENT=test \
+            --env PRODUCTION_MODE=false \
+            --env LICENSE_ENFORCEMENT_ENABLED=false \
+            --env MIGRATION_STRATEGY=startup \
+            assetcore:ci
+          trap 'docker logs assetcore-runtime-smoke || true; docker rm --force assetcore-runtime-smoke || true' EXIT
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:18080/api/ready > /tmp/readiness.json; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:18080/api/health
+          curl --fail --silent http://127.0.0.1:18080/api/ready

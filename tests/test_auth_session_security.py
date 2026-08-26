@@ -355,7 +355,18 @@ def test_bearer_compatibility_is_rejected_in_production_configuration():
         Settings(
             _env_file=None,
             deployment_environment="production",
+            production_mode=True,
+            database_url="postgresql+psycopg://assetcore@database/assetcore",
+            secret_key="test-production-secret-material-0000001",
+            owner_email="owner@example.invalid",
+            owner_job_title="Test production owner",
+            signature_encryption_key="test-signature-key-material-00000001",
+            license_enforcement_enabled=True,
+            license_public_key="test-only-public-key",
+            installation_id="test-only-installation",
             frontend_origin="https://assetcore.example.invalid",
+            public_base_url="https://assetcore.example.invalid",
+            migration_strategy="external",
             bearer_compatibility_enabled=True,
         )
     except ValidationError as exc:

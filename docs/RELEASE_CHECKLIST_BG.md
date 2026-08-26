@@ -11,7 +11,7 @@
 - [x] Frontend TypeScript syntax и изолирана semantic проверка са успешни.
 - [ ] Реален `pnpm install`, frontend typecheck, lint, Vitest и production build — изисква зелен GitHub frontend job.
 - [ ] PostgreSQL migration и encrypted backup/restore round trip — изисква зелен GitHub postgres job.
-- [ ] Docker image build, Compose validation и `/api/health` smoke test — изисква зелен GitHub docker/staging job.
+- [ ] Docker image build, non-root/LibreOffice smoke, Compose validation и отделни `/api/health` + `/api/ready` проверки — изисква зелен GitHub docker/staging job.
 - [ ] Ruff check — изисква зелен GitHub backend job.
 - [ ] Реален staging login → issue → batch signatures → return → repair → parts → DOCX/PDF workflow.
 - [ ] Backup/restore rehearsal върху staging копие.

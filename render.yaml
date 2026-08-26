@@ -1,10 +1,12 @@
 services:
+  # STAGING-ONLY blueprint. Production requires a paid pre-deploy migration step.
   - type: web
     name: assetcore
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
-    healthCheckPath: /api/health
+    healthCheckPath: /api/ready
+    maxShutdownDelaySeconds: 30
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -32,6 +34,10 @@ services:
         value: false
       - key: DEPLOYMENT_ENVIRONMENT
         value: staging
+      - key: MIGRATION_STRATEGY
+        value: startup
+      - key: MIGRATION_LOCK_TIMEOUT_SECONDS
+        value: 60
       - key: PUBLIC_BASE_URL
         sync: false
       - key: FRONTEND_ORIGIN
@@ -48,6 +54,20 @@ services:
         generateValue: true
       - key: PRODUCTION_MODE
         value: false
+      - key: DB_POOL_PRE_PING
+        value: true
+      - key: DB_POOL_SIZE
+        value: 5
+      - key: DB_MAX_OVERFLOW
+        value: 10
+      - key: DB_POOL_TIMEOUT_SECONDS
+        value: 30
+      - key: DB_POOL_RECYCLE_SECONDS
+        value: 1800
+      - key: DB_CONNECT_TIMEOUT_SECONDS
+        value: 10
+      - key: DB_STATEMENT_TIMEOUT_MS
+        value: 0
 
 databases:
   - name: assetcore-db

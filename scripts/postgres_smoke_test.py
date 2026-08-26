@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 
+from app.migrations import migration_lock_id, run_migrations  # noqa: E402
 from app.models import (  # noqa: E402
     Machine,
     OfficialDocument,
@@ -71,9 +72,63 @@ def _upgrade(url: str) -> None:
     previous = settings.database_url
     try:
         settings.database_url = url
-        command.upgrade(_alembic_config(), "head")
+        run_migrations()
     finally:
         settings.database_url = previous
+
+
+def _verify_migration_start_is_concurrency_safe(url: str) -> None:
+    environment = os.environ.copy()
+    environment["DATABASE_URL"] = url
+    environment["PYTHONPATH"] = str(BACKEND)
+    environment["MIGRATION_LOCK_TIMEOUT_SECONDS"] = "1"
+    migration_command = [sys.executable, "-m", "app.migrations"]
+
+    lock_engine = create_engine(url, pool_pre_ping=True)
+    try:
+        with lock_engine.connect() as connection:
+            acquired = connection.execute(
+                text("SELECT pg_try_advisory_lock(:lock_id)"),
+                {"lock_id": migration_lock_id()},
+            ).scalar_one()
+            connection.commit()
+            if not acquired:
+                raise RuntimeError("PostgreSQL QA could not acquire the migration test lock.")
+            blocked = subprocess.run(
+                migration_command,
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": migration_lock_id()},
+            )
+            connection.commit()
+        if blocked.returncode != 2 or blocked.stderr.strip() != "migration_status=lock_timeout":
+            raise RuntimeError("Concurrent PostgreSQL migration was not rejected safely.")
+
+        contenders = [
+            subprocess.Popen(
+                migration_command,
+                cwd=ROOT,
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for _ in range(2)
+        ]
+        results = [process.communicate(timeout=60) for process in contenders]
+        if any(process.returncode != 0 for process in contenders):
+            raise RuntimeError("Serialized PostgreSQL migration contenders did not complete.")
+        if any("migration_status=complete" not in stdout for stdout, _ in results):
+            raise RuntimeError("PostgreSQL migration contenders returned an unsafe result.")
+    finally:
+        lock_engine.dispose()
 
 
 def _downgrade(url: str, revision: str) -> None:
@@ -196,6 +251,7 @@ def main() -> None:
         raise SystemExit("PG_DUMP and PG_RESTORE must identify the PostgreSQL client tools.")
 
     _upgrade(source_url)
+    _verify_migration_start_is_concurrency_safe(source_url)
     _verify_safe_catalog_downgrade_round_trip(source_url)
     source_engine = create_engine(source_url, pool_pre_ping=True)
     previous_settings = (
