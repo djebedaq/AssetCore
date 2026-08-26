@@ -1,22 +1,53 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
-from backend.scripts.migration_history import normalized_sha256, validate_migration_history
+from backend.scripts.migration_history import (
+    DEFAULT_MANIFEST,
+    DEFAULT_VERSIONS_DIR,
+    normalized_sha256,
+    validate_migration_history,
+)
+
+OFFICIAL_DOCUMENT_INTEGRITY_MIGRATION = (
+    "20260826_0020_official_document_integrity.py"
+)
+OFFICIAL_DOCUMENT_INTEGRITY_SHA256 = (
+    "8129ca08d3c7c8717c3a563713c55e1478d4cd60812dac4d0e2bd90d9fbcb5f6"
+)
 
 
 def test_current_migration_history_baseline_protects_revision_0020():
     report = validate_migration_history()
+    manifest = json.loads(DEFAULT_MANIFEST.read_text(encoding="utf-8"))
 
-    assert report == {
-        "valid": True,
-        "algorithm": "sha256-normalized-lf",
-        "protected_count": 20,
-        "missing": [],
-        "mismatched": [],
-        "new_unprotected_migrations": [],
-    }
+    assert report["valid"] is True
+    assert report["protected_count"] >= 20
+    assert report["missing"] == []
+    assert report["mismatched"] == []
+    assert (
+        manifest["protected"][OFFICIAL_DOCUMENT_INTEGRITY_MIGRATION]
+        == OFFICIAL_DOCUMENT_INTEGRITY_SHA256
+    )
+
+
+def test_current_protected_baseline_allows_a_future_revision(tmp_path: Path):
+    versions = tmp_path / "versions"
+    shutil.copytree(DEFAULT_VERSIONS_DIR, versions)
+    future_revision = versions / "20990101_0021_future.py"
+    future_revision.write_text("revision = '0021'\n", encoding="utf-8")
+
+    report = validate_migration_history(
+        versions_dir=versions,
+        manifest_path=DEFAULT_MANIFEST,
+    )
+
+    assert report["valid"] is True
+    assert report["missing"] == []
+    assert report["mismatched"] == []
+    assert report["new_unprotected_migrations"] == [future_revision.name]
 
 
 def _manifest(path: Path, protected: dict[str, str]) -> Path:
