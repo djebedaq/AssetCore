@@ -107,6 +107,7 @@ from .schemas import (
     UserOut,
 )
 from .security import (
+    DUMMY_PASSWORD_HASH,
     create_access_token,
     get_authenticated_user,
     get_current_active_user,
@@ -328,7 +329,9 @@ def login(
     throttle_keys = login_rate_limit_keys(request, normalized_email)
     enforce_rate_limit(db, throttle_keys)
     user = db.scalar(select(User).where(func.lower(User.email) == normalized_email))
-    if not user or not user.is_active or not verify_password(data.password, user.password_hash):
+    password_hash = user.password_hash if user is not None else DUMMY_PASSWORD_HASH
+    password_valid = verify_password(data.password, password_hash)
+    if user is None or not user.is_active or not password_valid:
         language = normalize_language(request.headers.get("Accept-Language"))
         retry_after = record_rate_limit_failure(
             db,

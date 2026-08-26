@@ -6,7 +6,7 @@ from app.auth_sessions import secret_hash
 from app.auth_throttle import remote_source
 from app.main import app
 from app.models import AuthenticationThrottle, AuthSession, User, utcnow
-from app.security import hash_password
+from app.security import DUMMY_PASSWORD_HASH, hash_password, verify_password
 from app.settings import Settings, settings
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -51,6 +51,54 @@ def _add_login_user(session_factory, email: str, role: str = "mechanic") -> int:
         db.add(user)
         db.commit()
         return user.id
+
+
+def test_login_failure_paths_always_perform_equivalent_password_verification(
+    client, session_factory, monkeypatch
+):
+    inactive_id = _add_login_user(
+        session_factory,
+        "inactive-session@example.invalid",
+    )
+    with session_factory() as db:
+        inactive = db.get(User, inactive_id)
+        assert inactive is not None
+        inactive.is_active = False
+        db.commit()
+
+    verification_calls: list[tuple[str, str, bool]] = []
+
+    def tracked_verify_password(password: str, password_hash: str) -> bool:
+        result = verify_password(password, password_hash)
+        verification_calls.append((password, password_hash, result))
+        return result
+
+    monkeypatch.setattr("app.main.verify_password", tracked_verify_password)
+    attempts = (
+        ("unknown-session@example.invalid", "WrongPassword123!"),
+        ("inactive-session@example.invalid", "StrongPass123!"),
+        ("admin@assetcore.local", "WrongPassword123!"),
+    )
+    responses = [
+        client.post(
+            "/api/auth/login",
+            headers={"X-AssetCore-Auth-Mode": "session"},
+            json={"email": email, "password": password},
+        )
+        for email, password in attempts
+    ]
+
+    assert [response.status_code for response in responses] == [401, 401, 401]
+    assert responses[0].json() == responses[1].json() == responses[2].json()
+    assert len(verification_calls) == 3
+    assert verification_calls[0][1] == DUMMY_PASSWORD_HASH
+    assert verification_calls[1][1] != DUMMY_PASSWORD_HASH
+    assert verification_calls[2][1] != DUMMY_PASSWORD_HASH
+    assert [result for _, _, result in verification_calls] == [False, True, False]
+    assert {
+        tuple(password_hash.split("$", 2)[:2])
+        for _, password_hash, _ in verification_calls
+    } == {("pbkdf2_sha256", "310000")}
 
 
 def test_browser_login_uses_hashed_durable_session_and_explicit_cookie_policy(

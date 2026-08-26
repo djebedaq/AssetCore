@@ -20,6 +20,14 @@ from .settings import settings
 
 bearer = HTTPBearer(auto_error=False)
 
+# A fixed, valid PBKDF2 hash keeps unknown-account login failures on the same
+# password-verification work factor as real accounts. It is not a credential
+# and must not be regenerated per request.
+DUMMY_PASSWORD_HASH = (
+    "pbkdf2_sha256$310000$QXNzZXRDb3JlTG9naW5EdW1teQ$"
+    "Sa7JKlG6aohdH_BI-nuzDe5O_CV5KaSdf046o4V4B7I"
+)
+
 OBVIOUSLY_WEAK_PASSWORDS = {
     "password",
     "password1",
