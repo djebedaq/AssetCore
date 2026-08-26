@@ -44,6 +44,9 @@ from app.models import (  # noqa: E402
     User,
     UserRole,
 )
+from app.official_documents.integrity import (  # noqa: E402
+    validate_official_document_integrity,
+)
 from app.seed import seed_database  # noqa: E402
 from app.settings import settings  # noqa: E402
 from app.template_engine import validate_template  # noqa: E402
@@ -51,6 +54,7 @@ from sqlalchemy import create_engine, func, inspect, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from backend.scripts.document_qa import generate as generate_document_qa  # noqa: E402
+from backend.scripts.migration_history import validate_migration_history  # noqa: E402
 
 EXPECTED_INVENTORY = {"4", "5", "7", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24"}
 EXPECTED_SERIALS = {
@@ -129,6 +133,22 @@ def _verify_migrations(verification: Verification) -> None:
                     }
                     <= tables,
                 )
+                with Session(migration_engine) as migration_db:
+                    integrity = validate_official_document_integrity(migration_db)
+                    verification.check(
+                        "OfficialDocument current version integrity guard е активен",
+                        integrity["valid"]
+                        and integrity["blocking_count"] == 0
+                        and integrity["schema"]["owner_unique_index"]
+                        and (
+                            integrity["schema"]["composite_foreign_key"]
+                            or integrity["schema"]["sqlite_trigger_guard"]
+                        ),
+                        (
+                            f"blocking={integrity['blocking_count']}, "
+                            f"tolerated={integrity['tolerated_history_count']}"
+                        ),
+                    )
             finally:
                 migration_engine.dispose()
         finally:
@@ -141,6 +161,15 @@ def _verify_migrations(verification: Verification) -> None:
 
 def run(output: Path) -> Verification:
     verification = Verification()
+    migration_history = validate_migration_history()
+    verification.check(
+        "Публикуваната Alembic история е непроменена",
+        migration_history["valid"],
+        (
+            f"protected={migration_history['protected_count']}, "
+            f"new={len(migration_history['new_unprotected_migrations'])}"
+        ),
+    )
     _verify_migrations(verification)
     tracked = _tracked_files()
     unsafe_suffixes = (".db", ".sqlite", ".sqlite3", ".dump", ".backup", ".pem", ".key", ".p12", ".pfx")

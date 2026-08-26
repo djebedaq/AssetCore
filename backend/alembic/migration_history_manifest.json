@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "algorithm": "sha256-normalized-lf",
+  "protected": {
+    "20260731_0001_bulk_transfers.py": "92e6a0ea56211088b483313af9fa6f061ecc019ed865cc534bd1d1e56aa7434a",
+    "20260731_0002_i18n_status_roles.py": "e2db32f3c739d3dc8ed10373e16037608990fed53e6210651d6ee7189c493ad6",
+    "20260731_0003_industrial_platform.py": "f23f3cc084352bfa4740641d992b16d44de9194d12c334248d95f19a1af2faa6",
+    "20260801_0004_final_user_roles.py": "f560598dbf327143775fd297833a0917db392801c8b6e3975db6e68a3badd987",
+    "20260801_0005_production_hardening.py": "4a786d02b3d65d811e24b1a5425a5df6104a4d130319366bd460e53edd71c1b0",
+    "20260801_0006_final_staging_signatures.py": "7aa0b5b5fbf0c8ab7417b7a3616945bc64c1c9a30c39e8f8f1fbb30fc77d8823",
+    "20260805_0007_external_signer_optional_fields.py": "061fc65dc216c2a8d75a3c96517163e9d9094b390a74c268cfac7e8578039001",
+    "20260805_0008_transfer_checklists.py": "a4a1d450be02e78261cf67f4c8880de8a2ac6eb2699a2360d2ed1e6e28082b35",
+    "20260805_0009_safe_transfer_cancellation.py": "754744653266aeab6298e4f3361c019b254c5ac8ed014ea58c520bc8ebf15834",
+    "20260805_0010_issue_batch_signing.py": "a711f395a1a474e9b4fb3a65e5d2ed5fa132f7a65d8b498e2cf6affe22717f07",
+    "20260805_0011_return_batch_signing.py": "d91fc6342f071ade4cbb8a0b26677673fa3cfc6fe8c2ee74605a084c5cff4306",
+    "20260805_0012_verified_part_catalog.py": "5636e3ae4919aea6fdeb645ec8adc60324aab2f95a8a60e489851490db92885f",
+    "20260805_0013_unknown_part_requests.py": "2e3ed87bcdc0a1f526496557df7243c61ca72c976a916aaaa28215a8e256d080",
+    "20260805_0014_internal_repair_protocol.py": "3abdca8f1d05e64e981eb6416f10e187992b8e60b6d3c2475631ec5c187302f6",
+    "20260805_0015_live_regression_hotfix.py": "c2abd362e47e2c62799e9869b757e5d07282ca0543ca08a99919cd9df22720f7",
+    "20260808_0016_transfer_workflow_simplification.py": "6a8f6616a5c29573b27655075bf484e11aa894367070a5ebcf2142917977a830",
+    "20260809_0017_repair_workflow_protocol.py": "832aa1efbe7f08afdda4a8bdda7eddbe8527087365c4d25dae8b2997469596ee",
+    "20260810_0018_repair_wizard_simplification.py": "40415bda417c7bc597c696265d5d3ea314c9f49a3514bb301156cd102bc0bea0",
+    "20260818_0019_authoritative_parts_catalog_v2.py": "e48a847996bb41349a6f6e64f8a5a4b4c90fe7195e3c94d0ecc5ec4bfe497562"
+  }
+}

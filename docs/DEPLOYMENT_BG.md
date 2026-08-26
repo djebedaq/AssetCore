@@ -8,7 +8,9 @@ Generic Render URLs с `postgresql://` или legacy `postgres://` се норм
 
 ## Миграция
 
-Текущият `head` е `20260818_0019`. Той добавя source identity/metadata към `part_catalog`, active/source metadata към technical documents и repair kits, source metadata към kit components и position-centric таблиците `catalog_diagrams`/`catalog_position_hotspots`. Старият недостатъчен unique key за каталожна позиция се премахва, без да се изтриват исторически редове. Миграцията работи с PostgreSQL и SQLite. Guarded downgrade възстановява schema `0018` и `uq_part_catalog_source_position`, когато данните са съвместими; ако V2 source variants се сблъскват по legacy identity `brand/model/assembly/position/part_number`, downgrade отказва преди каквито и да е destructive промени, без merge, delete или загуба на history.
+Текущият `head` е `20260826_0020`. Той добавя unique owner key за `OfficialDocumentVersion`, PostgreSQL composite FK `official_documents(id, current_version_id) → official_document_versions(document_id, id)` и version-side trigger, както и SQLite trigger еквивалент. Преди guard-а миграцията отчита само броя на NULL, missing, wrong-owner, shared и orphan historical състояния. Тя не променя pointer, snapshot, binary document, signature или hash данни; PostgreSQL constraint се добавя `NOT VALID` и се валидира автоматично само когато existing current pointers са съвместими. Новите writes се пазят и при tolerated historical anomalies.
+
+Предходният `20260818_0019` добавя source identity/metadata към `part_catalog`, active/source metadata към technical documents и repair kits, source metadata към kit components и position-centric таблиците `catalog_diagrams`/`catalog_position_hotspots`. Старият недостатъчен unique key за каталожна позиция се премахва, без да се изтриват исторически редове. Миграцията работи с PostgreSQL и SQLite. Guarded downgrade възстановява schema `0018` и `uq_part_catalog_source_position`, когато данните са съвместими; ако V2 source variants се сблъскват по legacy identity `brand/model/assembly/position/part_number`, downgrade отказва преди каквито и да е destructive промени, без merge, delete или загуба на history.
 
 След `upgrade head` seed-ът валидира всички девет source файла и SHA-256 стойностите им, архивира старите active catalog/kit/document записи и идемпотентно импортира `PARTS_CATALOG_V2`. При липсващ или променен source bootstrap/read проверката fail-ва затворено. Docker image трябва да съдържа `backend/resources/technical_docs/PARTS_CATALOG/` и `backend/resources/catalog/v2/` непроменени.
 
@@ -25,6 +27,10 @@ Production Docker image включва LibreOffice Writer за PDF от exact fi
 ```bash
 python -m alembic -c backend/alembic.ini upgrade head
 ```
+
+Read-only диагностиката се изпълнява с `PYTHONPATH=backend python backend/scripts/validate_official_document_integrity.py`. По подразбиране тя fail-ва само за release-blocking schema/canonical ambiguity и отчита непоправимата historical аномалия като `TOLERATED_HISTORY`; `--strict-history` е за отделен контролиран одит.
+
+`backend/alembic/migration_history_manifest.json` пази normalized-LF SHA-256 за вече публикуваните revisions `0001…0019`. `backend/scripts/validate_migration_history.py` се изпълнява автоматично в CI и release verifier, отказва променен или липсващ protected файл и разрешава нова revision. След като нова миграция бъде merge-ната, приложена и обявена за released, нейният normalized-LF hash се добавя като нов protected entry в отделна контролирана промяна; съществуващ hash никога не се преизчислява, за да прикрие редакция.
 
 Миграцията `20260731_0001_bulk_transfers` добавя партиди, активна връзка, return данни, protocol document snapshots и audit препратки. За PostgreSQL и SQLite се създава partial unique index за едно активно предаване на машина. Legacy SQLite схемата се backfill-ва според последното предаване и текущия статус, без промяна на машинния регистър.
 

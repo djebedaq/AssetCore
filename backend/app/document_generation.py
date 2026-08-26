@@ -56,6 +56,11 @@ from .models import (
     User,
     utcnow,
 )
+from .official_documents.integrity import (
+    move_current_version,
+    require_current_version,
+    set_current_version,
+)
 from .template_engine import TemplateValidationError, convert_docx_to_pdf, render_docx
 
 DOCX_MEDIA_TYPE = (
@@ -1652,7 +1657,7 @@ def _register_official_version(
     )
     db.add(version)
     db.flush()
-    document.current_version_id = version.id
+    set_current_version(db, document, version)
     return document
 
 
@@ -2105,8 +2110,8 @@ def make_repair_correction(
     )
     if original is None or original.current_version_id is None:
         raise TemplateValidationError("Липсва заключена начална версия на ремонтния протокол.")
-    previous = db.get(OfficialDocumentVersion, original.current_version_id)
-    if previous is None or previous.status not in {
+    previous = require_current_version(db, original)
+    if previous.status not in {
         OfficialDocumentStatus.FINALIZED.value,
         OfficialDocumentStatus.SIGNED.value,
     }:
@@ -2120,8 +2125,7 @@ def make_repair_correction(
     )
     if temporary is None or temporary.current_version_id is None:
         raise TemplateValidationError("Новата версия на ремонтния протокол не беше регистрирана.")
-    version = db.get(OfficialDocumentVersion, temporary.current_version_id)
-    assert version is not None
+    version = require_current_version(db, temporary)
     next_version = previous.version + 1
     snapshot = dict(version.snapshot)
     snapshot["correction"] = {
@@ -2153,7 +2157,6 @@ def make_repair_correction(
             separators=(",", ":"),
         ).encode("utf-8")
     ).hexdigest()
-    version.document_id = original.id
     version.version = next_version
     version.snapshot = snapshot
     version.snapshot_sha256 = snapshot_sha256
@@ -2163,8 +2166,12 @@ def make_repair_correction(
     version.status = OfficialDocumentStatus.FINALIZED.value
     version.finalized_at = utcnow()
     previous.status = OfficialDocumentStatus.SUPERSEDED.value
-    original.current_version_id = version.id
-    temporary.current_version_id = None
+    move_current_version(
+        db,
+        source_document=temporary,
+        target_document=original,
+        version=version,
+    )
     db.delete(temporary)
     for document in documents:
         document.snapshot = {

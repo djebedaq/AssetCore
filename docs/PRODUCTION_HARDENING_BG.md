@@ -46,6 +46,13 @@ bytes и SHA-256. Статусите са `DRAFT`, `READY_FOR_SIGNATURE`,
 `PARTIALLY_SIGNED`, `SIGNED`, `SUPERSEDED`, `CANCELLED`. Корекцията създава нова
 версия с основание и нови участници/подписи.
 
+Базата гарантира, че current version pointer не може да сочи липсваща или чужда
+версия при бъдещ write. PostgreSQL използва composite FK плюс защита при промяна
+на version owner, а SQLite — еквивалентни migration triggers и application
+guard. Pre-existing malformed history остава непроменена и четима чрез safe
+registry behavior; диагностиката не зарежда или отпечатва document/signature
+bytes, криптирани подписи или snapshots.
+
 Вътрешният участник използва snapshot на потвърдения профил. Външният участник е
 отделен запис и не получава User акаунт. Подписните позиции са конфигурируеми по
 тип документ, задължителност, вътрешен/външен вид и последователност.
