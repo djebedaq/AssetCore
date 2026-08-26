@@ -114,6 +114,13 @@ from .transfer_service import (
 )
 from .user_api import router as user_router
 from .user_api import serialize_user
+from .web_security import (
+    ALLOWED_CORS_HEADERS,
+    ALLOWED_CORS_METHODS,
+    EXPOSED_CORS_HEADERS,
+    WebSecurityMiddleware,
+    configured_cors_origins,
+)
 from .workflow import (
     add_machine_event,
     ensure_machine_transition,
@@ -142,10 +149,11 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin, "http://localhost:4173"],
+    allow_origins=list(configured_cors_origins(settings)),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=list(ALLOWED_CORS_METHODS),
+    allow_headers=list(ALLOWED_CORS_HEADERS),
+    expose_headers=list(EXPOSED_CORS_HEADERS),
 )
 app.include_router(industrial_router)
 app.include_router(user_router)
@@ -183,6 +191,11 @@ async def enforce_license_read_only(request: Request, call_next):
                 headers={"X-AssetCore-License-State": license_state.state},
             )
     return await call_next(request)
+
+
+# Registered after the licence middleware so security headers are also present
+# on locally returned read-only licence responses and handled error responses.
+app.add_middleware(WebSecurityMiddleware, configuration=settings)
 
 
 @app.exception_handler(RequestValidationError)

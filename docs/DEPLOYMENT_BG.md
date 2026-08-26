@@ -6,6 +6,18 @@
 
 Generic Render URLs с `postgresql://` или legacy `postgres://` се нормализират към SQLAlchemy драйвера `postgresql+psycopg://`. SQLite URL остава непроменен.
 
+Production и staging изискват изричен `FRONTEND_ORIGIN` или comma-separated
+`FRONTEND_ORIGINS`. Стойността съдържа само `http(s)://host[:port]`, без path,
+query, credentials или wildcard. Тези среди не добавят localhost и отказват
+старт без explicit origin. Development/test добавя Vite preview
+`http://localhost:4173`. За Render задайте реалния HTTPS app origin; локалният
+full-stack Docker може изрично да използва `http://localhost:10000`.
+
+HSTS се изпраща само когато production request scope е HTTPS. Reverse proxy-то
+трябва надеждно да предава HTTPS scheme към ASGI сървъра; не симулирайте HTTPS
+чрез непроверен клиентски header. След deployment проверете CSP, HSTS, exact
+CORS origin и отказа на непознат origin върху реалния staging URL.
+
 ## Миграция
 
 Текущият `head` е `20260826_0020`. Той добавя unique owner key за `OfficialDocumentVersion`, PostgreSQL composite FK `official_documents(id, current_version_id) → official_document_versions(document_id, id)` и version-side trigger, както и SQLite trigger еквивалент. Преди guard-а миграцията отчита само броя на NULL, missing, wrong-owner, shared и orphan historical състояния. Тя не променя pointer, snapshot, binary document, signature или hash данни; PostgreSQL constraint се добавя `NOT VALID` и се валидира автоматично само когато existing current pointers са съвместими. Новите writes се пазят и при tolerated historical anomalies.

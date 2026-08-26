@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-before-production"
     access_token_minutes: int = 720
     frontend_origin: str = "http://localhost:5173"
+    frontend_origins: str | None = None
     public_base_url: str | None = None
     # Legacy variables remain optional only for migrations from older releases.
     # No usable credential is embedded in the application.
@@ -46,6 +47,18 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "LICENSE_PUBLIC_KEY and INSTALLATION_ID are required when licence enforcement is enabled"
                 )
+        production_like = self.production_mode or self.deployment_environment in {
+            "staging",
+            "production",
+        }
+        explicitly_configured = bool(self.frontend_origins) or (
+            "frontend_origin" in self.model_fields_set and bool(self.frontend_origin)
+        )
+        if production_like and not explicitly_configured:
+            raise ValueError(
+                "FRONTEND_ORIGIN or FRONTEND_ORIGINS must be explicitly configured "
+                "for staging and production"
+            )
         return self
 
     @field_validator("database_url", mode="before")
