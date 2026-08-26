@@ -34,6 +34,8 @@ def test_current_migration_history_baseline_protects_revision_0020():
 
 
 def test_current_protected_baseline_allows_a_future_revision(tmp_path: Path):
+    baseline_report = validate_migration_history()
+    baseline_unprotected = set(baseline_report["new_unprotected_migrations"])
     versions = tmp_path / "versions"
     shutil.copytree(DEFAULT_VERSIONS_DIR, versions)
     future_revision = versions / "20990101_0021_future.py"
@@ -47,7 +49,10 @@ def test_current_protected_baseline_allows_a_future_revision(tmp_path: Path):
     assert report["valid"] is True
     assert report["missing"] == []
     assert report["mismatched"] == []
-    assert report["new_unprotected_migrations"] == [future_revision.name]
+    assert future_revision.name not in baseline_unprotected
+    assert set(report["new_unprotected_migrations"]) == baseline_unprotected | {
+        future_revision.name
+    }
 
 
 def _manifest(path: Path, protected: dict[str, str]) -> Path:

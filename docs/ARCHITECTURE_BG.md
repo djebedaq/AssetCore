@@ -16,6 +16,11 @@
 - `backend/app/document_generation.py` генерира индивидуалните DOCX/PDF snapshots и безопасни имена.
 - `backend/app/application_errors.py` дефинира общия безопасен production error договор, diagnostic ID и структуриран log context.
 - `backend/app/authorization_inventory.py` обхожда реалния FastAPI dependency graph и fail-ва затворено за mutating/public маршрут без точно permission/auth/allowlist основание; `backend/scripts/validate_authorization_inventory.py` е CI gate-ът.
+- `backend/app/auth_sessions.py` управлява hashed durable browser sessions,
+  cookie policy, CSRF и revoke/cleanup lifecycle; `backend/app/auth_throttle.py`
+  пази bounded HMAC-псевдонимизирани account/source backoff записи. React
+  bootstrap-ва identity чрез `/api/auth/me` и не пази authorization truth или
+  bearer credential в browser storage.
 - `backend/app/web_security.py` централизира explicit CORS origins, browser security headers, CSP, HSTS само за production HTTPS и cache policy за API спрямо PWA assets.
 - `backend/app/catalog/` е отделният authoritative каталог domain: `routes.py` пази HTTP/permission договора, `service.py` прилага family/source integrity правилата, `repository.py` ограничава активните заявки, `importer.py` извършва идемпотентно архивиране/upsert, а `validation.py` проверява immutable source manifest и dataset.
 - `backend/resources/catalog/v2/manifest.json` и разделените JSON файлове са versioned immutable projection на точно деветте файла под `backend/resources/technical_docs/PARTS_CATALOG/`; `backend/scripts/build_catalog_v2.py` е възпроизводимият extractor, а `catalog_v2_validation.py` е release gate.

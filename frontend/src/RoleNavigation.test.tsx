@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { I18nProvider } from './i18n'
 import { MachinePassportModal } from './IndustrialPlatform'
+import { setSessionUser } from './permissions'
 import type { PermissionCode, UserSession } from './types'
 
 function session(role: UserSession['role'], permissions: PermissionCode[]): UserSession {
@@ -29,10 +30,10 @@ function json(value: unknown): Response {
 }
 
 function renderRole(user: UserSession) {
-  localStorage.setItem('assetcore_token', 'test-token')
-  localStorage.setItem('assetcore_user', JSON.stringify(user))
+  setSessionUser(user)
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
     const path = String(input)
+    if (path.endsWith('/api/auth/me')) return json(user)
     if (path.endsWith('/api/dashboard')) return json({ total_machines: 0, ready: 0, in_use: 0, open_repairs: 0, pending_parts: 0, status_breakdown: {}, recent_repairs: [] })
     return json([])
   }))
@@ -64,7 +65,7 @@ describe('ролево меню', () => {
   })
 
   it('показва ограничен паспорт без QR, сериен номер и история', async () => {
-    localStorage.setItem('assetcore_user', JSON.stringify(session('observer', ['assets.view'])))
+    setSessionUser(session('observer', ['assets.view']))
     vi.stubGlobal('fetch', vi.fn(async () => json({
       limited_view: true,
       machine: { id: 1, inventory_number: 'TEST-ONLY', name: 'Test only', brand: 'Test', model: null, status: 'READY', location: { id: 1, name: 'Test location' } },

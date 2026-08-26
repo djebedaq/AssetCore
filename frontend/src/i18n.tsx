@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { api, getToken } from './api'
+import { api } from './api'
+import { storedUser } from './permissions'
 import {
   DEFAULT_LOCALE,
   getStoredLocale,
@@ -1705,7 +1706,7 @@ export function I18nProvider({ children, initialLocale }: { children: ReactNode;
     setLocaleState(nextLocale)
     storeLocale(nextLocale)
     document.documentElement.lang = nextLocale
-    if (persistRemotely && getToken()) {
+    if (persistRemotely && storedUser()) {
       void api<UserPreference>('/users/me/preferences', {
         method: 'PATCH',
         body: JSON.stringify({ preferred_language: nextLocale }),
@@ -1715,12 +1716,10 @@ export function I18nProvider({ children, initialLocale }: { children: ReactNode;
 
   useEffect(() => {
     document.documentElement.lang = locale
-    if (!getToken()) return
-    void api<UserPreference>('/auth/me')
-      .then((user) => {
-        if (isLocale(user.preferred_language)) applyLocale(user.preferred_language, false)
-      })
-      .catch(() => undefined)
+    const user = storedUser()
+    if (user && isLocale(user.preferred_language)) {
+      applyLocale(user.preferred_language, false)
+    }
   }, [applyLocale])
 
   const value = useMemo<I18nContextValue>(() => ({

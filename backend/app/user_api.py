@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .audit import add_audit_log
+from .auth_sessions import issue_browser_session, revoke_all_user_sessions
+from .auth_throttle import (
+    clear_rate_limit_failures,
+    enforce_rate_limit,
+    record_rate_limit_failure,
+    sensitive_rate_limit_keys,
+    throttled_error,
+)
 from .database import get_db
 from .licensing import active_license
 from .models import Department, ProfileStatus, User, UserRole, utcnow
@@ -360,6 +368,7 @@ def update_user(
         )
     if target.role != old["role"] or target.is_active != old["active"]:
         target.token_version += 1
+        revoke_all_user_sessions(db, target.id, "role_or_activation_changed")
     target.updated_at = utcnow()
     add_audit_log(
         db,
@@ -402,6 +411,7 @@ def _set_active(
     old_active = target.is_active
     target.is_active = value
     target.token_version += 1
+    revoke_all_user_sessions(db, target.id, "activation_changed")
     target.updated_at = utcnow()
     add_audit_log(
         db,
@@ -465,6 +475,7 @@ def reset_password(
     target.password_changed_at = utcnow()
     target.updated_at = utcnow()
     target.token_version += 1
+    revoke_all_user_sessions(db, target.id, "password_reset")
     add_audit_log(
         db,
         actor,
@@ -479,18 +490,38 @@ def reset_password(
     return {"message": "Зададена е нова временна парола.", "user": serialize_user(target)}
 
 
-@router.post("/auth/change-password", response_model=TokenResponse)
+@router.post(
+    "/auth/change-password",
+    response_model=TokenResponse,
+    response_model_exclude_none=True,
+)
 def change_password(
     data: ChangePasswordRequest,
     request: Request,
+    response: Response,
     user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ) -> TokenResponse:
+    throttle_keys = sensitive_rate_limit_keys(request, user, "password_change")
+    enforce_rate_limit(db, throttle_keys)
     if not verify_password(data.current_password, user.password_hash):
+        retry_after = record_rate_limit_failure(
+            db,
+            throttle_keys,
+            user=user,
+            action="Ограничени неуспешни проверки на текуща парола",
+        )
+        db.commit()
+        if retry_after:
+            raise throttled_error(retry_after)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "current_password_invalid", "message": "Текущата парола е неправилна."},
         )
+    clear_rate_limit_failures(db, throttle_keys)
+    # A correct current password is a successful reauthentication even when
+    # the proposed replacement later fails policy validation.
+    db.commit()
     if verify_password(data.new_password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -508,6 +539,7 @@ def change_password(
     user.updated_at = utcnow()
     user.must_change_password = False
     user.token_version += 1
+    revoke_all_user_sessions(db, user.id, "password_changed")
     add_audit_log(
         db,
         user,
@@ -517,6 +549,15 @@ def change_password(
         {"target_user_id": user.id, "must_change_password": False},
         _correlation_id(request),
     )
+    bearer_mode = getattr(request.state, "auth_method", None) == "bearer"
+    access_token = create_access_token(user) if bearer_mode else None
+    token_type = "bearer" if bearer_mode else None
+    if not bearer_mode:
+        issue_browser_session(db, user, request, response)
     db.commit()
     db.refresh(user)
-    return TokenResponse(access_token=create_access_token(user), user=serialize_user(user))
+    return TokenResponse(
+        access_token=access_token,
+        token_type=token_type,
+        user=serialize_user(user),
+    )

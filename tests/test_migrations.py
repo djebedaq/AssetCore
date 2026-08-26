@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from app.models import Repair, RepairParticipant, User
+from app.models import AuthenticationThrottle, AuthSession, Repair, RepairParticipant, User
 from app.official_documents.integrity import validate_official_document_integrity
 from app.settings import Settings, settings
 from sqlalchemy import create_engine, inspect
@@ -610,6 +610,58 @@ def test_repair_duration_constraints_and_participant_identity_compile_for_postgr
         )
     )
     assert "ck_repair_participants_minutes_positive" in participant_ddl
+
+
+def test_auth_session_migration_upgrades_and_downgrades_on_sqlite(tmp_path: Path):
+    database_path = tmp_path / "auth-session-migration.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260826_0020")
+    _run_sqlite_revision(database_path, command.upgrade, "20260826_0021")
+
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    inspector = inspect(engine)
+    assert {"auth_sessions", "authentication_throttles"} <= set(
+        inspector.get_table_names()
+    )
+    assert {column["name"] for column in inspector.get_columns("auth_sessions")} == {
+        "id",
+        "user_id",
+        "token_hash",
+        "csrf_token_hash",
+        "user_token_version",
+        "created_at",
+        "expires_at",
+        "last_seen_at",
+        "revoked_at",
+        "revoked_reason",
+    }
+    assert {
+        "uq_authentication_throttle_scope_key",
+    } <= {
+        constraint["name"]
+        for constraint in inspector.get_unique_constraints("authentication_throttles")
+    }
+    engine.dispose()
+
+    _run_sqlite_revision(database_path, command.downgrade, "20260826_0020")
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    assert "auth_sessions" not in inspect(engine).get_table_names()
+    assert "authentication_throttles" not in inspect(engine).get_table_names()
+    engine.dispose()
+
+
+def test_auth_session_tables_compile_for_postgresql():
+    session_ddl = str(
+        CreateTable(AuthSession.__table__).compile(dialect=postgresql.dialect())
+    )
+    throttle_ddl = str(
+        CreateTable(AuthenticationThrottle.__table__).compile(
+            dialect=postgresql.dialect()
+        )
+    )
+    assert "UNIQUE (token_hash)" in session_ddl
+    assert "FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE" in session_ddl
+    assert "uq_authentication_throttle_scope_key" in throttle_ddl
+    assert "ck_authentication_throttle_failures" in throttle_ddl
 
 
 def test_repair_wizard_migration_normalizes_all_legacy_active_paths_without_data_loss(

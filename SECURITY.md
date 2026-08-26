@@ -19,6 +19,13 @@ SQLite е за development и автоматизирани тестове. Produ
 - Ролите са точно administrator, director, mechanic и observer; owner
   designation е отделно защитено свойство.
 - Backend проверява всяко право. Ролево скрит бутон не е security control.
+- Browser login използва durable opaque session в `HttpOnly` cookie; raw
+  session identifier не се пази в базата или `localStorage`. Authenticated
+  mutating requests изискват session-bound CSRF token, а logout и security
+  state промени revoke-ват предишните сесии.
+- Login и чувствителните password/owner проверки имат bounded database-backed
+  throttling без постоянно заключване. Forwarded client адрес се приема само
+  от изрично конфигуриран trusted proxy.
 - Детерминираният FastAPI authorization inventory блокира CI при нов
   некласифициран маршрут или публично изключение без точно method/path/name
   основание. Пълният договор е в

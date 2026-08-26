@@ -1,11 +1,17 @@
 import type { PermissionCode, UserSession } from './types'
 
+let authenticatedUser: UserSession | null = null
+
 export function storedUser(): UserSession | null {
-  try {
-    return JSON.parse(localStorage.getItem('assetcore_user') || 'null') as UserSession | null
-  } catch {
-    return null
-  }
+  return authenticatedUser
+}
+
+export function setSessionUser(user: UserSession): void {
+  authenticatedUser = user
+}
+
+export function clearSessionUser(): void {
+  authenticatedUser = null
 }
 
 export function hasPermission(...permissions: PermissionCode[]): boolean {

@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '../../i18n'
-import type { MultiPartRequest } from '../../types'
+import { setSessionUser } from '../../permissions'
+import type { MultiPartRequest, UserSession } from '../../types'
 import { PartRequestsTracking } from './PartRequestsTracking'
 
 const request: MultiPartRequest = {
@@ -52,7 +53,7 @@ describe('Заявени части tracking', () => {
   })
 
   it('is history-first, shows required data, and hides approval from a mechanic', async () => {
-    localStorage.setItem('assetcore_user', JSON.stringify({ role: 'mechanic', permissions: ['requests.view', 'requests.create', 'parts.view', 'documents.view', 'documents.generate'] }))
+    setSessionUser({ role: 'mechanic', permissions: ['requests.view', 'requests.create', 'parts.view', 'documents.view', 'documents.generate'] } as UserSession)
     vi.stubGlobal('fetch', vi.fn(async () => response([
       { ...request, id: 11, request_reference: 'PR-2026-000011', status: 'DRAFT', submitted_at: null },
       request,
@@ -70,7 +71,7 @@ describe('Заявени части tracking', () => {
   })
 
   it('shows canonical decision controls only to an approver and refreshes after approval', async () => {
-    localStorage.setItem('assetcore_user', JSON.stringify({ role: 'director', permissions: ['requests.view', 'requests.create', 'requests.approve', 'parts.view', 'documents.view', 'documents.generate'] }))
+    setSessionUser({ role: 'director', permissions: ['requests.view', 'requests.create', 'requests.approve', 'parts.view', 'documents.view', 'documents.generate'] } as UserSession)
     let current = request
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
@@ -90,7 +91,7 @@ describe('Заявени части tracking', () => {
   })
 
   it('hides normal Generate when the canonical protocol exists and keeps document actions', async () => {
-    localStorage.setItem('assetcore_user', JSON.stringify({ role: 'director', permissions: ['requests.view', 'requests.create', 'requests.approve', 'parts.view', 'documents.view', 'documents.generate'] }))
+    setSessionUser({ role: 'director', permissions: ['requests.view', 'requests.create', 'requests.approve', 'parts.view', 'documents.view', 'documents.generate'] } as UserSession)
     vi.stubGlobal('fetch', vi.fn(async () => response([{
       ...request,
       status: 'CANCELLED',

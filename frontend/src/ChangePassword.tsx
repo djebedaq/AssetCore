@@ -1,7 +1,8 @@
 import { type FormEvent, useState } from 'react'
 import { KeyRound, ShieldCheck } from 'lucide-react'
-import { ApiError, api, setToken } from './api'
+import { ApiError, api } from './api'
 import { useI18n, type TranslationKey } from './i18n'
+import { setSessionUser } from './permissions'
 import type { UserSession } from './types'
 
 function errorKey(error: unknown): TranslationKey {
@@ -25,11 +26,10 @@ export default function ChangePassword({ forced = false, onChanged, onCancel }: 
     setError('')
     setBusy(true)
     try {
-      const result = await api<{ access_token: string; user: UserSession }>('/auth/change-password', {
+      const result = await api<{ user: UserSession }>('/auth/change-password', {
         method: 'POST', body: JSON.stringify(form),
       })
-      setToken(result.access_token)
-      localStorage.setItem('assetcore_user', JSON.stringify(result.user))
+      setSessionUser(result.user)
       setForm({ current_password: '', new_password: '', confirm_password: '' })
       onChanged(result.user)
     } catch (caught) { setError(errorKey(caught)) }

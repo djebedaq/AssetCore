@@ -16,6 +16,19 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .application_errors import ApplicationError
 from .audit import add_audit_log
+from .auth_sessions import (
+    cleanup_auth_state,
+    clear_session_cookies,
+    issue_browser_session,
+    revoke_request_session,
+)
+from .auth_throttle import (
+    clear_rate_limit_failures,
+    enforce_rate_limit,
+    login_rate_limit_keys,
+    record_rate_limit_failure,
+    throttled_error,
+)
 from .catalog import router as catalog_router
 from .database import SessionLocal, get_db
 from .document_generation import (
@@ -94,6 +107,7 @@ from .schemas import (
     UserOut,
 )
 from .security import (
+    DUMMY_PASSWORD_HASH,
     create_access_token,
     get_authenticated_user,
     get_current_active_user,
@@ -120,6 +134,7 @@ from .web_security import (
     EXPOSED_CORS_HEADERS,
     WebSecurityMiddleware,
     configured_cors_origins,
+    normalize_origin,
 )
 from .workflow import (
     add_machine_event,
@@ -166,6 +181,7 @@ async def enforce_license_read_only(request: Request, call_next):
     """Expired licences preserve access, exports and backups, but block writes."""
     exempt_writes = {
         "/api/auth/login",
+        "/api/auth/logout",
         "/api/auth/change-password",
         "/api/license/install",
         "/api/users/me/profile",
@@ -284,26 +300,85 @@ def health() -> dict[str, str]:
     }
 
 
-@app.post("/api/auth/login", response_model=TokenResponse)
+@app.post(
+    "/api/auth/login",
+    response_model=TokenResponse,
+    response_model_exclude_none=True,
+)
 def login(
-    data: LoginRequest, request: Request, db: Session = Depends(get_db)
+    data: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
 ) -> TokenResponse:
-    normalized_email = data.email.strip().casefold()
-    user = db.scalar(select(User).where(func.lower(User.email) == normalized_email))
-    if not user or not verify_password(data.password, user.password_hash):
-        language = normalize_language(request.headers.get("Accept-Language"))
-        raise HTTPException(401, translate("auth.invalid_credentials", language))
-    if not user.is_active:
+    origin = request.headers.get("Origin")
+    cross_site = request.headers.get("Sec-Fetch-Site", "").casefold() == "cross-site"
+    try:
+        origin_allowed = not origin or normalize_origin(origin) in configured_cors_origins(settings)
+    except ValueError:
+        origin_allowed = False
+    if cross_site or not origin_allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "account_inactive", "message": "Акаунтът е деактивиран."},
+            detail={
+                "code": "csrf_failed",
+                "message": "Заявката за вход е отхвърлена, защото не е от разрешения адрес на AssetCore.",
+            },
         )
+    normalized_email = data.email.strip().casefold()
+    throttle_keys = login_rate_limit_keys(request, normalized_email)
+    enforce_rate_limit(db, throttle_keys)
+    user = db.scalar(select(User).where(func.lower(User.email) == normalized_email))
+    password_hash = user.password_hash if user is not None else DUMMY_PASSWORD_HASH
+    password_valid = verify_password(data.password, password_hash)
+    if user is None or not user.is_active or not password_valid:
+        language = normalize_language(request.headers.get("Accept-Language"))
+        retry_after = record_rate_limit_failure(
+            db,
+            throttle_keys,
+            user=user,
+            action="Ограничени неуспешни опити за вход",
+        )
+        db.commit()
+        if retry_after:
+            raise throttled_error(retry_after)
+        raise HTTPException(401, translate("auth.invalid_credentials", language))
+    clear_rate_limit_failures(
+        db,
+        tuple(key for key in throttle_keys if key.scope != "login_source"),
+    )
+    cleanup_auth_state(db)
     user.last_login_at = utcnow()
     user.updated_at = utcnow()
+    bearer_requested = request.headers.get("X-AssetCore-Auth-Mode", "").casefold() == "bearer"
+    access_token = None
+    token_type = None
+    if bearer_requested:
+        if not settings.bearer_compatibility_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "bearer_compatibility_disabled",
+                    "message": "Bearer съвместимостта не е разрешена в тази среда.",
+                },
+            )
+        access_token = create_access_token(user)
+        token_type = "bearer"
+    else:
+        issue_browser_session(db, user, request, response)
+    add_audit_log(
+        db,
+        user,
+        "authentication_session",
+        user.id,
+        "Успешно удостоверяване",
+        {"authentication_mode": "bearer_compatibility" if bearer_requested else "browser_session"},
+    )
     db.commit()
     db.refresh(user)
     return TokenResponse(
-        access_token=create_access_token(user),
+        access_token=access_token,
+        token_type=token_type,
         user=serialize_user(user),
     )
 
@@ -311,6 +386,32 @@ def login(
 @app.get("/api/auth/me", response_model=UserOut)
 def current_user(user: User = Depends(get_authenticated_user)) -> dict:
     return serialize_user(user)
+
+
+@app.post(
+    "/api/auth/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def logout_session(
+    request: Request,
+    response: Response,
+    user: User = Depends(get_authenticated_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    revoke_request_session(db, request, "logout")
+    add_audit_log(
+        db,
+        user,
+        "authentication_session",
+        user.id,
+        "Прекратена потребителска сесия",
+        {"authentication_mode": getattr(request.state, "auth_method", "unknown")},
+    )
+    db.commit()
+    clear_session_cookies(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
 
 
 @app.patch("/api/users/me/preferences", response_model=UserOut)

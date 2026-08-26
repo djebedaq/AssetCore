@@ -38,14 +38,18 @@ fallback. `OPTIONS` се обработва централизирано от CO
 но винаги имат authentication dependency и вътрешна server-side проверка:
 
 - смяна на собствената парола;
+- прекратяване на собствената browser сесия;
 - промяна на собствен език и завършване на собствен профил;
 - start/end на owner emergency access;
 - прехвърляне на owner designation;
 - инсталиране на подписан лиценз от owner-administrator.
 
 Точните method/path/name стойности и основанията им са versioned allowlist.
-Authentication/session договорът остава signed Bearer token; този hardening не
-добавя cookies, refresh tokens, CSRF механизъм или промяна на client storage.
+Основният browser договор е PostgreSQL/SQLite-backed opaque session в
+`HttpOnly` cookie. Mutating cookie requests изискват session-bound
+`X-CSRF-Token`; logout revoke-ва server-side сесията. Legacy bearer е само
+изрична development/test CLI съвместимост и е забранен в staging/production.
+Пълният договор е в [AUTHENTICATION_SESSION_SECURITY_BG.md](AUTHENTICATION_SESSION_SECURITY_BG.md).
 
 ## Ролево покритие
 
@@ -94,7 +98,8 @@ slash се нормализират, дубликатите се премахв�
 - staging/production: само изрично конфигурираните origins; липсваща explicit
   стойност прекратява старта;
 - credentials са разрешени само с exact origin; methods и request headers са
-  ограничени до versioned allowlists.
+  ограничени до versioned allowlists, включително `X-CSRF-Token` и explicit
+  test/CLI `X-AssetCore-Auth-Mode`.
 
 Production не добавя автоматично localhost. Локален full-stack Docker може да
 зададе `FRONTEND_ORIGIN=http://localhost:10000` изрично; това не се наследява от

@@ -1,6 +1,7 @@
 from pathlib import Path
+from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +10,22 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./assetcore.db"
     secret_key: str = "change-me-before-production"
     access_token_minutes: int = 720
+    session_minutes: int = Field(default=720, ge=5, le=43_200)
+    session_cookie_name: str = "assetcore_session"
+    csrf_cookie_name: str = "assetcore_csrf"
+    session_cookie_samesite: Literal["lax", "strict"] = "lax"
+    bearer_compatibility_enabled: bool = False
+    trusted_proxy_ips: str | None = None
+    login_rate_limit_attempts: int = Field(default=5, ge=2, le=100)
+    login_source_rate_limit_attempts: int = Field(default=40, ge=5, le=1000)
+    login_rate_limit_window_seconds: int = Field(default=300, ge=30, le=86_400)
+    login_rate_limit_base_block_seconds: int = Field(default=30, ge=1, le=3600)
+    login_rate_limit_max_block_seconds: int = Field(default=300, ge=1, le=86_400)
+    sensitive_rate_limit_attempts: int = Field(default=5, ge=2, le=100)
+    sensitive_rate_limit_window_seconds: int = Field(default=300, ge=30, le=86_400)
+    sensitive_rate_limit_base_block_seconds: int = Field(default=30, ge=1, le=3600)
+    sensitive_rate_limit_max_block_seconds: int = Field(default=300, ge=1, le=86_400)
+    auth_state_retention_days: int = Field(default=7, ge=1, le=365)
     frontend_origin: str = "http://localhost:5173"
     frontend_origins: str | None = None
     public_base_url: str | None = None
@@ -59,7 +76,22 @@ class Settings(BaseSettings):
                 "FRONTEND_ORIGIN or FRONTEND_ORIGINS must be explicitly configured "
                 "for staging and production"
             )
+        if production_like and self.bearer_compatibility_enabled:
+            raise ValueError(
+                "BEARER_COMPATIBILITY_ENABLED is restricted to development/test CLI compatibility"
+            )
+        if self.login_rate_limit_base_block_seconds > self.login_rate_limit_max_block_seconds:
+            raise ValueError("Login rate-limit base block cannot exceed its maximum")
+        if self.sensitive_rate_limit_base_block_seconds > self.sensitive_rate_limit_max_block_seconds:
+            raise ValueError("Sensitive rate-limit base block cannot exceed its maximum")
         return self
+
+    @property
+    def browser_cookie_secure(self) -> bool:
+        return self.production_mode or self.deployment_environment in {
+            "staging",
+            "production",
+        }
 
     @field_validator("database_url", mode="before")
     @classmethod

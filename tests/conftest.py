@@ -22,11 +22,17 @@ os.environ.setdefault("ADMIN_EMAIL", "admin@assetcore.local")
 os.environ.setdefault("ASSETCORE_OWNER_EMAIL", "admin@assetcore.local")
 os.environ.setdefault("ADMIN_PASSWORD", "AssetCore123!")
 os.environ.setdefault("OWNER_JOB_TITLE", "Тестов системен администратор")
+os.environ.setdefault("BEARER_COMPATIBILITY_ENABLED", "true")
 
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Machine, User  # noqa: E402
 from app.seed import seed_database  # noqa: E402
+
+# The imported application keeps explicit bearer compatibility for legacy API
+# fixtures. Newly constructed Settings objects must still exercise the secure
+# default and production prohibition without inheriting this test-only switch.
+os.environ["BEARER_COMPATIBILITY_ENABLED"] = "false"
 
 
 @pytest.fixture()
@@ -55,6 +61,7 @@ def client(session_factory: sessionmaker[Session]) -> Iterator[TestClient]:
 
     app.dependency_overrides[get_db] = override_db
     test_client = TestClient(app, raise_server_exceptions=False)
+    test_client.headers.update({"X-AssetCore-Auth-Mode": "bearer"})
     try:
         yield test_client
     finally:

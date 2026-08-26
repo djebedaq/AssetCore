@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '../../i18n'
+import { setSessionUser } from '../../permissions'
 import { IndustrialCatalog } from './IndustrialCatalog'
 import { catalogDisplayName } from './catalogNames'
 import type {
@@ -11,6 +12,7 @@ import type {
   CatalogRepairKit,
   PositionHotspot,
 } from './catalogTypes'
+import type { UserSession } from '../../types'
 
 const FALCH_MACHINE_ID = 9
 const HYDWIN_MACHINE_ID = 20
@@ -172,10 +174,10 @@ describe('machine-bound catalog request cart', () => {
       }
     }
     vi.stubGlobal('PointerEvent', TestPointerEvent)
-    localStorage.setItem('assetcore_user', JSON.stringify({
+    setSessionUser({
       role: 'mechanic',
       permissions: ['assets.view', 'requests.view', 'requests.create', 'parts.view'],
-    }))
+    } as UserSession)
     const NativeURL = URL
     class MockURL extends NativeURL {
       static createObjectURL = vi.fn(() => 'blob:test-only-diagram')
@@ -438,7 +440,7 @@ describe('machine-bound catalog request cart', () => {
   })
 
   it('allows only an administrator UI session to save an audited QA correction', async () => {
-    localStorage.setItem('assetcore_user', JSON.stringify({ role: 'administrator', permissions: ['parts.view', 'parts.manage'] }))
+    setSessionUser({ role: 'administrator', permissions: ['parts.view', 'parts.manage'] } as UserSession)
     const testDiagram = diagram()
     const hotspot: PositionHotspot = { id: 991, hotspot_key: 'test-only-position-3', diagram_id: 991, page_number: 1, position: '3', x: 0.5, y: 0.5, width: 0.03, height: 0.03, is_verified: true, provenance: 'AUTO_MATCHED', confidence: null, variants: [falchPart] }
     const fetchMock = setupFetch({ falchDiagrams: [testDiagram], hotspots: [hotspot] })

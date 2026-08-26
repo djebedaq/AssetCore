@@ -36,6 +36,14 @@ services:
         sync: false
       - key: FRONTEND_ORIGIN
         sync: false
+      - key: SESSION_MINUTES
+        value: 720
+      - key: SESSION_COOKIE_SAMESITE
+        value: lax
+      - key: TRUSTED_PROXY_IPS
+        sync: false
+      - key: BEARER_COMPATIBILITY_ENABLED
+        value: false
       - key: SIGNATURE_ENCRYPTION_KEY
         generateValue: true
       - key: PRODUCTION_MODE

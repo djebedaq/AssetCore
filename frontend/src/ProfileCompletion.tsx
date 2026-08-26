@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { api, ApiError } from './api'
 import { useI18n } from './i18n'
+import { setSessionUser } from './permissions'
 import type { Department, UserSession } from './types'
 
 export default function ProfileCompletion({
@@ -44,7 +45,7 @@ export default function ProfileCompletion({
           legal_name_exception_reason: exception ? exceptionReason : null,
         }),
       })
-      localStorage.setItem('assetcore_user', JSON.stringify(updated))
+      setSessionUser(updated)
       onCompleted(updated)
     } catch (caught) {
       setError(caught instanceof ApiError && caught.data.message ? caught.data.message : t('profile.saveError'))

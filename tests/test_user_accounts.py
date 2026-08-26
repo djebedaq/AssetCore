@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 
 import pytest
+from app.localization import translate
 from app.models import AuditLog, User, UserRole
 from app.permissions import ROLE_PERMISSIONS, Permission
 from app.security import hash_password, verify_password
@@ -286,10 +287,12 @@ def test_activation_deactivation_and_old_token_invalidation(
     assert deactivated.status_code == 200
     assert deactivated.json()["user"]["is_active"] is False
     assert client.get("/api/auth/me", headers=target_headers).status_code == 401
-    assert client.post(
+    inactive_login = client.post(
         "/api/auth/login",
         json={"email": "session-user@example.invalid", "password": "StrongPass123!"},
-    ).status_code == 403
+    )
+    assert inactive_login.status_code == 401
+    assert inactive_login.json()["detail"] == translate("auth.invalid_credentials", "bg")
     activated = client.post(f"/api/users/{target_id}/activate", headers=auth_headers)
     assert activated.status_code == 200
     assert activated.json()["user"]["is_active"] is True
