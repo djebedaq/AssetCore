@@ -28,11 +28,12 @@ if str(ROOT) not in sys.path:
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from alembic.script import ScriptDirectory  # noqa: E402
+from app.authorization_inventory import build_authorization_inventory  # noqa: E402
 from app.catalog.sources import CATALOG_VERSION  # noqa: E402
 from app.catalog.validation import validate_catalog_v2  # noqa: E402
 from app.database import Base  # noqa: E402
 from app.licensing import evaluate_license  # noqa: E402
-from app.main import health  # noqa: E402
+from app.main import app, health  # noqa: E402
 from app.models import (  # noqa: E402
     AuditLog,
     DocumentTemplateVersion,
@@ -161,6 +162,15 @@ def _verify_migrations(verification: Verification) -> None:
 
 def run(output: Path) -> Verification:
     verification = Verification()
+    authorization_inventory = build_authorization_inventory(app)
+    verification.check(
+        "FastAPI authorization inventory е пълен",
+        authorization_inventory.valid,
+        (
+            f"routes={len(authorization_inventory.routes)}, "
+            f"errors={len(authorization_inventory.errors)}"
+        ),
+    )
     migration_history = validate_migration_history()
     verification.check(
         "Публикуваната Alembic история е непроменена",

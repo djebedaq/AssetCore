@@ -124,6 +124,7 @@ Seed-ът регистрира машинно използваеми BG/EN/RU DO
 backend/.venv/Scripts/python.exe -m pytest -q
 backend/.venv/Scripts/python.exe -m compileall -q backend/app tests
 backend/.venv/Scripts/python.exe -m ruff check backend/app tests
+backend/.venv/Scripts/python.exe backend/scripts/validate_authorization_inventory.py
 backend/.venv/Scripts/python.exe backend/scripts/document_qa.py <папка-за-QA-резултат>
 backend/.venv/Scripts/python.exe scripts/verify_release.py --output <папка-за-QA-резултат>
 cd frontend
@@ -162,6 +163,7 @@ pnpm build
 - [backup и restore](docs/BACKUP_RESTORE_BG.md)
 - [модел за сигурност](docs/SECURITY_MODEL_BG.md)
 - [security policy](SECURITY.md)
+- [authorization и web security guardrails](docs/AUTHORIZATION_WEB_SECURITY_BG.md)
 - [release checklist](docs/RELEASE_CHECKLIST_BG.md)
 - [собственически лиценз](LICENSE_PROPRIETARY_BG.md)
 

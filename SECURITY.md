@@ -19,6 +19,10 @@ SQLite е за development и автоматизирани тестове. Produ
 - Ролите са точно administrator, director, mechanic и observer; owner
   designation е отделно защитено свойство.
 - Backend проверява всяко право. Ролево скрит бутон не е security control.
+- Детерминираният FastAPI authorization inventory блокира CI при нов
+  некласифициран маршрут или публично изключение без точно method/path/name
+  основание. Пълният договор е в
+  `docs/AUTHORIZATION_WEB_SECURITY_BG.md`.
 - Няма master password, backdoor, private licence-signing key или дистанционен
   kill switch.
 - Подписните strokes и изображения са криптирани; изображенията нямат публичен
@@ -29,6 +33,11 @@ SQLite е за development и автоматизирани тестове. Produ
   изискват идентифициран оператор и одит.
 - При изтекъл лиценз данните не се изтриват; след grace period се блокират
   записващите операции, а четене, export, backup и валиден авариен лиценз остават.
+- Централизиран CSP забранява inline scripts, `unsafe-eval` и framing. Всички API
+  и защитени document/signature отговори са `private, no-store`; hashed frontend
+  assets запазват immutable cache. HSTS се изпраща само за production HTTPS.
+- Staging/production CORS изисква explicit `FRONTEND_ORIGIN(S)`, не приема
+  wildcard и не добавя автоматично localhost.
 
 ## Преди production
 

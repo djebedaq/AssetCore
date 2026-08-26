@@ -125,4 +125,8 @@ def require_permission(permission: Permission) -> Callable[..., User]:
         ensure_permission(user, permission)
         return user
 
+    # Runtime metadata is consumed by the authorization inventory gate.  The
+    # gate follows FastAPI's dependency graph, so coverage never relies on URL
+    # prefixes or frontend visibility.
+    dependency.__assetcore_permission__ = permission.value
     return dependency

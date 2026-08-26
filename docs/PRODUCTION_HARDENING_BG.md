@@ -39,6 +39,25 @@ RBAC или лиценза; тя създава ограничен във вре
 по-рано след ново удостоверяване и основание. Моделът има поле за бъдещо MFA
 потвърждение; текущата версия не твърди, че MFA е внедрено.
 
+## Authorization coverage и browser граници
+
+Всеки FastAPI method е част от versioned authorization inventory. Mutating
+route се допуска само с централизирано permission право, exact self/owner/domain
+authentication изключение или точно документиран capability-token public flow.
+Нов некласифициран route и остарял задължителен allowlist запис блокират CI.
+Проверката следва dependency graph-а и не разчита на URL prefix или скрит UI.
+
+Web security middleware добавя `nosniff`, referrer/permissions policy,
+anti-framing CSP/X-Frame-Options и production-HTTPS-only HSTS. CSP не разрешава
+inline JavaScript или `unsafe-eval`; запазени са само нужните inline styles и
+`blob:` preview ресурси. API данните и protected downloads са `private,
+no-store`, докато hashed bundle assets остават immutable cacheable.
+
+Production/staging CORS стартира само с изричен `FRONTEND_ORIGIN` или
+`FRONTEND_ORIGINS`, без wildcard и без автоматичен localhost. Authentication
+остава съществуващият signed Bearer token договор; cookies, refresh tokens, CSRF
+и MFA не са добавени от тази промяна.
+
 ## Официални документи и подписи
 
 Всеки генериран протокол има `OfficialDocument` и версия със snapshot, DOCX/PDF

@@ -39,6 +39,7 @@ jobs:
       - run: python -m compileall backend/app backend/scripts scripts tests
       - run: python -m ruff check --select E9 backend/app backend/scripts scripts tests
       - run: python backend/scripts/validate_migration_history.py
+      - run: python backend/scripts/validate_authorization_inventory.py
       - run: PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py
       - run: python -m pytest -q
       - run: python scripts/verify_release.py --output release-verification

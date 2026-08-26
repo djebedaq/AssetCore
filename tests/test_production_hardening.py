@@ -48,6 +48,7 @@ def test_production_restart_does_not_require_reusing_bootstrap_password():
         owner_initial_password=None,
         signature_encryption_key="release-test-encryption-key",
         license_enforcement_enabled=False,
+        frontend_origin="https://assetcore.example.invalid",
     )
     assert configured.owner_initial_password is None
 
