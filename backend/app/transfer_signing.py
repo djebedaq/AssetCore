@@ -19,6 +19,7 @@ from .models import (
     User,
     utcnow,
 )
+from .official_documents.integrity import set_current_version
 from .schemas import TransferPartyInput
 
 
@@ -319,7 +320,7 @@ def prepare_issue_batch_signing(
     )
     db.add(version)
     db.flush()
-    document.current_version_id = version.id
+    set_current_version(db, document, version)
     batch.issue_manifest = manifest
     batch.issue_manifest_sha256 = manifest_sha256
     batch.issue_signing_document_id = document.id
@@ -451,7 +452,7 @@ def prepare_return_batch_signing(
     )
     db.add(version)
     db.flush()
-    document.current_version_id = version.id
+    set_current_version(db, document, version)
     batch.return_manifest = manifest
     batch.return_manifest_sha256 = manifest_sha256
     batch.return_signing_document_id = document.id

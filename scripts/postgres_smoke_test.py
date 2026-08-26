@@ -8,6 +8,7 @@ No URL, password, encryption key, or dump content is printed.
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 import secrets
 import subprocess
@@ -20,13 +21,24 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
 
-from app.models import Machine, User  # noqa: E402
+from app.models import (  # noqa: E402
+    Machine,
+    OfficialDocument,
+    OfficialDocumentStatus,
+    OfficialDocumentVersion,
+    User,
+)
+from app.official_documents.integrity import (  # noqa: E402
+    set_current_version,
+    validate_official_document_integrity,
+)
 from app.seed import seed_database  # noqa: E402
 from app.settings import settings  # noqa: E402
 
@@ -124,6 +136,57 @@ def _verify_guarded_catalog_downgrade(url: str) -> None:
         engine.dispose()
 
 
+def _verify_official_document_integrity(url: str, actor_id: int) -> None:
+    engine = create_engine(url, pool_pre_ping=True)
+    try:
+        with Session(engine) as db:
+            report = validate_official_document_integrity(db)
+            if not (
+                report["valid"]
+                and report["schema"]["composite_foreign_key"]
+                and report["schema"]["postgresql_version_trigger_guard"]
+            ):
+                raise RuntimeError(
+                    "PostgreSQL official document ownership guard is not active."
+                )
+            documents: list[tuple[OfficialDocument, OfficialDocumentVersion]] = []
+            for suffix in ("A", "B"):
+                document = OfficialDocument(
+                    document_number=f"POSTGRES-INTEGRITY-QA-{suffix}",
+                    document_type="PART_REQUEST",
+                    created_by_id=actor_id,
+                )
+                db.add(document)
+                db.flush()
+                digest = hashlib.sha256(suffix.encode()).hexdigest()
+                version = OfficialDocumentVersion(
+                    document_id=document.id,
+                    version=1,
+                    status=OfficialDocumentStatus.DRAFT.value,
+                    language="bg",
+                    snapshot={"qa": "postgres-integrity"},
+                    snapshot_sha256=digest,
+                    signing_sha256=digest,
+                    prepared_by_id=actor_id,
+                )
+                db.add(version)
+                db.flush()
+                set_current_version(db, document, version)
+                db.flush()
+                documents.append((document, version))
+            documents[1][0].current_version_id = documents[0][1].id
+            try:
+                db.flush()
+            except IntegrityError:
+                db.rollback()
+            else:
+                raise RuntimeError(
+                    "PostgreSQL accepted a current version owned by another document."
+                )
+    finally:
+        engine.dispose()
+
+
 def main() -> None:
     source_url = _safe_test_url("ASSETCORE_POSTGRES_SOURCE_URL")
     restore_url = _safe_test_url("ASSETCORE_POSTGRES_RESTORE_URL")
@@ -158,6 +221,8 @@ def main() -> None:
             settings.owner_initial_password,
         ) = previous_settings
         source_engine.dispose()
+
+    _verify_official_document_integrity(source_url, actor_id)
 
     _verify_guarded_catalog_downgrade(source_url)
 

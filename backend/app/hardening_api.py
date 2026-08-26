@@ -80,6 +80,7 @@ from .models import (
     utcnow,
 )
 from .official_documents import build_official_document_registry
+from .official_documents.integrity import require_current_version, set_current_version
 from .official_documents.schemas import OfficialDocumentRegistryOut
 from .permissions import Permission, require_permission
 from .security import get_authenticated_user, get_current_active_user, verify_password
@@ -1009,7 +1010,7 @@ def create_official_document(
     db.add(version)
     db.flush()
     _build_participants(db, version, data.document_type, data.participants)
-    document.current_version_id = version.id
+    set_current_version(db, document, version)
     add_audit_log(db, actor, "official_document", document.id, "Създадена неизменяема версия на официален документ", {"document_number": document.document_number, "version": 1, "snapshot_sha256": version.snapshot_sha256, "docx_sha256": version.docx_sha256, "pdf_sha256": version.pdf_sha256, "participant_slots": [p.slot_code for p in data.participants]}, _correlation_id(request))
     db.commit()
     return _document_out(db, document)
@@ -1206,7 +1207,7 @@ def supersede_document(document_id: int, data: SupersedeDocumentRequest, request
     document = db.scalar(select(OfficialDocument).where(OfficialDocument.id == document_id).with_for_update())
     if document is None:
         raise HTTPException(404, detail={"code": "document_not_found", "message": "Документът не е намерен."})
-    previous = db.get(OfficialDocumentVersion, document.current_version_id)
+    previous = require_current_version(db, document)
     if previous.status in {OfficialDocumentStatus.SUPERSEDED.value, OfficialDocumentStatus.CANCELLED.value}:
         raise HTTPException(409, detail={"code": "document_not_current", "message": "Тази версия не може да бъде коригирана."})
     docx, pdf = _decode_file(data.docx_base64, "DOCX"), _decode_file(data.pdf_base64, "PDF")
@@ -1225,7 +1226,7 @@ def supersede_document(document_id: int, data: SupersedeDocumentRequest, request
     _build_participants(db, version, document.document_type, data.participants)
     previous.status = OfficialDocumentStatus.SUPERSEDED.value
     previous.finalized_at = previous.finalized_at or utcnow()
-    document.current_version_id = version.id
+    set_current_version(db, document, version)
     add_audit_log(db, actor, "official_document", document.id, "Създадена коригираща версия на официален документ", {"previous_version": previous.version, "new_version": version.version, "reason": data.reason.strip(), "snapshot_sha256": version.snapshot_sha256}, _correlation_id(request))
     db.commit()
     return _document_out(db, document)

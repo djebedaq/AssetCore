@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     LargeBinary,
@@ -1531,8 +1532,18 @@ class ExternalSigner(Base):
 
 class OfficialDocument(Base):
     __tablename__ = "official_documents"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["id", "current_version_id"],
+            [
+                "official_document_versions.document_id",
+                "official_document_versions.id",
+            ],
+            name="fk_official_documents_current_version_owner",
+        ),
+    )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     document_number: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     document_type: Mapped[str] = mapped_column(String(80), index=True)
     machine_id: Mapped[int | None] = mapped_column(ForeignKey("machines.id"), nullable=True, index=True)
@@ -1547,6 +1558,12 @@ class OfficialDocumentVersion(Base):
     __tablename__ = "official_document_versions"
     __table_args__ = (
         UniqueConstraint("document_id", "version", name="uq_official_document_version"),
+        Index(
+            "uq_official_document_version_owner",
+            "document_id",
+            "id",
+            unique=True,
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

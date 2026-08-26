@@ -13,6 +13,12 @@ DOCX започва от точните bytes на избраната публи
 snapshot, preparer, creation time и file hashes. Генерирането не презаписва
 съществуващ номер.
 
+`OfficialDocument.current_version_id` се задава само през централизирания
+integrity service. Database guard-ът изисква сочената версия да съществува и
+нейният `document_id` да съвпада с документа. Исторически malformed pointer не
+се поправя чрез измислена версия или повторно генериране: registry read остава
+толерантен, а read-only validator го отчита като `TOLERATED_HISTORY`.
+
 Официалният поток е draft → участници/signature slots → preview → подписи →
 finalized signed version. Достъпни са индивидуални DOCX/PDF download-и, status,
 version history и hash verification. Подписана версия не се редактира и не се

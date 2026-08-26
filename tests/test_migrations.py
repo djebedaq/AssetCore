@@ -9,9 +9,11 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from app.models import Repair, RepairParticipant, User
+from app.official_documents.integrity import validate_official_document_integrity
 from app.settings import Settings, settings
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +54,173 @@ def test_published_industrial_platform_migration_content_is_immutable():
     assert hashlib.sha256(normalized_content).hexdigest() == (
         "f23f3cc084352bfa4740641d992b16d44de9194d12c334248d95f19a1af2faa6"
     )
+
+
+def test_official_document_integrity_migration_preserves_malformed_history_and_signed_data(
+    tmp_path: Path,
+):
+    database_path = tmp_path / "official-document-integrity.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260818_0019")
+    snapshot_hash = "1" * 64
+    signing_hash = "2" * 64
+    docx_hash = "3" * 64
+    pdf_hash = "4" * 64
+    signature_hash = "5" * 64
+    image_hash = "6" * 64
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "DROP INDEX IF EXISTS uq_official_document_version_owner"
+        )
+        connection.executemany(
+            """
+            INSERT INTO official_documents (
+              id, document_number, document_type, current_version_id,
+              created_by_id, created_at
+            ) VALUES (?, ?, 'PART_REQUEST', ?, 1, '2026-08-25 10:00:00')
+            """,
+            [
+                (100, "MIGRATION-VALID", 1000),
+                (101, "MIGRATION-NULL", None),
+                (102, "MIGRATION-MISSING", 1999),
+                (103, "MIGRATION-WRONG-OWNER", 1000),
+            ],
+        )
+        connection.executemany(
+            """
+            INSERT INTO official_document_versions (
+              id, document_id, version, status, language, snapshot,
+              snapshot_sha256, signing_sha256, docx_content, docx_sha256,
+              pdf_content, pdf_sha256, prepared_by_id, created_at, finalized_at
+            ) VALUES (?, ?, 1, 'SIGNED', 'bg', ?, ?, ?, ?, ?, ?, ?, 1,
+              '2026-08-25 10:00:00', '2026-08-25 11:00:00')
+            """,
+            [
+                (
+                    1000,
+                    100,
+                    '{"source":"preserved"}',
+                    snapshot_hash,
+                    signing_hash,
+                    b"preserved-docx",
+                    docx_hash,
+                    b"preserved-pdf",
+                    pdf_hash,
+                ),
+                (
+                    1001,
+                    999,
+                    '{"source":"orphan-preserved"}',
+                    "7" * 64,
+                    "8" * 64,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
+            ],
+        )
+        connection.execute(
+            """
+            INSERT INTO document_participants (
+              id, document_version_id, slot_code, participant_kind, user_id,
+              operation_role, identity_snapshot, identity_snapshot_sha256,
+              created_at
+            ) VALUES (
+              2000, 1000, 'PREPARER', 'INTERNAL', 1, 'PREPARER',
+              '{"identity":"preserved"}', ?, '2026-08-25 10:00:00'
+            )
+            """,
+            ("9" * 64,),
+        )
+        connection.execute(
+            """
+            INSERT INTO document_signatures (
+              id, participant_id, document_version_id, signature_kind,
+              consent_text, strokes_encrypted, image_encrypted, canvas_width,
+              canvas_height, stroke_count, point_count, document_sha256,
+              image_sha256, signature_sha256, signed_at, confirmed_at
+            ) VALUES (
+              3000, 2000, 1000, 'MANUAL_GRAPHIC', 'Preserved consent',
+              ?, ?, 320, 120, 1, 8, ?, ?, ?,
+              '2026-08-25 10:30:00', '2026-08-25 10:31:00'
+            )
+            """,
+            (
+                b"preserved-strokes",
+                b"preserved-image",
+                signing_hash,
+                image_hash,
+                signature_hash,
+            ),
+        )
+        connection.commit()
+
+    _run_sqlite_revision(database_path, command.upgrade, "head")
+
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(
+            "SELECT id, document_number, current_version_id "
+            "FROM official_documents ORDER BY id"
+        ).fetchall() == [
+            (100, "MIGRATION-VALID", 1000),
+            (101, "MIGRATION-NULL", None),
+            (102, "MIGRATION-MISSING", 1999),
+            (103, "MIGRATION-WRONG-OWNER", 1000),
+        ]
+        assert connection.execute(
+            "SELECT snapshot, snapshot_sha256, signing_sha256, docx_content, "
+            "docx_sha256, pdf_content, pdf_sha256, status, finalized_at "
+            "FROM official_document_versions WHERE id = 1000"
+        ).fetchone() == (
+            '{"source":"preserved"}',
+            snapshot_hash,
+            signing_hash,
+            b"preserved-docx",
+            docx_hash,
+            b"preserved-pdf",
+            pdf_hash,
+            "SIGNED",
+            "2026-08-25 11:00:00",
+        )
+        assert connection.execute(
+            "SELECT consent_text, strokes_encrypted, image_encrypted, "
+            "document_sha256, image_sha256, signature_sha256, confirmed_at "
+            "FROM document_signatures WHERE id = 3000"
+        ).fetchone() == (
+            "Preserved consent",
+            b"preserved-strokes",
+            b"preserved-image",
+            signing_hash,
+            image_hash,
+            signature_hash,
+            "2026-08-25 10:31:00",
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "UPDATE official_documents SET current_version_id = 2999 WHERE id = 100"
+            )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "UPDATE official_documents SET current_version_id = 1000 WHERE id = 101"
+            )
+
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    try:
+        with Session(engine) as session:
+            report = validate_official_document_integrity(session)
+            assert report["valid"] is True
+            assert report["blocking_count"] == 0
+            assert report["tolerated_history_count"] == 5
+            assert {item["code"] for item in report["findings"]} == {
+                "CURRENT_VERSION_NULL",
+                "CURRENT_VERSION_TARGET_MISSING",
+                "CURRENT_VERSION_WRONG_OWNER",
+                "ORPHAN_DOCUMENT_VERSION",
+                "CURRENT_VERSION_SHARED",
+            }
+            assert report["schema"]["sqlite_trigger_guard"] is True
+    finally:
+        engine.dispose()
 
 
 def test_catalog_v2_safe_downgrade_restores_0018_schema_and_reupgrades(
