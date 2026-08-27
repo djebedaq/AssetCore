@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -207,7 +208,7 @@ async def enforce_license_read_only(request: Request, call_next):
                     "detail": {
                         "code": "license_read_only",
                         "message": license_state.message,
-                        "license": serialize_license_state(license_state),
+                        "license": jsonable_encoder(serialize_license_state(license_state)),
                     }
                 },
                 headers={"X-AssetCore-License-State": license_state.state},
