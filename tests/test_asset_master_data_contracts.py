@@ -392,10 +392,21 @@ def test_passport_and_machine_patch_preserve_active_transfer_authority(
     # Transfer ProtocolDocument rows are not GeneratedDocument rows. The legacy
     # passport must not synthesize entries in its generated_documents collection.
     assert passport["generated_documents"] == []
+    assert {document["format"] for document in transfer["documents"]} == {"docx", "pdf"}
     for document in transfer["documents"]:
-        assert client.get(
-            f"/api{document['download_endpoint']}", headers=auth_headers
-        ).status_code == 200
+        assert document["download_endpoint"] == f"/api/protocol-documents/{document['id']}/download"
+        downloaded = client.get(document["download_endpoint"], headers=auth_headers)
+        assert downloaded.status_code == 200
+        media_type, file_signature = {
+            "docx": (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                b"PK\x03\x04",
+            ),
+            "pdf": ("application/pdf", b"%PDF-"),
+        }[document["format"]]
+        # An HTML SPA fallback can also return 200; require actual document bytes.
+        assert downloaded.headers["content-type"] == media_type
+        assert downloaded.content.startswith(file_signature)
     assert passport["audit_visible"] is True
     limited = client.get(f"/api/machines/{machine_id}/passport", headers=viewer_headers).json()
     assert limited["current_state"]["active_transfer"] == {"is_active": True}
