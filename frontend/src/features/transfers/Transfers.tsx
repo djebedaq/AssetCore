@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, downloadApiFile } from '../../api'
-import BulkTransfers from '../../BulkTransfers'
+import BulkTransfers from './BulkTransfers'
 import { useI18n } from '../../i18n'
 import type { Machine } from '../../types'
 
