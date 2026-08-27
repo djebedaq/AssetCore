@@ -175,7 +175,11 @@ def test_pdf_converter_receives_exact_registered_docx(monkeypatch, tmp_path, kin
     def capture(db, *args):
         # An actual fallback PDF is used as the converter result; the contract here
         # is byte transport, not a substitute for the separate LibreOffice tests.
-        pdf = original_fallback(args[0], "bg")
+        pdf = (
+            original_fallback(args[0], args[1].batch_reference, "bg")
+            if kind in {"issue", "return"}
+            else original_fallback(args[0], "bg")
+        )
 
         def converter(docx):
             seen.append(docx)
@@ -341,6 +345,8 @@ def test_repair_correction_keeps_original_evidence_and_canonical_identity(monkey
         assert current.status == "FINALIZED"
         assert previous.status == "SUPERSEDED"
         assert {name: getattr(previous, name) for name in original} == original
+        # Detect in-place JSON mutation as well as replacing the snapshot object.
+        assert _json_sha(previous.snapshot) == original["snapshot_sha256"]
         _check_version(document, current, corrected)
         assert all(record.document_number == previous_number + "-V2" for record in corrected)
         assert all(record.snapshot["official_document_id"] == document.id for record in corrected)
