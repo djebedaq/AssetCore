@@ -173,6 +173,7 @@ pnpm build
 - [security policy](SECURITY.md)
 - [authorization и web security guardrails](docs/AUTHORIZATION_WEB_SECURITY_BG.md)
 - [browser authentication, session, CSRF и throttling](docs/AUTHENTICATION_SESSION_SECURITY_BG.md)
+- [CI, dependency audit и реални PostgreSQL конкурентни тестове](docs/CI_SECURITY_BG.md)
 - [release checklist](docs/RELEASE_CHECKLIST_BG.md)
 - [собственически лиценз](LICENSE_PROPRIETARY_BG.md)
 

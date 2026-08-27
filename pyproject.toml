@@ -1,6 +1,7 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+markers = ["postgres: real PostgreSQL transactions (requires isolated QA database)"]
 
 [tool.ruff]
 target-version = "py312"
@@ -8,7 +9,21 @@ line-length = 100
 extend-exclude = ["backend/resources", "frontend"]
 
 [tool.ruff.lint]
-select = ["E9", "F", "I"]
+# Ruff's complete default correctness rules, plus import ordering. Do not
+# override this selection on the CI command line. Formatting is a separate gate.
+select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.ruff.lint.per-file-ignores]
 "backend/app/seed.py" = ["I001"]
+# Published revisions: preserve their exact normalized-LF hashes. No blanket
+# migration exemption: future revisions and every other rule remain checked.
+"backend/alembic/versions/20260805_0007_external_signer_optional_fields.py" = ["I001"]
+"backend/alembic/versions/20260805_0008_transfer_checklists.py" = ["I001"]
+"backend/alembic/versions/20260805_0009_safe_transfer_cancellation.py" = ["I001"]
+"backend/alembic/versions/20260805_0010_issue_batch_signing.py" = ["I001"]
+"backend/alembic/versions/20260805_0011_return_batch_signing.py" = ["I001"]
+"backend/alembic/versions/20260805_0012_verified_part_catalog.py" = ["I001"]
+"backend/alembic/versions/20260805_0013_unknown_part_requests.py" = ["I001"]
+"backend/alembic/versions/20260805_0014_internal_repair_protocol.py" = ["I001"]
+"backend/alembic/versions/20260805_0015_live_regression_hotfix.py" = ["I001"]
+"backend/alembic/versions/20260808_0016_transfer_workflow_simplification.py" = ["I001"]

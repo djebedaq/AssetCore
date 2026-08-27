@@ -55,7 +55,8 @@ from sqlalchemy import create_engine, func, inspect, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from backend.scripts.document_qa import generate as generate_document_qa  # noqa: E402
-from backend.scripts.migration_history import validate_migration_history  # noqa: E402
+from backend.scripts.migration_history import validate_migration_release  # noqa: E402
+from scripts.dependency_inventory import write_inventory  # noqa: E402
 
 EXPECTED_INVENTORY = {"4", "5", "7", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24"}
 EXPECTED_SERIALS = {
@@ -162,6 +163,25 @@ def _verify_migrations(verification: Verification) -> None:
 
 def run(output: Path) -> Verification:
     verification = Verification()
+    migration_history = validate_migration_release()
+    verification.check(
+        "Всички Alembic миграции са защитени и непроменени",
+        migration_history["valid"],
+        (
+            f"protected={migration_history['protected_count']}, "
+            f"missing={len(migration_history['missing'])}, "
+            f"mismatched={len(migration_history['mismatched'])}, "
+            f"new={len(migration_history['new_unprotected_migrations'])}"
+        ),
+    )
+    if not migration_history["valid"]:
+        return verification
+    dependency_inventory = write_inventory(output)
+    verification.check(
+        "Dependency manifests и инсталирани версии съвпадат; CycloneDX SBOM е създаден",
+        dependency_inventory["valid"],
+        f"python={dependency_inventory['python_packages']}, frontend={dependency_inventory['frontend_packages']}",
+    )
     authorization_inventory = build_authorization_inventory(app)
     verification.check(
         "FastAPI authorization inventory е пълен",
@@ -169,15 +189,6 @@ def run(output: Path) -> Verification:
         (
             f"routes={len(authorization_inventory.routes)}, "
             f"errors={len(authorization_inventory.errors)}"
-        ),
-    )
-    migration_history = validate_migration_history()
-    verification.check(
-        "Публикуваната Alembic история е непроменена",
-        migration_history["valid"],
-        (
-            f"protected={migration_history['protected_count']}, "
-            f"new={len(migration_history['new_unprotected_migrations'])}"
         ),
     )
     _verify_migrations(verification)

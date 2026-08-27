@@ -17,3 +17,18 @@
 - [ ] Backup/restore rehearsal върху staging копие.
 - [ ] Собственик, licence payload, installation ID, срокове и лимити са проверени за конкретната инсталация.
 - [ ] Draft legal documents са прегледани от квалифициран юрист.
+
+## Допълнителни release gates от PR #31
+
+Горните отбелязани резултати са исторически; всяка нова release версия изисква
+нов отчет за нейния точен commit SHA. [CI политика и команди](CI_SECURITY_BG.md).
+
+- [ ] Пълният конфигуриран Ruff gate (`E4,E7,E9,F,I`), без `--select E9` override.
+- [ ] Python и frontend dependency audits: няма блокиращи HIGH/CRITICAL/UNKNOWN;
+  всяко изключение има конкретна версия, review и неизтекъл срок.
+- [ ] Петте PostgreSQL конкурентни сценария са реално изпълнени, не skipped.
+- [ ] Migration history, authorization, production settings, catalog и EN/BG validators.
+- [ ] Пълен backend suite и frontend typecheck/lint/test/build за същия SHA.
+- [ ] Migration/backup/restore smoke и Docker production/runtime проверки.
+- [ ] Архивирани dependency inventory, CycloneDX SBOM, audit и PostgreSQL JUnit.
+- [ ] Прегледани immutable Action pins и dependency update PR-и; няма auto-merge.

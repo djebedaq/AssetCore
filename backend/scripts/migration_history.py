@@ -48,3 +48,19 @@ def validate_migration_history(
         "mismatched": mismatched,
         "new_unprotected_migrations": unprotected,
     }
+
+
+def validate_migration_release(
+    *,
+    versions_dir: Path = DEFAULT_VERSIONS_DIR,
+    manifest_path: Path = DEFAULT_MANIFEST,
+) -> dict[str, Any]:
+    """Require complete protection for CI/release, without changing history semantics."""
+    report = validate_migration_history(
+        versions_dir=versions_dir, manifest_path=manifest_path,
+    )
+    return {
+        **report,
+        "history_valid": report["valid"],
+        "valid": report["valid"] and not report["new_unprotected_migrations"],
+    }

@@ -25,6 +25,10 @@ if (-not (Test-Path -LiteralPath $Python)) {
 $qaDir = Join-Path $PWD ".tmp/release-qa"
 New-Item -ItemType Directory -Force -Path $qaDir | Out-Null
 
+Invoke-Check "Backend runtime and CI dependency install" { & $Python -m pip install -r backend/requirements.txt -r backend/requirements-ci.txt }
+Invoke-Check "Python dependency compatibility" { & $Python -m pip check }
+Invoke-Check "Python dependency audit" { & $Python scripts/audit_dependencies.py python --output "$qaDir/python-audit.json" }
+
 Invoke-Check "No tracked databases, backups, secrets or private keys" {
     $unsafe = git ls-files | Select-String -Pattern '(?i)(\.db$|\.sqlite3?$|\.dump$|\.backup$|(^|/)(\.env|private_keys)(/|$)|\.(pem|key|p12|pfx)$)'
     if ($unsafe) { $unsafe | ForEach-Object { Write-Host $_ }; throw "unsafe tracked files" }
@@ -35,6 +39,17 @@ Invoke-Check "Verified HPWJ seed count" {
 Invoke-Check "Python compile" { & $Python -m compileall -q backend/app backend/alembic backend/scripts scripts tests }
 Invoke-Check "Python lint" { & $Python -m ruff check backend/app backend/alembic backend/scripts scripts tests }
 Invoke-Check "Alembic single head" { & $Python -m alembic -c backend/alembic.ini heads }
+Invoke-Check "Strict migration release protection" { & $Python backend/scripts/validate_migration_history.py --require-all-protected }
+Invoke-Check "Authorization inventory" { & $Python backend/scripts/validate_authorization_inventory.py }
+Invoke-Check "Catalog translations" {
+    $qaPythonPath = $env:PYTHONPATH
+    try {
+        $env:PYTHONPATH = 'backend'
+        & $Python backend/scripts/build_catalog_translations.py --check
+    } finally {
+        $env:PYTHONPATH = $qaPythonPath
+    }
+}
 Invoke-Check "Backend tests" { & $Python -m pytest -q }
 Invoke-Check "Document QA" { & $Python backend/scripts/document_qa.py $qaDir }
 Invoke-Check "Isolated release invariants" { & $Python scripts/verify_release.py --output $qaDir }
@@ -52,6 +67,7 @@ try {
 } finally {
     Pop-Location
 }
+Invoke-Check "Frontend dependency audit" { & $Python scripts/audit_dependencies.py frontend --output "$qaDir/frontend-audit.json" }
 
 if (Get-Command docker -ErrorAction SilentlyContinue) {
     Invoke-Check "Docker Compose configuration" { docker compose config --quiet }
@@ -64,6 +80,12 @@ if ($env:ASSETCORE_POSTGRES_SOURCE_URL -and $env:ASSETCORE_POSTGRES_RESTORE_URL)
     Invoke-Check "PostgreSQL migrations and real backup/restore" { & $Python scripts/postgres_smoke_test.py }
 } else {
     Write-Host "SKIP: Separate PostgreSQL QA database URLs are not configured." -ForegroundColor Yellow
+}
+
+if ($env:ASSETCORE_POSTGRES_CONCURRENCY_URL) {
+    Invoke-Check "Real PostgreSQL concurrent transactions" { & $Python -m pytest -q tests/postgres --durations=10 }
+} else {
+    Write-Host "SKIP: Dedicated PostgreSQL concurrency database URL is not configured." -ForegroundColor Yellow
 }
 
 if ($script:Failures -gt 0) {
