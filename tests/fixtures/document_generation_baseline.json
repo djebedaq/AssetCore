@@ -1,0 +1,521 @@
+{
+  "base_commit": "df5aa50bc2f2e72d77af1ab301e1f1db11f59ffc",
+  "languages": {
+    "bg": {
+      "issue": {
+        "number": "QA-ONLY-PROTOCOL",
+        "type": "TRANSFER_ISSUE",
+        "language": "bg",
+        "version": 1,
+        "status": "DRAFT",
+        "template_version": 3,
+        "template_sha256": "dae5cc9f19dc06dd2c73635a838d5915d0efa36d3be9564a9c48f6bad981ee3b",
+        "snapshot_sha256": "fcbaba64d566cfa627741ff8a416a50add94eb3688efa5548a39353e9a084249",
+        "record_snapshot_sha256": "200a67d007c26bee82a4c69d7a3a34986a96ccb6e2e0fdb8e906fb9e9df5f179",
+        "filenames": {
+          "docx": "QA-ONLY-PROTOCOL.docx",
+          "pdf": "QA-ONLY-PROTOCOL.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "1296b228b22f99db10f7eb3b9f558b15ed604704cddaf6bea60abbf756ad63b5",
+          "word/document.xml": "599439b96ceee818233e99fe530b42899b751fa3e03fb6e163395de001316e95",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "f96a8df7eaf2a0274dba01d9c248d3882228ac5fa990b896f4fa6ba738cc7acc",
+          "word/media/image2.png": "dd4fb564266946dcd112d3ca85474ca067280a36e676c89c52c25f5d2c4cff03",
+          "word/media/image3.png": "6a386f5c8a5fcf0dcbf31ed417e498a7c115418922be15c73fdc9d903921eae4",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "1cbd55a277987631724df8df87004d72af19c648d9f63b0321630aed05a0d7dd",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      },
+      "return": {
+        "number": "QA-ONLY-PROTOCOL-R",
+        "type": "TRANSFER_RETURN",
+        "language": "bg",
+        "version": 1,
+        "status": "DRAFT",
+        "template_version": 3,
+        "template_sha256": "fdc0ee9b2cca5ccbb4a373aadac80b76cb10288b9d0dadbdc7c73907193504e1",
+        "snapshot_sha256": "e63464cf925c580789d9604e777701e2f962c95d0d4786de0b300781fed19934",
+        "record_snapshot_sha256": "ee730d4598f663e6308be70c67cd8f87a1ee217218985e36a6cffb7492806444",
+        "filenames": {
+          "docx": "QA-ONLY-PROTOCOL-R.docx",
+          "pdf": "QA-ONLY-PROTOCOL-R.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "1296b228b22f99db10f7eb3b9f558b15ed604704cddaf6bea60abbf756ad63b5",
+          "word/document.xml": "4cd70d49a957bd8519f22d7b38b13c0f70a3d55c1ec9b9f63136d40f2c1801ba",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "f96a8df7eaf2a0274dba01d9c248d3882228ac5fa990b896f4fa6ba738cc7acc",
+          "word/media/image2.png": "dd4fb564266946dcd112d3ca85474ca067280a36e676c89c52c25f5d2c4cff03",
+          "word/media/image3.png": "6a386f5c8a5fcf0dcbf31ed417e498a7c115418922be15c73fdc9d903921eae4",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "1cbd55a277987631724df8df87004d72af19c648d9f63b0321630aed05a0d7dd",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      },
+      "repair": {
+        "number": "QA-ONLY-REPAIR",
+        "type": "REPAIR_PROTOCOL",
+        "language": "bg",
+        "version": 1,
+        "status": "FINALIZED",
+        "template_version": 6,
+        "template_sha256": "89231f723dc6184f4a10a8f8682e59ba96f883d23087ad1008fc78f6d4673929",
+        "snapshot_sha256": "c63f149aebe9da92295e726d96bcda6dbc83899a9ac04d4835a7f8356a66161e",
+        "record_snapshot_sha256": "d5f7e1a9d588bf96c2811ef5d404510b4b45a41021aeabcd67c98cb98bf45941",
+        "filenames": {
+          "docx": "QA-ONLY-REPAIR.docx",
+          "pdf": "QA-ONLY-REPAIR.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "1296b228b22f99db10f7eb3b9f558b15ed604704cddaf6bea60abbf756ad63b5",
+          "word/document.xml": "f25a88d03c4fe8412e6222f2acbaa1f581c486b3dd9d5d2f4e4dad5b3e7893bc",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "f96a8df7eaf2a0274dba01d9c248d3882228ac5fa990b896f4fa6ba738cc7acc",
+          "word/media/image2.png": "dd4fb564266946dcd112d3ca85474ca067280a36e676c89c52c25f5d2c4cff03",
+          "word/media/image3.png": "6a386f5c8a5fcf0dcbf31ed417e498a7c115418922be15c73fdc9d903921eae4",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "cac2b4267044765dd6cf1c9176efc8323b72b625e4deb85757763a3304f5ef2a",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      },
+      "part_request": {
+        "number": "QA-ONLY-PART-REQUEST",
+        "type": "PART_REQUEST",
+        "language": "bg",
+        "version": 1,
+        "status": "DRAFT",
+        "template_version": 2,
+        "template_sha256": "286d06127f45dd11b533a539a69baea3302f7766ccabe63cb774a7ee0a9abce7",
+        "snapshot_sha256": "c141401aad1f6b599e67f03caf4463bf45765e4ae37a538e5d0a24ab0d4fa636",
+        "record_snapshot_sha256": "a2c15eada83492a5b54495d1f4233276eadb65f8c0025320effec9f49069e526",
+        "filenames": {
+          "docx": "QA-ONLY-PART-REQUEST.docx",
+          "pdf": "QA-ONLY-PART-REQUEST.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "33626580b61a415243e62ca85939d083a75674207d1648998696831afc977b08",
+          "word/document.xml": "1926bcca4dd304518cd6c35f185a9c41300e5b4115a5287e4a2c21c51a3c427b",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "5bb79a52671230f3376ad122e547fd55cf9d8c500cd2409585e115f00086c545",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "0417520953259e42ae1847fe070f945655c86d8186aab4b22bb67c1250342920",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      }
+    },
+    "en": {
+      "issue": {
+        "number": "QA-ONLY-PROTOCOL",
+        "type": "TRANSFER_ISSUE",
+        "language": "en",
+        "version": 1,
+        "status": "DRAFT",
+        "template_version": 3,
+        "template_sha256": "baf133ed7acc8be64152dc881398add4259f0ac42b8c092d0d354eebacfdc62f",
+        "snapshot_sha256": "479a2bcaa045d3a67205a1098d13ae09dab5500580b1aab0cda39d5215786da0",
+        "record_snapshot_sha256": "9d6f02b4cbc326892283c02c7ffe7a7422e1e4a7c4b7dc99d777339a7dafe239",
+        "filenames": {
+          "docx": "QA-ONLY-PROTOCOL.docx",
+          "pdf": "QA-ONLY-PROTOCOL.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "1296b228b22f99db10f7eb3b9f558b15ed604704cddaf6bea60abbf756ad63b5",
+          "word/document.xml": "42bb76107da458a663270a9df7a2d6c93e2bd2f36fdb52aaf70d7e47e53a3cb9",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "f96a8df7eaf2a0274dba01d9c248d3882228ac5fa990b896f4fa6ba738cc7acc",
+          "word/media/image2.png": "dd4fb564266946dcd112d3ca85474ca067280a36e676c89c52c25f5d2c4cff03",
+          "word/media/image3.png": "6a386f5c8a5fcf0dcbf31ed417e498a7c115418922be15c73fdc9d903921eae4",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "1cbd55a277987631724df8df87004d72af19c648d9f63b0321630aed05a0d7dd",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      },
+      "return": {
+        "number": "QA-ONLY-PROTOCOL-R",
+        "type": "TRANSFER_RETURN",
+        "language": "en",
+        "version": 1,
+        "status": "DRAFT",
+        "template_version": 3,
+        "template_sha256": "293b87744d90182e90087108ac12575aeaecdcb7b67e5bc2cf7ce56d47053b34",
+        "snapshot_sha256": "11298f397b5eb715c2aefc5d4755ce721aa2a1e78b753476ded51940f5e11458",
+        "record_snapshot_sha256": "3a7b60bacd09a2f10357aea022010c92ae5004ebaf2bf286fe1bce07d1bb4759",
+        "filenames": {
+          "docx": "QA-ONLY-PROTOCOL-R.docx",
+          "pdf": "QA-ONLY-PROTOCOL-R.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "1296b228b22f99db10f7eb3b9f558b15ed604704cddaf6bea60abbf756ad63b5",
+          "word/document.xml": "9dcc6716ec2b24852e37049786639e3a52c862cb86f7e82518b87137593d0831",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "f96a8df7eaf2a0274dba01d9c248d3882228ac5fa990b896f4fa6ba738cc7acc",
+          "word/media/image2.png": "dd4fb564266946dcd112d3ca85474ca067280a36e676c89c52c25f5d2c4cff03",
+          "word/media/image3.png": "6a386f5c8a5fcf0dcbf31ed417e498a7c115418922be15c73fdc9d903921eae4",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "1cbd55a277987631724df8df87004d72af19c648d9f63b0321630aed05a0d7dd",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      },
+      "repair": {
+        "number": "QA-ONLY-REPAIR",
+        "type": "REPAIR_PROTOCOL",
+        "language": "en",
+        "version": 1,
+        "status": "FINALIZED",
+        "template_version": 6,
+        "template_sha256": "35a383f7d269e57bfe6f310c864badb422f581d13e321e2b19a26fe2f70b6e89",
+        "snapshot_sha256": "c63f149aebe9da92295e726d96bcda6dbc83899a9ac04d4835a7f8356a66161e",
+        "record_snapshot_sha256": "d5f7e1a9d588bf96c2811ef5d404510b4b45a41021aeabcd67c98cb98bf45941",
+        "filenames": {
+          "docx": "QA-ONLY-REPAIR.docx",
+          "pdf": "QA-ONLY-REPAIR.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "1296b228b22f99db10f7eb3b9f558b15ed604704cddaf6bea60abbf756ad63b5",
+          "word/document.xml": "31af1f9b2b926b393d2fa30d7aaedfe91d0109fba15c0b0a7ccedd018c2b2f38",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "f96a8df7eaf2a0274dba01d9c248d3882228ac5fa990b896f4fa6ba738cc7acc",
+          "word/media/image2.png": "dd4fb564266946dcd112d3ca85474ca067280a36e676c89c52c25f5d2c4cff03",
+          "word/media/image3.png": "6a386f5c8a5fcf0dcbf31ed417e498a7c115418922be15c73fdc9d903921eae4",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "cac2b4267044765dd6cf1c9176efc8323b72b625e4deb85757763a3304f5ef2a",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      },
+      "part_request": {
+        "number": "QA-ONLY-PART-REQUEST",
+        "type": "PART_REQUEST",
+        "language": "en",
+        "version": 1,
+        "status": "DRAFT",
+        "template_version": 2,
+        "template_sha256": "ec1478440bd9eb6550479d32dedb5ca25304d09cc4fdceddfe4e1e69c17cc48c",
+        "snapshot_sha256": "c141401aad1f6b599e67f03caf4463bf45765e4ae37a538e5d0a24ab0d4fa636",
+        "record_snapshot_sha256": "a2c15eada83492a5b54495d1f4233276eadb65f8c0025320effec9f49069e526",
+        "filenames": {
+          "docx": "QA-ONLY-PART-REQUEST.docx",
+          "pdf": "QA-ONLY-PART-REQUEST.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "33626580b61a415243e62ca85939d083a75674207d1648998696831afc977b08",
+          "word/document.xml": "bb44bb9e1cedff5529ce8ff9c1ff8dd27bd20c21c95848038750bd46289b8097",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "5bb79a52671230f3376ad122e547fd55cf9d8c500cd2409585e115f00086c545",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "0417520953259e42ae1847fe070f945655c86d8186aab4b22bb67c1250342920",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      }
+    },
+    "ru": {
+      "issue": {
+        "number": "QA-ONLY-PROTOCOL",
+        "type": "TRANSFER_ISSUE",
+        "language": "ru",
+        "version": 1,
+        "status": "DRAFT",
+        "template_version": 3,
+        "template_sha256": "01bc59bd2604b0d6fd55d2ee12f538656e2a574dd06afb6bf3e203f190dc12ac",
+        "snapshot_sha256": "9ba218a642af51b737bce094549209b274f5636e4e44b3505cad3ff14242bf17",
+        "record_snapshot_sha256": "70721c57f14a0290d6266a0a713c408335b7b17ff9145cd6e82d9c49efbae6a8",
+        "filenames": {
+          "docx": "QA-ONLY-PROTOCOL.docx",
+          "pdf": "QA-ONLY-PROTOCOL.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "1296b228b22f99db10f7eb3b9f558b15ed604704cddaf6bea60abbf756ad63b5",
+          "word/document.xml": "1add7a46bdce7bb27c982fbfc09be195096bbd792ec5985ede3d1115c6bf0144",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "f96a8df7eaf2a0274dba01d9c248d3882228ac5fa990b896f4fa6ba738cc7acc",
+          "word/media/image2.png": "dd4fb564266946dcd112d3ca85474ca067280a36e676c89c52c25f5d2c4cff03",
+          "word/media/image3.png": "6a386f5c8a5fcf0dcbf31ed417e498a7c115418922be15c73fdc9d903921eae4",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "1cbd55a277987631724df8df87004d72af19c648d9f63b0321630aed05a0d7dd",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      },
+      "return": {
+        "number": "QA-ONLY-PROTOCOL-R",
+        "type": "TRANSFER_RETURN",
+        "language": "ru",
+        "version": 1,
+        "status": "DRAFT",
+        "template_version": 3,
+        "template_sha256": "99ad077cd568ab53549d0d8344d85e72c9ca95ab30ef38b44f78b9f18e4bef2f",
+        "snapshot_sha256": "14ef00b02eb23b9265d319e5c2926fc4ee359e1244987bf160dc3f358b3ec334",
+        "record_snapshot_sha256": "86ad2a796ecd09843c9a6be09f8e47494ba49a109b29109cfaed3983849b6d43",
+        "filenames": {
+          "docx": "QA-ONLY-PROTOCOL-R.docx",
+          "pdf": "QA-ONLY-PROTOCOL-R.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "1296b228b22f99db10f7eb3b9f558b15ed604704cddaf6bea60abbf756ad63b5",
+          "word/document.xml": "8b8f818030f8950f4d4cbad3459c9fb75e221e724ecd588795a1bce562406021",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "f96a8df7eaf2a0274dba01d9c248d3882228ac5fa990b896f4fa6ba738cc7acc",
+          "word/media/image2.png": "dd4fb564266946dcd112d3ca85474ca067280a36e676c89c52c25f5d2c4cff03",
+          "word/media/image3.png": "6a386f5c8a5fcf0dcbf31ed417e498a7c115418922be15c73fdc9d903921eae4",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "1cbd55a277987631724df8df87004d72af19c648d9f63b0321630aed05a0d7dd",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      },
+      "repair": {
+        "number": "QA-ONLY-REPAIR",
+        "type": "REPAIR_PROTOCOL",
+        "language": "ru",
+        "version": 1,
+        "status": "FINALIZED",
+        "template_version": 6,
+        "template_sha256": "ba786e2e86e18130bef3dbe4a906e08f900416f87e636f439a0c4a70dffd92d5",
+        "snapshot_sha256": "c63f149aebe9da92295e726d96bcda6dbc83899a9ac04d4835a7f8356a66161e",
+        "record_snapshot_sha256": "d5f7e1a9d588bf96c2811ef5d404510b4b45a41021aeabcd67c98cb98bf45941",
+        "filenames": {
+          "docx": "QA-ONLY-REPAIR.docx",
+          "pdf": "QA-ONLY-REPAIR.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "1296b228b22f99db10f7eb3b9f558b15ed604704cddaf6bea60abbf756ad63b5",
+          "word/document.xml": "6cc7e41b56e27e4d368f5f72a325b7169b8b70ca9a21853c95dbe855c37d74fa",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "f96a8df7eaf2a0274dba01d9c248d3882228ac5fa990b896f4fa6ba738cc7acc",
+          "word/media/image2.png": "dd4fb564266946dcd112d3ca85474ca067280a36e676c89c52c25f5d2c4cff03",
+          "word/media/image3.png": "6a386f5c8a5fcf0dcbf31ed417e498a7c115418922be15c73fdc9d903921eae4",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "cac2b4267044765dd6cf1c9176efc8323b72b625e4deb85757763a3304f5ef2a",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      },
+      "part_request": {
+        "number": "QA-ONLY-PART-REQUEST",
+        "type": "PART_REQUEST",
+        "language": "ru",
+        "version": 1,
+        "status": "DRAFT",
+        "template_version": 2,
+        "template_sha256": "a123806a75ffca5e96bd7877a3eca705461ea21e8d40a23debd813036ec0bea8",
+        "snapshot_sha256": "c141401aad1f6b599e67f03caf4463bf45765e4ae37a538e5d0a24ab0d4fa636",
+        "record_snapshot_sha256": "a2c15eada83492a5b54495d1f4233276eadb65f8c0025320effec9f49069e526",
+        "filenames": {
+          "docx": "QA-ONLY-PART-REQUEST.docx",
+          "pdf": "QA-ONLY-PART-REQUEST.pdf"
+        },
+        "media_types": {
+          "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "pdf": "application/pdf"
+        },
+        "docx_members": {
+          "[Content_Types].xml": "ecbe3f7dfd70530319fed457805e79a3df0cc177119a7d97bacbb25f516c7adb",
+          "_rels/.rels": "a9ae57efe9186f07d48303bcac5d54c7e359bf3f503939c03ad2954e5c59a5c4",
+          "customXml/_rels/item1.xml.rels": "1ca6c9a64edcebe24ee703a54403611b322d96da33371779e742d2d3f7ed7a6c",
+          "customXml/item1.xml": "a86086ffc5d8e83ebd6c71a55d1d2efaa31b137977f5f3a752366e1023612144",
+          "customXml/itemProps1.xml": "c542307b13ec29a8b546217bb37936ab4822e044b265d2952985ec3d6afed24e",
+          "docProps/app.xml": "be664981c3141cddfc59362beb287ebf20d0773660e2dd6faac5968a5930a081",
+          "docProps/core.xml": "d14be8284e406d14dc2a576b19f15e7f637b955f9e27a3d9ed871ec99606f7ba",
+          "docProps/thumbnail.jpeg": "96367138dc44ce09bf2c8f0f8e49348a1478d2c5c0af69bbc2bbc38b63cdcead",
+          "word/_rels/document.xml.rels": "33626580b61a415243e62ca85939d083a75674207d1648998696831afc977b08",
+          "word/document.xml": "2eb888816c6c81765da749a459f1528c0761d05548119c8eea128c2d64d9918c",
+          "word/fontTable.xml": "79385fb7f60247507ecaffc292e9ebd52ea0657b8634f629ba6fccc54011d6bb",
+          "word/footer1.xml": "cc831c46cac03c968fc5b2d8e0ce3179d17a559dd54fa4e4fba3f7c2680cc344",
+          "word/header1.xml": "e1d2d4060c859ac7d6648284ba49706cf80e2e14374d3cf9bb2983edf9ee677f",
+          "word/media/image1.png": "5bb79a52671230f3376ad122e547fd55cf9d8c500cd2409585e115f00086c545",
+          "word/numbering.xml": "70976f19cbcd896e51890859fe6ecb3467a5a7ad0c040160fedc5a1993cb09ce",
+          "word/settings.xml": "51a0d348fe85965c66e4748a03c3c0d055d78455514f03cb121c334af7d73689",
+          "word/styles.xml": "0417520953259e42ae1847fe070f945655c86d8186aab4b22bb67c1250342920",
+          "word/stylesWithEffects.xml": "463ae0928cf0d84775dbf8cf18d6c3029f6707c81bf590f6d6dd8757a5e93f15",
+          "word/theme/theme1.xml": "e3a8ab7db9ca7afca56f5f2820a56e8b660016c647773555b060b0a02ac76941",
+          "word/webSettings.xml": "349d36de7434d09f86987ff671d8814964a0588c1e630c06e562cda7e75e9f95"
+        }
+      }
+    }
+  }
+}

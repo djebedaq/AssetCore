@@ -24,6 +24,13 @@ finalized signed version. Достъпни са индивидуални DOCX/PD
 version history и hash verification. Подписана версия не се редактира и не се
 анулира; supersede създава версия N+1 с причина и връзка към предишната.
 
+Имплементацията на генераторите е разделена в `backend/app/documents/`, без
+промяна на този workflow. Старите imports от `app.document_generation` остават
+валидни. Document builders регистрират версията чрез съществуващия integrity
+service и връщат файловите записи, но не правят commit — транзакцията принадлежи
+на извикващия workflow. Картата на модулите и доказателствата за запазено
+съдържание са в [DOCUMENT_MODULARIZATION_BG.md](DOCUMENT_MODULARIZATION_BG.md).
+
 Екранът „Официални документи и подписи“ е централен read-only регистър, а не
 алтернативен генератор или signing workflow. Той показва отделно lifecycle-ите
 за приемане/предаване, ремонтните протоколи и протоколите за заявени части,
