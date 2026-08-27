@@ -1,0 +1,2315 @@
+{
+  "base_commit": "123c3324e8f7e96e9192322bda17acf78ce671e6",
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/api/admin/departments",
+      "name": "create_department",
+      "kind": "permission",
+      "permission": "settings.manage",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/departments/{department_id}",
+      "name": "update_department",
+      "kind": "permission",
+      "permission": "settings.manage",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/locations",
+      "name": "create_location",
+      "kind": "permission",
+      "permission": "settings.manage",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/locations/{location_id}",
+      "name": "update_location",
+      "kind": "permission",
+      "permission": "settings.manage",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/reference-data",
+      "name": "admin_reference_data",
+      "kind": "permission",
+      "permission": "settings.manage",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/categories",
+      "name": "list_categories",
+      "kind": "permission",
+      "permission": "documents.view",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/categories",
+      "name": "create_category",
+      "kind": "permission",
+      "permission": "assets.create",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/categories/{category_id}/fields",
+      "name": "create_category_field",
+      "kind": "permission",
+      "permission": "assets.edit",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/departments",
+      "name": "list_departments",
+      "kind": "permission",
+      "permission": "documents.view",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/locations",
+      "name": "locations",
+      "kind": "permission",
+      "permission": "documents.view",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/machine-attachments/{attachment_id}/download",
+      "name": "download_machine_attachment",
+      "kind": "permission",
+      "permission": "documents.view",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/machines",
+      "name": "machines",
+      "kind": "permission",
+      "permission": "assets.view",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/machines",
+      "name": "create_machine",
+      "kind": "permission",
+      "permission": "assets.create",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/machines/{machine_id}",
+      "name": "machine",
+      "kind": "permission",
+      "permission": "assets.view",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/machines/{machine_id}",
+      "name": "update_machine",
+      "kind": "permission",
+      "permission": "assets.edit",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/machines/{machine_id}/attachments",
+      "name": "add_machine_attachment",
+      "kind": "permission",
+      "permission": "repairs.edit",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/machines/{machine_id}/custom-fields",
+      "name": "update_custom_fields",
+      "kind": "permission",
+      "permission": "assets.edit",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/machines/{machine_id}/passport",
+      "name": "machine_passport",
+      "kind": "permission",
+      "permission": "assets.view",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/machines/{machine_id}/qr",
+      "name": "qr",
+      "kind": "permission",
+      "permission": "documents.generate",
+      "reason": "FastAPI dependency enforces the listed centralized permission.",
+      "mutating": false
+    }
+  ],
+  "paths": {
+    "/api/admin/departments": {
+      "post": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Create Department",
+        "operationId": "create_department_api_admin_departments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create Department Api Admin Departments Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/departments/{department_id}": {
+      "patch": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Update Department",
+        "operationId": "update_department_api_admin_departments__department_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "department_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Department Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepartmentUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Update Department Api Admin Departments  Department Id  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/locations": {
+      "post": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Create Location",
+        "operationId": "create_location_api_admin_locations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationAdminCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create Location Api Admin Locations Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/locations/{location_id}": {
+      "patch": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Update Location",
+        "operationId": "update_location_api_admin_locations__location_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Location Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationAdminUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Update Location Api Admin Locations  Location Id  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/reference-data": {
+      "get": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Admin Reference Data",
+        "operationId": "admin_reference_data_api_admin_reference_data_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Admin Reference Data Api Admin Reference Data Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "List Categories",
+        "operationId": "list_categories_api_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Categories Api Categories Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Create Category",
+        "operationId": "create_category_api_categories_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/categories/{category_id}/fields": {
+      "post": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Create Category Field",
+        "operationId": "create_category_field_api_categories__category_id__fields_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Category Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryFieldCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/departments": {
+      "get": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "List Departments",
+        "operationId": "list_departments_api_departments_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Departments Api Departments Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/locations": {
+      "get": {
+        "summary": "Locations",
+        "operationId": "locations_api_locations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LocationOut"
+                  },
+                  "type": "array",
+                  "title": "Response Locations Api Locations Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/machine-attachments/{attachment_id}/download": {
+      "get": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Download Machine Attachment",
+        "operationId": "download_machine_attachment_api_machine_attachments__attachment_id__download_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Attachment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/machines": {
+      "get": {
+        "summary": "Machines",
+        "operationId": "machines_api_machines_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create Machine",
+        "operationId": "create_machine_api_machines_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/machines/{machine_id}": {
+      "get": {
+        "summary": "Machine",
+        "operationId": "machine_api_machines__machine_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "machine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Machine Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Machine",
+        "operationId": "update_machine_api_machines__machine_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "machine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Machine Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/machines/{machine_id}/attachments": {
+      "post": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Add Machine Attachment",
+        "operationId": "add_machine_attachment_api_machines__machine_id__attachments_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "machine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Machine Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachmentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Add Machine Attachment Api Machines  Machine Id  Attachments Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/machines/{machine_id}/custom-fields": {
+      "put": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Update Custom Fields",
+        "operationId": "update_custom_fields_api_machines__machine_id__custom_fields_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "machine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Machine Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomFieldValuesUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Update Custom Fields Api Machines  Machine Id  Custom Fields Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/machines/{machine_id}/passport": {
+      "get": {
+        "tags": [
+          "industrial-platform"
+        ],
+        "summary": "Machine Passport",
+        "operationId": "machine_passport_api_machines__machine_id__passport_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "machine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Machine Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Machine Passport Api Machines  Machine Id  Passport Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/machines/{machine_id}/qr": {
+      "get": {
+        "summary": "Qr",
+        "operationId": "qr_api_machines__machine_id__qr_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "machine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Machine Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "DepartmentCreate": {
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 80,
+          "minLength": 2,
+          "pattern": "^[A-Z0-9_-]+$",
+          "title": "Code"
+        },
+        "name_bg": {
+          "type": "string",
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name Bg"
+        },
+        "name_en": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name En"
+        },
+        "name_ru": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name Ru"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        }
+      },
+      "type": "object",
+      "required": [
+        "code",
+        "name_bg"
+      ],
+      "title": "DepartmentCreate"
+    },
+    "HTTPValidationError": {
+      "properties": {
+        "detail": {
+          "items": {
+            "$ref": "#/components/schemas/ValidationError"
+          },
+          "type": "array",
+          "title": "Detail"
+        }
+      },
+      "type": "object",
+      "title": "HTTPValidationError"
+    },
+    "ValidationError": {
+      "properties": {
+        "loc": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "type": "array",
+          "title": "Location"
+        },
+        "msg": {
+          "type": "string",
+          "title": "Message"
+        },
+        "type": {
+          "type": "string",
+          "title": "Error Type"
+        },
+        "input": {
+          "title": "Input"
+        },
+        "ctx": {
+          "type": "object",
+          "title": "Context"
+        }
+      },
+      "type": "object",
+      "required": [
+        "loc",
+        "msg",
+        "type"
+      ],
+      "title": "ValidationError"
+    },
+    "DepartmentUpdate": {
+      "properties": {
+        "code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 2,
+              "pattern": "^[A-Z0-9_-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Code"
+        },
+        "name_bg": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 255,
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name Bg"
+        },
+        "name_en": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name En"
+        },
+        "name_ru": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name Ru"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "is_active": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Is Active"
+        }
+      },
+      "type": "object",
+      "title": "DepartmentUpdate"
+    },
+    "LocationAdminCreate": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        }
+      },
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "title": "LocationAdminCreate"
+    },
+    "LocationAdminUpdate": {
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 120,
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "is_active": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Is Active"
+        }
+      },
+      "type": "object",
+      "title": "LocationAdminUpdate"
+    },
+    "CategoryCreate": {
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 80,
+          "minLength": 2,
+          "pattern": "^[A-Z0-9_-]+$",
+          "title": "Code"
+        },
+        "name_bg": {
+          "type": "string",
+          "maxLength": 255,
+          "minLength": 2,
+          "title": "Name Bg"
+        },
+        "name_en": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name En"
+        },
+        "name_ru": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name Ru"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 120
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Icon"
+        },
+        "validation_rules": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Validation Rules"
+        },
+        "document_types": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Document Types"
+        },
+        "checklists": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Checklists"
+        },
+        "status_codes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Status Codes"
+        }
+      },
+      "type": "object",
+      "required": [
+        "code",
+        "name_bg"
+      ],
+      "title": "CategoryCreate"
+    },
+    "CategoryFieldCreate": {
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 80,
+          "minLength": 2,
+          "pattern": "^[A-Z0-9_-]+$",
+          "title": "Code"
+        },
+        "label_bg": {
+          "type": "string",
+          "maxLength": 255,
+          "minLength": 2,
+          "title": "Label Bg"
+        },
+        "label_en": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label En"
+        },
+        "label_ru": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 255
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label Ru"
+        },
+        "field_type": {
+          "$ref": "#/components/schemas/FieldType",
+          "default": "TEXT"
+        },
+        "is_required": {
+          "type": "boolean",
+          "title": "Is Required",
+          "default": false
+        },
+        "options": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Options"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 40
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unit"
+        },
+        "validation_rules": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Validation Rules"
+        },
+        "sort_order": {
+          "type": "integer",
+          "title": "Sort Order",
+          "default": 0
+        }
+      },
+      "type": "object",
+      "required": [
+        "code",
+        "label_bg"
+      ],
+      "title": "CategoryFieldCreate"
+    },
+    "FieldType": {
+      "type": "string",
+      "enum": [
+        "TEXT",
+        "INTEGER",
+        "DECIMAL",
+        "DATE",
+        "BOOLEAN",
+        "SELECT"
+      ],
+      "title": "FieldType"
+    },
+    "LocationOut": {
+      "properties": {
+        "id": {
+          "type": "integer",
+          "title": "Id"
+        },
+        "name": {
+          "type": "string",
+          "title": "Name"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "is_active": {
+          "type": "boolean",
+          "title": "Is Active",
+          "default": true
+        }
+      },
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "LocationOut"
+    },
+    "MachineCreate": {
+      "properties": {
+        "inventory_number": {
+          "type": "string",
+          "title": "Inventory Number"
+        },
+        "name": {
+          "type": "string",
+          "title": "Name"
+        },
+        "category": {
+          "type": "string",
+          "title": "Category",
+          "default": "HPWJ"
+        },
+        "category_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Category Id"
+        },
+        "brand": {
+          "type": "string",
+          "title": "Brand"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model"
+        },
+        "pressure_bar": {
+          "type": "integer",
+          "title": "Pressure Bar",
+          "default": 500
+        },
+        "serial_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Serial Number"
+        },
+        "status": {
+          "$ref": "#/components/schemas/MachineStatus",
+          "default": "READY"
+        },
+        "location_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Location Id"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Notes"
+        },
+        "asset_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Asset Type"
+        },
+        "subtype": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subtype"
+        },
+        "manufacturer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Manufacturer"
+        },
+        "manufacture_year": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "maximum": 2200,
+              "minimum": 1800
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Manufacture Year"
+        },
+        "commissioning_date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Commissioning Date"
+        },
+        "ownership": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ownership"
+        },
+        "department": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Department"
+        },
+        "responsible_person": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Responsible Person"
+        },
+        "capacity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Capacity"
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dimensions"
+        },
+        "is_active": {
+          "type": "boolean",
+          "title": "Is Active",
+          "default": true
+        }
+      },
+      "type": "object",
+      "required": [
+        "inventory_number",
+        "name",
+        "brand"
+      ],
+      "title": "MachineCreate"
+    },
+    "MachineStatus": {
+      "type": "string",
+      "enum": [
+        "READY",
+        "ISSUED",
+        "REPAIR"
+      ],
+      "title": "MachineStatus"
+    },
+    "MachineOut": {
+      "properties": {
+        "inventory_number": {
+          "type": "string",
+          "title": "Inventory Number"
+        },
+        "name": {
+          "type": "string",
+          "title": "Name"
+        },
+        "category": {
+          "type": "string",
+          "title": "Category",
+          "default": "HPWJ"
+        },
+        "category_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Category Id"
+        },
+        "brand": {
+          "type": "string",
+          "title": "Brand"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model"
+        },
+        "pressure_bar": {
+          "type": "integer",
+          "title": "Pressure Bar",
+          "default": 500
+        },
+        "serial_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Serial Number"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/MachineStatus"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Status"
+        },
+        "location_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Location Id"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Notes"
+        },
+        "asset_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Asset Type"
+        },
+        "subtype": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subtype"
+        },
+        "manufacturer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Manufacturer"
+        },
+        "manufacture_year": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "maximum": 2200,
+              "minimum": 1800
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Manufacture Year"
+        },
+        "commissioning_date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Commissioning Date"
+        },
+        "ownership": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ownership"
+        },
+        "department": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Department"
+        },
+        "responsible_person": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Responsible Person"
+        },
+        "capacity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Capacity"
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dimensions"
+        },
+        "is_active": {
+          "type": "boolean",
+          "title": "Is Active",
+          "default": true
+        },
+        "id": {
+          "type": "integer",
+          "title": "Id"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/LocationOut"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "title": "Created At"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "title": "Updated At"
+        }
+      },
+      "type": "object",
+      "required": [
+        "inventory_number",
+        "name",
+        "brand",
+        "status",
+        "id",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "MachineOut"
+    },
+    "MachineUpdate": {
+      "properties": {
+        "category_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Category Id"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "brand": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Brand"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model"
+        },
+        "pressure_bar": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pressure Bar"
+        },
+        "serial_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Serial Number"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/MachineStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Location Id"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Notes"
+        },
+        "asset_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Asset Type"
+        },
+        "subtype": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Subtype"
+        },
+        "manufacturer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Manufacturer"
+        },
+        "manufacture_year": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "maximum": 2200,
+              "minimum": 1800
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Manufacture Year"
+        },
+        "commissioning_date": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Commissioning Date"
+        },
+        "ownership": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ownership"
+        },
+        "department": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Department"
+        },
+        "responsible_person": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Responsible Person"
+        },
+        "capacity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Capacity"
+        },
+        "dimensions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dimensions"
+        },
+        "is_active": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Is Active"
+        }
+      },
+      "type": "object",
+      "title": "MachineUpdate"
+    },
+    "AttachmentCreate": {
+      "properties": {
+        "filename": {
+          "type": "string",
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Filename"
+        },
+        "media_type": {
+          "type": "string",
+          "maxLength": 150,
+          "minLength": 3,
+          "title": "Media Type"
+        },
+        "content_base64": {
+          "type": "string",
+          "minLength": 1,
+          "title": "Content Base64"
+        },
+        "kind": {
+          "type": "string",
+          "maxLength": 40,
+          "title": "Kind",
+          "default": "DOCUMENT"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "stage": {
+          "type": "string",
+          "maxLength": 40,
+          "title": "Stage",
+          "default": "GENERAL"
+        }
+      },
+      "type": "object",
+      "required": [
+        "filename",
+        "media_type",
+        "content_base64"
+      ],
+      "title": "AttachmentCreate"
+    },
+    "CustomFieldValuesUpdate": {
+      "properties": {
+        "values": {
+          "items": {
+            "$ref": "#/components/schemas/CustomFieldValueInput"
+          },
+          "type": "array",
+          "title": "Values"
+        }
+      },
+      "type": "object",
+      "required": [
+        "values"
+      ],
+      "title": "CustomFieldValuesUpdate"
+    },
+    "CustomFieldValueInput": {
+      "properties": {
+        "field_id": {
+          "type": "integer",
+          "title": "Field Id"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "type": "object",
+      "required": [
+        "field_id"
+      ],
+      "title": "CustomFieldValueInput"
+    }
+  }
+}

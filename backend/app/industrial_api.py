@@ -4,22 +4,30 @@ import base64
 import binascii
 import hashlib
 import hmac
-import io
 import json
 import mimetypes
-import re
 import time
-import zipfile
-from datetime import UTC, date, datetime
-from decimal import Decimal, InvalidOperation
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from .assets.custom_fields import _validated_custom_field_value as _validated_custom_field_value
+from .assets.routes import add_machine_attachment as add_machine_attachment
+from .assets.routes import download_machine_attachment as download_machine_attachment
+from .assets.routes import machine_passport as machine_passport
+from .assets.routes import router as assets_router
+from .assets.routes import update_custom_fields as update_custom_fields
+from .attachment_io import ALLOWED_MEDIA_TYPES as ALLOWED_MEDIA_TYPES
+from .attachment_io import MAX_ATTACHMENT_BYTES as MAX_ATTACHMENT_BYTES
+from .attachment_io import _attachment_dict as _attachment_dict
+
+# Compatibility imports retain the historical Python entry points.
+from .attachment_io import _decode_file as _decode_file
 from .audit import add_audit_log
 from .database import get_db
 from .document_generation import (
@@ -33,16 +41,9 @@ from .industrial_schemas import (
     AttachmentCreate,
     CatalogPartCreate,
     CatalogPartUpdate,
-    CategoryCreate,
-    CategoryFieldCreate,
-    CustomFieldValuesUpdate,
-    DepartmentCreate,
-    DepartmentUpdate,
     HotspotCreate,
     ImportConfirmRequest,
     ImportPreviewRequest,
-    LocationAdminCreate,
-    LocationAdminUpdate,
     MultiPartRequestCreate,
     PartRequestDecision,
     PartRequestFulfillmentUpdate,
@@ -60,20 +61,27 @@ from .industrial_schemas import (
     UnknownPartCatalogLink,
     UnknownPartRequestCreate,
 )
+from .master_data.routes import admin_reference_data as admin_reference_data
+from .master_data.routes import category_router as category_router
+from .master_data.routes import create_category as create_category
+from .master_data.routes import create_category_field as create_category_field
+from .master_data.routes import create_department as create_department
+from .master_data.routes import create_location as create_location
+from .master_data.routes import list_categories as list_categories
+from .master_data.routes import list_departments as list_departments
+from .master_data.routes import router as master_data_router
+from .master_data.routes import update_department as update_department
+from .master_data.routes import update_location as update_location
+from .master_data.serializers import _department_dict as _department_dict
+from .master_data.serializers import _location_dict as _location_dict
 from .models import (
-    AssetCategory,
     AuditLog,
-    CategoryFieldDefinition,
-    Department,
     DocumentTemplate,
     DocumentTemplateVersion,
     DocumentType,
-    FieldType,
     GeneratedDocument,
     Location,
     Machine,
-    MachineAttachment,
-    MachineFieldValue,
     MachineStatus,
     OfficialDocument,
     OfficialDocumentStatus,
@@ -114,10 +122,10 @@ from .part_requests import (
 from .permissions import (
     Permission,
     ensure_permission,
-    has_permission,
     is_observer,
     require_permission,
 )
+from .persistence import _commit as _commit
 from .repairs import (
     apply_repair_transition,
     generate_completion_documents_or_rollback,
@@ -133,15 +141,6 @@ from .workflow import (
 
 router = APIRouter(prefix="/api", tags=["industrial-platform"])
 
-MAX_ATTACHMENT_BYTES = 12 * 1024 * 1024
-ALLOWED_MEDIA_TYPES = {
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-}
 PROTECTED_HPWJ_NUMBERS = {
     "4", "5", "7", "9", "10", "11", "12", "13", "14", "15", "16",
     "17", "18", "19", "20", "21", "22", "23", "24",
@@ -162,97 +161,6 @@ require_document_viewer = require_permission(Permission.DOCUMENTS_VIEW)
 require_document_generator = require_permission(Permission.DOCUMENTS_GENERATE)
 require_template_manager = require_permission(Permission.TEMPLATES_MANAGE)
 require_audit_full = require_permission(Permission.AUDIT_VIEW_FULL)
-
-
-def _decode_file(payload: AttachmentCreate | TechnicalDocumentUpload | TemplateVersionCreate) -> tuple[str, bytes]:
-    filename = Path(payload.filename).name
-    if filename != payload.filename or filename in {"", ".", ".."}:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "unsafe_filename", "message": "Името на файла не е допустимо."},
-        )
-    if payload.media_type not in ALLOWED_MEDIA_TYPES:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "unsupported_media_type",
-                "message": "Файловият формат не се поддържа.",
-            },
-        )
-    try:
-        content = base64.b64decode(payload.content_base64, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "invalid_file_content", "message": "Файлът не е валидно кодиран."},
-        ) from exc
-    if not content or len(content) > MAX_ATTACHMENT_BYTES:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "invalid_file_size",
-                "message": "Файлът трябва да бъде с размер до 12 MB.",
-            },
-        )
-    suffix = Path(filename).suffix.lower()
-    signatures_valid = {
-        "application/pdf": suffix == ".pdf" and content.startswith(b"%PDF-"),
-        "image/png": suffix == ".png" and content.startswith(b"\x89PNG\r\n\x1a\n"),
-        "image/jpeg": suffix in {".jpg", ".jpeg"} and content.startswith(b"\xff\xd8\xff"),
-        "image/webp": suffix == ".webp" and content[:4] == b"RIFF" and content[8:12] == b"WEBP",
-    }
-    office_roots = {
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (".docx", "word/document.xml"),
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": (".xlsx", "xl/workbook.xml"),
-    }
-    if payload.media_type in office_roots:
-        expected_suffix, required_member = office_roots[payload.media_type]
-        try:
-            with zipfile.ZipFile(io.BytesIO(content)) as package:
-                names = set(package.namelist())
-            valid_signature = suffix == expected_suffix and {"[Content_Types].xml", required_member}.issubset(names)
-        except zipfile.BadZipFile:
-            valid_signature = False
-    else:
-        valid_signature = signatures_valid.get(payload.media_type, False)
-    if not valid_signature:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "file_signature_mismatch",
-                "message": "Съдържанието на файла не съответства на заявения формат.",
-            },
-        )
-    return filename, content
-
-
-def _commit(db: Session) -> None:
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise business_conflict(
-            "database_integrity_conflict",
-            "Операцията е в конфликт с вече съществуващ запис.",
-        ) from exc
-
-
-def _attachment_dict(
-    item: MachineAttachment | RepairAttachment | PartRequestAttachment, kind: str
-) -> dict:
-    return {
-        "id": item.id,
-        "filename": item.filename,
-        "media_type": item.media_type,
-        "sha256": item.sha256,
-        "created_at": item.created_at,
-        "description": getattr(item, "description", None),
-        "kind": getattr(item, "kind", None),
-        "caption": getattr(item, "caption", None),
-        "stage": getattr(item, "stage", None),
-        "request_line_id": getattr(item, "request_line_id", None),
-        "download_endpoint": f"/{kind}-attachments/{item.id}/download",
-    }
 
 
 def _repair_event_dict(item: RepairEvent) -> dict:
@@ -518,704 +426,10 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
     }
 
 
-def _validated_custom_field_value(
-    field: CategoryFieldDefinition, raw_value: str | None
-) -> str | None:
-    value = raw_value.strip() if raw_value is not None else None
-    if value == "":
-        value = None
-    if value is None:
-        if field.is_required:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "code": "required_custom_field",
-                    "message": f"Полето „{field.label_bg}“ е задължително.",
-                    "field_id": field.id,
-                },
-            )
-        return None
-    normalized_value = value
-    try:
-        if field.field_type == FieldType.INTEGER.value:
-            normalized_value = str(int(value))
-        elif field.field_type == FieldType.DECIMAL.value:
-            decimal_value = Decimal(value)
-            if not decimal_value.is_finite():
-                raise InvalidOperation
-            normalized_value = format(decimal_value.normalize(), "f")
-        elif field.field_type == FieldType.DATE.value:
-            normalized_value = date.fromisoformat(value).isoformat()
-        elif field.field_type == FieldType.BOOLEAN.value:
-            normalized = value.lower()
-            if normalized not in {"true", "false", "1", "0"}:
-                raise ValueError
-            normalized_value = "true" if normalized in {"true", "1"} else "false"
-        elif field.field_type == FieldType.SELECT.value:
-            options = field.options or []
-            if value not in options:
-                raise ValueError
-        rules = field.validation_rules or {}
-        if field.field_type in {FieldType.INTEGER.value, FieldType.DECIMAL.value}:
-            numeric = Decimal(normalized_value)
-            if rules.get("min") is not None and numeric < Decimal(str(rules["min"])):
-                raise ValueError
-            if rules.get("max") is not None and numeric > Decimal(str(rules["max"])):
-                raise ValueError
-        if rules.get("min_length") is not None and len(normalized_value) < int(rules["min_length"]):
-            raise ValueError
-        if rules.get("max_length") is not None and len(normalized_value) > int(rules["max_length"]):
-            raise ValueError
-        if rules.get("pattern") and re.fullmatch(str(rules["pattern"]), normalized_value) is None:
-            raise ValueError
-    except (InvalidOperation, ValueError, TypeError, re.error):
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "invalid_custom_field_value",
-                "message": f"Стойността за поле „{field.label_bg}“ е невалидна.",
-                "field_id": field.id,
-                "field_type": field.field_type,
-            },
-        ) from None
-    return normalized_value
+router.include_router(category_router)
 
 
-@router.get("/categories")
-def list_categories(
-    _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
-) -> list[dict]:
-    categories = db.scalars(
-        select(AssetCategory)
-        .options(selectinload(AssetCategory.fields))
-        .where(AssetCategory.is_active.is_(True))
-        .order_by(AssetCategory.name_bg)
-    ).all()
-    return [
-        {
-            "id": category.id,
-            "code": category.code,
-            "name_bg": category.name_bg,
-            "name_en": category.name_en,
-            "name_ru": category.name_ru,
-            "description": category.description,
-            "icon": category.icon,
-            "validation_rules": category.validation_rules,
-            "document_types": category.document_types,
-            "checklists": category.checklists,
-            "status_codes": category.status_codes,
-            "is_active": category.is_active,
-            "created_at": category.created_at,
-            "fields": sorted(category.fields, key=lambda item: (item.sort_order, item.id)),
-        }
-        for category in categories
-    ]
-
-
-@router.post("/categories", status_code=201, response_model=None)
-def create_category(
-    payload: CategoryCreate,
-    user: User = Depends(require_permission(Permission.ASSETS_CREATE)),
-    db: Session = Depends(get_db),
-) -> AssetCategory:
-    category = AssetCategory(**payload.model_dump())
-    db.add(category)
-    db.flush()
-    add_audit_log(db, user, "asset_category", category.id, "Създадена категория", payload.model_dump())
-    _commit(db)
-    db.refresh(category)
-    return category
-
-
-@router.post("/categories/{category_id}/fields", status_code=201, response_model=None)
-def create_category_field(
-    category_id: int,
-    payload: CategoryFieldCreate,
-    user: User = Depends(require_permission(Permission.ASSETS_EDIT)),
-    db: Session = Depends(get_db),
-) -> CategoryFieldDefinition:
-    if db.get(AssetCategory, category_id) is None:
-        raise HTTPException(404, "Категорията не е намерена.")
-    field = CategoryFieldDefinition(category_id=category_id, **payload.model_dump(mode="json"))
-    db.add(field)
-    db.flush()
-    add_audit_log(db, user, "category_field", field.id, "Създадено конфигурируемо поле", payload.model_dump(mode="json"))
-    _commit(db)
-    db.refresh(field)
-    return field
-
-
-@router.get("/machines/{machine_id}/passport")
-def machine_passport(
-    machine_id: int,
-    user: User = Depends(require_asset_viewer),
-    db: Session = Depends(get_db),
-) -> dict:
-    machine = db.scalar(
-        select(Machine)
-        .options(
-            joinedload(Machine.location),
-            joinedload(Machine.category_definition).selectinload(AssetCategory.fields),
-            selectinload(Machine.custom_values).joinedload(MachineFieldValue.field),
-            selectinload(Machine.attachments),
-            selectinload(Machine.events),
-            selectinload(Machine.repairs).selectinload(Repair.parts_used),
-            selectinload(Machine.transfers).joinedload(TransferProtocol.batch),
-        )
-        .where(Machine.id == machine_id)
-    )
-    if machine is None:
-        raise HTTPException(404, "Машината не е намерена.")
-    if is_observer(user):
-        active_transfer = next(
-            (item for item in machine.transfers if item.is_active), None
-        )
-        active_repair = next(
-            (
-                item
-                for item in sorted(
-                    machine.repairs,
-                    key=lambda value: value.opened_at,
-                    reverse=True,
-                )
-                if item.status != RepairStatus.COMPLETED.value
-            ),
-            None,
-        )
-        return {
-            "limited_view": True,
-            "machine": {
-                "id": machine.id,
-                "inventory_number": machine.inventory_number,
-                "name": machine.name,
-                "brand": machine.brand,
-                "model": machine.model,
-                "status": machine.status,
-                "is_active": machine.is_active,
-                "location": (
-                    {"id": machine.location.id, "name": machine.location.name}
-                    if machine.location
-                    else None
-                ),
-            },
-            "custom_fields": [],
-            "attachments": [],
-            "history": [],
-            "repairs": [],
-            "transfers": [],
-            "part_requests": [],
-            "parts_used": [],
-            "generated_documents": [],
-            "technical_documents": [],
-            "current_state": {
-                "available": machine.is_active
-                and active_transfer is None
-                and active_repair is None,
-                "active_transfer": (
-                    {"is_active": True} if active_transfer is not None else None
-                ),
-                "active_repair": (
-                    {"status": active_repair.status}
-                    if active_repair is not None
-                    else None
-                ),
-                "last_movement": None,
-                "last_inspection": None,
-                "last_test": None,
-                "allowed_actions": {
-                    "issue": False,
-                    "return": False,
-                    "repair": False,
-                    "edit": False,
-                },
-            },
-            "audit_visible": False,
-            "audit": [],
-            "qr_endpoint": None,
-        }
-    values = {item.field_id: item for item in machine.custom_values}
-    fields = machine.category_definition.fields if machine.category_definition else []
-    documents = db.scalars(
-        select(GeneratedDocument)
-        .where(GeneratedDocument.machine_id == machine.id)
-        .order_by(GeneratedDocument.created_at.desc())
-    ).all()
-    part_requests = db.scalars(
-        select(PartRequest)
-        .where(PartRequest.machine_id == machine.id)
-        .order_by(PartRequest.created_at.desc())
-    ).all()
-    technical_documents = [
-        item
-        for item in db.scalars(
-            select(TechnicalDocument)
-            .where(TechnicalDocument.is_active.is_(True))
-            .options(selectinload(TechnicalDocument.revisions))
-            .where(TechnicalDocument.linked_machine_numbers.is_not(None))
-            .order_by(TechnicalDocument.title)
-        ).all()
-        if machine.inventory_number in (item.linked_machine_numbers or [])
-    ]
-    active_transfer = next(
-        (item for item in machine.transfers if item.is_active), None
-    )
-    active_repair = next(
-        (
-            item
-            for item in sorted(
-                machine.repairs, key=lambda value: value.opened_at, reverse=True
-            )
-            if item.status != RepairStatus.COMPLETED.value
-        ),
-        None,
-    )
-    last_movement = next(
-        (
-            event
-            for event in sorted(
-                machine.events, key=lambda value: value.created_at, reverse=True
-            )
-            if event.event_type in {"TRANSFER_ISSUED", "TRANSFER_RETURNED", "IMPORTED"}
-        ),
-        None,
-    )
-    last_inspection = next(
-        (
-            repair
-            for repair in sorted(
-                machine.repairs,
-                key=lambda value: value.inspection_completed_at or value.opened_at,
-                reverse=True,
-            )
-            if repair.inspection_completed_at is not None
-        ),
-        None,
-    )
-    last_test = next(
-        (
-            repair
-            for repair in sorted(
-                machine.repairs,
-                key=lambda value: value.closed_at or value.opened_at,
-                reverse=True,
-            )
-            if repair.test_passed is not None
-        ),
-        None,
-    )
-    repair_ids = [item.id for item in machine.repairs]
-    transfer_ids = [item.id for item in machine.transfers]
-    request_ids = [item.id for item in part_requests]
-    document_ids = [item.id for item in documents]
-    audit_conditions = [
-        and_(AuditLog.entity_type == "machine", AuditLog.entity_id == machine.id)
-    ]
-    for entity_type, identifiers in (
-        ("repair", repair_ids),
-        ("transfer", transfer_ids),
-        ("part_request", request_ids),
-        ("generated_document", document_ids),
-    ):
-        if identifiers:
-            audit_conditions.append(
-                and_(
-                    AuditLog.entity_type == entity_type,
-                    AuditLog.entity_id.in_(identifiers),
-                )
-            )
-    audit_entries = (
-        db.scalars(
-            select(AuditLog)
-            .where(or_(*audit_conditions))
-            .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
-        ).all()
-        if has_permission(user, Permission.AUDIT_VIEW_OPERATIONAL)
-        else []
-    )
-    return {
-        "limited_view": False,
-        "machine": {
-            column.name: getattr(machine, column.name)
-            for column in Machine.__table__.columns
-            if column.name not in {"category_id"}
-        }
-        | {
-            "location": (
-                {
-                    "id": machine.location.id,
-                    "name": machine.location.name,
-                    "description": machine.location.description,
-                }
-                if machine.location
-                else None
-            ),
-            "category_definition": (
-                {
-                    "id": machine.category_definition.id,
-                    "code": machine.category_definition.code,
-                    "name_bg": machine.category_definition.name_bg,
-                    "name_en": machine.category_definition.name_en,
-                    "name_ru": machine.category_definition.name_ru,
-                }
-                if machine.category_definition
-                else None
-            ),
-        },
-        "custom_fields": [
-            {
-                "field_id": field.id,
-                "code": field.code,
-                "label_bg": field.label_bg,
-                "label_en": field.label_en,
-                "label_ru": field.label_ru,
-                "field_type": field.field_type,
-                "is_required": field.is_required,
-                "options": field.options,
-                "unit": field.unit,
-                "validation_rules": field.validation_rules,
-                "value": values.get(field.id).value if field.id in values else None,
-            }
-            for field in sorted(fields, key=lambda item: (item.sort_order, item.id))
-        ],
-        "attachments": [_attachment_dict(item, "machine") for item in machine.attachments],
-        "history": [
-            {
-                "id": event.id,
-                "event_type": event.event_type,
-                "reference": event.reference,
-                "previous_status": event.previous_status,
-                "new_status": event.new_status,
-                "previous_location_id": event.previous_location_id,
-                "new_location_id": event.new_location_id,
-                "details": event.details,
-                "user_id": event.user_id,
-                "created_at": event.created_at,
-            }
-            for event in sorted(
-                machine.events, key=lambda item: item.created_at, reverse=True
-            )
-        ],
-        "repairs": [
-            {
-                "id": repair.id,
-                "repair_reference": repair.repair_reference,
-                "status": repair.status,
-                "reported_problem": repair.reported_problem,
-                "opened_at": repair.opened_at,
-                "closed_at": repair.closed_at,
-            }
-            for repair in sorted(machine.repairs, key=lambda item: item.opened_at, reverse=True)
-        ],
-        "transfers": [
-            {
-                "id": transfer.id,
-                "protocol_number": transfer.protocol_number,
-                "batch_reference": transfer.batch_reference,
-                "is_active": transfer.is_active,
-                "issued_at": transfer.issued_at,
-                "returned_at": transfer.returned_at,
-                "location_text": transfer.location_text,
-                "accepted_by": transfer.accepted_by,
-            }
-            for transfer in sorted(machine.transfers, key=lambda item: item.created_at, reverse=True)
-        ],
-        "part_requests": [
-            {
-                "id": item.id,
-                "request_reference": item.request_reference,
-                "status": item.status,
-                "priority": item.priority,
-                "created_at": item.created_at,
-            }
-            for item in part_requests
-        ],
-        "parts_used": [
-            {
-                "id": part.id,
-                "repair_id": repair.id,
-                "repair_reference": repair.repair_reference,
-                "catalog_part_id": part.catalog_part_id,
-                "part_number": part.part_number,
-                "description": part.description,
-                "quantity": part.quantity,
-                "unit": part.unit,
-                "source": part.source,
-                "created_at": part.created_at,
-            }
-            for repair in sorted(
-                machine.repairs, key=lambda value: value.opened_at, reverse=True
-            )
-            for part in sorted(
-                repair.parts_used, key=lambda value: value.created_at, reverse=True
-            )
-        ],
-        "generated_documents": [
-            {
-                "id": item.id,
-                "document_number": item.document_number,
-                "document_type": item.document_type,
-                "format": item.format,
-                "filename": item.filename,
-                "created_at": item.created_at,
-                "download_endpoint": f"/generated-documents/{item.id}/download",
-            }
-            for item in documents
-        ],
-        "technical_documents": [
-            {
-                "id": item.id,
-                "brand": item.brand,
-                "model": item.model,
-                "category": item.category,
-                "title": item.title,
-                "document_type": item.document_type,
-                "language": item.language,
-                "revision": item.revision,
-                "source_label": item.source_label,
-                "document_date": item.document_date,
-                "tags": item.tags,
-                "page_count": item.page_count,
-                "notes": item.notes,
-                "linked_machine_numbers": item.linked_machine_numbers,
-                "sha256": item.sha256,
-                "created_at": item.created_at,
-                "download_endpoint": f"/technical-library/{item.id}/download",
-                "revisions": [
-                    {
-                        "id": revision.id,
-                        "version": revision.version,
-                        "revision_label": revision.revision_label,
-                        "filename": revision.filename,
-                        "sha256": revision.sha256,
-                        "change_note": revision.change_note,
-                        "created_at": revision.created_at,
-                        "download_endpoint": (
-                            f"/technical-library/revisions/{revision.id}/download"
-                        ),
-                    }
-                    for revision in sorted(
-                        item.revisions, key=lambda value: value.version, reverse=True
-                    )
-                ],
-            }
-            for item in technical_documents
-        ],
-        "current_state": {
-            "available": machine.is_active and active_transfer is None,
-            "active_transfer": (
-                {
-                    "id": active_transfer.id,
-                    "protocol_number": active_transfer.protocol_number,
-                    "batch_reference": active_transfer.batch_reference,
-                    "issued_at": active_transfer.issued_at,
-                    "company_unit": active_transfer.company_unit,
-                    "department": active_transfer.department,
-                    "vessel": active_transfer.vessel,
-                    "dock": active_transfer.dock,
-                    "pier": active_transfer.pier,
-                    "work_area": active_transfer.work_area,
-                    "location_text": active_transfer.location_text,
-                    "accepted_by": active_transfer.accepted_by,
-                }
-                if active_transfer
-                else None
-            ),
-            "active_repair": (
-                {
-                    "id": active_repair.id,
-                    "repair_reference": active_repair.repair_reference,
-                    "status": active_repair.status,
-                    "reported_problem": active_repair.reported_problem,
-                    "opened_at": active_repair.opened_at,
-                }
-                if active_repair
-                else None
-            ),
-            "last_movement": (
-                {
-                    "event_type": last_movement.event_type,
-                    "reference": last_movement.reference,
-                    "created_at": last_movement.created_at,
-                }
-                if last_movement
-                else None
-            ),
-            "last_inspection": (
-                {
-                    "repair_reference": last_inspection.repair_reference,
-                    "completed_at": last_inspection.inspection_completed_at,
-                }
-                if last_inspection
-                else None
-            ),
-            "last_test": (
-                {
-                    "repair_reference": last_test.repair_reference,
-                    "passed": last_test.test_passed,
-                    "details": last_test.test_details,
-                    "completed_at": last_test.closed_at,
-                }
-                if last_test
-                else None
-            ),
-            "allowed_actions": {
-                "issue": has_permission(user, Permission.TRANSFERS_CREATE)
-                and active_transfer is None,
-                "return": has_permission(user, Permission.TRANSFERS_RETURN)
-                and active_transfer is not None,
-                "repair": has_permission(user, Permission.REPAIRS_CREATE)
-                and active_repair is None,
-                "edit": has_permission(user, Permission.ASSETS_EDIT),
-            },
-        },
-        "audit_visible": has_permission(user, Permission.AUDIT_VIEW_OPERATIONAL),
-        "audit": [
-            {
-                "id": item.id,
-                "entity_type": item.entity_type,
-                "entity_id": item.entity_id,
-                "action": item.action,
-                "details": item.details,
-                "user_name": item.user_name,
-                "operation_reference": item.operation_reference,
-                "created_at": item.created_at,
-            }
-            for item in audit_entries
-        ],
-        "qr_endpoint": f"/machines/{machine.id}/qr",
-    }
-
-
-@router.put("/machines/{machine_id}/custom-fields")
-def update_custom_fields(
-    machine_id: int,
-    payload: CustomFieldValuesUpdate,
-    user: User = Depends(require_permission(Permission.ASSETS_EDIT)),
-    db: Session = Depends(get_db),
-) -> dict:
-    machine = db.get(Machine, machine_id)
-    if machine is None:
-        raise HTTPException(404, "Машината не е намерена.")
-    field_ids = [item.field_id for item in payload.values]
-    fields = db.scalars(
-        select(CategoryFieldDefinition).where(CategoryFieldDefinition.id.in_(field_ids))
-    ).all() if field_ids else []
-    by_id = {field.id: field for field in fields}
-    if len(by_id) != len(field_ids):
-        raise HTTPException(404, "Едно или повече потребителски полета не са намерени.")
-    current_values = {
-        item.field_id: item
-        for item in db.scalars(
-            select(MachineFieldValue).where(MachineFieldValue.machine_id == machine.id)
-        ).all()
-    }
-    previous = {
-        by_id[field_id].code: current_values.get(field_id).value
-        if field_id in current_values
-        else None
-        for field_id in field_ids
-    }
-    normalized: dict[int, str | None] = {}
-    for item in payload.values:
-        field = by_id[item.field_id]
-        if machine.category_id != field.category_id:
-            raise business_conflict(
-                "field_category_mismatch",
-                f"Полето „{field.label_bg}“ не принадлежи към категорията на машината.",
-            )
-        normalized[field.id] = _validated_custom_field_value(field, item.value)
-        value = current_values.get(field.id)
-        if value is None:
-            value = MachineFieldValue(machine_id=machine.id, field_id=field.id)
-            db.add(value)
-            current_values[field.id] = value
-        value.value = normalized[field.id]
-        value.updated_by_id = user.id
-    required_fields = db.scalars(
-        select(CategoryFieldDefinition).where(
-            CategoryFieldDefinition.category_id == machine.category_id,
-            CategoryFieldDefinition.is_active.is_(True),
-            CategoryFieldDefinition.is_required.is_(True),
-        )
-    ).all()
-    for field in required_fields:
-        candidate = normalized.get(
-            field.id,
-            current_values.get(field.id).value if field.id in current_values else None,
-        )
-        _validated_custom_field_value(field, candidate)
-    changed = {
-        by_id[field_id].code: normalized[field_id]
-        for field_id in field_ids
-        if previous[by_id[field_id].code] != normalized[field_id]
-    }
-    add_machine_event(
-        db, machine, user, "CUSTOM_FIELDS_UPDATED",
-        details={"field_ids": field_ids, "previous": previous, "new": changed},
-    )
-    add_audit_log(
-        db,
-        user,
-        "machine",
-        machine.id,
-        "Обновени конфигурируеми полета",
-        {"field_ids": field_ids, "previous": previous, "new": changed},
-    )
-    _commit(db)
-    return {
-        "message": "Потребителските полета са обновени.",
-        "machine_id": machine.id,
-        "values": [
-            {"field_id": field_id, "value": normalized[field_id]}
-            for field_id in field_ids
-        ],
-    }
-
-
-@router.post("/machines/{machine_id}/attachments", status_code=201)
-def add_machine_attachment(
-    machine_id: int,
-    payload: AttachmentCreate,
-    user: User = Depends(require_repair_operator),
-    db: Session = Depends(get_db),
-) -> dict:
-    machine = db.get(Machine, machine_id)
-    if machine is None:
-        raise HTTPException(404, "Машината не е намерена.")
-    filename, content = _decode_file(payload)
-    item = MachineAttachment(
-        machine_id=machine.id,
-        kind=payload.kind,
-        filename=filename,
-        media_type=payload.media_type,
-        content=content,
-        sha256=hashlib.sha256(content).hexdigest(),
-        description=payload.description,
-        created_by_id=user.id,
-    )
-    db.add(item)
-    db.flush()
-    add_machine_event(db, machine, user, "ATTACHMENT_ADDED", reference=str(item.id), details={"filename": filename, "kind": payload.kind})
-    add_audit_log(db, user, "machine_attachment", item.id, "Добавен файл към машината", {"machine_number": machine.inventory_number, "filename": filename, "sha256": item.sha256})
-    _commit(db)
-    db.refresh(item)
-    return _attachment_dict(item, "machine")
-
-
-@router.get("/machine-attachments/{attachment_id}/download")
-def download_machine_attachment(
-    attachment_id: int,
-    _: User = Depends(require_document_viewer),
-    db: Session = Depends(get_db),
-) -> Response:
-    item = db.get(MachineAttachment, attachment_id)
-    if item is None:
-        raise HTTPException(404, "Файлът не е намерен.")
-    return Response(
-        item.content,
-        media_type=item.media_type,
-        headers={"Content-Disposition": f'attachment; filename="{item.filename}"', "X-Content-Type-Options": "nosniff"},
-    )
+router.include_router(assets_router)
 
 
 @router.get("/repair-cases")
@@ -3471,190 +2685,7 @@ def global_search(
     }
 
 
-def _location_dict(item: Location) -> dict:
-    return {
-        "id": item.id,
-        "name": item.name,
-        "description": item.description,
-        "is_active": item.is_active,
-    }
-
-
-def _department_dict(item: Department) -> dict:
-    return {
-        "id": item.id,
-        "code": item.code,
-        "name_bg": item.name_bg,
-        "name_en": item.name_en,
-        "name_ru": item.name_ru,
-        "description": item.description,
-        "is_active": item.is_active,
-        "created_at": item.created_at,
-    }
-
-
-@router.get("/departments")
-def list_departments(
-    _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
-) -> list[dict]:
-    items = db.scalars(select(Department).order_by(Department.code)).all()
-    return [_department_dict(item) for item in items]
-
-
-@router.get("/admin/reference-data")
-def admin_reference_data(
-    _: User = Depends(require_admin), db: Session = Depends(get_db)
-) -> dict:
-    locations = db.scalars(select(Location).order_by(Location.name)).all()
-    departments = db.scalars(select(Department).order_by(Department.code)).all()
-    return {
-        "locations": [_location_dict(item) for item in locations],
-        "departments": [_department_dict(item) for item in departments],
-    }
-
-
-@router.post("/admin/locations", status_code=201)
-def create_location(
-    payload: LocationAdminCreate,
-    user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-) -> dict:
-    name = payload.name.strip()
-    if any(
-        existing.casefold() == name.casefold()
-        for existing in db.scalars(select(Location.name)).all()
-    ):
-        raise business_conflict(
-            "location_duplicate",
-            "Вече съществува местоположение със същото име.",
-            name=name,
-        )
-    item = Location(name=name, description=payload.description)
-    db.add(item)
-    db.flush()
-    add_audit_log(
-        db,
-        user,
-        "location",
-        item.id,
-        "Добавено местоположение",
-        {"name": item.name, "is_active": item.is_active},
-    )
-    _commit(db)
-    db.refresh(item)
-    return _location_dict(item)
-
-
-@router.patch("/admin/locations/{location_id}")
-def update_location(
-    location_id: int,
-    payload: LocationAdminUpdate,
-    user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-) -> dict:
-    item = db.get(Location, location_id)
-    if item is None:
-        raise HTTPException(404, "Местоположението не е намерено.")
-    changes = payload.model_dump(exclude_unset=True)
-    if "name" in changes:
-        name = changes["name"].strip()
-        duplicate = any(
-            existing.casefold() == name.casefold()
-            for existing in db.scalars(
-                select(Location.name).where(Location.id != item.id)
-            ).all()
-        )
-        if duplicate:
-            raise business_conflict(
-                "location_duplicate",
-                "Вече съществува местоположение със същото име.",
-                name=name,
-            )
-        changes["name"] = name
-    previous = _location_dict(item)
-    for key, value in changes.items():
-        setattr(item, key, value)
-    add_audit_log(
-        db,
-        user,
-        "location",
-        item.id,
-        "Обновено местоположение",
-        {"previous": previous, "changes": changes},
-    )
-    _commit(db)
-    db.refresh(item)
-    return _location_dict(item)
-
-
-@router.post("/admin/departments", status_code=201)
-def create_department(
-    payload: DepartmentCreate,
-    user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-) -> dict:
-    code = payload.code.strip().upper()
-    if db.scalar(select(Department.id).where(Department.code == code)):
-        raise business_conflict(
-            "department_duplicate",
-            "Вече съществува отдел със същия системен код.",
-            department_code=code,
-        )
-    item = Department(**payload.model_dump(exclude={"code"}), code=code)
-    db.add(item)
-    db.flush()
-    add_audit_log(
-        db,
-        user,
-        "department",
-        item.id,
-        "Добавен отдел",
-        {"code": item.code, "name_bg": item.name_bg, "is_active": item.is_active},
-    )
-    _commit(db)
-    db.refresh(item)
-    return _department_dict(item)
-
-
-@router.patch("/admin/departments/{department_id}")
-def update_department(
-    department_id: int,
-    payload: DepartmentUpdate,
-    user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-) -> dict:
-    item = db.get(Department, department_id)
-    if item is None:
-        raise HTTPException(404, "Отделът не е намерен.")
-    changes = payload.model_dump(exclude_unset=True)
-    if "code" in changes:
-        code = changes["code"].strip().upper()
-        duplicate = db.scalar(
-            select(Department.id).where(
-                Department.code == code, Department.id != item.id
-            )
-        )
-        if duplicate:
-            raise business_conflict(
-                "department_duplicate",
-                "Вече съществува отдел със същия системен код.",
-                department_code=code,
-            )
-        changes["code"] = code
-    previous = _department_dict(item)
-    for key, value in changes.items():
-        setattr(item, key, value)
-    add_audit_log(
-        db,
-        user,
-        "department",
-        item.id,
-        "Обновен отдел",
-        {"previous": previous, "changes": changes},
-    )
-    _commit(db)
-    db.refresh(item)
-    return _department_dict(item)
+router.include_router(master_data_router)
 
 
 def _sign_preview(records: list[dict]) -> str:
