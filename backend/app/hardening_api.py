@@ -6,7 +6,7 @@ import io
 import json
 import re
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 from cryptography.fernet import Fernet
@@ -25,29 +25,29 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .audit import add_audit_log
-from .auth_sessions import revoke_all_user_sessions
-from .auth_throttle import (
-    clear_rate_limit_failures,
-    enforce_rate_limit,
-    record_rate_limit_failure,
-    sensitive_rate_limit_keys,
-    throttled_error,
-)
 from .database import get_db
+from .governance import emergency_routes, license_routes, owner_routes
+from .governance.audit_context import _correlation_id as _correlation_id
+from .governance.emergency_routes import emergency_access_status as emergency_access_status
+from .governance.emergency_routes import end_emergency_access as end_emergency_access
+from .governance.emergency_routes import start_emergency_access as start_emergency_access
+from .governance.emergency_service import _emergency_status as _emergency_status
+from .governance.license_routes import install_license as install_license
+from .governance.license_routes import license_status as license_status
+from .governance.license_service import _parse_license_date as _parse_license_date
+from .governance.owner_routes import owner_audit_history as owner_audit_history
+from .governance.owner_routes import owner_status as owner_status
+from .governance.owner_routes import transfer_owner as transfer_owner
+from .governance.owner_service import _ownership as _ownership
+from .governance.profile_checks import _profile_complete as _profile_complete
+from .governance.profile_checks import _require_complete_profile as _require_complete_profile
 from .hardening_schemas import (
-    EmergencyAccessEnd,
-    EmergencyAccessStart,
-    EmergencyAccessStatusOut,
     ExternalSignerCreate,
     ExternalSignerOut,
     ExternalSignerUpdate,
-    LicenseEnvelope,
-    LicenseStatusOut,
     OfficialDocumentCreate,
     OfficialDocumentOut,
     OfficialDocumentVersionOut,
-    OwnerStatusOut,
-    OwnerTransferRequest,
     ParticipantsAssign,
     ProfileUpdate,
     ReasonRequest,
@@ -58,23 +58,12 @@ from .hardening_schemas import (
     SignatureSubmit,
     SupersedeDocumentRequest,
 )
-from .licensing import (
-    LicenseValidationError,
-    active_license,
-    evaluate_license,
-    payload_hash,
-    serialize_license_state,
-    validate_envelope,
-)
 from .models import (
-    AuditLog,
     Department,
     DocumentParticipant,
     DocumentSignature,
     DocumentType,
-    EmergencyAccessSession,
     ExternalSigner,
-    InstallationOwnership,
     Machine,
     OfficialDocument,
     OfficialDocumentStatus,
@@ -82,7 +71,6 @@ from .models import (
     ProfileStatus,
     SignatureSession,
     SignatureSlot,
-    SoftwareLicense,
     User,
     UserRole,
     utcnow,
@@ -91,7 +79,7 @@ from .official_documents import build_official_document_registry
 from .official_documents.integrity import require_current_version, set_current_version
 from .official_documents.schemas import OfficialDocumentRegistryOut
 from .permissions import Permission, require_permission
-from .security import get_authenticated_user, get_current_active_user, verify_password
+from .security import get_current_active_user
 from .settings import settings
 from .template_engine import convert_docx_to_pdf
 from .transfer_service import (
@@ -140,32 +128,6 @@ def _signature_consent(language: str) -> str:
         "en": "I confirm that the signature is mine and that I accept the contents of the document.",
         "ru": "Подтверждаю, что подпись принадлежит мне и что я принимаю содержание документа.",
     }.get(language, "Потвърждавам, че положеният подпис е мой и че приемам съдържанието на документа.")
-
-
-def _correlation_id(request: Request) -> str | None:
-    value = request.headers.get("X-Request-ID", "")
-    return value if re.fullmatch(r"[A-Za-z0-9._:-]{1,80}", value) else None
-
-
-def _profile_complete(user: User) -> bool:
-    has_middle = bool(user.middle_name) or (
-        user.legal_name_exception
-        and bool(user.legal_name_exception_reason)
-        and bool(user.legal_name_exception_approved_by_id)
-        and bool(user.legal_name_exception_approved_at)
-    )
-    return bool(user.first_name and has_middle and user.last_name and user.job_title)
-
-
-def _require_complete_profile(user: User) -> None:
-    if user.profile_status != ProfileStatus.COMPLETE.value or not _profile_complete(user):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "code": "profile_incomplete",
-                "message": "Профилът трябва да съдържа потвърдени три имена и длъжност.",
-            },
-        )
 
 
 def _identity_snapshot(user: User, operation_role: str) -> dict:
@@ -225,46 +187,6 @@ def _decode_file(value: str | None, label: str) -> bytes | None:
 def _fernet() -> Fernet:
     material = (settings.signature_encryption_key or settings.secret_key).encode("utf-8")
     return Fernet(base64.urlsafe_b64encode(hashlib.sha256(material).digest()))
-
-
-def _ownership(db: Session, lock: bool = False) -> InstallationOwnership:
-    query = select(InstallationOwnership).order_by(InstallationOwnership.id)
-    if lock:
-        query = query.with_for_update()
-    item = db.scalar(query)
-    if item is None:
-        owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
-        if owner is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"code": "owner_missing", "message": "Инсталацията няма определен собственик."},
-            )
-        item = InstallationOwnership(owner_user_id=owner.id, designated_by_id=owner.id)
-        db.add(item)
-        db.flush()
-    return item
-
-
-def _emergency_status(
-    item: EmergencyAccessSession | None, db: Session
-) -> dict:
-    now = utcnow()
-    active = bool(item and item.ended_at is None and item.expires_at > now)
-    owner = db.get(User, item.owner_user_id) if active and item else None
-    return {
-        "active": active,
-        "session_id": item.id if active and item else None,
-        "started_at": item.started_at if active and item else None,
-        "expires_at": item.expires_at if active and item else None,
-        "owner_name": owner.full_name if owner else None,
-        "mfa_verified": bool(item and item.mfa_verified_at) if active else False,
-        "message": (
-            "Активна е контролирана аварийна административна процедура. "
-            "Тя не разширява системните права и приключва автоматично в посочения час."
-            if active
-            else "Няма активна аварийна административна процедура."
-        ),
-    }
 
 
 @router.put("/users/me/profile")
@@ -391,395 +313,16 @@ def _update_profile(
     return serialize_user(target)
 
 
-@router.get("/owner", response_model=OwnerStatusOut)
-def owner_status(
-    _: User = Depends(get_authenticated_user), db: Session = Depends(get_db)
-) -> dict:
-    item = _ownership(db)
-    owner = db.get(User, item.owner_user_id)
-    return {
-        "owner_user_id": owner.id,
-        "owner_name": owner.full_name,
-        "owner_email": owner.email,
-        "role": owner.role,
-        "designated_at": item.designated_at,
-        "designation_version": item.version,
-    }
+router.include_router(owner_routes.router)
 
 
-@router.get("/owner/audit")
-def owner_audit_history(
-    actor: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
-) -> list[dict]:
-    ownership = _ownership(db)
-    if actor.id != ownership.owner_user_id or actor.role != UserRole.ADMINISTRATOR.value:
-        raise HTTPException(
-            403,
-            detail={
-                "code": "owner_only",
-                "message_key": "errors.ownerOnly",
-                "message": "Историята на собствеността е достъпна само за определения собственик-администратор.",
-            },
-        )
-    entries = db.scalars(
-        select(AuditLog)
-        .where(AuditLog.entity_type == "installation_owner")
-        .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
-    )
-    return [
-        {
-            "id": entry.id,
-            "actor_user_id": entry.user_id,
-            "actor_name": entry.user_name,
-            "action": entry.action,
-            "entity_id": entry.entity_id,
-            "details": json.loads(entry.details) if entry.details else None,
-            "correlation_id": entry.operation_reference,
-            "created_at": entry.created_at,
-        }
-        for entry in entries
-    ]
+router.include_router(emergency_routes.router)
 
 
-@router.get("/emergency-access/status", response_model=EmergencyAccessStatusOut)
-def emergency_access_status(
-    _: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
-) -> dict:
-    item = db.scalar(
-        select(EmergencyAccessSession)
-        .where(
-            EmergencyAccessSession.ended_at.is_(None),
-            EmergencyAccessSession.expires_at > utcnow(),
-        )
-        .order_by(EmergencyAccessSession.started_at.desc())
-    )
-    return _emergency_status(item, db)
+router.include_router(owner_routes.transfer_router)
 
 
-@router.post(
-    "/emergency-access/start",
-    response_model=EmergencyAccessStatusOut,
-    status_code=status.HTTP_201_CREATED,
-)
-def start_emergency_access(
-    data: EmergencyAccessStart,
-    request: Request,
-    actor: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
-) -> dict:
-    _require_complete_profile(actor)
-    ownership = _ownership(db, lock=True)
-    if (
-        actor.id != ownership.owner_user_id
-        or actor.role != UserRole.ADMINISTRATOR.value
-        or not actor.is_system_owner
-    ):
-        raise HTTPException(
-            403,
-            detail={
-                "code": "owner_only",
-                "message_key": "errors.ownerOnly",
-                "message": "Аварийна процедура може да започне само определеният собственик-администратор.",
-            },
-        )
-    throttle_keys = sensitive_rate_limit_keys(request, actor, "emergency_start")
-    enforce_rate_limit(db, throttle_keys)
-    if not verify_password(data.current_password, actor.password_hash):
-        retry_after = record_rate_limit_failure(
-            db,
-            throttle_keys,
-            user=actor,
-            action="Ограничени неуспешни проверки за начало на аварийна процедура",
-        )
-        add_audit_log(
-            db,
-            actor,
-            "emergency_access",
-            None,
-            "Отказано начало на аварийна административна процедура",
-            {"result": "rejected", "reason": "invalid_reauthentication"},
-            _correlation_id(request),
-        )
-        db.commit()
-        if retry_after:
-            raise throttled_error(retry_after)
-        raise HTTPException(
-            403,
-            detail={
-                "code": "reauthentication_failed",
-                "message_key": "errors.reauthenticationFailed",
-                "message": "Текущата парола е неправилна.",
-            },
-        )
-    clear_rate_limit_failures(db, throttle_keys)
-
-    now = utcnow()
-    expired_items = db.scalars(
-        select(EmergencyAccessSession)
-        .where(
-            EmergencyAccessSession.owner_user_id == actor.id,
-            EmergencyAccessSession.ended_at.is_(None),
-            EmergencyAccessSession.expires_at <= now,
-        )
-        .with_for_update()
-    ).all()
-    for expired in expired_items:
-        expired.ended_at = expired.expires_at
-        expired.end_reason = "Автоматично приключване след изтичане на определения срок."
-
-    existing = db.scalar(
-        select(EmergencyAccessSession)
-        .where(
-            EmergencyAccessSession.ended_at.is_(None),
-            EmergencyAccessSession.expires_at > now,
-        )
-        .with_for_update()
-    )
-    if existing:
-        add_audit_log(
-            db,
-            actor,
-            "emergency_access",
-            existing.id,
-            "Отказано повторно начало на аварийна административна процедура",
-            {"result": "rejected", "reason": "already_active"},
-            _correlation_id(request),
-        )
-        db.commit()
-        raise HTTPException(
-            409,
-            detail={
-                "code": "emergency_access_already_active",
-                "message": "Вече има активна аварийна административна процедура.",
-            },
-        )
-
-    item = EmergencyAccessSession(
-        owner_user_id=actor.id,
-        reason=data.reason.strip(),
-        started_at=now,
-        expires_at=now + timedelta(minutes=data.duration_minutes),
-        reauthenticated_at=now,
-        correlation_id=_correlation_id(request),
-    )
-    db.add(item)
-    db.flush()
-    add_audit_log(
-        db,
-        actor,
-        "emergency_access",
-        item.id,
-        "Започната контролирана аварийна административна процедура",
-        {
-            "reason": item.reason,
-            "started_at": item.started_at.isoformat(),
-            "expires_at": item.expires_at.isoformat(),
-            "mfa_verified": False,
-            "permissions_elevated": False,
-        },
-        item.correlation_id,
-    )
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            409,
-            detail={
-                "code": "emergency_access_conflict",
-                "message": "Аварийната процедура е променена едновременно. Опитайте отново.",
-            },
-        ) from exc
-    db.refresh(item)
-    return _emergency_status(item, db)
-
-
-@router.post(
-    "/emergency-access/{session_id}/end",
-    response_model=EmergencyAccessStatusOut,
-)
-def end_emergency_access(
-    session_id: int,
-    data: EmergencyAccessEnd,
-    request: Request,
-    actor: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
-) -> dict:
-    _require_complete_profile(actor)
-    ownership = _ownership(db, lock=True)
-    if actor.id != ownership.owner_user_id or actor.role != UserRole.ADMINISTRATOR.value:
-        raise HTTPException(403, detail={"code": "owner_only", "message": "Само текущият собственик може да приключи аварийната процедура."})
-    throttle_keys = sensitive_rate_limit_keys(request, actor, "emergency_end")
-    enforce_rate_limit(db, throttle_keys)
-    if not verify_password(data.current_password, actor.password_hash):
-        retry_after = record_rate_limit_failure(
-            db,
-            throttle_keys,
-            user=actor,
-            action="Ограничени неуспешни проверки за край на аварийна процедура",
-        )
-        add_audit_log(db, actor, "emergency_access", session_id, "Отказано приключване на аварийна административна процедура", {"result": "rejected", "reason": "invalid_reauthentication"}, _correlation_id(request))
-        db.commit()
-        if retry_after:
-            raise throttled_error(retry_after)
-        raise HTTPException(403, detail={"code": "reauthentication_failed", "message": "Текущата парола е неправилна."})
-    clear_rate_limit_failures(db, throttle_keys)
-    item = db.scalar(
-        select(EmergencyAccessSession)
-        .where(EmergencyAccessSession.id == session_id)
-        .with_for_update()
-    )
-    if item is None:
-        raise HTTPException(404, detail={"code": "emergency_access_not_found", "message": "Аварийната процедура не е намерена."})
-    if item.owner_user_id != actor.id:
-        raise HTTPException(403, detail={"code": "owner_only", "message": "Процедурата принадлежи на друг определен собственик."})
-    if item.ended_at is not None or item.expires_at <= utcnow():
-        raise HTTPException(409, detail={"code": "emergency_access_not_active", "message": "Аварийната процедура вече не е активна."})
-    item.ended_at = utcnow()
-    item.ended_by_id = actor.id
-    item.end_reason = data.reason.strip()
-    add_audit_log(db, actor, "emergency_access", item.id, "Приключена аварийна административна процедура", {"reason": item.end_reason, "ended_at": item.ended_at.isoformat(), "permissions_elevated": False}, _correlation_id(request))
-    db.commit()
-    return _emergency_status(item, db)
-
-
-@router.post("/owner/transfer", response_model=OwnerStatusOut)
-def transfer_owner(
-    data: OwnerTransferRequest,
-    request: Request,
-    actor: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
-) -> dict:
-    _require_complete_profile(actor)
-    item = _ownership(db, lock=True)
-    if actor.id != item.owner_user_id or not actor.is_system_owner:
-        raise HTTPException(403, detail={"code": "owner_only", "message": "Само текущият собственик може да прехвърли собствеността."})
-    throttle_keys = sensitive_rate_limit_keys(request, actor, "owner_transfer")
-    enforce_rate_limit(db, throttle_keys)
-    if not verify_password(data.current_password, actor.password_hash):
-        retry_after = record_rate_limit_failure(
-            db,
-            throttle_keys,
-            user=actor,
-            action="Ограничени неуспешни проверки за прехвърляне на собственост",
-        )
-        add_audit_log(db, actor, "installation_owner", actor.id, "Отказано прехвърляне на собственост", {"result": "rejected", "target_user_id": data.target_user_id, "reason": "invalid_reauthentication"}, _correlation_id(request))
-        db.commit()
-        if retry_after:
-            raise throttled_error(retry_after)
-        raise HTTPException(403, detail={"code": "reauthentication_failed", "message": "Текущата парола е неправилна."})
-    clear_rate_limit_failures(db, throttle_keys)
-    target = db.scalar(select(User).where(User.id == data.target_user_id).with_for_update())
-    if target is None:
-        raise HTTPException(404, detail={"code": "user_not_found", "message": "Новият собственик не е намерен."})
-    if target.id == actor.id:
-        raise HTTPException(409, detail={"code": "owner_unchanged", "message": "Избраният потребител вече е собственик."})
-    if not target.is_active or target.role != UserRole.ADMINISTRATOR.value:
-        raise HTTPException(409, detail={"code": "invalid_owner_target", "message": "Новият собственик трябва да е активен администратор."})
-    _require_complete_profile(target)
-    actor.is_system_owner = False
-    target.is_system_owner = True
-    item.owner_user_id = target.id
-    item.designated_by_id = actor.id
-    item.designated_at = utcnow()
-    item.transfer_reason = data.reason.strip()
-    item.version += 1
-    actor.token_version += 1
-    target.token_version += 1
-    revoke_all_user_sessions(db, actor.id, "owner_transferred")
-    revoke_all_user_sessions(db, target.id, "owner_designated")
-    add_audit_log(db, actor, "installation_owner", target.id, "Прехвърлена собственост на инсталацията", {"previous_owner_user_id": actor.id, "new_owner_user_id": target.id, "reason": data.reason.strip(), "designation_version": item.version}, _correlation_id(request))
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(409, detail={"code": "owner_transfer_conflict", "message": "Собствеността е променена едновременно. Опитайте отново."}) from exc
-    return owner_status(target, db)
-
-
-@router.get("/license/validate", response_model=LicenseStatusOut)
-@router.get("/license/status", response_model=LicenseStatusOut)
-def license_status(
-    _: User = Depends(get_authenticated_user), db: Session = Depends(get_db)
-) -> dict:
-    return serialize_license_state(evaluate_license(db))
-
-
-@router.post("/license/install", response_model=LicenseStatusOut)
-def install_license(
-    envelope: LicenseEnvelope,
-    request: Request,
-    actor: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db),
-) -> dict:
-    _require_complete_profile(actor)
-    ownership = _ownership(db, lock=True)
-    if actor.id != ownership.owner_user_id or actor.role != UserRole.ADMINISTRATOR.value:
-        raise HTTPException(403, detail={"code": "owner_only", "message": "Лицензът се управлява само от активния собственик-администратор."})
-    try:
-        payload = validate_envelope(envelope.payload, envelope.signature)
-    except LicenseValidationError as exc:
-        add_audit_log(db, actor, "software_license", None, "Отказано инсталиране на лиценз", {"result": "rejected", "reason": exc.code}, _correlation_id(request))
-        db.commit()
-        raise HTTPException(409, detail={"code": exc.code, "message": str(exc)}) from exc
-    current_users = db.scalar(select(func.count(User.id))) or 0
-    current_assets = db.scalar(select(func.count(Machine.id))) or 0
-    if int(payload["max_users"]) < current_users or int(payload["max_assets"]) < current_assets:
-        add_audit_log(
-            db,
-            actor,
-            "software_license",
-            None,
-            "Отказано инсталиране на лиценз",
-            {
-                "result": "rejected",
-                "reason": "license_capacity_below_current_usage",
-                "current_users": current_users,
-                "current_assets": current_assets,
-            },
-            _correlation_id(request),
-        )
-        db.commit()
-        raise HTTPException(
-            409,
-            detail={
-                "code": "license_capacity_below_current_usage",
-                "message": "Лицензните ограничения са под текущия брой потребители или активи.",
-                "current_users": current_users,
-                "current_assets": current_assets,
-            },
-        )
-    duplicate = db.scalar(select(SoftwareLicense).where(SoftwareLicense.license_id == str(payload["license_id"])))
-    if duplicate is not None:
-        raise HTTPException(409, detail={"code": "license_already_installed", "message": "Този лиценз вече е инсталиран."})
-    previous = active_license(db)
-    if previous:
-        previous.is_active = False
-        previous.superseded_at = utcnow()
-    valid_from = _parse_license_date(payload.get("valid_from"))
-    valid_until = _parse_license_date(payload.get("valid_until"))
-    item = SoftwareLicense(
-        license_id=str(payload["license_id"]), payload=payload,
-        payload_sha256=payload_hash(payload), signature=envelope.signature,
-        license_type=str(payload["license_type"]), client_name=str(payload["client_name"]),
-        installation_id=str(payload["installation_id"]), valid_from=valid_from,
-        valid_until=valid_until, grace_days=int(payload.get("grace_days", 0)),
-        installed_by_id=actor.id,
-    )
-    db.add(item)
-    db.flush()
-    add_audit_log(db, actor, "software_license", item.id, "Инсталиран и проверен лиценз", {"license_id": item.license_id, "license_type": item.license_type, "payload_sha256": item.payload_sha256, "previous_license_id": previous.license_id if previous else None}, _correlation_id(request))
-    db.commit()
-    return serialize_license_state(evaluate_license(db))
-
-
-def _parse_license_date(value: object):
-    if value in (None, ""):
-        return None
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    return parsed.replace(tzinfo=None) if parsed.tzinfo is None else parsed.astimezone(UTC).replace(tzinfo=None)
+router.include_router(license_routes.router)
 
 
 @router.get("/external-signers", response_model=list[ExternalSignerOut])

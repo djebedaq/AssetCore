@@ -18,6 +18,7 @@
 - `backend/app/documents/` разделя генерирането на transfer, repair, parts-request и daily-report документи; `common.py`, `rendering.py`, `templates.py` и `registration.py` запазват съществуващите общи договори. `document_generation.py` е само explicit compatibility import слой. Template engine, signing и read-only official registry остават самостоятелни и непроменени. Вж. [модулната карта и output регресиите](DOCUMENT_MODULARIZATION_BG.md).
 - `backend/app/application_errors.py` дефинира общия безопасен production error договор, diagnostic ID и структуриран log context.
 - `backend/app/authorization_inventory.py` обхожда реалния FastAPI dependency graph и fail-ва затворено за mutating/public маршрут без точно permission/auth/allowlist основание; `backend/scripts/validate_authorization_inventory.py` е CI gate-ът.
+- `backend/app/governance/` притежава owner, emergency и license HTTP/service домейните; `hardening_api.py` ги регистрира в същия ред и пази compatibility imports. Auth/owner prerequisites, locks, audit и transaction границите са непроменени. `licensing.py`, session/CSRF и security middleware остават централизирани. Вж. [картата на маршрутите, regression договорите и известния baseline read-only HTTP дефект](GOVERNANCE_MODULARIZATION_BG.md).
 - `backend/app/auth_sessions.py` управлява hashed durable browser sessions,
   cookie policy, CSRF и revoke/cleanup lifecycle; `backend/app/auth_throttle.py`
   пази bounded HMAC-псевдонимизирани account/source backoff записи. React

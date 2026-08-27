@@ -1,0 +1,467 @@
+{
+  "base_commit": "37b9c0ff61e1f08d62de3fd96041638bedb34ca4",
+  "contracts": {
+    "routes": {
+      "GET /api/owner": {
+        "name": "owner_status",
+        "status_code": null,
+        "tags": [
+          "production-hardening"
+        ],
+        "dependencies": [
+          {
+            "call": "app.security.get_authenticated_user",
+            "parameter": "_",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": [
+              {
+                "call": "fastapi.security.http.HTTPBearer",
+                "parameter": "credentials",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": []
+              },
+              {
+                "call": "app.database.get_db",
+                "parameter": "db",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": []
+              }
+            ]
+          },
+          {
+            "call": "app.database.get_db",
+            "parameter": "db",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": []
+          }
+        ],
+        "openapi_sha256": "094cf8847833cc3de12f903a384fb71f7fd9a7ebc258ac0e8a21c8c2af8ec7c5"
+      },
+      "GET /api/owner/audit": {
+        "name": "owner_audit_history",
+        "status_code": null,
+        "tags": [
+          "production-hardening"
+        ],
+        "dependencies": [
+          {
+            "call": "app.security.get_current_active_user",
+            "parameter": "actor",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": [
+              {
+                "call": "app.security.get_current_user",
+                "parameter": "user",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": [
+                  {
+                    "call": "app.security.get_authenticated_user",
+                    "parameter": "user",
+                    "permission": null,
+                    "use_cache": true,
+                    "dependencies": [
+                      {
+                        "call": "fastapi.security.http.HTTPBearer",
+                        "parameter": "credentials",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      },
+                      {
+                        "call": "app.database.get_db",
+                        "parameter": "db",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "call": "app.database.get_db",
+            "parameter": "db",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": []
+          }
+        ],
+        "openapi_sha256": "f13cd23a98d9ab913aa5d6ec2d473eb6537362474c34421a6131c6b277dcae9c"
+      },
+      "GET /api/emergency-access/status": {
+        "name": "emergency_access_status",
+        "status_code": null,
+        "tags": [
+          "production-hardening"
+        ],
+        "dependencies": [
+          {
+            "call": "app.security.get_current_active_user",
+            "parameter": "_",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": [
+              {
+                "call": "app.security.get_current_user",
+                "parameter": "user",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": [
+                  {
+                    "call": "app.security.get_authenticated_user",
+                    "parameter": "user",
+                    "permission": null,
+                    "use_cache": true,
+                    "dependencies": [
+                      {
+                        "call": "fastapi.security.http.HTTPBearer",
+                        "parameter": "credentials",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      },
+                      {
+                        "call": "app.database.get_db",
+                        "parameter": "db",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "call": "app.database.get_db",
+            "parameter": "db",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": []
+          }
+        ],
+        "openapi_sha256": "12ca403e56345a0e2d6158d387fa8a1a55f3fe5ec47a2762226c88424cfec807"
+      },
+      "POST /api/emergency-access/start": {
+        "name": "start_emergency_access",
+        "status_code": 201,
+        "tags": [
+          "production-hardening"
+        ],
+        "dependencies": [
+          {
+            "call": "app.security.get_current_active_user",
+            "parameter": "actor",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": [
+              {
+                "call": "app.security.get_current_user",
+                "parameter": "user",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": [
+                  {
+                    "call": "app.security.get_authenticated_user",
+                    "parameter": "user",
+                    "permission": null,
+                    "use_cache": true,
+                    "dependencies": [
+                      {
+                        "call": "fastapi.security.http.HTTPBearer",
+                        "parameter": "credentials",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      },
+                      {
+                        "call": "app.database.get_db",
+                        "parameter": "db",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "call": "app.database.get_db",
+            "parameter": "db",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": []
+          }
+        ],
+        "openapi_sha256": "9d9418992f3169f29975dd6e01faecff609e35f6a7872083540dcb05cc7ad958"
+      },
+      "POST /api/emergency-access/{session_id}/end": {
+        "name": "end_emergency_access",
+        "status_code": null,
+        "tags": [
+          "production-hardening"
+        ],
+        "dependencies": [
+          {
+            "call": "app.security.get_current_active_user",
+            "parameter": "actor",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": [
+              {
+                "call": "app.security.get_current_user",
+                "parameter": "user",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": [
+                  {
+                    "call": "app.security.get_authenticated_user",
+                    "parameter": "user",
+                    "permission": null,
+                    "use_cache": true,
+                    "dependencies": [
+                      {
+                        "call": "fastapi.security.http.HTTPBearer",
+                        "parameter": "credentials",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      },
+                      {
+                        "call": "app.database.get_db",
+                        "parameter": "db",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "call": "app.database.get_db",
+            "parameter": "db",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": []
+          }
+        ],
+        "openapi_sha256": "40c32fb8734b249d0378bb848e684d2a2f25e7cac37b2b110a9d4b623b3962f7"
+      },
+      "POST /api/owner/transfer": {
+        "name": "transfer_owner",
+        "status_code": null,
+        "tags": [
+          "production-hardening"
+        ],
+        "dependencies": [
+          {
+            "call": "app.security.get_current_active_user",
+            "parameter": "actor",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": [
+              {
+                "call": "app.security.get_current_user",
+                "parameter": "user",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": [
+                  {
+                    "call": "app.security.get_authenticated_user",
+                    "parameter": "user",
+                    "permission": null,
+                    "use_cache": true,
+                    "dependencies": [
+                      {
+                        "call": "fastapi.security.http.HTTPBearer",
+                        "parameter": "credentials",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      },
+                      {
+                        "call": "app.database.get_db",
+                        "parameter": "db",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "call": "app.database.get_db",
+            "parameter": "db",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": []
+          }
+        ],
+        "openapi_sha256": "611f06a7ec7ae2e53bb48767062b54675985731515eedc7cc2a4c5bf0139b6a7"
+      },
+      "GET /api/license/status": {
+        "name": "license_status",
+        "status_code": null,
+        "tags": [
+          "production-hardening"
+        ],
+        "dependencies": [
+          {
+            "call": "app.security.get_authenticated_user",
+            "parameter": "_",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": [
+              {
+                "call": "fastapi.security.http.HTTPBearer",
+                "parameter": "credentials",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": []
+              },
+              {
+                "call": "app.database.get_db",
+                "parameter": "db",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": []
+              }
+            ]
+          },
+          {
+            "call": "app.database.get_db",
+            "parameter": "db",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": []
+          }
+        ],
+        "openapi_sha256": "e06800663c6e8fd7fe15170930e0feb65182fb10c499fff9202f15b7ea3bd493"
+      },
+      "GET /api/license/validate": {
+        "name": "license_status",
+        "status_code": null,
+        "tags": [
+          "production-hardening"
+        ],
+        "dependencies": [
+          {
+            "call": "app.security.get_authenticated_user",
+            "parameter": "_",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": [
+              {
+                "call": "fastapi.security.http.HTTPBearer",
+                "parameter": "credentials",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": []
+              },
+              {
+                "call": "app.database.get_db",
+                "parameter": "db",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": []
+              }
+            ]
+          },
+          {
+            "call": "app.database.get_db",
+            "parameter": "db",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": []
+          }
+        ],
+        "openapi_sha256": "6f288f38b889a6b73f89f12c65cdf697275fa0247ffcc533de9b2fd336ec364b"
+      },
+      "POST /api/license/install": {
+        "name": "install_license",
+        "status_code": null,
+        "tags": [
+          "production-hardening"
+        ],
+        "dependencies": [
+          {
+            "call": "app.security.get_current_active_user",
+            "parameter": "actor",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": [
+              {
+                "call": "app.security.get_current_user",
+                "parameter": "user",
+                "permission": null,
+                "use_cache": true,
+                "dependencies": [
+                  {
+                    "call": "app.security.get_authenticated_user",
+                    "parameter": "user",
+                    "permission": null,
+                    "use_cache": true,
+                    "dependencies": [
+                      {
+                        "call": "fastapi.security.http.HTTPBearer",
+                        "parameter": "credentials",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      },
+                      {
+                        "call": "app.database.get_db",
+                        "parameter": "db",
+                        "permission": null,
+                        "use_cache": true,
+                        "dependencies": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "call": "app.database.get_db",
+            "parameter": "db",
+            "permission": null,
+            "use_cache": true,
+            "dependencies": []
+          }
+        ],
+        "openapi_sha256": "e594bb08fb27a36f95d017dd320f5509c928e14c7c0a1656eb9b3d2ac584a0fc"
+      }
+    },
+    "schemas": {
+      "EmergencyAccessEnd": "105c60b72a25bfe9e9d2afed9ead1a1236965b06916398c00f5d659a4ca5be0c",
+      "EmergencyAccessStart": "be1cc74a0d79537446bf5821b579cf6201272207bb1fea0bc7850b3bd7c10f25",
+      "EmergencyAccessStatusOut": "04f5cd7ed3f8a1757c5947081b00e15587efc7add16cb449015e6eb5a45e0e7f",
+      "HTTPValidationError": "8066e2a0c5a412d69c50851c85d5b9329034080fac2286b3a0bb71e7bb19a7f3",
+      "LicenseEnvelope": "5c8a0b4e514368af06afae305b9a6b93bff208d70b35359fa43e7e11bc1ef684",
+      "LicenseStatusOut": "469eb31d8e9cb37565bd507d8e8afd389fb0d879233c28f691a058133f11e387",
+      "LicenseType": "84ae3ba4dd3f42cfd84963f2bd9dc517b5f1fcb316fcaafbe303d2aa1b12133e",
+      "OwnerStatusOut": "352470e2e27c5689ac49e30dc41849a3d4a836575779ba57b5b9e4db5b38743f",
+      "OwnerTransferRequest": "fc94c4634ab0a45cceae2e29dab7f78b13f3854fb8e25e91d6d1ccbdb8e205e4",
+      "UserRole": "e04a8788a60fd24d0b5190fca1e9ee54b359f6cde87c2e738a05fa8ffa82fb82",
+      "ValidationError": "e8f81b97d8f99e0c85b6223743404a3a2a5367f671ee38a5dce9b87b4f1f0193"
+    }
+  }
+}
