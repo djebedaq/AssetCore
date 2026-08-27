@@ -86,13 +86,13 @@ BG/EN/RU UI key parity остава покрита от съществуващи
 python backend/scripts/validate_migration_history.py
 python backend/scripts/validate_authorization_inventory.py
 PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py
-python backend/scripts/build_catalog_translations.py --check
+PYTHONPATH=backend python backend/scripts/build_catalog_translations.py --check
 python -m pytest -q tests/test_runtime_deployment_hardening.py
 python -m pytest -q -m "not postgres" --durations=10
 python scripts/verify_release.py --output release-verification
 ```
 
-PowerShell: задайте `$env:PYTHONPATH='backend'` преди catalog командата.
+PowerShell: задайте `$env:PYTHONPATH='backend'` преди catalog и translation командите.
 Inventory и CycloneDX 1.6 артефактите са описани в `SOFTWARE_BOM.md`; те не са
 сертификация и не включват OS/container packages.
 

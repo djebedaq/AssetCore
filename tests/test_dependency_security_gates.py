@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -150,3 +153,24 @@ def test_ci_actions_are_immutable_and_all_existing_security_gates_remain_explici
     postgres = workflow["jobs"]["postgres"]
     assert postgres["env"]["ASSETCORE_REQUIRE_POSTGRES_TESTS"] == "true"
     assert any("pytest -q tests/postgres" in step.get("run", "") for step in postgres["steps"])
+
+
+def test_ci_translation_command_runs_without_an_inherited_pythonpath():
+    root = Path(__file__).resolve().parents[1]
+    workflow = yaml.safe_load((root / ".github/workflows/check.yml").read_text(encoding="utf-8"))
+    step = next(
+        item
+        for item in workflow["jobs"]["backend"]["steps"]
+        if item.get("name") == "Catalog EN/BG translation gate"
+    )
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    environment.update(step.get("env", {}))
+    result = subprocess.run(
+        [sys.executable, "backend/scripts/build_catalog_translations.py", "--check"],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, "Translation gate must run in a clean CI environment."
