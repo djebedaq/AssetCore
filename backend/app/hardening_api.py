@@ -1741,12 +1741,15 @@ def _signature_annex_pdf(
     y = height - 84
     for participant, signature, image in rows:
         if y < 150:
-            pdf.showPage(); y = height - 55
+            pdf.showPage()
+            y = height - 55
         snapshot = participant.identity_snapshot
         pdf.setFont(font_name, 10)
-        pdf.drawString(42, y, str(snapshot.get("display_name") or "")); y -= 15
+        pdf.drawString(42, y, str(snapshot.get("display_name") or ""))
+        y -= 15
         pdf.setFont(font_name, 8)
-        pdf.drawString(42, y, " · ".join(filter(None, [str(snapshot.get("job_title") or ""), str(snapshot.get("company") or ""), participant.operation_role]))); y -= 55
+        pdf.drawString(42, y, " · ".join(filter(None, [str(snapshot.get("job_title") or ""), str(snapshot.get("company") or ""), participant.operation_role])))
+        y -= 55
         pdf.drawImage(ImageReader(io.BytesIO(image)), 42, y, width=170, height=48, preserveAspectRatio=True, anchor="sw", mask="auto")
         pdf.drawString(230, y + 28, f"SHA-256: {signature.signature_sha256[:32]}…")
         pdf.drawString(230, y + 13, f"UTC: {signature.confirmed_at.isoformat()}Z")

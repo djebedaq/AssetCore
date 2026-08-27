@@ -9,8 +9,8 @@ BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from app.database import SessionLocal
-from app.official_documents.integrity import validate_official_document_integrity
+from app.database import SessionLocal  # noqa: E402 -- standalone script bootstrap
+from app.official_documents.integrity import validate_official_document_integrity  # noqa: E402
 
 
 def main() -> None:

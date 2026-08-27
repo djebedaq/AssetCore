@@ -56,6 +56,7 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 from backend.scripts.document_qa import generate as generate_document_qa  # noqa: E402
 from backend.scripts.migration_history import validate_migration_history  # noqa: E402
+from scripts.dependency_inventory import write_inventory  # noqa: E402
 
 EXPECTED_INVENTORY = {"4", "5", "7", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24"}
 EXPECTED_SERIALS = {
@@ -162,6 +163,12 @@ def _verify_migrations(verification: Verification) -> None:
 
 def run(output: Path) -> Verification:
     verification = Verification()
+    dependency_inventory = write_inventory(output)
+    verification.check(
+        "Dependency manifests и инсталирани версии съвпадат; CycloneDX SBOM е създаден",
+        dependency_inventory["valid"],
+        f"python={dependency_inventory['python_packages']}, frontend={dependency_inventory['frontend_packages']}",
+    )
     authorization_inventory = build_authorization_inventory(app)
     verification.check(
         "FastAPI authorization inventory е пълен",
