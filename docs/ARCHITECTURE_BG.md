@@ -2,11 +2,13 @@
 
 ## Слоеве
 
-- `backend/app/main.py` дефинира FastAPI маршрутите и ролевите зависимости.
+- `backend/app/main.py` сглобява FastAPI приложението и запазва legacy оперативните маршрути; asset HTTP маршрутите се включват от `assets/routes.py`, а `/locations` — от `master_data/routes.py`.
 - `backend/app/models.py` съдържа SQLAlchemy модела и стабилните enum кодове.
 - `backend/app/schemas.py` е Pydantic договорът, включително legacy входна съвместимост.
 - `backend/app/industrial_schemas.py` е договорът за паспорти, configurable categories, ремонти, каталог, библиотека, шаблони и administration.
-- `backend/app/industrial_api.py` съдържа универсалните индустриални API модули и provenance/approval границите.
+- `backend/app/industrial_api.py` сглобява индустриалния router и запазва provenance/approval границите извън asset/master-data домейните.
+- `backend/app/assets/` притежава машинното четене/CRUD/QR (`service.py`), read-only паспорта (`passport.py`), типизираните полета (`custom_fields.py`) и машинните файлове (`attachments.py`). `routes.py` запазва HTTP/permission договора; `queries.py` и `serializers.py` съдържат съществуващия active-transfer read query и ограниченото machine представяне.
+- `backend/app/master_data/` отделя категориите/дефинициите на полета и справочниците за местоположения/отдели. Транзакционните граници и audit действията са непроменени. Общите чисти attachment проверки са в `attachment_io.py`, а съществуващото commit-time IntegrityError преобразуване — в `persistence.py`. Вж. [картата на маршрутите и тестовото покритие за PR #32](ASSET_MODULARIZATION_BG.md).
 - `backend/app/workflow.py` централизира позволените машинни и ремонтни преходи и completion gates.
 - `backend/app/repairs/service.py` прилага ремонтните преходи и задължителното document persistence без commit; API маршрутът остава собственик на транзакцията.
 - `backend/app/part_requests/service.py` централизира заключените submit/decision преходи, action-required query-то и document-eligible статусите без собствен commit.

@@ -5,7 +5,6 @@ import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import qrcode
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +14,16 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .application_errors import ApplicationError
+
+# Compatibility imports retain the historical Python entry points.
+from .assets.queries import _active_transfer as _active_transfer
+from .assets.routes import create_machine as create_machine
+from .assets.routes import legacy_router as assets_legacy_router
+from .assets.routes import machine as machine
+from .assets.routes import machines as machines
+from .assets.routes import qr as qr
+from .assets.routes import update_machine as update_machine
+from .assets.serializers import _limited_machine as _limited_machine
 from .audit import add_audit_log
 from .auth_sessions import (
     cleanup_auth_state,
@@ -43,12 +52,12 @@ from .industrial_api import (
 )
 from .licensing import evaluate_license, serialize_license_state
 from .localization import normalize_language, translate
+from .master_data.routes import legacy_router as master_data_legacy_router
+from .master_data.routes import locations as locations
 from .models import (
-    AssetCategory,
     AuditLog,
     DocumentType,
     GeneratedDocument,
-    Location,
     Machine,
     MachineStatus,
     OfficialDocument,
@@ -69,7 +78,7 @@ from .models import (
     User,
     utcnow,
 )
-from .permissions import Permission, ensure_permission, is_observer, require_permission
+from .permissions import Permission, ensure_permission, require_permission
 from .repairs import (
     apply_repair_transition,
     generate_completion_documents_or_rollback,
@@ -89,11 +98,7 @@ from .schemas import (
     CancelTransferBatchRequest,
     CancelTransferBatchResponse,
     LanguagePreferenceUpdate,
-    LocationOut,
     LoginRequest,
-    MachineCreate,
-    MachineOut,
-    MachineUpdate,
     PartCatalogOut,
     PartRequestCreate,
     PartRequestOut,
@@ -270,15 +275,6 @@ require_request_creator = require_permission(Permission.REQUESTS_CREATE)
 require_parts_viewer = require_permission(Permission.PARTS_VIEW)
 require_document_viewer = require_permission(Permission.DOCUMENTS_VIEW)
 require_document_generator = require_permission(Permission.DOCUMENTS_GENERATE)
-
-
-def _active_transfer(db: Session, machine_id: int) -> TransferProtocol | None:
-    return db.scalar(
-        select(TransferProtocol).where(
-            TransferProtocol.machine_id == machine_id,
-            TransferProtocol.is_active.is_(True),
-        )
-    )
 
 
 def _transfer_with_relations(db: Session, transfer_id: int) -> TransferProtocol | None:
@@ -494,188 +490,10 @@ def dashboard(
     }
 
 
-@app.get("/api/locations", response_model=list[LocationOut])
-def locations(
-    _: User = Depends(require_document_viewer), db: Session = Depends(get_db)
-) -> list[Location]:
-    return db.scalars(select(Location).order_by(Location.name)).all()
+app.include_router(master_data_legacy_router)
 
 
-def _limited_machine(item: Machine) -> dict:
-    return {
-        "id": item.id,
-        "inventory_number": item.inventory_number,
-        "name": item.name,
-        "brand": item.brand,
-        "model": item.model,
-        "status": item.status,
-        "is_active": item.is_active,
-        "location": (
-            {"id": item.location.id, "name": item.location.name}
-            if item.location
-            else None
-        ),
-    }
-
-
-@app.get("/api/machines", response_model=None)
-def machines(
-    user: User = Depends(require_asset_viewer), db: Session = Depends(get_db)
-) -> list[Machine] | list[dict]:
-    items = db.scalars(
-        select(Machine)
-        .options(joinedload(Machine.location))
-        .order_by(Machine.pressure_bar.desc(), Machine.inventory_number)
-    ).all()
-    return [_limited_machine(item) for item in items] if is_observer(user) else items
-
-
-@app.get("/api/machines/{machine_id}", response_model=None)
-def machine(
-    machine_id: int,
-    user: User = Depends(require_asset_viewer),
-    db: Session = Depends(get_db),
-) -> Machine | dict:
-    item = db.scalar(
-        select(Machine)
-        .options(joinedload(Machine.location))
-        .where(Machine.id == machine_id)
-    )
-    if not item:
-        raise HTTPException(404, "Машината не е намерена")
-    return _limited_machine(item) if is_observer(user) else item
-
-
-@app.post("/api/machines", response_model=MachineOut, status_code=201)
-def create_machine(
-    data: MachineCreate,
-    user: User = Depends(require_permission(Permission.ASSETS_CREATE)),
-    db: Session = Depends(get_db),
-) -> Machine:
-    if db.scalar(select(Machine).where(Machine.inventory_number == data.inventory_number)):
-        raise HTTPException(409, "Дублиран инвентарен номер")
-    category = db.get(AssetCategory, data.category_id) if data.category_id is not None else None
-    if data.category_id is not None and category is None:
-        raise HTTPException(404, "Категорията не е намерена")
-    values = data.model_dump(mode="json")
-    if category is not None:
-        values["category"] = category.code
-    item = Machine(**values)
-    db.add(item)
-    db.flush()
-    add_machine_event(
-        db,
-        item,
-        user,
-        "MACHINE_CREATED",
-        new_status=item.status,
-        new_location_id=item.location_id,
-        details={"inventory_number": item.inventory_number},
-    )
-    add_audit_log(db, user, "machine", item.id, "Създадена машина", values)
-    db.commit()
-    return db.scalar(
-        select(Machine)
-        .options(joinedload(Machine.location))
-        .where(Machine.id == item.id)
-    )
-
-
-@app.patch("/api/machines/{machine_id}", response_model=MachineOut)
-def update_machine(
-    machine_id: int,
-    data: MachineUpdate,
-    user: User = Depends(require_permission(Permission.ASSETS_EDIT)),
-    db: Session = Depends(get_db),
-) -> Machine:
-    item = db.get(Machine, machine_id)
-    if not item:
-        raise HTTPException(404, "Машината не е намерена")
-    changes = data.model_dump(exclude_unset=True, mode="json")
-    category = (
-        db.get(AssetCategory, changes["category_id"])
-        if changes.get("category_id") is not None
-        else None
-    )
-    if changes.get("category_id") is not None and category is None:
-        raise HTTPException(404, "Категорията не е намерена")
-    active = _active_transfer(db, machine_id)
-    if "status" in changes:
-        requested_status = changes["status"]
-        open_repair = db.scalar(
-            select(Repair.id).where(
-                Repair.machine_id == machine_id,
-                Repair.status != RepairStatus.COMPLETED.value,
-            )
-        )
-        authoritative_status = (
-            MachineStatus.ISSUED.value
-            if active
-            else MachineStatus.REPAIR.value
-            if open_repair is not None
-            else MachineStatus.READY.value
-        )
-        if requested_status != authoritative_status:
-            raise HTTPException(
-                409,
-                detail={
-                    "code": "authoritative_machine_status_conflict",
-                    "message": (
-                        f"Статусът на машина №{item.inventory_number} не може да бъде "
-                        f"сменен на „{requested_status}“. Текущите предавания и "
-                        f"ремонтни карти изискват статус „{authoritative_status}“."
-                    ),
-                },
-            )
-        ensure_machine_transition(item.status, requested_status)
-    before = {"status": item.status, "location_id": item.location_id}
-    for key, value in changes.items():
-        setattr(item, key, value)
-    if category is not None:
-        item.category = category.code
-    item.updated_at = utcnow()
-    add_machine_event(
-        db,
-        item,
-        user,
-        "MACHINE_UPDATED",
-        previous_status=before["status"],
-        new_status=item.status,
-        previous_location_id=before["location_id"],
-        new_location_id=item.location_id,
-        details={"changed_fields": sorted(changes)},
-    )
-    add_audit_log(
-        db,
-        user,
-        "machine",
-        item.id,
-        "Актуализирана машина",
-        {"преди": before, "след": changes},
-    )
-    db.commit()
-    return db.scalar(
-        select(Machine)
-        .options(joinedload(Machine.location))
-        .where(Machine.id == item.id)
-    )
-
-
-@app.get("/api/machines/{machine_id}/qr")
-def qr(
-    machine_id: int,
-    request: Request,
-    _: User = Depends(require_document_generator),
-    db: Session = Depends(get_db),
-) -> Response:
-    item = db.get(Machine, machine_id)
-    if not item:
-        raise HTTPException(404, "Машината не е намерена")
-    base_url = (settings.public_base_url or str(request.base_url)).rstrip("/")
-    image = qrcode.make(f"{base_url}/machine/{item.id}")
-    output = io.BytesIO()
-    image.save(output, format="PNG")
-    return Response(output.getvalue(), media_type="image/png")
+app.include_router(assets_legacy_router)
 
 
 @app.get("/api/repairs", response_model=list[RepairOut])
