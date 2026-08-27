@@ -60,7 +60,7 @@ jobs:
         run: python scripts/audit_dependencies.py python --output security-reports/python-audit.json
       - run: python -m compileall -q backend/app backend/alembic backend/scripts scripts tests
       - run: python -m ruff check backend/app backend/alembic backend/scripts scripts tests
-      - run: python backend/scripts/validate_migration_history.py
+      - run: python backend/scripts/validate_migration_history.py --require-all-protected
       - run: python backend/scripts/validate_authorization_inventory.py
       - run: PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py
       - name: Catalog EN/BG translation gate

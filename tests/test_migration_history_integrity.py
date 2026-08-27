@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 from backend.scripts.migration_history import (
     DEFAULT_MANIFEST,
     DEFAULT_VERSIONS_DIR,
     normalized_sha256,
     validate_migration_history,
+    validate_migration_release,
 )
 
 OFFICIAL_DOCUMENT_INTEGRITY_MIGRATION = (
@@ -116,3 +121,107 @@ def test_migration_history_validator_accepts_new_unprotected_revision(
 
     assert report["valid"] is True
     assert report["new_unprotected_migrations"] == [new_revision.name]
+
+
+def _cli(versions: Path, manifest: Path, *, strict: bool = False):
+    command = [
+        sys.executable,
+        str(DEFAULT_VERSIONS_DIR.parents[1] / "scripts" / "validate_migration_history.py"),
+        "--versions-dir", str(versions),
+        "--manifest", str(manifest),
+    ]
+    if strict:
+        command.append("--require-all-protected")
+    result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+    return result.returncode, json.loads(result.stdout)
+
+
+def test_strict_gate_requires_future_revision_protection_in_the_same_release(tmp_path: Path):
+    versions = tmp_path / "versions"
+    shutil.copytree(DEFAULT_VERSIONS_DIR, versions)
+    manifest = tmp_path / "manifest.json"
+    shutil.copyfile(DEFAULT_MANIFEST, manifest)
+    future = versions / "20990101_9999_future.py"
+    future.write_bytes(b"revision = '20990101_9999'\r\n")
+
+    normal_code, normal = _cli(versions, manifest)
+    strict_code, strict = _cli(versions, manifest, strict=True)
+    assert normal_code == 0
+    assert normal["valid"] is True
+    assert normal["missing"] == normal["mismatched"] == []
+    assert future.name in normal["new_unprotected_migrations"]
+    assert strict_code == 1
+    assert strict["valid"] is False
+    assert strict["history_valid"] is True
+    assert strict["new_unprotected_migrations"] == normal["new_unprotected_migrations"]
+
+    # Protect every candidate revision in this temporary manifest only. This
+    # models completing a migration in its own PR, not a follow-up release.
+    content = json.loads(manifest.read_text(encoding="utf-8"))
+    for name in normal["new_unprotected_migrations"]:
+        content["protected"][name] = normalized_sha256(versions / name)
+    manifest.write_text(json.dumps(content), encoding="utf-8")
+    future.write_bytes(future.read_bytes().replace(b"\r\n", b"\n"))
+
+    strict_code, strict = _cli(versions, manifest, strict=True)
+    assert strict_code == 0
+    assert strict["valid"] is strict["history_valid"] is True
+    assert strict["missing"] == strict["mismatched"] == []
+    assert strict["new_unprotected_migrations"] == []
+    assert strict["protected_count"] == len(content["protected"])
+    assert validate_migration_release(versions_dir=versions, manifest_path=manifest) == strict
+
+
+@pytest.mark.parametrize("failure", ["missing", "mismatched", "new_unprotected_migrations"])
+def test_strict_cli_and_release_entrypoint_block_every_migration_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, failure: str,
+):
+    from scripts import verify_release
+
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    protected = versions / "0001_protected.py"
+    protected.write_bytes(b"revision = '0001'\n")
+    manifest = _manifest(tmp_path, {protected.name: normalized_sha256(protected)})
+    if failure == "missing":
+        protected.unlink()
+        affected = protected.name
+    elif failure == "mismatched":
+        protected.write_bytes(b"revision = '0001'\n# unexpected edit\n")
+        affected = protected.name
+    else:
+        future = versions / "9999_future.py"
+        future.write_bytes(b"revision = '9999'\n")
+        affected = future.name
+
+    normal_code, normal = _cli(versions, manifest)
+    strict_code, strict = _cli(versions, manifest, strict=True)
+    assert normal_code == (0 if failure == "new_unprotected_migrations" else 1)
+    assert normal["valid"] is (failure == "new_unprotected_migrations")
+    assert strict_code == 1
+    assert strict["valid"] is False
+    assert strict[failure] == [affected]
+
+    # Redirect only the input paths: run the real release gate and CLI exit
+    # handling. No database, dependency or document QA should run on rejection.
+    monkeypatch.setattr(
+        verify_release, "validate_migration_release",
+        lambda: validate_migration_release(versions_dir=versions, manifest_path=manifest),
+    )
+    output = tmp_path / "release"
+    monkeypatch.setattr(sys, "argv", ["verify_release.py", "--output", str(output)])
+    with pytest.raises(SystemExit) as error:
+        verify_release.main()
+    assert error.value.code == 1
+    assert '"passed": false' in capsys.readouterr().out
+    assert list(output.iterdir()) == []
+
+
+def test_current_release_baseline_has_no_unprotected_migrations():
+    # This is deliberately the strict release contract, not the history
+    # validator contract: newly completed revisions must join this PR's manifest.
+    report = validate_migration_release()
+    assert report["valid"] is report["history_valid"] is True
+    assert report["protected_count"] >= 21
+    assert report["missing"] == report["mismatched"] == []
+    assert report["new_unprotected_migrations"] == []

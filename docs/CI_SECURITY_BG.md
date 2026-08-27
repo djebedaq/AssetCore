@@ -51,16 +51,26 @@ Python severity идва от публичния OSV запис; frontend severi
 - Суров stderr от auditor не се публикува: може да съдържа private index URL.
   Архивира се само нормализирана package/advisory информация и безопасен error code.
 
-Security обновяванията в този PR са ограничени до установени HIGH advisories:
+Security обновяванията в този PR адресират установените advisories:
 Starlette 1.3.1 ([Range DoS](https://github.com/advisories/GHSA-82w8-qh3p-5jfq)),
 съвместимата FastAPI 0.135.1, cryptography 50.0.0
-([advisory](https://github.com/advisories/GHSA-g6cj-pr64-35w5)), pypdf 6.14.2
+([advisory](https://github.com/advisories/GHSA-g6cj-pr64-35w5)), pypdf 6.15.0
 ([advisory](https://github.com/advisories/GHSA-g867-7843-wf8q)), js-yaml 4.3.1
 ([advisory](https://github.com/advisories/GHSA-5p4m-2wfm-xmqj)) и nanoid 3.3.18
 ([advisory](https://github.com/advisories/GHSA-2v37-7h3g-55p8)). FastAPI 0.141.1
 бе отхвърлена при проверката за съвместимост: router промяната нарушава текущия
 authorization inventory. Validator-ът не е отслабен. Новият CI manifest фиксира
 audit инструментите и pip; runtime образът не инсталира тези CI зависимости.
+
+Корекцията на PR #31 обновява pypdf от 6.14.2 до 6.15.0 за двата runtime
+MODERATE advisories [GHSA-fp3f-mc75-235c](https://github.com/advisories/GHSA-fp3f-mc75-235c)
+и [GHSA-fwg2-594c-jp42](https://github.com/advisories/GHSA-fwg2-594c-jp42).
+Test-only pytest е обновен от 8.3.4 до 9.0.3 за
+[GHSA-6w46-j5rx-g56g](https://github.com/advisories/GHSA-6w46-j5rx-g56g).
+Съвместимостта се проверява чрез целия backend suite, document/PDF/hash
+регресиите и PostgreSQL job; pytest-cov остава 6.0.0. Не се добавят audit
+изключения и severity политиката не се променя. Конкретните audit резултати
+се архивират за exact CI commit, а не се приемат за вечна гаранция.
 
 ## Автоматизирани update PR-и и Actions
 
@@ -83,7 +93,7 @@ translation validator, full backend и frontend suites и release verifier.
 BG/EN/RU UI key parity остава покрита от съществуващите tests.
 
 ```sh
-python backend/scripts/validate_migration_history.py
+python backend/scripts/validate_migration_history.py --require-all-protected
 python backend/scripts/validate_authorization_inventory.py
 PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py
 PYTHONPATH=backend python backend/scripts/build_catalog_translations.py --check
@@ -95,6 +105,31 @@ python scripts/verify_release.py --output release-verification
 PowerShell: задайте `$env:PYTHONPATH='backend'` преди catalog и translation командите.
 Inventory и CycloneDX 1.6 артефактите са описани в `SOFTWARE_BOM.md`; те не са
 сертификация и не включват OS/container packages.
+
+### Постоянна защита на migration release кандидата
+
+Обикновеният `validate_migration_history()` и CLI без flag остават диагностични:
+нов unprotected revision се отчита в `new_unprotected_migrations`, но не прави
+непроменената историческа част невалидна. Това е допустимо по време на разработка.
+
+CI и PowerShell release orchestration задължително използват
+`--require-all-protected`; `scripts/verify_release.py` използва същия строг
+`validate_migration_release()`. Missing, mismatched **или** unprotected revision
+дава `valid: false` и non-zero exit. `history_valid` отделно показва историческата
+цялост. Release verifier спира преди мигриране на QA база или генериране на QA
+документи при такъв проблем. Текущата база е 21 protected / 0 unprotected.
+
+Постоянен lifecycle: създайте/редактирайте новата миграция → завършете реализацията
+и тестовете → изчислете normalized-LF SHA-256 чрез `normalized_sha256()` → добавете
+новия entry в `backend/alembic/migration_history_manifest.json` **в същия PR** →
+strict CI трябва да премине → човешки review и merge. Следващ PR не е необходим
+само за защита на предходната миграция. Публикуваните файлове и техните hashes
+не се редактират; промени на схема след release се правят с нов revision.
+
+Регресиите изпълняват реалния CLI срещу временни файлове: normal приема бъдеща
+миграция, strict отказва, exact normalized-LF hash в временния manifest отключва
+strict проверката. Отделно се проверяват missing/mismatched и non-zero exit на
+самия release entrypoint, без редакция на repository baseline.
 
 ## Истински PostgreSQL конкурентни транзакции
 

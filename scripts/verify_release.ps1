@@ -39,7 +39,7 @@ Invoke-Check "Verified HPWJ seed count" {
 Invoke-Check "Python compile" { & $Python -m compileall -q backend/app backend/alembic backend/scripts scripts tests }
 Invoke-Check "Python lint" { & $Python -m ruff check backend/app backend/alembic backend/scripts scripts tests }
 Invoke-Check "Alembic single head" { & $Python -m alembic -c backend/alembic.ini heads }
-Invoke-Check "Historical migration integrity" { & $Python backend/scripts/validate_migration_history.py }
+Invoke-Check "Strict migration release protection" { & $Python backend/scripts/validate_migration_history.py --require-all-protected }
 Invoke-Check "Authorization inventory" { & $Python backend/scripts/validate_authorization_inventory.py }
 Invoke-Check "Catalog translations" {
     $qaPythonPath = $env:PYTHONPATH

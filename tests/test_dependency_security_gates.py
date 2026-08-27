@@ -140,7 +140,7 @@ def test_ci_actions_are_immutable_and_all_existing_security_gates_remain_explici
     backend = "\n".join(step.get("run", "") for step in workflow["jobs"]["backend"]["steps"])
     for gate in (
         "ruff check",
-        "validate_migration_history.py",
+        "validate_migration_history.py --require-all-protected",
         "validate_authorization_inventory.py",
         "catalog_v2_validation.py",
         "build_catalog_translations.py --check",

@@ -92,7 +92,11 @@ Production release sequence:
 
 Read-only диагностиката се изпълнява с `PYTHONPATH=backend python backend/scripts/validate_official_document_integrity.py`. По подразбиране тя fail-ва само за release-blocking schema/canonical ambiguity и отчита непоправимата historical аномалия като `TOLERATED_HISTORY`; `--strict-history` е за отделен контролиран одит.
 
-`backend/alembic/migration_history_manifest.json` пази normalized-LF SHA-256 за вече публикуваните revisions `0001…0021`. `backend/scripts/validate_migration_history.py` се изпълнява автоматично в CI и release verifier, отказва променен или липсващ protected файл и разрешава нова revision. След като нова миграция бъде merge-ната, приложена и обявена за released, нейният normalized-LF hash се добавя като нов protected entry в отделна контролирана промяна; съществуващ hash никога не се преизчислява, за да прикрие редакция.
+`backend/alembic/migration_history_manifest.json` пази normalized-LF SHA-256 за revisions `0001…0021`. Обикновеният `validate_migration_history()` и CLI без flag отказват променен/липсващ protected файл, но приемат и отчитат нова unprotected revision за диагностика по време на разработка. Това не означава разрешен release.
+
+CI използва `python backend/scripts/validate_migration_history.py --require-all-protected`, а release verifier — същата строга проверка. Missing, mismatched или която и да е `new_unprotected_migrations` блокира merge/release кандидата с non-zero exit. Текущият baseline е **21 protected / 0 unprotected**.
+
+Задължителният lifecycle е: създаване/редактиране на нов revision → завършване на реализацията и тестовете → normalized-LF SHA-256 → нов manifest entry **в същия PR** → strict CI → review/merge. Използвайте `normalized_sha256(Path(...))` от `backend.scripts.migration_history`: алгоритъмът заменя CRLF с LF преди SHA-256. Не е нужен следващ PR само за защита на вече merge-ната миграция. Публикуваните revisions и съществуващите hashes никога не се редактират или преизчисляват, за да прикрият промяна; schema корекции изискват нов revision.
 
 Миграцията `20260731_0001_bulk_transfers` добавя партиди, активна връзка, return данни, protocol document snapshots и audit препратки. За PostgreSQL и SQLite се създава partial unique index за едно активно предаване на машина. Legacy SQLite схемата се backfill-ва според последното предаване и текущия статус, без промяна на машинния регистър.
 
