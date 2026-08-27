@@ -3,4 +3,4 @@ httpx==0.28.1
 pytest==9.0.3
 pytest-cov==6.0.0
 ruff==0.8.4
-pdfplumber==0.11.9
+pdfplumber==0.11.10
