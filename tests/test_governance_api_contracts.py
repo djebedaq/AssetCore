@@ -364,24 +364,70 @@ def test_license_read_only_install_history_and_emergency_do_not_bypass_rbac(clie
         assert json.loads(emergency.details)["permissions_elevated"] is False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="Pre-existing main.py licence middleware passes datetime to plain JSONResponse; outside zero-behavior-change extraction.",
-)
-def test_known_license_read_only_http_serialization_regression(client, auth_headers, session_factory, monkeypatch):
-    # Reproduced on base 37b9c0f before extraction. A fix must remove this marker;
-    # strict XPASS makes that lifecycle explicit, without changing the middleware here.
+@pytest.mark.parametrize("license_state", ["NOT_INSTALLED", "READ_ONLY"])
+def test_known_license_read_only_http_serialization_regression(client, auth_headers, session_factory, monkeypatch, license_state):
+    now = licensing.utcnow().replace(microsecond=123456)
+    monkeypatch.setattr(licensing, "utcnow", lambda: now)
     monkeypatch.setattr(settings, "license_enforcement_enabled", True)
     monkeypatch.setattr(importlib.import_module("app.main"), "SessionLocal", session_factory)
+    if license_state == "READ_ONLY":
+        # Reuse the signed, isolated-test licence pattern above; no key is persisted.
+        key = Ed25519PrivateKey.generate()
+        public = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+        monkeypatch.setattr(settings, "license_public_key", base64.b64encode(public).decode())
+        monkeypatch.setattr(settings, "installation_id", "governance-qa")
+        monkeypatch.setattr(settings, "deployment_environment", "development")
+        payload = {
+            "license_id": "QA-READ-ONLY", "rightsholder": licensing.RIGHTSHOLDER,
+            "client_name": "Isolated QA", "installation_id": "governance-qa",
+            "modules": ["assets"], "max_users": 100, "max_assets": 100,
+            "valid_from": (now - timedelta(days=10)).isoformat(),
+            "valid_until": (now - timedelta(days=3)).isoformat(),
+            "issued_at": (now - timedelta(days=11)).isoformat(),
+            "activated_at": (now - timedelta(days=10)).isoformat(),
+            "support_until": (now - timedelta(days=3)).isoformat(),
+            "license_type": "ANNUAL", "environment": "development", "allowed_domains": [],
+            "max_installations": 1, "grace_days": 1, "version": 1,
+        }
+        installed = client.post("/api/license/install", headers=auth_headers, json={
+            "payload": payload,
+            "signature": base64.b64encode(key.sign(licensing.canonical_payload(payload))).decode(),
+        })
+        assert installed.status_code == 200
+    state_response = client.get("/api/license/status", headers=auth_headers)
+    assert state_response.status_code == 200
+    state = state_response.json()
+    assert settings.license_enforcement_enabled is True
+    assert state["read_only"] is True and state["state"] == license_state
+    assert state["checked_at"] == now.isoformat()
+    if license_state == "READ_ONLY":
+        for field in ("valid_from", "valid_until", "issued_at", "activated_at", "support_until"):
+            assert state[field] == payload[field]
+        assert state["grace_until"] == (now - timedelta(days=2)).isoformat()
+    machine_id = client.get("/api/machines", headers=auth_headers).json()[0]["id"]
+    machine_url = f"/api/machines/{machine_id}"
+    before = client.get(machine_url, headers=auth_headers)
+    assert before.status_code == 200
+    assert before.json()["notes"] != REASON
+    observed_models = (AuditLog, AuthSession, SoftwareLicense, EmergencyAccessSession)
+    with session_factory() as db:
+        counts = [db.scalar(select(func.count()).select_from(model)) for model in observed_models]
     diagnostic_client = TestClient(app, raise_server_exceptions=True)
     try:
-        blocked = diagnostic_client.patch("/api/machines/999999", headers=auth_headers, json={})
+        blocked = diagnostic_client.patch(machine_url, headers=auth_headers, json={"notes": REASON})
     finally:
         diagnostic_client.close()
     assert blocked.status_code == 423
     assert blocked.json()["detail"]["code"] == "license_read_only"
+    assert blocked.json()["detail"] == {"code": "license_read_only", "message": state["message"], "license": state}
+    assert blocked.headers["X-AssetCore-License-State"] == license_state
     _security_headers(blocked)
+    for header in ("referrer-policy", "permissions-policy", "x-frame-options", "x-permitted-cross-domain-policies", "pragma", "expires"):
+        assert blocked.headers[header] == state_response.headers[header]
+    after = client.get(machine_url, headers=auth_headers)
+    assert after.status_code == 200 and after.json() == before.json()
+    with session_factory() as db:
+        assert [db.scalar(select(func.count()).select_from(model)) for model in observed_models] == counts
 
 
 def test_legacy_governance_imports_are_route_callables():
