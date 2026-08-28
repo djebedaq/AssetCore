@@ -11,6 +11,7 @@ import {
   formatNumber,
   I18nProvider,
   ru,
+  statusText,
   translate,
 } from './i18n'
 import { getStoredLocale, LANGUAGE_STORAGE_KEY } from './locale'
@@ -66,5 +67,21 @@ describe('многоезична архитектура', () => {
     expect(translate('bg', 'nav.transfers')).toBe('Приемане / предаване')
     expect(translate('en', 'nav.transfers')).toBe('Issue / return')
     expect(translate('ru', 'nav.transfers')).toBe('Выдача / возврат')
+  })
+
+  it.each(['bg', 'en', 'ru'] as const)('локализира CANCELLED и запазва всички batch mappings и реалния badge (%s)', locale => {
+    const expected = [
+      ['ACTIVE', 'batch.active'], ['PARTIALLY_RETURNED', 'batch.partiallyReturned'],
+      ['RETURNED', 'batch.returned'], ['CANCELLED', 'status.cancelled'],
+      ['Издадена партида', 'batch.active'], ['Частично върната партида', 'batch.partiallyReturned'], ['Върната партида', 'batch.returned'],
+    ] as const
+    const batch = { batch_id: 1, batch_reference: 'QA-BATCH', total_machines: 2, returned_machines: 0, still_issued_machines: 2, awaiting_signature_machines: 0, machine_numbers: ['4', '5'] }
+    const { rerender, container } = render(<I18nProvider initialLocale={locale}><BatchProgressCard batch={{ ...batch, status: 'CANCELLED' }} /></I18nProvider>)
+    for (const [code, key] of expected) {
+      expect(statusText(key => translate(locale, key), code, 'batch')).toBe(translate(locale, key))
+      rerender(<I18nProvider initialLocale={locale}><BatchProgressCard batch={{ ...batch, status: code }} /></I18nProvider>)
+      expect(container.querySelector('.badge')?.textContent).toBe(translate(locale, key))
+      expect(screen.queryByText('CANCELLED')).not.toBeInTheDocument()
+    }
   })
 })

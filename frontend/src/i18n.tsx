@@ -221,6 +221,8 @@ export const bg = {
   'bulk.checklist.notePlaceholder': 'Кратка забележка',
   'bulk.issueSuccess': 'Издаването е завършено успешно.',
   'bulk.returnSuccess': 'Връщането е записано успешно.',
+  'bulk.returnRefreshError': 'Операцията е обработена, но актуалният резултат не можа да бъде зареден. Обновете напредъка, без да подавате връщането отново.',
+  'bulk.refreshReturnProgress': 'Обнови напредъка на връщането',
   'bulk.awaitingSignature': 'Очаква подпис',
   'bulk.awaitingSignatureCount': 'Очакват подпис: {{count}}',
   'bulk.recipient': 'Приемащ машината',
@@ -1144,6 +1146,8 @@ Object.assign(en, {
   'bulk.returnNotCompleted': 'The asset has not yet been accepted',
   'bulk.signatureCancelled': 'Signing is incomplete. The operation remains Awaiting signature.', 'bulk.signatureProgress': 'Signature {{current}} of {{total}}',
   'bulk.returnSuccess': 'The return was recorded successfully.', 'bulk.batchProgressTitle': 'Batches and progress',
+  'bulk.returnRefreshError': 'The operation was processed, but the current result could not be loaded. Refresh the progress without submitting the return again.',
+  'bulk.refreshReturnProgress': 'Refresh return progress',
   'bulk.batchProgressSubtitle': 'Fully and partially returned batches with individual traceability', 'bulk.noBatches': 'No batches have been created yet.',
   'bulk.selectedCount': 'Selected assets: {{count}}', 'bulk.unavailableHint': 'Unavailable assets are disabled and show the reason.',
   'bulk.machineSearch': 'Asset search', 'bulk.machineSearchPlaceholder': 'Number, brand, status, or location…',
@@ -1480,6 +1484,8 @@ Object.assign(ru, {
   'bulk.returnNotCompleted': 'Оборудование ещё не принято',
   'bulk.signatureCancelled': 'Подписание не завершено. Операция остаётся в статусе «Ожидает подписи».', 'bulk.signatureProgress': 'Подпись {{current}} из {{total}}',
   'bulk.returnSuccess': 'Возврат успешно зарегистрирован.', 'bulk.batchProgressTitle': 'Партии и ход возврата',
+  'bulk.returnRefreshError': 'Операция обработана, но актуальный результат не удалось загрузить. Обновите ход возврата, не отправляя возврат повторно.',
+  'bulk.refreshReturnProgress': 'Обновить ход возврата',
   'bulk.batchProgressSubtitle': 'Полностью и частично возвращённые партии с индивидуальной прослеживаемостью', 'bulk.noBatches': 'Партии ещё не созданы.',
   'bulk.selectedCount': 'Выбрано: {{count}}', 'bulk.unavailableHint': 'Недоступное оборудование заблокировано с указанием причины.',
   'bulk.machineSearch': 'Поиск оборудования', 'bulk.machineSearchPlaceholder': 'Номер, марка, статус или место…', 'bulk.noSearchMachines': 'Оборудование не найдено.',
@@ -1664,7 +1670,7 @@ const partStatusKeys: Record<string, TranslationKey> = {
 }
 
 const batchStatusKeys: Record<string, TranslationKey> = {
-  ACTIVE: 'batch.active', PARTIALLY_RETURNED: 'batch.partiallyReturned', RETURNED: 'batch.returned',
+  ACTIVE: 'batch.active', PARTIALLY_RETURNED: 'batch.partiallyReturned', RETURNED: 'batch.returned', CANCELLED: 'status.cancelled',
   'Издадена партида': 'batch.active', 'Частично върната партида': 'batch.partiallyReturned', 'Върната партида': 'batch.returned',
 }
 
