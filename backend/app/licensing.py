@@ -3,7 +3,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
@@ -48,6 +49,7 @@ class LicenseState:
     read_only: bool
     license: SoftwareLicense | None = None
     grace_until: datetime | None = None
+    verified_payload: dict | None = field(default=None, repr=False)
 
 
 def canonical_payload(payload: dict) -> bytes:
@@ -208,6 +210,19 @@ def active_license(db: Session) -> SoftwareLicense | None:
     )
 
 
+def _entitlement_projections(payload: dict) -> dict:
+    """Match installation normalization without changing the signed payload."""
+    return {
+        "license_id": str(payload["license_id"]),
+        "client_name": str(payload["client_name"]),
+        "license_type": str(payload["license_type"]),
+        "installation_id": str(payload["installation_id"]),
+        "valid_from": _parse_datetime(payload.get("valid_from"), "valid_from"),
+        "valid_until": _parse_datetime(payload.get("valid_until"), "valid_until", required=False),
+        "grace_days": int(payload["grace_days"]),
+    }
+
+
 def evaluate_license(db: Session, now: datetime | None = None) -> LicenseState:
     current = active_license(db)
     enforcement = settings.license_enforcement_enabled
@@ -218,10 +233,16 @@ def evaluate_license(db: Session, now: datetime | None = None) -> LicenseState:
             enforcement,
         )
     try:
-        validate_envelope(current.payload, current.signature)
-        if payload_hash(current.payload) != current.payload_sha256:
+        payload = deepcopy(validate_envelope(current.payload, current.signature))
+        if payload_hash(payload) != current.payload_sha256:
             raise LicenseValidationError(
                 "license_payload_changed", "Съдържанието на лиценза е променено."
+            )
+        entitlement = _entitlement_projections(payload)
+        if any(getattr(current, name) != value for name, value in entitlement.items()):
+            raise LicenseValidationError(
+                "license_projection_mismatch",
+                "Съхранените лицензионни данни не съответстват на подписания лиценз.",
             )
     except LicenseValidationError:
         return LicenseState(
@@ -231,17 +252,18 @@ def evaluate_license(db: Session, now: datetime | None = None) -> LicenseState:
             current,
         )
     now = now or utcnow()
-    if settings.installation_id and current.installation_id != settings.installation_id:
-        return LicenseState("INVALID", "Лицензът е за друга инсталация.", True, current)
-    valid_from = current.valid_from
+    valid_from = entitlement["valid_from"]
     if valid_from and now < valid_from:
-        return LicenseState("NOT_YET_VALID", "Лицензът все още не е в сила.", True, current)
-    valid_until = current.valid_until
+        return LicenseState(
+            "NOT_YET_VALID", "Лицензът все още не е в сила.", True, current,
+            verified_payload=payload,
+        )
+    valid_until = entitlement["valid_until"]
     if valid_until is None:
-        return LicenseState("ACTIVE", "Лицензът е активен.", False, current)
-    grace_until = valid_until + timedelta(days=current.grace_days)
+        return LicenseState("ACTIVE", "Лицензът е активен.", False, current, verified_payload=payload)
+    grace_until = valid_until + timedelta(days=entitlement["grace_days"])
     if now <= valid_until:
-        return LicenseState("ACTIVE", "Лицензът е активен.", False, current, grace_until)
+        return LicenseState("ACTIVE", "Лицензът е активен.", False, current, grace_until, payload)
     if now <= grace_until:
         return LicenseState(
             "GRACE_PERIOD",
@@ -249,6 +271,7 @@ def evaluate_license(db: Session, now: datetime | None = None) -> LicenseState:
             False,
             current,
             grace_until,
+            payload,
         )
     return LicenseState(
         "READ_ONLY",
@@ -256,27 +279,29 @@ def evaluate_license(db: Session, now: datetime | None = None) -> LicenseState:
         True,
         current,
         grace_until,
+        payload,
     )
 
 
 def serialize_license_state(state: LicenseState) -> dict:
-    item = state.license
-    payload = item.payload if item else {}
+    # Never label mutable/unverified storage values as signed entitlement data.
+    payload = state.verified_payload or {}
+    entitlement = _entitlement_projections(payload) if payload else {}
     return {
         "state": state.state,
         "message": state.message,
         "read_only": state.read_only,
-        "license_id": item.license_id if item else None,
-        "license_type": item.license_type if item else None,
-        "client_name": item.client_name if item else None,
+        "license_id": entitlement.get("license_id"),
+        "license_type": entitlement.get("license_type"),
+        "client_name": entitlement.get("client_name"),
         "rightsholder": payload.get("rightsholder"),
-        "installation_id": item.installation_id if item else settings.installation_id,
-        "valid_from": item.valid_from if item else None,
-        "valid_until": item.valid_until if item else None,
+        "installation_id": entitlement.get("installation_id", settings.installation_id),
+        "valid_from": entitlement.get("valid_from"),
+        "valid_until": entitlement.get("valid_until"),
         "grace_until": state.grace_until,
-        "issued_at": _safe_optional_datetime(payload.get("issued_at"), "issued_at") if item else None,
-        "activated_at": _safe_optional_datetime(payload.get("activated_at"), "activated_at") if item else None,
-        "support_until": _safe_optional_datetime(payload.get("support_until"), "support_until") if item else None,
+        "issued_at": _safe_optional_datetime(payload.get("issued_at"), "issued_at"),
+        "activated_at": _safe_optional_datetime(payload.get("activated_at"), "activated_at"),
+        "support_until": _safe_optional_datetime(payload.get("support_until"), "support_until"),
         "checked_at": utcnow(),
         "modules": payload.get("modules", []),
         "max_users": payload.get("max_users"),
