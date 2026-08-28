@@ -123,7 +123,6 @@ export function ReturnModal({ items, onClose, onComplete }: {
       })
       setResult({ ...result, returned, batches })
       setRefreshState('idle')
-      onComplete()
     } catch {
       setRefreshState('error')
     } finally {
@@ -140,6 +139,7 @@ export function ReturnModal({ items, onClose, onComplete }: {
     const next = signingIndex + 1
     if (next < signingTasks.length) setSigningIndex(next)
     else {
+      onComplete()
       void refreshResult()
     }
   }
@@ -227,7 +227,10 @@ export function ReturnModal({ items, onClose, onComplete }: {
           <div className="actions">{!result.returned.every((item) => item.workflow_status === 'COMPLETED' || item.workflow_status === 'CANCELLED') && <button className="danger" onClick={() => setCancelOpen(true)}><Ban size={17} />{t('bulk.cancelPendingAction')}</button>}<button className="primary" onClick={onClose}>{t('common.done')}</button></div>
         </div>
       )}
-      {cancelOpen && result && <CancelBatchModal batch={{ batch_id: result.batch_id, batch_reference: result.batch_reference, operation: 'RETURN', awaiting_signature_machines: result.returned.filter((item) => item.workflow_status === 'AWAITING_SIGNATURE').length, total_machines: result.returned.length }} onClose={() => setCancelOpen(false)} onCancelled={() => void refreshResult()} />}
+      {cancelOpen && result && <CancelBatchModal batch={{ batch_id: result.batch_id, batch_reference: result.batch_reference, operation: 'RETURN', awaiting_signature_machines: result.returned.filter((item) => item.workflow_status === 'AWAITING_SIGNATURE').length, total_machines: result.returned.length }} onClose={() => setCancelOpen(false)} onCancelled={() => {
+        onComplete()
+        void refreshResult()
+      }} />}
     </ModalShell>
   )
 }

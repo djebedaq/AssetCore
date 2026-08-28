@@ -44,7 +44,7 @@ function setup(result: BulkReturnResult, read: (path: string) => Response | Prom
 }
 async function begin(result: BulkReturnResult, done = vi.fn(), close = vi.fn()) {
   const user = userEvent.setup()
-  render(<ReturnModal items={issued} onClose={close} onComplete={done} />)
+  const { unmount } = render(<ReturnModal items={issued} onClose={close} onComplete={done} />)
   for (const item of result.returned) {
     await user.click(screen.getByLabelText(`Връщане на машина №${item.machine_number}`))
     fillReturn(item.machine_number)
@@ -53,8 +53,10 @@ async function begin(result: BulkReturnResult, done = vi.fn(), close = vi.fn()) 
   }
   await user.click(screen.getByRole('button', { name: t('bulk.reviewConfirm') }))
   await user.click(screen.getByRole('button', { name: t('bulk.confirmReturn') }))
-  await screen.findByRole('button', { name: t('signature.review') })
-  return { user, done, close }
+  if (result.signing_tasks.length || result.returned.some(item => item.signing_tasks.length)) {
+    await screen.findByRole('button', { name: t('signature.review') })
+  }
+  return { user, done, close, unmount }
 }
 async function sign(user: ReturnType<typeof userEvent.setup>) {
   await waitFor(() => expect(screen.getByRole('button', { name: t('signature.review') })).toBeEnabled())
@@ -96,17 +98,24 @@ describe('canonical return result presentation after server-confirmed operations
     operation.transfers[0].return_documents = operation.transfers[0].return_documents.map(document => ({ ...document, filename: `final-${document.filename}` }))
     const finalConfirm = deferred<Response>()
     const progress = deferred<Response>()
-    const request = setup(result, path => path === '/api/transfer-batches/12' ? response(operation) : progress.promise, finalConfirm.promise)
-    const { user, done, close } = await begin(result)
+    const done = vi.fn()
+    const completionsAtRead: number[] = []
+    const request = setup(result, path => {
+      completionsAtRead.push(done.mock.calls.length)
+      return path === '/api/transfer-batches/12' ? response(operation) : progress.promise
+    }, finalConfirm.promise)
+    const { user, close } = await begin(result, done)
     await sign(user)
     expect(done).not.toHaveBeenCalled()
     await sign(user)
     expect(request.mock.calls.some(([path]) => String(path).startsWith('/api/transfer-batches/'))).toBe(false)
+    expect(done).not.toHaveBeenCalled()
     await act(async () => finalConfirm.resolve(response({ document_status: 'SIGNED' })))
     expect(await screen.findByText(t('common.loading'))).toBeVisible()
     expect(screen.queryByText(t('bulk.returnSuccess'))).not.toBeInTheDocument()
     expect(modal().querySelector('.batch-card')).toBeNull() // pre-signature counts are not final evidence
-    expect(done).not.toHaveBeenCalled()
+    expect(done).toHaveBeenCalledTimes(1)
+    expect(completionsAtRead).toEqual([1, 1])
     await act(async () => progress.resolve(response(original)))
     expect(await screen.findByRole('heading', { name: t('bulk.returnSuccess') })).toBeVisible()
     const partial = mode === 'partial REPAIR'
@@ -135,12 +144,19 @@ describe('canonical return result presentation after server-confirmed operations
     const operation = canonicalReturnDetails(result, true)
     const original = canonicalIssueDetails(result, true)
     const pending = deferred<Response>()
-    const request = setup(result, path => path === '/api/transfer-batches/12' ? response(operation) : pending.promise)
-    const { user, done, close } = await begin(result)
+    const done = vi.fn()
+    const completionsAtRead: number[] = []
+    const request = setup(result, path => {
+      completionsAtRead.push(done.mock.calls.length)
+      return path === '/api/transfer-batches/12' ? response(operation) : pending.promise
+    })
+    const { user, close } = await begin(result, done)
+    expect(done).not.toHaveBeenCalled()
     await cancel(user)
     expect(screen.getByText(t('common.loading'))).toBeVisible()
     expect(modal().querySelector('.batch-card')).toBeNull()
-    expect(done).not.toHaveBeenCalled()
+    expect(done).toHaveBeenCalledTimes(1)
+    expect(completionsAtRead).toEqual([1, 1])
     await act(async () => pending.resolve(response(original)))
     expect(await screen.findByRole('heading', { name: t('bulk.cancelSuccess') })).toBeVisible()
     expectProgress(0, 2, 'batch.active')
@@ -180,15 +196,20 @@ describe('canonical return result presentation after server-confirmed operations
     expect(screen.queryByRole('button', { name: 'DOCX' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: t('bulk.confirmReturn') })).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: t('bulk.returnConfirmTitle') })).toHaveTextContent('№4')
-    expect(done).not.toHaveBeenCalled()
+    expect(done).toHaveBeenCalledTimes(1)
     const mutations = request.mock.calls.filter(([, init]) => init?.method === 'POST')
+    const callsBeforeRetry = request.mock.calls.length
     const submitted = String(mutations[0][1]?.body)
     expect(JSON.parse(submitted).items).toEqual([expect.objectContaining({ transfer_id: 101, machine_id: 1, next_status: 'REPAIR', notes: ' QA retained note 4 ', condition_text: ' QA condition 4 ', result_text: ' QA result 4 ' })])
     await user.dblClick(screen.getByRole('button', { name: t('bulk.refreshReturnProgress') }))
     expect(screen.getByRole('button', { name: t('bulk.refreshReturnProgress') })).toBeDisabled()
     expect(attempt).toBe(2)
+    expect(done).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls.slice(callsBeforeRetry).map(([path, init]) => [path, init?.method || 'GET'])).toEqual([
+      ['/api/transfer-batches/12', 'GET'], ['/api/transfer-batches/11', 'GET'],
+    ])
     await act(async () => retry.resolve(response(canonicalIssueDetails(result, cancelled))))
-    await waitFor(() => expect(done).toHaveBeenCalledTimes(1))
+    expect(await screen.findByRole('heading', { name: t(cancelled ? 'bulk.cancelSuccess' : 'bulk.returnSuccess') })).toBeVisible()
     expectProgress(cancelled ? 0 : 1, cancelled ? 2 : 1, cancelled ? 'batch.active' : 'batch.partiallyReturned')
     // A slower sibling read from the failed attempt must not replace the retry's snapshot.
     await act(async () => stale.resolve(response({ ...canonicalIssueDetails(result), ...result.batches[0] })))
@@ -196,5 +217,48 @@ describe('canonical return result presentation after server-confirmed operations
     expect(request.mock.calls.filter(([, init]) => init?.method === 'POST')).toEqual(mutations)
     expect(String(request.mock.calls[0][1]?.body)).toBe(submitted)
     expect(done).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['signed', 'cancelled'] as const)('can close after a failed %s refresh without repeating completion or mutations', async outcome => {
+    const result = returnResult(tasks)
+    const cancelled = outcome === 'cancelled'
+    const pending = deferred<Response>()
+    const request = setup(result, path => path === '/api/transfer-batches/12'
+      ? response({ detail: { code: 'refresh_unavailable' } }, 500)
+      : pending.promise)
+    const { user, done, close, unmount } = await begin(result)
+    close.mockImplementation(unmount)
+    if (cancelled) await cancel(user)
+    else { await sign(user); await sign(user) }
+    expect(await screen.findByRole('alert')).toHaveTextContent(t('bulk.returnRefreshError'))
+    expect(done).toHaveBeenCalledTimes(1)
+    const callsBeforeClose = [...request.mock.calls]
+    await user.click(within(modal()).getAllByRole('button', { name: t('common.close') })[0])
+    expect(screen.queryByRole('dialog', { name: t('bulk.return') })).not.toBeInTheDocument()
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(done).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls).toEqual(callsBeforeClose)
+    await act(async () => pending.resolve(response(canonicalIssueDetails(result, cancelled))))
+    expect(done).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls).toEqual(callsBeforeClose)
+  })
+
+  it('preserves exactly one completion for a return without signing tasks and performs no canonical refresh', async () => {
+    const result = returnResult()
+    const request = setup(result, () => { throw new Error('Unexpected canonical refresh') })
+    const { user, done, close, unmount } = await begin(result)
+    close.mockImplementation(unmount)
+    expect(await screen.findByRole('heading', { name: t('bulk.returnSuccess') })).toBeVisible()
+    expectProgress(1, 1, 'batch.partiallyReturned')
+    expect(done).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: t('signature.review') })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'DOCX' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: t('common.done') }))
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(done).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls.map(([path, init]) => [path, init?.method])).toEqual([
+      ['/api/transfers/bulk-return', 'POST'],
+    ])
   })
 })
