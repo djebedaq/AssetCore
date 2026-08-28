@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import { Ban, CheckCircle2, Download, Search } from 'lucide-react'
 import { downloadApiFile } from '../../api'
 import { statusText, useI18n } from '../../i18n'
@@ -29,6 +29,8 @@ export function ReturnModal({ items, onClose, onComplete }: {
   const [error, setError] = useState<Error | null>(null)
   const [busy, setBusy] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [refreshState, setRefreshState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const refreshing = useRef(false)
   const filtered = activeItems.filter((item) => (
     `${item.machine_number} ${item.brand} ${item.batch_reference || ''} ${item.protocol_number || ''}`
       .toLowerCase()
@@ -94,6 +96,41 @@ export function ReturnModal({ items, onClose, onComplete }: {
     }
   }
 
+  async function refreshResult() {
+    if (!result || refreshing.current) return
+    refreshing.current = true
+    setRefreshState('loading')
+    setError(null)
+    setSigningTasks([])
+    setStep('result')
+    try {
+      // Read only after the server confirms signing/cancellation. Publish the
+      // complete snapshot together; failed/overlapping reads cannot restore it partially.
+      const [operation, ...batches] = await Promise.all([
+        transferApi.batch(result.batch_id),
+        ...result.batches.map((batch) => transferApi.batch(batch.batch_id)),
+      ])
+      const returned = result.returned.map((item) => {
+        const transfer = operation.transfers.find((entry) => entry.transfer_id === item.transfer_id && entry.machine_id === item.machine_id)
+        if (!transfer?.return_status) throw new Error('return_progress_unavailable')
+        return {
+          ...item,
+          workflow_status: operation.status === 'CANCELLED' ? operation.status : transfer.return_status,
+          new_status: transfer.current_status,
+          returned_at: transfer.returned_at,
+          documents: transfer.return_documents,
+        }
+      })
+      setResult({ ...result, returned, batches })
+      setRefreshState('idle')
+      onComplete()
+    } catch {
+      setRefreshState('error')
+    } finally {
+      refreshing.current = false
+    }
+  }
+
   const finishSignature = (outcome: 'DONE' | 'REJECTED') => {
     if (outcome === 'REJECTED') {
       setError(new Error('signature_cancelled'))
@@ -103,13 +140,7 @@ export function ReturnModal({ items, onClose, onComplete }: {
     const next = signingIndex + 1
     if (next < signingTasks.length) setSigningIndex(next)
     else {
-      setResult((current) => current ? {
-        ...current,
-        message: t('bulk.returnSuccess'),
-        returned: current.returned.map((item) => ({ ...item, workflow_status: 'COMPLETED' })),
-      } : current)
-      setStep('result')
-      onComplete()
+      void refreshResult()
     }
   }
 
@@ -178,7 +209,16 @@ export function ReturnModal({ items, onClose, onComplete }: {
         </>
       )}
       {step === 'sign' && signingTasks[signingIndex] && <SignatureStep tasks={signingTasks} index={signingIndex} onFinished={finishSignature} />}
-      {step === 'result' && result && (
+      {step === 'result' && result && refreshState !== 'idle' && (
+        <div className="operation-result" aria-busy={refreshState === 'loading'}>
+          <ConfirmationSummary title={t('bulk.returnConfirmTitle')} machineNumbers={result.returned.map((item) => item.machine_number)} rows={[]} />
+          {refreshState === 'loading'
+            ? <p role="status">{t('common.loading')}</p>
+            : <div className="conflict-notice" role="alert">{t('bulk.returnRefreshError')}</div>}
+          <div className="actions"><button className="secondary" onClick={onClose}>{t('common.close')}</button><button className="primary" disabled={refreshState === 'loading'} onClick={() => void refreshResult()}>{t('bulk.refreshReturnProgress')}</button></div>
+        </div>
+      )}
+      {step === 'result' && result && refreshState === 'idle' && (
         <div className="operation-result" role="status">
           {result.returned.every((item) => item.workflow_status === 'COMPLETED') && <CheckCircle2 size={36} />}
           <h4>{result.returned.every((item) => item.workflow_status === 'COMPLETED') ? t('bulk.returnSuccess') : result.returned.every((item) => item.workflow_status === 'CANCELLED') ? t('bulk.cancelSuccess') : t('bulk.awaitingSignature')}</h4>
@@ -187,7 +227,7 @@ export function ReturnModal({ items, onClose, onComplete }: {
           <div className="actions">{!result.returned.every((item) => item.workflow_status === 'COMPLETED' || item.workflow_status === 'CANCELLED') && <button className="danger" onClick={() => setCancelOpen(true)}><Ban size={17} />{t('bulk.cancelPendingAction')}</button>}<button className="primary" onClick={onClose}>{t('common.done')}</button></div>
         </div>
       )}
-      {cancelOpen && result && <CancelBatchModal batch={{ batch_id: result.batch_id, batch_reference: result.batch_reference, operation: 'RETURN', awaiting_signature_machines: result.returned.filter((item) => item.workflow_status === 'AWAITING_SIGNATURE').length, total_machines: result.returned.length }} onClose={() => setCancelOpen(false)} onCancelled={() => { setResult((current) => current ? { ...current, returned: current.returned.map((item) => ({ ...item, workflow_status: 'CANCELLED' })) } : current); setSigningTasks([]); setError(null); onComplete() }} />}
+      {cancelOpen && result && <CancelBatchModal batch={{ batch_id: result.batch_id, batch_reference: result.batch_reference, operation: 'RETURN', awaiting_signature_machines: result.returned.filter((item) => item.workflow_status === 'AWAITING_SIGNATURE').length, total_machines: result.returned.length }} onClose={() => setCancelOpen(false)} onCancelled={() => void refreshResult()} />}
     </ModalShell>
   )
 }

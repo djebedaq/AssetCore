@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueModal, ReturnModal } from '../../../BulkTransfers'
-import { change, fillIssue, fillReturn, issued, issueResult, locations, machines, mockApi, response, returnResult, t, tasks } from './fixtures'
+import { canonicalIssueDetails, canonicalReturnDetails, change, fillIssue, fillReturn, issued, issueResult, locations, machines, mockApi, response, returnResult, t, tasks } from './fixtures'
 
 beforeEach(() => {
   const context = { fillRect: vi.fn(), beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn() }
@@ -44,6 +44,8 @@ describe('real integrated signature UI inside bulk transfer steps', () => {
     if (legacy) result.signing_tasks = [] // Same task list remains on the first individual record.
     const request = mockApi((path, init) => {
       if (path === `/api/transfers/bulk-${operation}`) return response(result, operation === 'issue' ? 201 : 200)
+      if (operation === 'return' && path === '/api/transfer-batches/12') return response(canonicalReturnDetails(returnResult(configured)))
+      if (operation === 'return' && path === '/api/transfer-batches/11') return response(canonicalIssueDetails(returnResult(configured)))
       if (path.startsWith('/api/signing/')) {
         if (init.method === 'POST') return response({ requires_confirmation: true, document_status: 'SIGNED' })
         const task = configured.find(item => path === item.signing_endpoint)!
@@ -88,6 +90,7 @@ describe('real integrated signature UI inside bulk transfer steps', () => {
     expect(request.mock.calls.map(([path]) => String(path))).toEqual([
       `/api/transfers/bulk-${operation}`,
       ...configured.flatMap(item => [item.signing_endpoint, item.signing_endpoint, `${item.signing_endpoint}/confirm`]),
+      ...(operation === 'return' ? ['/api/transfer-batches/12', '/api/transfer-batches/11'] : []),
     ])
     // No client-side machine mutation, manifest rewrite, per-machine repeat generation or extra signature act.
     expect(request.mock.calls.filter(([path]) => String(path).includes('/transfers/bulk-'))).toHaveLength(1)
@@ -97,6 +100,8 @@ describe('real integrated signature UI inside bulk transfer steps', () => {
     const result = operation === 'issue' ? issueResult(tasks) : returnResult(tasks)
     const request = mockApi((path, init) => {
       if (path === `/api/transfers/bulk-${operation}`) return response(result)
+      if (operation === 'return' && path === '/api/transfer-batches/12') return response(canonicalReturnDetails(returnResult(tasks), true))
+      if (operation === 'return' && path === '/api/transfer-batches/11') return response(canonicalIssueDetails(returnResult(tasks), true))
       if (path.endsWith('/reject')) return response({ message: 'QA rejection' })
       if (path.endsWith('/cancel')) return response({ batch_id: result.batch_id, batch_reference: result.batch_reference, status: 'CANCELLED', cancelled_transfers: 1, invalidated_signing_sessions: 1, message: 'QA' })
       if (path.startsWith('/api/signing/') && !init.method) return response({ document_number: 'QA', document_version: 1, participant: {}, operation_role: 'QA', consent_notice: 'QA explicit consent' })
