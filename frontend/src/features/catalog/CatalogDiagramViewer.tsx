@@ -10,6 +10,7 @@ import { catalogDisplayName } from './catalogNames'
 import {
   exceedsTapMovementThreshold,
   resolveHotspotActivation,
+  resolveHotspotHit,
   type DiagramPointerKind,
 } from './catalogInteraction'
 import type { CatalogDiagram, CatalogPart, PositionHotspot } from './catalogTypes'
@@ -201,10 +202,15 @@ export function CatalogDiagramViewer({
 
   function pointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (qaMode) return
-    const trigger = (event.target as HTMLElement).closest<HTMLButtonElement>('.catalog-v2-hotspot')
-    const hotspotId = trigger?.dataset.hotspotId
-    const hotspot = hotspotId
-      ? visibleHotspots.find((item) => item.id === Number(hotspotId)) || null
+    const target = (event.target as HTMLElement).closest<HTMLButtonElement>('.catalog-v2-hotspot')
+    const hotspot = resolveHotspotHit(
+      visibleHotspots,
+      event,
+      canvas.current?.getBoundingClientRect() || null,
+      target ? Number(target.dataset.hotspotId) : undefined,
+    )
+    const trigger = hotspot
+      ? canvas.current?.querySelector<HTMLButtonElement>(`[data-hotspot-id="${hotspot.id}"]`) || null
       : null
     if (pointers.current.size === 0) gesture.current = { moved: false, pinched: false }
     pointers.current.set(event.pointerId, {
