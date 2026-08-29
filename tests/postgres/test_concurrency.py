@@ -7,7 +7,9 @@ Only random schemas in the explicitly named concurrency test DB are removed.
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import io
 import json
 import os
 import secrets
@@ -21,8 +23,22 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
-from app.hardening_api import start_emergency_access
-from app.hardening_schemas import EmergencyAccessStart
+from app.hardening_api import (
+    confirm_signature,
+    create_official_document,
+    create_signature_session,
+    signing_summary,
+    start_emergency_access,
+    submit_signature,
+    supersede_document,
+)
+from app.hardening_schemas import (
+    EmergencyAccessStart,
+    OfficialDocumentCreate,
+    SignatureSessionCreate,
+    SignatureSubmit,
+    SupersedeDocumentRequest,
+)
 from app.industrial_api import (
     create_multi_part_request,
     create_repair_case,
@@ -39,6 +55,7 @@ from app.models import (
     ApprovalDecision,
     AuditLog,
     DocumentParticipant,
+    DocumentSignature,
     EmergencyAccessSession,
     ExternalSigner,
     GeneratedDocument,
@@ -55,6 +72,7 @@ from app.models import (
     ProtocolDocument,
     Repair,
     RepairEvent,
+    SignatureSession,
     TransferBatch,
     TransferProtocol,
     User,
@@ -64,6 +82,7 @@ from app.security import hash_password
 from app.seed import seed_database
 from app.transfer_service import TransferServiceError, bulk_issue
 from fastapi import HTTPException
+from PIL import Image, ImageDraw
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
@@ -433,3 +452,265 @@ def test_two_emergency_starts_keep_one_owner_and_one_active_session(pg_factory):
         assert len(audit(db, "Започната контролирана аварийна административна процедура")) == 1
         assert len(audit(db, "Отказано повторно начало на аварийна административна процедура")) == 1
         assert all(password not in (entry.details or "") for entry in db.scalars(select(AuditLog)))
+
+
+def _request(method: str, path: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "headers": [],
+            "client": ("127.0.0.1", 12345),
+            "method": method,
+            "path": path,
+        }
+    )
+
+
+def _postgres_signature_payload(consent_text: str) -> SignatureSubmit:
+    output = io.BytesIO()
+    image = Image.new("RGBA", (320, 120), "white")
+    ImageDraw.Draw(image).line(
+        [(15, 80), (70, 30), (135, 88), (205, 25), (300, 75)],
+        fill="black",
+        width=5,
+    )
+    image.save(output, format="PNG")
+    return SignatureSubmit.model_validate(
+        {
+            "consent_accepted": True,
+            "consent_text": consent_text,
+            "strokes": [
+                [
+                    {"x": 20 + index * 20, "y": 30 + index, "t": index * 10}
+                    for index in range(8)
+                ]
+            ],
+            "image_base64": base64.b64encode(output.getvalue()).decode(),
+            "canvas_width": 320,
+            "canvas_height": 120,
+        }
+    )
+
+
+def _prepare_postgres_stale_signature(factory, suffix: str) -> dict:
+    with factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        participants = [
+            {
+                "slot_code": "REQUESTED_BY",
+                "operation_role": "QA requester",
+                "user_id": actor.id,
+            },
+            {
+                "slot_code": "APPROVED_BY",
+                "operation_role": "QA approver",
+                "user_id": actor.id,
+            },
+        ]
+        created = create_official_document(
+            OfficialDocumentCreate(
+                document_number=f"QA-F02-{suffix}",
+                document_type="PART_REQUEST",
+                snapshot={"test_scope": "postgres-superseded-signing"},
+                participants=participants,
+            ),
+            _request("POST", "/api/official-documents"),
+            actor=actor,
+            db=db,
+        )
+        participant_id = created["participants"][0]["id"]
+        signing_session = create_signature_session(
+            SignatureSessionCreate(participant_id=participant_id),
+            _request("POST", "/api/signatures/sessions"),
+            actor=actor,
+            db=db,
+        )
+        token = signing_session["signing_token"]
+        summary = signing_summary(token, db)
+        submit_signature(
+            token,
+            _postgres_signature_payload(summary["consent_notice"]),
+            db,
+        )
+        document = db.get(OfficialDocument, created["id"])
+        version = db.get(OfficialDocumentVersion, document.current_version_id)
+        signature = db.scalar(
+            select(DocumentSignature).where(
+                DocumentSignature.participant_id == participant_id
+            )
+        )
+        session = db.scalar(
+            select(SignatureSession).where(
+                SignatureSession.participant_id == participant_id
+            )
+        )
+        return {
+            "document_id": document.id,
+            "version_id": version.id,
+            "signature_id": signature.id,
+            "session_id": session.id,
+            "token": token,
+            "participants": participants,
+            "snapshot_sha256": version.snapshot_sha256,
+            "signing_sha256": version.signing_sha256,
+        }
+
+
+def _postgres_correction_payload(fixture: dict) -> SupersedeDocumentRequest:
+    return SupersedeDocumentRequest(
+        reason="QA PostgreSQL superseded-signing lifecycle correction.",
+        snapshot={"test_scope": "postgres-superseded-signing-correction"},
+        participants=fixture["participants"],
+    )
+
+
+def test_postgres_stale_confirm_cannot_reactivate_superseded_version(pg_factory):
+    fixture = _prepare_postgres_stale_signature(pg_factory, uuid4().hex)
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        supersede_document(
+            fixture["document_id"],
+            _postgres_correction_payload(fixture),
+            _request(
+                "POST",
+                f"/api/official-documents/{fixture['document_id']}/supersede",
+            ),
+            actor=actor,
+            db=db,
+        )
+        document = db.get(OfficialDocument, fixture["document_id"])
+        first_version = db.get(OfficialDocumentVersion, fixture["version_id"])
+        second_version = db.get(OfficialDocumentVersion, document.current_version_id)
+        evidence = (
+            document.current_version_id,
+            first_version.status,
+            first_version.finalized_at,
+            first_version.snapshot_sha256,
+            first_version.signing_sha256,
+            second_version.status,
+            second_version.snapshot_sha256,
+            second_version.signing_sha256,
+        )
+        with pytest.raises(HTTPException) as rejected:
+            confirm_signature(fixture["token"], db)
+        assert rejected.value.status_code == 410
+        assert rejected.value.detail["code"] == "signing_session_closed"
+        db.rollback()
+
+    with pg_factory() as db:
+        document = db.get(OfficialDocument, fixture["document_id"])
+        first_version = db.get(OfficialDocumentVersion, fixture["version_id"])
+        second_version = db.get(OfficialDocumentVersion, document.current_version_id)
+        assert (
+            document.current_version_id,
+            first_version.status,
+            first_version.finalized_at,
+            first_version.snapshot_sha256,
+            first_version.signing_sha256,
+            second_version.status,
+            second_version.snapshot_sha256,
+            second_version.signing_sha256,
+        ) == evidence
+        assert first_version.status == "SUPERSEDED"
+        assert db.get(DocumentSignature, fixture["signature_id"]).confirmed_at is None
+        stale_session = db.get(SignatureSession, fixture["session_id"])
+        assert stale_session.consumed_at is None and stale_session.rejected_at is None
+        assert len(audit(db, "Потвърден ръчен графичен подпис")) == 0
+
+
+def test_postgres_supersede_and_confirm_race_preserves_canonical_lifecycle(pg_factory):
+    fixture = _prepare_postgres_stale_signature(pg_factory, uuid4().hex)
+    barrier = Barrier(3, timeout=12)
+    pids = [None, None]
+    engine = pg_factory.kw["bind"]
+
+    def confirm_worker():
+        with pg_factory() as db:
+            pids[0] = db.scalar(text("SELECT pg_backend_pid()"))
+            barrier.wait()
+            try:
+                confirm_signature(fixture["token"], db)
+                return Outcome(200)
+            except HTTPException as exc:
+                db.rollback()
+                return Outcome(exc.status_code, exc.detail.get("code"))
+
+    def supersede_worker():
+        with pg_factory() as db:
+            pids[1] = db.scalar(text("SELECT pg_backend_pid()"))
+            actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            barrier.wait()
+            try:
+                supersede_document(
+                    fixture["document_id"],
+                    _postgres_correction_payload(fixture),
+                    _request(
+                        "POST",
+                        f"/api/official-documents/{fixture['document_id']}/supersede",
+                    ),
+                    actor=actor,
+                    db=db,
+                )
+                return Outcome(201)
+            except HTTPException as exc:
+                db.rollback()
+                return Outcome(exc.status_code, exc.detail.get("code"))
+
+    with engine.connect() as coordinator, ThreadPoolExecutor(max_workers=2) as pool:
+        coordinator.execute(
+            select(OfficialDocument.id)
+            .where(OfficialDocument.id == fixture["document_id"])
+            .with_for_update()
+        )
+        futures = [pool.submit(confirm_worker), pool.submit(supersede_worker)]
+        try:
+            barrier.wait()
+            assert len(set(pids)) == 2
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                coordinator.execute(text("SELECT pg_stat_clear_snapshot()"))
+                waiting = coordinator.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_stat_activity WHERE pid = ANY(:pids) "
+                        "AND wait_event_type = 'Lock' "
+                        "AND cardinality(pg_blocking_pids(pid)) > 0"
+                    ),
+                    {"pids": pids},
+                )
+                if waiting == 2:
+                    break
+                if any(future.done() for future in futures):
+                    pytest.fail("A worker finished before both document locks overlapped.")
+                time.sleep(0.025)
+            else:
+                pytest.fail("Both lifecycle transactions did not overlap in time.")
+        finally:
+            coordinator.rollback()
+        confirm_outcome, supersede_outcome = [
+            future.result(timeout=50) for future in futures
+        ]
+
+    assert supersede_outcome.status == 201
+    assert (confirm_outcome.status, confirm_outcome.code) in {
+        (200, None),
+        (410, "signing_session_closed"),
+    }
+    with pg_factory() as db:
+        document = db.get(OfficialDocument, fixture["document_id"])
+        first_version = db.get(OfficialDocumentVersion, fixture["version_id"])
+        second_version = db.get(OfficialDocumentVersion, document.current_version_id)
+        assert document.current_version_id == second_version.id
+        assert first_version.status == "SUPERSEDED"
+        assert first_version.snapshot_sha256 == fixture["snapshot_sha256"]
+        assert first_version.signing_sha256 == fixture["signing_sha256"]
+        assert second_version.version == 2
+        assert second_version.status == "READY_FOR_SIGNATURE"
+        assert count(db, OfficialDocumentVersion) == 2
+        signature = db.get(DocumentSignature, fixture["signature_id"])
+        session = db.get(SignatureSession, fixture["session_id"])
+        if confirm_outcome.status == 200:
+            assert signature.confirmed_at is not None and session.consumed_at is not None
+            assert len(audit(db, "Потвърден ръчен графичен подпис")) == 1
+        else:
+            assert signature.confirmed_at is None and session.consumed_at is None
+            assert len(audit(db, "Потвърден ръчен графичен подпис")) == 0

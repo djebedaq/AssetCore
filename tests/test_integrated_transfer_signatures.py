@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import copy
 import io
 
 from app.models import (
+    AuditLog,
     DocumentParticipant,
     DocumentSignature,
     DocumentType,
@@ -11,6 +13,7 @@ from app.models import (
     OfficialDocument,
     OfficialDocumentVersion,
     Repair,
+    SignatureSession,
     TransferProtocol,
 )
 from PIL import Image, ImageDraw
@@ -147,6 +150,234 @@ def test_signature_image_cannot_be_reused_for_another_document(
     rejected = _sign_task(client, second["signing_tasks"][0], 2, image=reused_image)
     assert rejected.status_code == 409
     assert rejected.json()["detail"]["code"] == "signature_reuse_forbidden"
+
+
+def test_superseded_issue_version_rejects_stale_signing_and_preserves_history(
+    client, auth_headers, machine_ids, issue_payload, session_factory
+):
+    issued = client.post(
+        "/api/transfers/bulk-issue",
+        headers=auth_headers,
+        json=issue_payload(machine_ids["4"]),
+    )
+    assert issued.status_code == 201, issued.text
+    body = issued.json()
+    transfer_result = body["transfers"][0]
+    assert _sign_task(client, body["signing_tasks"][0], 100).status_code == 201
+    stale_task = body["signing_tasks"][1]
+    stale_token = stale_task["signing_token"]
+    stale_summary = client.get(f"/api/signing/{stale_token}")
+    assert stale_summary.status_code == 200, stale_summary.text
+    submitted = client.post(
+        f"/api/signing/{stale_token}",
+        json=_signature_payload(stale_summary.json()["consent_notice"], 101),
+    )
+    assert submitted.status_code == 201, submitted.text
+
+    document_id = body["signing_document_id"]
+    with session_factory() as db:
+        document = db.get(OfficialDocument, document_id)
+        first_version = db.get(OfficialDocumentVersion, document.current_version_id)
+        stale_participant = db.get(DocumentParticipant, stale_task["participant_id"])
+        source_snapshot = copy.deepcopy(first_version.snapshot)
+        source_docx = (
+            bytes(first_version.docx_content) if first_version.docx_content else None
+        )
+        source_pdf = (
+            bytes(first_version.pdf_content) if first_version.pdf_content else None
+        )
+        first_version_evidence = {
+            "id": first_version.id,
+            "snapshot": copy.deepcopy(first_version.snapshot),
+            "snapshot_sha256": first_version.snapshot_sha256,
+            "signing_sha256": first_version.signing_sha256,
+            "docx_content": source_docx,
+            "docx_sha256": first_version.docx_sha256,
+            "pdf_content": source_pdf,
+            "pdf_sha256": first_version.pdf_sha256,
+        }
+        participant_inputs = []
+        for participant in db.scalars(
+            select(DocumentParticipant)
+            .where(DocumentParticipant.document_version_id == first_version.id)
+            .order_by(DocumentParticipant.id)
+        ):
+            participant_inputs.append(
+                {
+                    "slot_code": participant.slot_code,
+                    "operation_role": participant.operation_role,
+                    "user_id": participant.user_id,
+                    "external_signer_id": participant.external_signer_id,
+                }
+            )
+        stale_signature = db.scalar(
+            select(DocumentSignature).where(
+                DocumentSignature.participant_id == stale_participant.id
+            )
+        )
+        assert stale_signature is not None and stale_signature.confirmed_at is None
+        stale_signature_id = stale_signature.id
+        stale_session = db.scalar(
+            select(SignatureSession).where(
+                SignatureSession.participant_id == stale_participant.id
+            )
+        )
+        stale_session_id = stale_session.id
+        protocol_document = db.get(
+            OfficialDocument, transfer_result["official_document_id"]
+        )
+        protocol_version = db.get(
+            OfficialDocumentVersion, protocol_document.current_version_id
+        )
+        protocol_evidence = {
+            "id": protocol_version.id,
+            "status": protocol_version.status,
+            "snapshot": copy.deepcopy(protocol_version.snapshot),
+            "snapshot_sha256": protocol_version.snapshot_sha256,
+            "signing_sha256": protocol_version.signing_sha256,
+            "docx_content": bytes(protocol_version.docx_content),
+            "docx_sha256": protocol_version.docx_sha256,
+            "pdf_content": bytes(protocol_version.pdf_content),
+            "pdf_sha256": protocol_version.pdf_sha256,
+        }
+        machine_before = db.get(Machine, machine_ids["4"])
+        transfer_before = db.get(TransferProtocol, transfer_result["transfer_id"])
+        workflow_before = (
+            machine_before.status,
+            machine_before.location_id,
+            transfer_before.issue_status,
+            transfer_before.issued_at,
+        )
+
+    corrected = client.post(
+        f"/api/official-documents/{document_id}/supersede",
+        headers=auth_headers,
+        json={
+            "reason": "QA correction for stale signing lifecycle regression.",
+            "snapshot": source_snapshot,
+            "docx_base64": (
+                base64.b64encode(source_docx).decode() if source_docx else None
+            ),
+            "pdf_base64": (
+                base64.b64encode(source_pdf).decode() if source_pdf else None
+            ),
+            "participants": participant_inputs,
+        },
+    )
+    assert corrected.status_code == 201, corrected.text
+    corrected_body = corrected.json()
+    assert corrected_body["current_version"]["version"] == 2
+
+    with session_factory() as db:
+        document = db.get(OfficialDocument, document_id)
+        first_version = db.get(OfficialDocumentVersion, first_version_evidence["id"])
+        second_version = db.get(OfficialDocumentVersion, document.current_version_id)
+        assert first_version.status == "SUPERSEDED"
+        first_finalized_at = first_version.finalized_at
+        current_version_id = document.current_version_id
+        second_version_evidence = {
+            "status": second_version.status,
+            "snapshot": copy.deepcopy(second_version.snapshot),
+            "snapshot_sha256": second_version.snapshot_sha256,
+            "signing_sha256": second_version.signing_sha256,
+            "docx_content": (
+                bytes(second_version.docx_content)
+                if second_version.docx_content
+                else None
+            ),
+            "docx_sha256": second_version.docx_sha256,
+            "pdf_content": (
+                bytes(second_version.pdf_content)
+                if second_version.pdf_content
+                else None
+            ),
+            "pdf_sha256": second_version.pdf_sha256,
+        }
+
+    stale_responses = [
+        client.get(f"/api/signing/{stale_token}"),
+        client.post(
+            f"/api/signing/{stale_token}",
+            json=_signature_payload(stale_summary.json()["consent_notice"], 102),
+        ),
+        client.post(f"/api/signing/{stale_token}/confirm"),
+        client.post(f"/api/signing/{stale_token}/reject"),
+    ]
+    assert [response.status_code for response in stale_responses] == [410, 410, 410, 410]
+    assert {
+        response.json()["detail"]["code"] for response in stale_responses
+    } == {"signing_session_closed"}
+    stale_session_create = client.post(
+        "/api/signatures/sessions",
+        headers=auth_headers,
+        json={"participant_id": stale_task["participant_id"]},
+    )
+    assert stale_session_create.status_code == 409
+    assert stale_session_create.json()["detail"]["code"] == "document_not_signable"
+
+    with session_factory() as db:
+        document = db.get(OfficialDocument, document_id)
+        first_version = db.get(OfficialDocumentVersion, first_version_evidence["id"])
+        second_version = db.get(OfficialDocumentVersion, current_version_id)
+        assert document.current_version_id == current_version_id
+        assert first_version.status == "SUPERSEDED"
+        assert first_version.finalized_at == first_finalized_at
+        for field, expected in first_version_evidence.items():
+            if field != "id":
+                assert getattr(first_version, field) == expected
+        for field, expected in second_version_evidence.items():
+            assert getattr(second_version, field) == expected
+        stale_signature = db.get(DocumentSignature, stale_signature_id)
+        stale_session = db.get(SignatureSession, stale_session_id)
+        assert stale_signature.confirmed_at is None
+        assert stale_session.consumed_at is None and stale_session.rejected_at is None
+        assert db.scalar(select(func.count(DocumentSignature.id))) == 2
+        assert db.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.action == "Потвърден ръчен графичен подпис"
+            )
+        ) == 1
+        protocol_version = db.get(OfficialDocumentVersion, protocol_evidence["id"])
+        for field, expected in protocol_evidence.items():
+            if field != "id":
+                assert getattr(protocol_version, field) == expected
+        machine = db.get(Machine, machine_ids["4"])
+        transfer = db.get(TransferProtocol, transfer_result["transfer_id"])
+        assert (
+            machine.status,
+            machine.location_id,
+            transfer.issue_status,
+            transfer.issued_at,
+        ) == workflow_before
+
+    slot_order = {"ACCEPTANCE": 1, "HANDOVER": 2}
+    current_participants = sorted(
+        corrected_body["participants"], key=lambda item: slot_order[item["slot_code"]]
+    )
+    for index, participant in enumerate(current_participants, start=103):
+        current_session = client.post(
+            "/api/signatures/sessions",
+            headers=auth_headers,
+            json={"participant_id": participant["id"]},
+        )
+        assert current_session.status_code == 201, current_session.text
+        assert _sign_task(client, current_session.json(), index).status_code == 201
+
+    with session_factory() as db:
+        document = db.get(OfficialDocument, document_id)
+        first_version = db.get(OfficialDocumentVersion, first_version_evidence["id"])
+        second_version = db.get(OfficialDocumentVersion, current_version_id)
+        machine = db.get(Machine, machine_ids["4"])
+        transfer = db.get(TransferProtocol, transfer_result["transfer_id"])
+        assert document.current_version_id == current_version_id
+        assert first_version.status == "SUPERSEDED"
+        assert first_version.docx_content == first_version_evidence["docx_content"]
+        assert first_version.pdf_content == first_version_evidence["pdf_content"]
+        assert first_version.docx_sha256 == first_version_evidence["docx_sha256"]
+        assert first_version.pdf_sha256 == first_version_evidence["pdf_sha256"]
+        assert second_version.status == "SIGNED"
+        assert machine.status == "ISSUED"
+        assert transfer.issue_status == "COMPLETED"
 
 
 def test_return_remains_pending_until_return_and_acceptance_signatures(
