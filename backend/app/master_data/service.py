@@ -18,7 +18,7 @@ from ..industrial_schemas import (
 from ..models import AssetCategory, CategoryFieldDefinition, Department, Location, User
 from ..persistence import _commit
 from ..workflow import business_conflict
-from .serializers import _department_dict, _location_dict
+from .serializers import _category_field_dict, _department_dict, _location_dict
 
 
 def locations(_: User, db: Session) -> list[Location]:
@@ -47,7 +47,12 @@ def list_categories(_: User, db: Session) -> list[dict]:
             "status_codes": category.status_codes,
             "is_active": category.is_active,
             "created_at": category.created_at,
-            "fields": sorted(category.fields, key=lambda item: (item.sort_order, item.id)),
+            "fields": [
+                _category_field_dict(item)
+                for item in sorted(
+                    category.fields, key=lambda item: (item.sort_order, item.id)
+                )
+            ],
         }
         for category in categories
     ]
