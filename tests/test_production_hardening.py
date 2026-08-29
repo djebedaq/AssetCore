@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import tarfile
 from datetime import timedelta
@@ -12,7 +13,9 @@ from app.models import (
     DocumentSignature,
     EmergencyAccessSession,
     InstallationOwnership,
+    OfficialDocument,
     OfficialDocumentVersion,
+    SignatureSession,
     SoftwareLicense,
     User,
     UserRole,
@@ -500,6 +503,138 @@ def test_sequential_mobile_signatures_finalize_immutable_version_and_allow_super
         assert old.docx_sha256 == old_docx_hash
         assert old.pdf_sha256 == old_pdf_hash
         assert db.scalar(select(func.count(DocumentSignature.id))) == 2
+
+
+def test_superseded_version_rejects_stale_summary_and_unsubmitted_signature(
+    client, auth_headers, session_factory
+):
+    first = _external_signer(client, auth_headers, "F02-A")
+    second = _external_signer(client, auth_headers, "F02-B")
+    docx, pdf = _document_files()
+    participant_inputs = [
+        {
+            "slot_code": "REQUESTED_BY",
+            "operation_role": "Requested by",
+            "external_signer_id": first["id"],
+        },
+        {
+            "slot_code": "APPROVED_BY",
+            "operation_role": "Approved by",
+            "external_signer_id": second["id"],
+        },
+    ]
+    created = client.post(
+        "/api/official-documents",
+        headers=auth_headers,
+        json={
+            "document_number": "QA-F02-STALE-SUBMIT",
+            "document_type": "PART_REQUEST",
+            "language": "bg",
+            "snapshot": {"purpose": "isolated stale submission regression"},
+            "docx_base64": docx,
+            "pdf_base64": pdf,
+            "participants": participant_inputs,
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    requested_by = next(
+        item for item in body["participants"] if item["slot_code"] == "REQUESTED_BY"
+    )
+    signing_session = client.post(
+        "/api/signatures/sessions",
+        headers=auth_headers,
+        json={"participant_id": requested_by["id"]},
+    )
+    assert signing_session.status_code == 201, signing_session.text
+    stale_token = signing_session.json()["signing_token"]
+    summary = client.get(f"/api/signing/{stale_token}")
+    assert summary.status_code == 200, summary.text
+
+    with session_factory() as db:
+        document = db.get(OfficialDocument, body["id"])
+        first_version = db.get(OfficialDocumentVersion, document.current_version_id)
+        first_version_id = first_version.id
+        first_evidence = {
+            "snapshot": first_version.snapshot,
+            "snapshot_sha256": first_version.snapshot_sha256,
+            "signing_sha256": first_version.signing_sha256,
+            "docx_content": bytes(first_version.docx_content),
+            "docx_sha256": first_version.docx_sha256,
+            "pdf_content": bytes(first_version.pdf_content),
+            "pdf_sha256": first_version.pdf_sha256,
+        }
+        assert hashlib.sha256(first_evidence["docx_content"]).hexdigest() == (
+            first_evidence["docx_sha256"]
+        )
+        assert hashlib.sha256(first_evidence["pdf_content"]).hexdigest() == (
+            first_evidence["pdf_sha256"]
+        )
+        stale_session_id = db.scalar(
+            select(SignatureSession.id).where(
+                SignatureSession.participant_id == requested_by["id"]
+            )
+        )
+
+    superseded = client.post(
+        f"/api/official-documents/{body['id']}/supersede",
+        headers=auth_headers,
+        json={
+            "reason": "QA correction preserves immutable historical evidence.",
+            "snapshot": {"purpose": "isolated current correction regression"},
+            "docx_base64": docx,
+            "pdf_base64": pdf,
+            "participants": participant_inputs,
+        },
+    )
+    assert superseded.status_code == 201, superseded.text
+
+    with session_factory() as db:
+        document = db.get(OfficialDocument, body["id"])
+        first_version = db.get(OfficialDocumentVersion, first_version_id)
+        second_version = db.get(OfficialDocumentVersion, document.current_version_id)
+        assert first_version.status == "SUPERSEDED"
+        first_finalized_at = first_version.finalized_at
+        current_version_id = document.current_version_id
+        second_evidence = {
+            "status": second_version.status,
+            "snapshot": second_version.snapshot,
+            "snapshot_sha256": second_version.snapshot_sha256,
+            "signing_sha256": second_version.signing_sha256,
+            "docx_content": bytes(second_version.docx_content),
+            "docx_sha256": second_version.docx_sha256,
+            "pdf_content": bytes(second_version.pdf_content),
+            "pdf_sha256": second_version.pdf_sha256,
+        }
+
+    stale_summary = client.get(f"/api/signing/{stale_token}")
+    stale_submit = client.post(
+        f"/api/signing/{stale_token}",
+        json=_signature_payload(summary.json()["consent_notice"], 201),
+    )
+    assert stale_summary.status_code == stale_submit.status_code == 410
+    assert stale_summary.json()["detail"]["code"] == "signing_session_closed"
+    assert stale_submit.json()["detail"]["code"] == "signing_session_closed"
+
+    with session_factory() as db:
+        document = db.get(OfficialDocument, body["id"])
+        first_version = db.get(OfficialDocumentVersion, first_version_id)
+        second_version = db.get(OfficialDocumentVersion, current_version_id)
+        assert document.current_version_id == current_version_id
+        assert first_version.status == "SUPERSEDED"
+        assert first_version.finalized_at == first_finalized_at
+        for field, expected in first_evidence.items():
+            assert getattr(first_version, field) == expected
+        for field, expected in second_evidence.items():
+            assert getattr(second_version, field) == expected
+        assert db.scalar(select(func.count(DocumentSignature.id))) == 0
+        stale_session = db.get(SignatureSession, stale_session_id)
+        assert stale_session.consumed_at is None and stale_session.rejected_at is None
+        assert db.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.action == "Потвърден ръчен графичен подпис"
+            )
+        ) == 0
 
 
 def test_restore_rejects_archive_path_traversal(tmp_path):

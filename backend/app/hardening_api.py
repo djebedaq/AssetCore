@@ -90,6 +90,13 @@ from .user_api import serialize_user
 
 router = APIRouter(prefix="/api", tags=["production-hardening"])
 
+_SIGNABLE_DOCUMENT_STATUSES = frozenset(
+    {
+        OfficialDocumentStatus.READY_FOR_SIGNATURE.value,
+        OfficialDocumentStatus.PARTIALLY_SIGNED.value,
+    }
+)
+
 
 def _canonical(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
@@ -886,8 +893,21 @@ def create_signature_session(data: SignatureSessionCreate, request: Request, act
     if participant is None:
         raise HTTPException(404, detail={"code": "participant_not_found", "message": "Участникът не е намерен."})
     version = db.get(OfficialDocumentVersion, participant.document_version_id)
-    if version.status not in {OfficialDocumentStatus.READY_FOR_SIGNATURE.value, OfficialDocumentStatus.PARTIALLY_SIGNED.value}:
+    if version is None:
         raise HTTPException(409, detail={"code": "document_not_signable", "message": "Версията не е отворена за подписване."})
+    document = db.scalar(
+        select(OfficialDocument)
+        .where(OfficialDocument.id == version.document_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    version = db.scalar(
+        select(OfficialDocumentVersion)
+        .where(OfficialDocumentVersion.id == version.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    _require_current_signable_version(document, version)
     if db.scalar(select(DocumentSignature.id).where(DocumentSignature.participant_id == participant.id)):
         raise HTTPException(409, detail={"code": "already_signed", "message": "Този участник вече е положил подпис."})
     _ensure_sequence(db, participant, version)
@@ -954,29 +974,82 @@ def _ensure_sequence(db: Session, participant: DocumentParticipant, version: Off
         raise HTTPException(409, detail={"code": "signature_sequence_blocked", "message": "Предходните задължителни подписи още не са потвърдени."})
 
 
-def _signing_context(token: str, db: Session, lock: bool = False):
-    token_hash = _sha(token.encode())
-    query = select(SignatureSession).where(SignatureSession.token_hash == token_hash)
-    if lock:
-        query = query.with_for_update()
-    session = db.scalar(query)
+def _require_current_signable_version(
+    document: OfficialDocument | None,
+    version: OfficialDocumentVersion | None,
+    *,
+    signing_session: bool = False,
+) -> None:
+    if (
+        document is not None
+        and version is not None
+        and document.current_version_id == version.id
+        and version.status in _SIGNABLE_DOCUMENT_STATUSES
+    ):
+        return
+    if signing_session:
+        raise HTTPException(
+            410,
+            detail={
+                "code": "signing_session_closed",
+                "message": "Сесията за подпис е изтекла или вече е приключена.",
+            },
+        )
+    raise HTTPException(
+        409,
+        detail={
+            "code": "document_not_signable",
+            "message": "Версията не е отворена за подписване.",
+        },
+    )
+
+
+def _require_open_signing_session(session: SignatureSession | None) -> SignatureSession:
     if session is None:
         raise HTTPException(404, detail={"code": "signing_session_not_found", "message": "Сесията за подпис не е намерена."})
     if session.expires_at < utcnow() or session.consumed_at or session.rejected_at:
         raise HTTPException(410, detail={"code": "signing_session_closed", "message": "Сесията за подпис е изтекла или вече е приключена."})
+    return session
+
+
+def _signing_context(token: str, db: Session, lock: bool = False):
+    token_hash = _sha(token.encode())
+    session = _require_open_signing_session(
+        db.scalar(select(SignatureSession).where(SignatureSession.token_hash == token_hash))
+    )
     participant = db.get(DocumentParticipant, session.participant_id)
-    version_query = select(OfficialDocumentVersion).where(
-        OfficialDocumentVersion.id == participant.document_version_id
-    )
     if lock:
-        version_query = version_query.with_for_update()
-    version = db.scalar(version_query)
-    document_query = select(OfficialDocument).where(
-        OfficialDocument.id == version.document_id
-    )
-    if lock:
-        document_query = document_query.with_for_update()
-    document = db.scalar(document_query)
+        # Superseding locks the canonical document before updating its version.
+        # Use the same order here to avoid document/version deadlocks in PostgreSQL.
+        version_reference = db.get(
+            OfficialDocumentVersion, participant.document_version_id
+        )
+        document = db.scalar(
+            select(OfficialDocument)
+            .where(OfficialDocument.id == version_reference.document_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        version = db.scalar(
+            select(OfficialDocumentVersion)
+            .where(OfficialDocumentVersion.id == participant.document_version_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        session = _require_open_signing_session(
+            db.scalar(
+                select(SignatureSession)
+                .where(SignatureSession.id == session.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+    else:
+        version = db.get(OfficialDocumentVersion, participant.document_version_id)
+        document = (
+            db.get(OfficialDocument, version.document_id) if version is not None else None
+        )
+    _require_current_signable_version(document, version, signing_session=True)
     return session, participant, version, document
 
 
@@ -1154,6 +1227,7 @@ def reject_signature(token: str, db: Session = Depends(get_db)) -> dict:
 
 
 def _refresh_document_status(db: Session, document: OfficialDocument, version: OfficialDocumentVersion) -> None:
+    _require_current_signable_version(document, version, signing_session=True)
     participants = list(db.scalars(select(DocumentParticipant).where(DocumentParticipant.document_version_id == version.id)))
     required_codes = {slot.code for slot in db.scalars(select(SignatureSlot).where(SignatureSlot.document_type == document.document_type, SignatureSlot.required.is_(True), SignatureSlot.is_active.is_(True)))}
     required = [participant for participant in participants if not required_codes or participant.slot_code in required_codes]
