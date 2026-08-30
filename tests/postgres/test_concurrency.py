@@ -16,6 +16,7 @@ import secrets
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from threading import Barrier
 from uuid import uuid4
@@ -23,6 +24,7 @@ from uuid import uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
+from app.governance.owner_service import transfer_owner
 from app.hardening_api import (
     confirm_signature,
     create_official_document,
@@ -35,6 +37,7 @@ from app.hardening_api import (
 from app.hardening_schemas import (
     EmergencyAccessStart,
     OfficialDocumentCreate,
+    OwnerTransferRequest,
     SignatureSessionCreate,
     SignatureSubmit,
     SupersedeDocumentRequest,
@@ -54,6 +57,7 @@ from app.industrial_schemas import (
 from app.models import (
     ApprovalDecision,
     AuditLog,
+    AuthSession,
     DocumentParticipant,
     DocumentSignature,
     EmergencyAccessSession,
@@ -76,6 +80,8 @@ from app.models import (
     TransferBatch,
     TransferProtocol,
     User,
+    UserRole,
+    utcnow,
 )
 from app.schemas import BulkIssueRequest
 from app.security import hash_password
@@ -714,3 +720,278 @@ def test_postgres_supersede_and_confirm_race_preserves_canonical_lifecycle(pg_fa
         else:
             assert signature.confirmed_at is None and session.consumed_at is None
             assert len(audit(db, "Потвърден ръчен графичен подпис")) == 0
+
+
+def _postgres_owner_target(db, nonce: str, suffix: str, password: str) -> User:
+    target = User(
+        email=f"f03-{suffix}-{nonce}@example.invalid",
+        full_name=f"QA F03 Owner {suffix}",
+        first_name="QA",
+        middle_name="F03",
+        last_name=f"Owner {suffix}",
+        job_title="Test administrator",
+        profile_status="PROFILE_COMPLETE",
+        password_hash=hash_password(password),
+        role=UserRole.ADMINISTRATOR.value,
+        is_active=True,
+    )
+    db.add(target)
+    db.flush()
+    return target
+
+
+def _postgres_auth_session(db, user: User, marker: str) -> AuthSession:
+    now = utcnow()
+    item = AuthSession(
+        user_id=user.id,
+        token_hash=hashlib.sha256(f"session-{marker}-{uuid4().hex}".encode()).hexdigest(),
+        csrf_token_hash=hashlib.sha256(f"csrf-{marker}-{uuid4().hex}".encode()).hexdigest(),
+        user_token_version=user.token_version,
+        created_at=now,
+        last_seen_at=now,
+        expires_at=now + timedelta(hours=1),
+    )
+    db.add(item)
+    db.flush()
+    return item
+
+
+def _postgres_owner_success_audits(db):
+    return db.scalars(
+        select(AuditLog)
+        .where(
+            AuditLog.entity_type == "installation_owner",
+            AuditLog.action == "Прехвърлена собственост на инсталацията",
+        )
+        .order_by(AuditLog.id)
+    ).all()
+
+
+def test_postgres_owner_transfer_round_trip_a_to_b_to_a_to_b(pg_factory):
+    nonce = uuid4().hex
+    passwords = {
+        "a": secrets.token_urlsafe(32),
+        "b": secrets.token_urlsafe(32),
+    }
+    with pg_factory() as db:
+        ownership = db.scalar(select(InstallationOwnership))
+        owner_a = db.get(User, ownership.owner_user_id)
+        owner_a.password_hash = hash_password(passwords["a"])
+        owner_b = _postgres_owner_target(db, nonce, "b", passwords["b"])
+        db.commit()
+        owner_ids = {"a": owner_a.id, "b": owner_b.id}
+        initial_version = ownership.version
+        initial_tokens = {
+            key: db.get(User, identifier).token_version
+            for key, identifier in owner_ids.items()
+        }
+
+    steps = [
+        ("a", "b", "F03 PostgreSQL owner A to owner B."),
+        ("b", "a", "F03 PostgreSQL reverse owner B to owner A."),
+        ("a", "b", "F03 PostgreSQL owner A to owner B again."),
+    ]
+    session_ids: list[tuple[int, int]] = []
+    for sequence, (actor_key, target_key, reason) in enumerate(steps, start=1):
+        with pg_factory() as db:
+            actor = db.get(User, owner_ids[actor_key])
+            target = db.get(User, owner_ids[target_key])
+            actor_session = _postgres_auth_session(db, actor, f"{sequence}-actor")
+            target_session = _postgres_auth_session(db, target, f"{sequence}-target")
+            db.commit()
+            session_ids.append((actor_session.id, target_session.id))
+
+            result = transfer_owner(
+                OwnerTransferRequest(
+                    target_user_id=target.id,
+                    current_password=passwords[actor_key],
+                    reason=reason,
+                ),
+                _request("POST", "/api/owner/transfer"),
+                actor=actor,
+                db=db,
+            )
+            assert result["owner_user_id"] == target.id
+            assert result["designation_version"] == initial_version + sequence
+
+        with pg_factory() as db:
+            ownership = db.scalar(select(InstallationOwnership))
+            owners = db.scalars(
+                select(User).where(User.is_system_owner.is_(True))
+            ).all()
+            assert len(owners) == 1
+            assert ownership.owner_user_id == owners[0].id == owner_ids[target_key]
+            assert ownership.version == initial_version + sequence
+            assert ownership.designated_by_id == owner_ids[actor_key]
+            assert ownership.transfer_reason == reason
+            assert owners[0].is_active is True
+            assert owners[0].role == UserRole.ADMINISTRATOR.value
+            assert (
+                db.get(User, owner_ids["a"]).token_version
+                == initial_tokens["a"] + sequence
+            )
+            assert (
+                db.get(User, owner_ids["b"]).token_version
+                == initial_tokens["b"] + sequence
+            )
+            actor_session = db.get(AuthSession, session_ids[-1][0])
+            target_session = db.get(AuthSession, session_ids[-1][1])
+            assert actor_session.revoked_at is not None
+            assert actor_session.revoked_reason == "owner_transferred"
+            assert target_session.revoked_at is not None
+            assert target_session.revoked_reason == "owner_designated"
+            entries = _postgres_owner_success_audits(db)
+            assert len(entries) == sequence
+            details = json.loads(entries[-1].details)
+            assert details == {
+                "previous_owner_user_id": owner_ids[actor_key],
+                "new_owner_user_id": owner_ids[target_key],
+                "reason": reason,
+                "designation_version": initial_version + sequence,
+            }
+
+    with pg_factory() as db:
+        assert {
+            db.get(User, owner_ids[key]).role for key in ("a", "b")
+        } == {UserRole.ADMINISTRATOR.value}
+        assert {role.value for role in UserRole} == {
+            "administrator",
+            "director",
+            "mechanic",
+            "observer",
+        }
+        sessions = db.scalars(
+            select(AuthSession).where(
+                AuthSession.id.in_([identifier for pair in session_ids for identifier in pair])
+            )
+        ).all()
+        assert len(sessions) == 6
+        assert all(item.revoked_at is not None for item in sessions)
+
+
+def test_postgres_overlapping_owner_transfers_are_serialized(pg_factory):
+    nonce = uuid4().hex
+    owner_password = secrets.token_urlsafe(32)
+    target_password = secrets.token_urlsafe(32)
+    with pg_factory() as db:
+        ownership = db.scalar(select(InstallationOwnership))
+        owner_a = db.get(User, ownership.owner_user_id)
+        owner_a.password_hash = hash_password(owner_password)
+        owner_b = _postgres_owner_target(db, nonce, "b", target_password)
+        owner_c = _postgres_owner_target(db, nonce, "c", target_password)
+        _postgres_auth_session(db, owner_a, "race-a")
+        _postgres_auth_session(db, owner_b, "race-b")
+        _postgres_auth_session(db, owner_c, "race-c")
+        db.commit()
+        ownership_id = ownership.id
+        initial_version = ownership.version
+        owner_a_id = owner_a.id
+        target_ids = [owner_b.id, owner_c.id]
+        initial_tokens = {
+            item.id: item.token_version for item in (owner_a, owner_b, owner_c)
+        }
+
+    reasons = [
+        "F03 overlapping transfer from owner A to administrator B.",
+        "F03 overlapping transfer from owner A to administrator C.",
+    ]
+    barrier = Barrier(3, timeout=12)
+    pids = [None, None]
+    engine = pg_factory.kw["bind"]
+
+    def worker(index):
+        with pg_factory() as db:
+            pids[index] = db.scalar(text("SELECT pg_backend_pid()"))
+            actor = db.get(User, owner_a_id)
+            barrier.wait()
+            try:
+                transfer_owner(
+                    OwnerTransferRequest(
+                        target_user_id=target_ids[index],
+                        current_password=owner_password,
+                        reason=reasons[index],
+                    ),
+                    _request("POST", "/api/owner/transfer"),
+                    actor=actor,
+                    db=db,
+                )
+                return Outcome(200)
+            except HTTPException as exc:
+                db.rollback()
+                return Outcome(
+                    exc.status_code,
+                    exc.detail.get("code") if isinstance(exc.detail, dict) else None,
+                )
+
+    with engine.connect() as coordinator, ThreadPoolExecutor(max_workers=2) as pool:
+        coordinator.execute(
+            select(InstallationOwnership.id)
+            .where(InstallationOwnership.id == ownership_id)
+            .with_for_update()
+        )
+        futures = [pool.submit(worker, index) for index in range(2)]
+        try:
+            barrier.wait()
+            assert len(set(pids)) == 2
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                coordinator.execute(text("SELECT pg_stat_clear_snapshot()"))
+                waiting = coordinator.scalar(
+                    text(
+                        "SELECT count(*) FROM pg_stat_activity WHERE pid = ANY(:pids) "
+                        "AND wait_event_type = 'Lock' "
+                        "AND cardinality(pg_blocking_pids(pid)) > 0"
+                    ),
+                    {"pids": pids},
+                )
+                if waiting == 2:
+                    break
+                if any(future.done() for future in futures):
+                    pytest.fail(
+                        "An owner transfer finished before both canonical locks overlapped."
+                    )
+                time.sleep(0.025)
+            else:
+                pytest.fail("Both owner transfers did not overlap on PostgreSQL locks.")
+        finally:
+            coordinator.rollback()
+        outcomes = [future.result(timeout=50) for future in futures]
+
+    assert sorted(item.status for item in outcomes) == [200, 403]
+    loser = next(item for item in outcomes if item.status == 403)
+    assert loser.code == "owner_only"
+    winner_index = next(index for index, item in enumerate(outcomes) if item.status == 200)
+    winner_id = target_ids[winner_index]
+    loser_id = target_ids[1 - winner_index]
+
+    with pg_factory() as db:
+        ownership = db.scalar(select(InstallationOwnership))
+        owners = db.scalars(select(User).where(User.is_system_owner.is_(True))).all()
+        assert len(owners) == 1
+        assert ownership.owner_user_id == owners[0].id == winner_id
+        assert ownership.version == initial_version + 1
+        assert ownership.designated_by_id == owner_a_id
+        assert ownership.transfer_reason == reasons[winner_index]
+        assert db.get(User, owner_a_id).token_version == initial_tokens[owner_a_id] + 1
+        assert db.get(User, winner_id).token_version == initial_tokens[winner_id] + 1
+        assert db.get(User, loser_id).token_version == initial_tokens[loser_id]
+        sessions = {
+            item.user_id: item
+            for item in db.scalars(
+                select(AuthSession).where(
+                    AuthSession.user_id.in_([owner_a_id, *target_ids])
+                )
+            )
+        }
+        assert sessions[owner_a_id].revoked_reason == "owner_transferred"
+        assert sessions[winner_id].revoked_reason == "owner_designated"
+        assert sessions[loser_id].revoked_at is None
+        assert sessions[loser_id].revoked_reason is None
+        entries = _postgres_owner_success_audits(db)
+        assert len(entries) == 1
+        assert json.loads(entries[0].details) == {
+            "previous_owner_user_id": owner_a_id,
+            "new_owner_user_id": winner_id,
+            "reason": reasons[winner_index],
+            "designation_version": initial_version + 1,
+        }
