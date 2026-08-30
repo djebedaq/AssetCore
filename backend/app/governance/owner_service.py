@@ -125,19 +125,23 @@ def transfer_owner(
     if not target.is_active or target.role != UserRole.ADMINISTRATOR.value:
         raise HTTPException(409, detail={"code": "invalid_owner_target", "message": "Новият собственик трябва да е активен администратор."})
     _require_complete_profile(target)
-    actor.is_system_owner = False
-    target.is_system_owner = True
-    item.owner_user_id = target.id
-    item.designated_by_id = actor.id
-    item.designated_at = utcnow()
-    item.transfer_reason = data.reason.strip()
-    item.version += 1
-    actor.token_version += 1
-    target.token_version += 1
-    revoke_all_user_sessions(db, actor.id, "owner_transferred")
-    revoke_all_user_sessions(db, target.id, "owner_designated")
-    add_audit_log(db, actor, "installation_owner", target.id, "Прехвърлена собственост на инсталацията", {"previous_owner_user_id": actor.id, "new_owner_user_id": target.id, "reason": data.reason.strip(), "designation_version": item.version}, _correlation_id(request))
     try:
+        # Preserve the database-enforced single-owner invariant regardless of
+        # SQLAlchemy's primary-key update ordering. The temporary zero-owner
+        # state exists only inside this locked, uncommitted transaction.
+        actor.is_system_owner = False
+        db.flush()
+        target.is_system_owner = True
+        item.owner_user_id = target.id
+        item.designated_by_id = actor.id
+        item.designated_at = utcnow()
+        item.transfer_reason = data.reason.strip()
+        item.version += 1
+        actor.token_version += 1
+        target.token_version += 1
+        revoke_all_user_sessions(db, actor.id, "owner_transferred")
+        revoke_all_user_sessions(db, target.id, "owner_designated")
+        add_audit_log(db, actor, "installation_owner", target.id, "Прехвърлена собственост на инсталацията", {"previous_owner_user_id": actor.id, "new_owner_user_id": target.id, "reason": data.reason.strip(), "designation_version": item.version}, _correlation_id(request))
         db.commit()
     except IntegrityError as exc:
         db.rollback()
