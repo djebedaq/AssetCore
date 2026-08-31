@@ -21,6 +21,13 @@ RUN apt-get update \
     && groupadd --system --gid 10001 assetcore \
     && useradd --system --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin assetcore
 COPY backend/ ./backend/
+COPY scripts/backup_database.py \
+     scripts/backup_assetcore.py \
+     scripts/verify_backup.py \
+     scripts/restore_database.py \
+     scripts/restore_assetcore.py \
+     scripts/operations_audit.py \
+     ./scripts/
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 RUN chmod -R a-w /app
 ENV PYTHONPATH=/app/backend

@@ -171,6 +171,18 @@ jobs:
         run: docker build --pull --tag assetcore:ci .
       - name: Verify fixed non-root runtime identity
         run: test "$(docker image inspect assetcore:ci --format '{{.Config.User}}')" = "10001:10001"
+      - name: Verify production backup operations in the exact image
+        run: |
+          set -euo pipefail
+          docker run --rm --read-only \
+            --tmpfs /tmp:rw,nosuid,noexec,size=512m \
+            assetcore:ci python scripts/backup_database.py --help
+          docker run --rm --read-only \
+            --tmpfs /tmp:rw,nosuid,noexec,size=512m \
+            assetcore:ci python scripts/verify_backup.py --help
+          docker run --rm --read-only \
+            --tmpfs /tmp:rw,nosuid,noexec,size=512m \
+            assetcore:ci python scripts/restore_database.py --help
       - name: Verify LibreOffice with read-only root filesystem
         run: >-
           docker run --rm --read-only
