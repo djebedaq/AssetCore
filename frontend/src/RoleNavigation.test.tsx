@@ -79,6 +79,41 @@ describe('ролево меню', () => {
     expect(document.querySelector('img')).toBeNull()
   })
 
+  it('не показва действие за издаване, когато паспортът отчита активен ремонт', async () => {
+    setSessionUser(session('administrator', ['assets.view', 'assets.edit', 'transfers.create', 'repairs.view']))
+    vi.stubGlobal('fetch', vi.fn(async () => json({
+      limited_view: false,
+      machine: {
+        id: 1, inventory_number: 'TEST-ONLY', name: 'Test only', brand: 'Test', model: null,
+        pressure_bar: 500, status: 'REPAIR', is_active: true, location: null,
+        category: 'HPWJ', category_definition: null, created_at: '2026-08-01T00:00:00Z',
+      },
+      current_state: {
+        available: false,
+        active_transfer: null,
+        active_repair: {
+          id: 2,
+          repair_reference: 'REP-TEST-ONLY',
+          status: 'ACCEPTED',
+          reported_problem: 'Test only',
+          opened_at: '2026-08-01T00:00:00Z',
+        },
+        last_movement: null,
+        last_inspection: null,
+        last_test: null,
+        allowed_actions: { issue: false, return: false, repair: false, edit: true },
+      },
+      custom_fields: [], repairs: [], transfers: [], part_requests: [], generated_documents: [],
+      technical_documents: [], history: [], parts_used: [], attachments: [], audit: [], audit_visible: false,
+    })))
+
+    render(<I18nProvider initialLocale="bg"><MachinePassportModal machineId={1} onClose={vi.fn()} /></I18nProvider>)
+
+    expect(await screen.findByText('Недостъпна')).toBeVisible()
+    expect(screen.getByText('REP-TEST-ONLY')).toBeVisible()
+    expect(screen.queryByText('Издай')).not.toBeInTheDocument()
+  })
+
   it('заключва background scroll и пази отделна touch-scroll област за цялото mobile меню', async () => {
     vi.spyOn(window, 'scrollX', 'get').mockReturnValue(0)
     vi.spyOn(window, 'scrollY', 'get').mockReturnValue(480)

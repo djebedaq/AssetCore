@@ -13,6 +13,7 @@ from ..models import (
     GeneratedDocument,
     Machine,
     MachineFieldValue,
+    MachineStatus,
     PartRequest,
     Repair,
     RepairStatus,
@@ -21,6 +22,19 @@ from ..models import (
     User,
 )
 from ..permissions import Permission, has_permission, is_observer
+
+
+def _passport_available(
+    machine: Machine,
+    active_transfer: TransferProtocol | None,
+    active_repair: Repair | None,
+) -> bool:
+    return (
+        machine.is_active
+        and machine.status == MachineStatus.READY.value
+        and active_transfer is None
+        and active_repair is None
+    )
 
 
 def machine_passport(machine_id: int, user: User, db: Session) -> dict:
@@ -79,9 +93,9 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             "generated_documents": [],
             "technical_documents": [],
             "current_state": {
-                "available": machine.is_active
-                and active_transfer is None
-                and active_repair is None,
+                "available": _passport_available(
+                    machine, active_transfer, active_repair
+                ),
                 "active_transfer": ({"is_active": True} if active_transfer is not None else None),
                 "active_repair": (
                     {"status": active_repair.status} if active_repair is not None else None
@@ -132,6 +146,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
         ),
         None,
     )
+    available = _passport_available(machine, active_transfer, active_repair)
     last_movement = next(
         (
             event
@@ -356,7 +371,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             for item in technical_documents
         ],
         "current_state": {
-            "available": machine.is_active and active_transfer is None,
+            "available": available,
             "active_transfer": (
                 {
                     "id": active_transfer.id,
@@ -415,7 +430,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             ),
             "allowed_actions": {
                 "issue": has_permission(user, Permission.TRANSFERS_CREATE)
-                and active_transfer is None,
+                and available,
                 "return": has_permission(user, Permission.TRANSFERS_RETURN)
                 and active_transfer is not None,
                 "repair": has_permission(user, Permission.REPAIRS_CREATE) and active_repair is None,
