@@ -239,6 +239,8 @@ def test_csp_matches_vite_pwa_and_authenticated_blob_previews():
     }
     assert directives["script-src"] == "script-src 'self'"
     assert "'unsafe-eval'" not in CONTENT_SECURITY_POLICY
+    assert "'self'" in directives["frame-src"]
+    assert "blob:" in directives["frame-src"]
     assert "blob:" in directives["object-src"]
     assert "blob:" in directives["img-src"]
     assert directives["worker-src"] == "worker-src 'self'"
