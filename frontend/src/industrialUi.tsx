@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Download, Search, X } from 'lucide-react'
+import { Download, ExternalLink, Search, X } from 'lucide-react'
 
 import { ApiError, createApiObjectUrl, downloadApiFile } from './api'
 import { useI18n, type TranslationKey } from './i18n'
@@ -112,7 +112,7 @@ export function DocumentButtons({ path, filename, format, label }: { path: strin
     URL.revokeObjectURL(previewUrl)
     setPreviewUrl('')
   }
-  return <span className="document-actions-inline"><DownloadButton path={path} filename={filename} label={label || format.toUpperCase()} />{format.toLowerCase() === 'pdf' && <button className="secondary compact" disabled={loading} onClick={() => void preview()}><Search size={15} />{t('common.preview')}</button>}{failed && <small className="inline-error">{t('catalog.documentPreviewError')}</small>}{previewUrl && <Modal title={filename} onClose={closePreview} wide><object className="generated-document-preview" data={previewUrl} type="application/pdf"><p>{t('catalog.previewUnsupported')}</p></object></Modal>}</span>
+  return <span className="document-actions-inline"><DownloadButton path={path} filename={filename} label={label || format.toUpperCase()} />{format.toLowerCase() === 'pdf' && <button className="secondary compact" disabled={loading} onClick={() => void preview()}><Search size={15} />{t('common.preview')}</button>}{failed && <small className="inline-error">{t('catalog.documentPreviewError')}</small>}{previewUrl && <Modal title={filename} onClose={closePreview} wide><object className="generated-document-preview" data={previewUrl} type="application/pdf"><p>{t('document.previewFallback')}</p></object><div className="generated-document-preview-recovery" role="note"><p>{t('document.previewFallback')}</p><div><a className="secondary compact button-link" href={previewUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={15} />{t('document.openPdf')}</a><DownloadButton path={path} filename={filename} /></div></div></Modal>}</span>
 }
 
 export function AttachmentList({ items }: { items: StoredAttachment[] }) {
