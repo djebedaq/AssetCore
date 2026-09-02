@@ -3,6 +3,11 @@ import { DocumentButtons } from '../../industrialUi'
 import { statusText, useI18n, type TranslationKey } from '../../i18n'
 import type { OfficialRegistryDocument, OfficialRegistryItem, OfficialRegistrySection as RegistrySection } from './types'
 
+const TRANSFER_DOCUMENT_ORDER: Record<string, number> = {
+  TRANSFER_ISSUE: 0,
+  TRANSFER_RETURN: 1,
+}
+
 type Props = {
   section: RegistrySection
   titleKey: TranslationKey
@@ -22,7 +27,7 @@ export default function OfficialDocumentSection({ section, titleKey, emptyKey, t
         </div>
         <span className="badge official-count" aria-label={t('official.sectionCount', { count: section.count })}>{section.count}</span>
       </header>
-      <div className="table-card official-registry-table">
+      {statusDomain === 'transfer' ? <TransferRegistry section={section} /> : <div className="table-card official-registry-table">
         <table>
           <thead><tr><th>{t('official.number')}</th><th>{t('official.type')}</th><th>{t('common.status')}</th><th>{t('official.progress')}</th><th>{t('official.created')}</th><th>{t('transfers.documents')}</th></tr></thead>
           <tbody>{section.items.map((item) => (
@@ -30,9 +35,54 @@ export default function OfficialDocumentSection({ section, titleKey, emptyKey, t
           ))}</tbody>
         </table>
         {!section.items.length && <div className="empty-state">{t(emptyKey)}</div>}
-      </div>
+      </div>}
     </section>
   )
+
+  function TransferRegistry({ section: transferSection }: { section: RegistrySection }) {
+    return (
+      <div className="table-card official-transfer-registry">
+        <div className="official-transfer-list" role="list">
+          {transferSection.items.map((item) => <TransferRegistryItem key={item.registry_key} item={item} />)}
+        </div>
+        {!transferSection.items.length && <div className="empty-state">{t(emptyKey)}</div>}
+      </div>
+    )
+  }
+
+  function TransferRegistryItem({ item }: { item: OfficialRegistryItem }) {
+    const created = item.created_at ? date(item.created_at) : t('common.noValue')
+    const orderedDocuments = item.documents
+      .map((document, index) => ({ document, index }))
+      .sort((left, right) => (
+        (TRANSFER_DOCUMENT_ORDER[left.document.document_type] ?? 2)
+        - (TRANSFER_DOCUMENT_ORDER[right.document.document_type] ?? 2)
+        || left.index - right.index
+      ))
+      .map(({ document }) => document)
+
+    return (
+      <article className="official-transfer-item" role="listitem" data-registry-key={item.registry_key}>
+        <div className="official-transfer-info">
+          <h5>{item.machine_number ? t('official.machineNumber', { number: item.machine_number }) : t(typeKey)}</h5>
+          <dl className="official-transfer-metadata">
+            <div><dt>{t('common.status')}</dt><dd><span className={`badge official-status ${item.status.toLowerCase()}`}>{registryStatus(item.status, 'transfer')}</span></dd></div>
+            <div><dt>{t('official.progress')}</dt><dd><span className={`official-signature ${item.signature_status.toLowerCase()}`}>{signatureLabel(item.signature_status)}</span></dd></div>
+            <div><dt>{t('official.created')}</dt><dd>{created}{!item.created_at && item.started_at && <small>{t('official.startedAt', { date: date(item.started_at) })}</small>}</dd></div>
+          </dl>
+        </div>
+        <div className="official-transfer-protocols" aria-label={t('transfers.documents')}>
+          {orderedDocuments.map((document) => (
+            <DocumentAction
+              key={`${item.registry_key}-${document.document_type}-${document.document_number}`}
+              document={document}
+              transferLayout
+            />
+          ))}
+        </div>
+      </article>
+    )
+  }
 
   function OfficialDocumentRow({ item, typeKey: rowTypeKey, statusDomain: rowStatusDomain }: { item: OfficialRegistryItem; typeKey: TranslationKey; statusDomain: Props['statusDomain'] }) {
     const created = item.created_at ? date(item.created_at) : t('common.noValue')
@@ -51,12 +101,13 @@ export default function OfficialDocumentSection({ section, titleKey, emptyKey, t
     )
   }
 
-  function DocumentAction({ document }: { document: OfficialRegistryDocument }) {
+  function DocumentAction({ document, transferLayout = false }: { document: OfficialRegistryDocument; transferLayout?: boolean }) {
     const safeNumber = document.document_number.replace(/[^A-Za-z0-9._-]/g, '_')
     return (
-      <div className="official-document-action">
+      <div className={`official-document-action${transferLayout ? ' official-transfer-protocol' : ''}`} data-document-type={document.document_type}>
         <span>{documentLabel(document)}</span>
-        <div>{document.files.map((file) => <DocumentButtons key={`${document.document_number}-${file.format}`} path={file.preview_endpoint || file.download_endpoint} filename={`${safeNumber}${document.version ? `-v${document.version}` : ''}.${file.format}`} format={file.format} label={file.format === 'docx' ? t('common.word') : t('common.pdf')} />)}{!document.files.length && <span className="muted">{t('common.noValue')}</span>}</div>
+        {transferLayout && <strong className="official-transfer-protocol-number">{document.document_number}</strong>}
+        <div>{document.files.map((file) => <DocumentButtons key={`${document.document_number}-${file.format}`} path={file.preview_endpoint || file.download_endpoint} filename={`${safeNumber}${document.version ? `-v${document.version}` : ''}.${file.format}`} format={file.format} label={transferLayout ? file.format.toUpperCase() : file.format === 'docx' ? t('common.word') : t('common.pdf')} />)}{!document.files.length && <span className="muted">{t('common.noValue')}</span>}</div>
       </div>
     )
   }
