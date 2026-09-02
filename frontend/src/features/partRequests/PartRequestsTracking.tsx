@@ -19,6 +19,10 @@ import { statusText, useI18n, type TranslationKey } from '../../i18n'
 import { hasPermission } from '../../permissions'
 import type { CatalogPartEnhanced, MultiPartRequest } from '../../types'
 import { notifyPartRequestsChanged } from './partRequestEvents'
+import {
+  formatTransactionalPartQuantity,
+  isDeliveredPartQuantity,
+} from './partRequestQuantities'
 
 const DOCUMENT_STATUSES = new Set([
   'APPROVED',
@@ -68,7 +72,8 @@ function UnknownPartLinkModal({
 
 function PartRequestFulfillmentModal({ request, onClose, onSaved }: { request: MultiPartRequest; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
-  const statuses = request.status === 'APPROVED' ? ['ORDERED', 'CANCELLED'] : ['PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED']
+  const legacyFractional = request.quantity_compatibility.status === 'LEGACY_FRACTIONAL'
+  const statuses = legacyFractional ? ['CANCELLED'] : request.status === 'APPROVED' ? ['ORDERED', 'CANCELLED'] : ['PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED']
   const [nextStatus, setNextStatus] = useState(statuses[0])
   const [supplier, setSupplier] = useState(request.supplier || '')
   const [note, setNote] = useState(request.delivery_note || '')
@@ -77,8 +82,16 @@ function PartRequestFulfillmentModal({ request, onClose, onSaved }: { request: M
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!window.confirm(t('requests.fulfillmentConfirm'))) return
+    const changesQuantities = nextStatus === 'PARTIALLY_DELIVERED' || nextStatus === 'DELIVERED'
+    const lines = changesQuantities
+      ? request.lines.map((line) => ({ line_id: line.id, delivered_quantity: quantities[line.id] ?? 0 }))
+      : []
+    if (lines.some((line) => !isDeliveredPartQuantity(line.delivered_quantity))) {
+      setError(t('errors.validation'))
+      return
+    }
     try {
-      await api(`/part-requests/${request.id}/fulfillment`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, supplier: supplier || null, note: note || null, lines: request.lines.map((line) => ({ line_id: line.id, delivered_quantity: quantities[line.id] || 0 })) }) })
+      await api(`/part-requests/${request.id}/fulfillment`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, supplier: supplier || null, note: note || null, lines }) })
       notifyPartRequestsChanged()
       onSaved()
     } catch (caught) {
@@ -89,13 +102,16 @@ function PartRequestFulfillmentModal({ request, onClose, onSaved }: { request: M
     <label>{t('common.status')}<select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>{statuses.map((status) => <option value={status} key={status}>{statusText(t, status, 'part')}</option>)}</select></label>
     <label>{t('catalog.supplier')}<input value={supplier} onChange={(event) => setSupplier(event.target.value)} /></label>
     <label className="wide">{t('common.notes')}<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label>
-    <div className="wide request-line-list">{request.lines.map((line) => <div key={line.id}><span><b>{line.part_number || t('common.noValue')}</b><small>{line.description}</small></span><label>{t('requests.deliveredQuantity')}<input disabled={nextStatus === 'ORDERED' || nextStatus === 'CANCELLED'} type="number" min={line.delivered_quantity} max={line.quantity} step="0.01" value={quantities[line.id] || 0} onChange={(event) => setQuantities((current) => ({ ...current, [line.id]: Number(event.target.value) }))} /></label><em>/ {line.quantity} {line.unit}</em></div>)}</div>
+    <div className="wide request-line-list">{request.lines.map((line) => <div key={line.id}><span><b>{line.part_number || t('common.noValue')}</b><small>{line.description}</small></span><label>{t('requests.deliveredQuantity')}<input aria-label={`${t('requests.deliveredQuantity')} ${line.part_number || line.id}`} disabled={nextStatus === 'ORDERED' || nextStatus === 'CANCELLED'} type="number" inputMode="numeric" min={line.delivered_quantity} max={line.quantity} step="1" value={quantities[line.id] ?? 0} onChange={(event) => { const value = Number(event.target.value); if (isDeliveredPartQuantity(value)) setQuantities((current) => ({ ...current, [line.id]: value })) }} /></label><em>/ {formatTransactionalPartQuantity(line.quantity)} {line.unit}</em></div>)}</div>
     {error && <div className="error wide">{error}</div>}
     <div className="actions wide"><button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary">{t('requests.saveFulfillment')}</button></div>
   </form></Modal>
 }
 
 function nextActionKey(request: MultiPartRequest): TranslationKey {
+  if (request.quantity_compatibility.status === 'LEGACY_FRACTIONAL') {
+    return `requests.legacyRecovery.${request.quantity_compatibility.recovery_action}` as TranslationKey
+  }
   if (request.status === 'DRAFT') return 'requests.nextAction.submit'
   if (request.status === 'WAITING_APPROVAL') return hasPermission('requests.approve') ? 'requests.nextAction.decide' : 'requests.nextAction.waitingApproval'
   if (request.status === 'APPROVED') return 'requests.nextAction.order'
@@ -166,14 +182,15 @@ export function PartRequestsTracking() {
     {error && <div className="error" role="alert">{error}</div>}
     <div className="cards-list">{items.map((request) => <article className="panel request-card" key={request.id}>
       <div className="request-card-head"><div><span className="badge">{statusText(t, request.status, 'part')}</span><h3>{request.request_reference}</h3><small>{date(request.created_at)} · {request.machine_number ? t('passport.title', { number: request.machine_number }) : t('parts.general')}</small>{request.requested_by_name && <small>{t('requests.requester')}: {request.requested_by_name}</small>}{request.repair_reference && <small>{t('requests.linkedRepair')}: {request.repair_reference}</small>}{request.department && <small>{t('requests.department')}: {request.department}</small>}{request.supplier && <small>{t('catalog.supplier')}: {request.supplier}</small>}</div><b>{statusText(t, request.priority, 'part')}</b></div>
+      {request.quantity_compatibility.status === 'LEGACY_FRACTIONAL' && <div className="conflict-notice" role="alert"><b>{t('requests.legacyQuantityWarning')}</b><p>{t(`requests.legacyRecovery.${request.quantity_compatibility.recovery_action}` as TranslationKey)}</p><small>{t('requests.legacyQuantityAffectedLines', { lines: request.quantity_compatibility.affected_line_ids.join(', ') })}</small></div>}
       <div className="request-next-action"><b>{t('requests.nextAction')}</b><span>{t(nextActionKey(request))}</span></div>
-      <div className="request-line-list">{request.lines.map((line) => <div className={line.is_unknown_part ? 'unknown-part-request-line' : ''} key={line.id}><span><b>{line.is_unknown_part ? t('unknownPart.label') : line.part_number || t('common.noValue')}</b><small>{line.is_unknown_part && line.assembly ? `${t('unknownPart.assembly')}: ${line.assembly} · ` : ''}{line.description}</small>{line.linked_part_number && <small className="verified">{t('unknownPart.linkedTo')}: {line.linked_part_number} · {line.linked_part_description}</small>}</span><span className="request-line-side"><em>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${line.delivered_quantity} / ` : ''}{line.quantity} {line.unit}</em>{line.is_unknown_part && !line.linked_catalog_part_id && hasPermission('parts.manage') && <button className="secondary compact" onClick={() => setUnknownLink({ request, line })}><ShieldCheck size={14} />{t('unknownPart.linkAction')}</button>}</span></div>)}</div>
+      <div className="request-line-list">{request.lines.map((line) => <div className={line.is_unknown_part ? 'unknown-part-request-line' : ''} key={line.id}><span><b>{line.is_unknown_part ? t('unknownPart.label') : line.part_number || t('common.noValue')}</b><small>{line.is_unknown_part && line.assembly ? `${t('unknownPart.assembly')}: ${line.assembly} · ` : ''}{line.description}</small>{line.linked_part_number && <small className="verified">{t('unknownPart.linkedTo')}: {line.linked_part_number} · {line.linked_part_description}</small>}</span><span className="request-line-side"><em>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${formatTransactionalPartQuantity(line.delivered_quantity)} / ` : ''}{formatTransactionalPartQuantity(line.quantity)} {line.unit}</em>{line.is_unknown_part && !line.linked_catalog_part_id && hasPermission('parts.manage') && <button className="secondary compact" onClick={() => setUnknownLink({ request, line })}><ShieldCheck size={14} />{t('unknownPart.linkAction')}</button>}</span></div>)}</div>
       {request.approvals.length > 0 && <details><summary>{t('requests.approvalHistory')} ({request.approvals.length})</summary><div className="request-approval-history">{request.approvals.map((approval) => <div key={approval.id}><b>{statusText(t, approval.decision, 'part')}</b><span>{approval.decided_by_name || t('common.noValue')} · {date(approval.decided_at)}</span>{approval.note && <small>{approval.note}</small>}</div>)}</div></details>}
       {request.attachments.length > 0 && <details><summary>{t('requests.attachments')} ({request.attachments.length})</summary><AttachmentList items={request.attachments} /></details>}
       <div className="request-actions">
-        {request.status === 'DRAFT' && hasPermission('requests.create') && <button className="primary" onClick={() => void submitDraft(request.id)}>{t('requests.submitDraft')}</button>}
-        {request.status === 'WAITING_APPROVAL' && hasPermission('requests.approve') && <><button className="primary" onClick={() => void decide(request.id, 'APPROVED')}><CheckCircle2 size={16} />{t('requests.approve')}</button><button className="secondary" onClick={() => void decide(request.id, 'REJECTED')}>{t('requests.reject')}</button></>}
-        {['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.create') && <button className="secondary" onClick={() => setFulfillment(request)}><PackageCheck size={16} />{t('requests.updateFulfillment')}</button>}
+        {request.status === 'DRAFT' && request.quantity_compatibility.status !== 'LEGACY_FRACTIONAL' && hasPermission('requests.create') && <button className="primary" onClick={() => void submitDraft(request.id)}>{t('requests.submitDraft')}</button>}
+        {request.status === 'WAITING_APPROVAL' && hasPermission('requests.approve') && <>{request.quantity_compatibility.status !== 'LEGACY_FRACTIONAL' && <button className="primary" onClick={() => void decide(request.id, 'APPROVED')}><CheckCircle2 size={16} />{t('requests.approve')}</button>}<button className="secondary" onClick={() => void decide(request.id, 'REJECTED')}>{t('requests.reject')}</button></>}
+        {['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.create') && <button className="secondary" onClick={() => setFulfillment(request)}><PackageCheck size={16} />{request.quantity_compatibility.status === 'LEGACY_FRACTIONAL' ? t('requests.legacyCancelAction') : t('requests.updateFulfillment')}</button>}
         {hasPermission('requests.create') && <label className="secondary compact file-button"><Upload size={15} />{t('requests.addAttachment')}<input hidden type="file" accept="application/pdf,.docx,.xlsx,image/png,image/jpeg,image/webp" onChange={(event) => { void attach(request, event.target.files?.[0]); event.currentTarget.value = '' }} /></label>}
         {DOCUMENT_STATUSES.has(request.status) && request.documents.length === 0 && hasPermission('documents.generate') && <button className="secondary" onClick={() => void generate(request)}><FilePlus2 size={16} />{t('requests.generate')} ({t(`language.${request.language}` as TranslationKey)})</button>}
         {request.documents.map((document) => <DocumentButtons key={document.id} path={document.download_endpoint} filename={document.filename} format={document.format} />)}

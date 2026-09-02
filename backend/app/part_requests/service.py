@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from math import isfinite
 from threading import RLock
 from typing import Iterator
 
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -30,6 +32,86 @@ OFFICIAL_DOCUMENT_STATUSES = frozenset(
 )
 
 _sqlite_document_generation_lock = RLock()
+
+
+def _is_whole_quantity(value: float) -> bool:
+    numeric = float(value)
+    return isfinite(numeric) and numeric.is_integer()
+
+
+def part_request_quantity_compatibility(request: PartRequest) -> dict:
+    affected_lines = [
+        {
+            "line_id": line.id,
+            "quantity": line.quantity,
+            "delivered_quantity": line.delivered_quantity,
+        }
+        for line in request.lines
+        if not _is_whole_quantity(line.quantity)
+        or not _is_whole_quantity(line.delivered_quantity)
+    ]
+    if not affected_lines:
+        return {
+            "status": "COMPATIBLE",
+            "affected_line_ids": [],
+            "recovery_action": "NONE",
+        }
+    if request.status == PartRequestStatus.DRAFT.value:
+        recovery_action = "CREATE_REPLACEMENT"
+    elif request.status in {
+        PartRequestStatus.SUBMITTED.value,
+        PartRequestStatus.WAITING_APPROVAL.value,
+    }:
+        recovery_action = "REJECT_AND_RECREATE"
+    elif request.status in {
+        PartRequestStatus.APPROVED.value,
+        PartRequestStatus.ORDERED.value,
+        PartRequestStatus.PARTIALLY_DELIVERED.value,
+    }:
+        recovery_action = "CANCEL_AND_RECREATE"
+    else:
+        recovery_action = "HISTORICAL_ONLY"
+    return {
+        "status": "LEGACY_FRACTIONAL",
+        "affected_line_ids": [line["line_id"] for line in affected_lines],
+        "recovery_action": recovery_action,
+        "affected_lines": affected_lines,
+    }
+
+
+def legacy_quantity_conflict(request: PartRequest) -> HTTPException:
+    compatibility = part_request_quantity_compatibility(request)
+    recovery_action = compatibility["recovery_action"]
+    messages = {
+        "CREATE_REPLACEMENT": (
+            "Историческата чернова съдържа дробни количества и не може да бъде "
+            "подадена по целочисления процес. Създайте нова заявка с цели количества; "
+            "черновата ще остане в историята без промяна."
+        ),
+        "REJECT_AND_RECREATE": (
+            "Историческата заявка съдържа дробни количества и не може да бъде "
+            "одобрена по целочисления процес. Отхвърлете я и създайте нова заявка "
+            "с цели количества."
+        ),
+        "CANCEL_AND_RECREATE": (
+            "Историческата заявка съдържа дробни количества и не може да бъде "
+            "изпълнена по целочисления процес. Отменете я без промяна на количествата "
+            "и създайте нова заявка с цели количества."
+        ),
+        "HISTORICAL_ONLY": (
+            "Заявката съдържа исторически дробни количества и е достъпна само като "
+            "непроменена история."
+        ),
+    }
+    return business_conflict(
+        "legacy_fractional_part_request_requires_recovery",
+        messages[recovery_action],
+        request_reference=request.request_reference,
+        current_status=request.status,
+        recovery_action=recovery_action,
+        affected_line_ids=compatibility["affected_line_ids"],
+        affected_lines=compatibility.get("affected_lines", []),
+    )
 
 
 def _request_statement(request_id: int):
@@ -90,6 +172,8 @@ def submit_for_approval(
         raise business_conflict(
             "part_request_has_no_lines", "Заявката няма редове с части."
         )
+    if part_request_quantity_compatibility(request)["status"] == "LEGACY_FRACTIONAL":
+        raise legacy_quantity_conflict(request)
     previous_status = request.status
     request.status = PartRequestStatus.WAITING_APPROVAL.value
     request.submitted_at = utcnow()
@@ -126,6 +210,12 @@ def decide_request(
             request_reference=request.request_reference,
             current_status=request.status,
         )
+    if (
+        decision == ApprovalDecision.APPROVED
+        and part_request_quantity_compatibility(request)["status"]
+        == "LEGACY_FRACTIONAL"
+    ):
+        raise legacy_quantity_conflict(request)
     previous_status = request.status
     if decision == ApprovalDecision.APPROVED:
         request.status = PartRequestStatus.APPROVED.value

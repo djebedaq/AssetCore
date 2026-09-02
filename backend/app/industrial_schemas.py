@@ -323,7 +323,7 @@ class PartRequestLineCreate(BaseModel):
     position: str | None = Field(default=None, max_length=40)
     part_number: str | None = Field(default=None, max_length=120)
     description: str = Field(min_length=1, max_length=500)
-    quantity: float = Field(gt=0)
+    quantity: int = Field(ge=1)
     unit: str | None = Field(default=None, max_length=40)
     reason: str | None = None
     source_document: str | None = Field(default=None, max_length=700)
@@ -366,12 +366,31 @@ class MultiPartRequestCreate(BaseModel):
         return self
 
 
-class PartRequestLineOut(PartRequestLineCreate):
+class PartRequestLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     request_id: int
+    catalog_part_id: int | None = None
+    position: str | None = None
+    part_number: str | None = None
+    description: str
+    # Legacy Float persistence remains readable without weakening current writes.
+    quantity: float
+    unit: str | None = None
+    reason: str | None = None
+    source_document: str | None = None
+    source_page: int | None = None
     delivered_quantity: float
+    is_unknown_part: bool = False
+    assembly: str | None = None
+    note: str | None = None
+    linked_catalog_part_id: int | None = None
+    linked_part_number: str | None = None
+    linked_part_description: str | None = None
+    linked_by_id: int | None = None
+    linked_at: datetime | None = None
+    link_note: str | None = None
 
 
 class PartRequestApprovalOut(BaseModel):
@@ -383,6 +402,19 @@ class PartRequestApprovalOut(BaseModel):
     decided_by_id: int
     decided_by_name: str | None = None
     decided_at: datetime
+
+
+class PartRequestQuantityCompatibilityOut(BaseModel):
+    status: Literal["COMPATIBLE", "LEGACY_FRACTIONAL"]
+    affected_line_ids: list[int]
+    recovery_action: Literal[
+        "NONE",
+        "CREATE_REPLACEMENT",
+        "REJECT_AND_RECREATE",
+        "CANCEL_AND_RECREATE",
+        "HISTORICAL_ONLY",
+    ]
+    affected_lines: list[dict] = Field(default_factory=list)
 
 
 class MultiPartRequestOut(BaseModel):
@@ -405,6 +437,7 @@ class MultiPartRequestOut(BaseModel):
     decided_at: datetime | None = None
     decision_note: str | None = None
     created_at: datetime
+    quantity_compatibility: PartRequestQuantityCompatibilityOut
     lines: list[PartRequestLineOut]
     approvals: list[PartRequestApprovalOut]
     attachments: list[AttachmentOut]
@@ -422,7 +455,7 @@ class PartRequestDecision(BaseModel):
 
 class PartRequestDeliveryLine(BaseModel):
     line_id: int
-    delivered_quantity: float = Field(ge=0)
+    delivered_quantity: int = Field(ge=0)
 
 
 class UnknownPartRequestCreate(BaseModel):
@@ -430,7 +463,7 @@ class UnknownPartRequestCreate(BaseModel):
     repair_id: int | None = None
     assembly: str = Field(min_length=1, max_length=255)
     description: str = Field(min_length=1, max_length=500)
-    quantity: float = Field(gt=0)
+    quantity: int = Field(ge=1)
     unit: str | None = Field(default=None, max_length=40)
     note: str | None = None
     priority: PartRequestPriority = PartRequestPriority.NORMAL

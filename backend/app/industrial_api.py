@@ -114,8 +114,10 @@ from .models import (
 from .part_requests import (
     OFFICIAL_DOCUMENT_STATUSES,
     decide_request,
+    legacy_quantity_conflict,
     load_request,
     part_request_document_generation_guard,
+    part_request_quantity_compatibility,
     pending_action_count,
     submit_for_approval,
 )
@@ -369,6 +371,7 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
         "ordered_at": item.ordered_at,
         "delivered_at": item.delivered_at,
         "created_at": item.created_at,
+        "quantity_compatibility": part_request_quantity_compatibility(item),
         "lines": [
             {
                 "id": line.id,
@@ -1207,7 +1210,7 @@ def create_multi_part_request(
     first_catalog = catalog_parts.get(first.catalog_part_id) if first.catalog_part_id else None
     first_name = kit.name if kit and payload.repair_kit_mode == "KIT" else first_catalog.description if first_catalog else first.description
     first_number = kit.code if kit and payload.repair_kit_mode == "KIT" else (first_catalog.replaced_by_part_number or first_catalog.part_number) if first_catalog else first.part_number
-    request_item = PartRequest(machine_id=resolved_machine_id, repair_id=payload.repair_id, repair_kit_id=payload.repair_kit_id, repair_kit_mode=payload.repair_kit_mode if kit else None, part_name=first_name, part_number=first_number, quantity=max(1, int(first.quantity)), reason=payload.reason, department=payload.department, priority=payload.priority.value, status=PartRequestStatus.DRAFT.value, language=payload.language.value, requested_by_id=user.id)
+    request_item = PartRequest(machine_id=resolved_machine_id, repair_id=payload.repair_id, repair_kit_id=payload.repair_kit_id, repair_kit_mode=payload.repair_kit_mode if kit else None, part_name=first_name, part_number=first_number, quantity=first.quantity, reason=payload.reason, department=payload.department, priority=payload.priority.value, status=PartRequestStatus.DRAFT.value, language=payload.language.value, requested_by_id=user.id)
     db.add(request_item)
     db.flush()
     request_item.request_reference = f"PR-{request_item.created_at:%Y}-{request_item.id:06d}"
@@ -1284,7 +1287,7 @@ def create_unknown_part_request(
         repair_id=repair.id if repair else None,
         part_name="Част без потвърден part number",
         part_number=None,
-        quantity=max(1, int(payload.quantity)),
+        quantity=payload.quantity,
         reason=payload.note,
         department=payload.department,
         priority=payload.priority.value,
@@ -1570,6 +1573,20 @@ def update_part_request_fulfillment(
             current_status=item.status,
             requested_status=next_status,
         )
+    compatibility = part_request_quantity_compatibility(item)
+    if compatibility["status"] == "LEGACY_FRACTIONAL":
+        if next_status != PartRequestStatus.CANCELLED.value:
+            raise legacy_quantity_conflict(item)
+        if payload.lines:
+            raise business_conflict(
+                "legacy_fractional_cancellation_requires_no_line_updates",
+                "Отмяната на историческа заявка с дробни количества трябва да бъде "
+                "изпратена без промени по редовете, за да се запази точната история.",
+                request_reference=item.request_reference,
+                current_status=item.status,
+                recovery_action="CANCEL_AND_RECREATE",
+                affected_line_ids=compatibility["affected_line_ids"],
+            )
     lines_by_id = {line.id: line for line in item.lines}
     requested_ids = {line.line_id for line in payload.lines}
     if not requested_ids.issubset(lines_by_id):
