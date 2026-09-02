@@ -9,6 +9,10 @@ import type { MultiPartRequest } from '../../types'
 import { notifyPartRequestsChanged } from '../partRequests/partRequestEvents'
 import { updateCartQuantity } from './catalogState'
 import type { CatalogCartLine } from './catalogTypes'
+import {
+  formatTransactionalPartQuantity,
+  isRequestedPartQuantity,
+} from '../partRequests/partRequestQuantities'
 
 export function CatalogRequestCart({
   machineId,
@@ -35,6 +39,10 @@ export function CatalogRequestCart({
   async function submit() {
     if (!lines.length || cartMachineId !== machineId) {
       setError(t('catalog.cartMachineMismatch'))
+      return
+    }
+    if (lines.some((line) => !isRequestedPartQuantity(line.quantity))) {
+      setError(t('errors.validation'))
       return
     }
     setSubmitting(true)
@@ -77,7 +85,7 @@ export function CatalogRequestCart({
     {error && <div className="error">{error}</div>}
     <div className="catalog-v2-cart-lines">{lines.map((line) => <div key={line.source_record_key}>
       <span><b>{t('catalog.position')} {line.position} · {line.part_number || t('common.noValue')}</b><small>{line.description}</small>{line.replacement_applied && <small className="verified">{t('catalog.oldNumber')}: {line.source_part_number}</small>}</span>
-      <label>{t('catalog.requestedQuantity')}<input aria-label={`${t('catalog.requestedQuantity')} ${line.part_number}`} type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => onChange(updateCartQuantity(lines, line.source_record_key, Number(event.target.value)))} /></label>
+      <label>{t('catalog.requestedQuantity')}<input aria-label={`${t('catalog.requestedQuantity')} ${line.part_number}`} type="number" inputMode="numeric" min="1" step="1" value={line.quantity} onChange={(event) => onChange(updateCartQuantity(lines, line.source_record_key, Number(event.target.value)))} /></label>
       <button className="link" aria-label={t('common.remove')} onClick={() => onChange(lines.filter((item) => item.source_record_key !== line.source_record_key))}><Trash2 size={16} /></button>
     </div>)}</div>
     {!lines.length && <div className="empty-state">{t('catalog.emptyCart')}</div>}
@@ -86,7 +94,7 @@ export function CatalogRequestCart({
     {confirming && <div className="catalog-v2-confirmation" role="dialog" aria-modal="true">
       <h4>{t('requests.confirm')}</h4>
       <p>{t('catalog.confirmRequestSummary', { count: lines.length })}</p>
-      <div>{lines.map((line) => <span key={line.source_record_key}><b>{line.part_number || t('common.noValue')}</b> × {line.quantity}</span>)}</div>
+      <div>{lines.map((line) => <span key={line.source_record_key}><b>{line.part_number || t('common.noValue')}</b> × {formatTransactionalPartQuantity(line.quantity)}</span>)}</div>
       <label>{t('parts.reason')}<textarea value={reason} onChange={(event) => setReason(event.target.value)} /></label>
       <div className="actions"><button className="secondary" disabled={submitting} onClick={() => setConfirming(false)}>{t('common.cancel')}</button><button className="primary" disabled={submitting} onClick={() => void submit()}>{submitting ? t('common.loading') : t('requests.submit')}</button></div>
     </div>}

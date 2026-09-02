@@ -5,6 +5,7 @@ import { useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
 import { catalogDisplayName, catalogSourceDescription } from './catalogNames'
 import type { CatalogPart, CatalogRepairKit } from './catalogTypes'
+import { formatCatalogSourceQuantity } from '../partRequests/partRequestQuantities'
 
 const FOCUSABLE_ELEMENTS = [
   'a[href]',
@@ -123,7 +124,7 @@ export function CatalogPartDetails({
       <div><dt>{t('catalog.displayName')}</dt><dd>{catalogDisplayName(part)}</dd></div>
       <div><dt>{t('catalog.originalDescription')}</dt><dd>{catalogSourceDescription(part)}</dd></div>
       <div><dt>{t('catalog.specification')}</dt><dd>{part.description_2 || t('common.noValue')}</dd></div>
-      <div><dt>{t('catalog.sourceQuantity')}</dt><dd>{part.quantity_raw || t('common.noValue')}</dd></div>
+      <div><dt>{t('catalog.sourceQuantity')}</dt><dd>{formatCatalogSourceQuantity(part.quantity, part.quantity_raw) || t('common.noValue')}</dd></div>
       <div><dt>{t('catalog.assembly')}</dt><dd>{part.assembly}</dd></div>
       <div><dt>{t('catalog.validFor')}</dt><dd>{part.valid_for_raw || t('common.noValue')}</dd></div>
       <div><dt>{t('catalog.repairKit')}</dt><dd>{part.repair_kit_code ? <button className="link" onClick={() => onKit(part.repair_kit_code as string)}>{part.repair_kit_code}</button> : t('common.noValue')}</dd></div>
@@ -182,7 +183,7 @@ export function CatalogRepairKitPreview({
     <div className="catalog-v2-kit-preview">
     <div className="toolbar"><div><span className="badge batch-complete">{t('catalog.verified')}</span><h3>{t('catalog.repairKit')} {kit.code}</h3><p>{t('catalog.kitContains', { count: kit.components.length })}</p></div></div>
     <button className={`secondary ${positionsVisible ? 'active' : ''}`} aria-pressed={positionsVisible} onClick={onTogglePositions}><Layers3 size={17} />{positionsVisible ? t('catalog.hideKitPositions') : t('catalog.showKitPositions')}</button>
-    <div className="catalog-v2-kit-components">{kit.components.map((component) => <div key={component.id}><b>{t('catalog.position')} {component.position} · {component.part_number || t('common.noValue')}</b><span>{catalogDisplayName(component)}</span><em>{t('catalog.sourceQuantity')}: {component.quantity_raw}</em></div>)}</div>
+    <div className="catalog-v2-kit-components">{kit.components.map((component) => <div key={component.id}><b>{t('catalog.position')} {component.position} · {component.part_number || t('common.noValue')}</b><span>{catalogDisplayName(component)}</span><em>{t('catalog.sourceQuantity')}: {formatCatalogSourceQuantity(component.quantity, component.quantity_raw)}</em></div>)}</div>
     <div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" onClick={onConfirm}><PackagePlus size={17} />{t('catalog.addWholeKit')}</button></div>
     </div>
   </CatalogDialog>

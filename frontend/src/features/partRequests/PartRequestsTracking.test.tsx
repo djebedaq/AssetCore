@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -105,5 +105,46 @@ describe('Заявени части tracking', () => {
     expect(screen.queryByRole('button', { name: /Генерирай/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'DOCX' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'PDF' })).toBeInTheDocument()
+  })
+
+  it('uses integer fulfillment controls and never submits a fractional edit', async () => {
+    setSessionUser({ role: 'mechanic', permissions: ['requests.view', 'requests.create', 'parts.view'] } as UserSession)
+    const ordered = { ...request, status: 'ORDERED', lines: [{ ...request.lines[0], quantity: 4, delivered_quantity: 0 }], documents: [] }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path.endsWith('/api/part-requests/multi')) return response([ordered])
+      if (path.endsWith('/api/part-requests/12/fulfillment') && init?.method === 'PATCH') return response(ordered)
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<I18nProvider initialLocale="bg"><PartRequestsTracking /></I18nProvider>)
+    await userEvent.click(await screen.findByRole('button', { name: 'Поръчка / доставка' }))
+    const input = screen.getByRole('spinbutton', { name: 'Доставено количество SOURCE-PART' })
+    expect(input).toHaveAttribute('step', '1')
+    expect(input).toHaveAttribute('min', '0')
+    expect(input).toHaveAttribute('max', '4')
+    fireEvent.change(input, { target: { value: '1' } })
+    expect(input).toHaveValue(1)
+    fireEvent.change(input, { target: { value: '1.5' } })
+    expect(input).toHaveValue(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Запиши изпълнението' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([inputValue, init]) => String(inputValue).endsWith('/api/part-requests/12/fulfillment') && init?.method === 'PATCH')).toBe(true))
+    const mutation = fetchMock.mock.calls.find(([inputValue, init]) => String(inputValue).endsWith('/api/part-requests/12/fulfillment') && init?.method === 'PATCH')
+    const body = JSON.parse(String(mutation?.[1]?.body))
+    expect(body.lines).toEqual([{ line_id: 21, delivered_quantity: 1 }])
+    expect(Number.isInteger(body.lines[0].delivered_quantity)).toBe(true)
+  })
+
+  it('renders whole transaction progress cleanly and preserves legacy fractions for read-only history', async () => {
+    setSessionUser({ role: 'observer', permissions: ['requests.view', 'parts.view'] } as UserSession)
+    vi.stubGlobal('fetch', vi.fn(async () => response([
+      { ...request, id: 13, request_reference: 'PR-2026-000013', status: 'DELIVERED', lines: [{ ...request.lines[0], id: 22, request_id: 13, quantity: 4, delivered_quantity: 1 }] },
+      { ...request, id: 14, request_reference: 'PR-LEGACY-000014', status: 'DELIVERED', lines: [{ ...request.lines[0], id: 23, request_id: 14, quantity: 1.5, delivered_quantity: 0.5 }] },
+    ])))
+    render(<I18nProvider initialLocale="bg"><PartRequestsTracking /></I18nProvider>)
+    expect(await screen.findByText('Доставено количество: 1 / 4 pcs')).toBeInTheDocument()
+    expect(screen.getByText('Доставено количество: 0.5 / 1.5 pcs')).toBeInTheDocument()
+    expect(screen.queryByText(/1\.0 \/ 4\.0/)).not.toBeInTheDocument()
   })
 })

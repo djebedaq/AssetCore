@@ -4,8 +4,12 @@ import type {
   CatalogRepairKit,
 } from './catalogTypes'
 import { catalogDisplayName } from './catalogNames'
+import { isRequestedPartQuantity } from '../partRequests/partRequestQuantities'
 
 export function partToCartLine(part: CatalogPart, quantity = 1): CatalogCartLine {
+  if (!isRequestedPartQuantity(quantity)) {
+    throw new RangeError('Part-request quantities must be positive whole numbers.')
+  }
   return {
     catalog_part_id: part.id,
     source_record_key: part.source_record_key,
@@ -26,13 +30,16 @@ export function mergeCartLine(
   current: CatalogCartLine[],
   incoming: CatalogCartLine,
 ): CatalogCartLine[] {
+  if (!isRequestedPartQuantity(incoming.quantity)) return current
   const existing = current.find(
     (line) => line.source_record_key === incoming.source_record_key,
   )
   if (!existing) return [...current, incoming]
+  const mergedQuantity = existing.quantity + incoming.quantity
+  if (!isRequestedPartQuantity(mergedQuantity)) return current
   return current.map((line) => (
     line.source_record_key === incoming.source_record_key
-      ? { ...line, quantity: line.quantity + incoming.quantity }
+      ? { ...line, quantity: mergedQuantity }
       : line
   ))
 }
@@ -58,7 +65,7 @@ export function updateCartQuantity(
   sourceRecordKey: string,
   quantity: number,
 ): CatalogCartLine[] {
-  if (!Number.isFinite(quantity) || quantity <= 0) return current
+  if (!isRequestedPartQuantity(quantity)) return current
   return current.map((line) => (
     line.source_record_key === sourceRecordKey ? { ...line, quantity } : line
   ))

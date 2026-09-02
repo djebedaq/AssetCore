@@ -1207,7 +1207,7 @@ def create_multi_part_request(
     first_catalog = catalog_parts.get(first.catalog_part_id) if first.catalog_part_id else None
     first_name = kit.name if kit and payload.repair_kit_mode == "KIT" else first_catalog.description if first_catalog else first.description
     first_number = kit.code if kit and payload.repair_kit_mode == "KIT" else (first_catalog.replaced_by_part_number or first_catalog.part_number) if first_catalog else first.part_number
-    request_item = PartRequest(machine_id=resolved_machine_id, repair_id=payload.repair_id, repair_kit_id=payload.repair_kit_id, repair_kit_mode=payload.repair_kit_mode if kit else None, part_name=first_name, part_number=first_number, quantity=max(1, int(first.quantity)), reason=payload.reason, department=payload.department, priority=payload.priority.value, status=PartRequestStatus.DRAFT.value, language=payload.language.value, requested_by_id=user.id)
+    request_item = PartRequest(machine_id=resolved_machine_id, repair_id=payload.repair_id, repair_kit_id=payload.repair_kit_id, repair_kit_mode=payload.repair_kit_mode if kit else None, part_name=first_name, part_number=first_number, quantity=first.quantity, reason=payload.reason, department=payload.department, priority=payload.priority.value, status=PartRequestStatus.DRAFT.value, language=payload.language.value, requested_by_id=user.id)
     db.add(request_item)
     db.flush()
     request_item.request_reference = f"PR-{request_item.created_at:%Y}-{request_item.id:06d}"
@@ -1284,7 +1284,7 @@ def create_unknown_part_request(
         repair_id=repair.id if repair else None,
         part_name="Част без потвърден part number",
         part_number=None,
-        quantity=max(1, int(payload.quantity)),
+        quantity=payload.quantity,
         reason=payload.note,
         department=payload.department,
         priority=payload.priority.value,

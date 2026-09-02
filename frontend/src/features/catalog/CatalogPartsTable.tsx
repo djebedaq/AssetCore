@@ -4,6 +4,7 @@ import { LocateFixed, Search } from 'lucide-react'
 import { useI18n } from '../../i18n'
 import { catalogDisplayName } from './catalogNames'
 import type { CatalogPart } from './catalogTypes'
+import { formatCatalogSourceQuantity } from '../partRequests/partRequestQuantities'
 
 export function CatalogPartsTable({
   parts,
@@ -67,7 +68,7 @@ export function CatalogPartsTable({
       <td><b>{part.position}</b></td>
       <td><code>{part.part_number || t('common.noValue')}</code>{part.replaced_by_part_number && <small>→ {part.replaced_by_part_number}</small>}</td>
       <td>{catalogDisplayName(part)}<small>{part.valid_for_raw}</small></td>
-      <td>{part.quantity_raw || t('common.noValue')}</td>
+      <td>{formatCatalogSourceQuantity(part.quantity, part.quantity_raw) || t('common.noValue')}</td>
       <td>{part.repair_kit_code || t('common.noValue')}</td>
       <td>{diagramPositions.has(part.position) && <button className="link" aria-label={`${t('catalog.showOnDiagram')} ${part.position}`} onClick={(event) => { event.stopPropagation(); onSelect(part); onShowDiagram(part) }}><LocateFixed size={17} /><span>{t('catalog.showOnDiagram')}</span></button>}</td>
     </tr>)}</tbody></table></div>

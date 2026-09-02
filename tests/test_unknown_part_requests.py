@@ -23,7 +23,7 @@ def test_unknown_part_request_requires_machine_and_image_and_does_not_create_cat
             "machine_id": machine_ids["4"],
             "assembly": "test-only pump assembly",
             "description": "test-only unidentified metal component",
-            "quantity": 2.5,
+            "quantity": 2,
             "unit": "pcs",
             "note": "test-only note",
             "priority": "URGENT",

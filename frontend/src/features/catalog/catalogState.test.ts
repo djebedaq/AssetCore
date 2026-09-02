@@ -109,6 +109,9 @@ describe('authoritative catalog cart', () => {
   it('rejects invalid order quantities without corrupting the cart', () => {
     const cart = addPart([], part())
     expect(updateCartQuantity(cart, cart[0].source_record_key, 0)).toEqual(cart)
+    expect(updateCartQuantity(cart, cart[0].source_record_key, 0.5)).toEqual(cart)
+    expect(updateCartQuantity(cart, cart[0].source_record_key, 1.04)).toEqual(cart)
+    expect(updateCartQuantity(cart, cart[0].source_record_key, 1.5)).toEqual(cart)
     expect(updateCartQuantity(cart, cart[0].source_record_key, Number.NaN)).toEqual(cart)
   })
 })

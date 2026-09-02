@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -42,7 +42,13 @@ describe('catalog canonical request submit', () => {
     vi.stubGlobal('fetch', fetchMock)
     const onChange = vi.fn()
     render(<I18nProvider initialLocale="bg"><CatalogRequestCart machineId={9} cartMachineId={9} lines={[line]} onChange={onChange} undoAvailable={false} onUndo={vi.fn()} /></I18nProvider>)
+    const quantity = screen.getByRole('spinbutton', { name: 'Заявено количество SOURCE-PART' })
+    expect(quantity).toHaveAttribute('min', '1')
+    expect(quantity).toHaveAttribute('step', '1')
+    fireEvent.change(quantity, { target: { value: '1.5' } })
+    expect(onChange).toHaveBeenLastCalledWith([line])
     await userEvent.click(screen.getByRole('button', { name: 'Създай заявка' }))
+    expect(screen.getByText('× 1')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Подай заявката' }))
     await waitFor(() => expect(screen.getByText('PR-2026-000012')).toBeInTheDocument())
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -51,5 +57,15 @@ describe('catalog canonical request submit', () => {
     expect(body.machine_id).toBe(9)
     expect(body.lines).toEqual([expect.objectContaining({ catalog_part_id: 31, quantity: 1 })])
     expect(onChange).toHaveBeenCalledWith([])
+  })
+
+  it('does not submit a fractional quantity supplied by external state', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<I18nProvider initialLocale="bg"><CatalogRequestCart machineId={9} cartMachineId={9} lines={[{ ...line, quantity: 1.5 }]} onChange={vi.fn()} undoAvailable={false} onUndo={vi.fn()} /></I18nProvider>)
+    await userEvent.click(screen.getByRole('button', { name: 'Създай заявка' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Подай заявката' }))
+    expect(await screen.findByText('Проверете попълнените полета.')).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
