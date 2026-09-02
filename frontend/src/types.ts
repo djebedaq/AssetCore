@@ -259,6 +259,13 @@ export type MultiPartRequestLine = {
   linked_by_id?: number | null; linked_at?: string | null; link_note?: string | null
 }
 
+export type PartRequestQuantityCompatibility = {
+  status: 'COMPATIBLE' | 'LEGACY_FRACTIONAL';
+  affected_line_ids: number[];
+  recovery_action: 'NONE' | 'CREATE_REPLACEMENT' | 'REJECT_AND_RECREATE' | 'CANCEL_AND_RECREATE' | 'HISTORICAL_ONLY';
+  affected_lines?: Array<{ line_id: number; quantity: number; delivered_quantity: number }>
+}
+
 export type MultiPartRequest = {
   id: number; request_reference: string; machine_id?: number | null; machine_number?: string | null;
   repair_id?: number | null; repair_reference?: string | null;
@@ -269,6 +276,7 @@ export type MultiPartRequest = {
   requested_by_id?: number | null; requested_by_name?: string | null; submitted_at?: string | null; decided_at?: string | null;
   decided_by_name?: string | null;
   decision_note?: string | null; created_at: string; lines: MultiPartRequestLine[];
+  quantity_compatibility: PartRequestQuantityCompatibility;
   approvals: Array<{ id: number; decision: string; note?: string | null; decided_by_id: number; decided_by_name?: string | null; decided_at: string }>;
   attachments: StoredAttachment[];
   documents: ProtocolDocument[]

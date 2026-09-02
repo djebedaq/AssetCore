@@ -404,6 +404,19 @@ class PartRequestApprovalOut(BaseModel):
     decided_at: datetime
 
 
+class PartRequestQuantityCompatibilityOut(BaseModel):
+    status: Literal["COMPATIBLE", "LEGACY_FRACTIONAL"]
+    affected_line_ids: list[int]
+    recovery_action: Literal[
+        "NONE",
+        "CREATE_REPLACEMENT",
+        "REJECT_AND_RECREATE",
+        "CANCEL_AND_RECREATE",
+        "HISTORICAL_ONLY",
+    ]
+    affected_lines: list[dict] = Field(default_factory=list)
+
+
 class MultiPartRequestOut(BaseModel):
     id: int
     request_reference: str
@@ -424,6 +437,7 @@ class MultiPartRequestOut(BaseModel):
     decided_at: datetime | None = None
     decision_note: str | None = None
     created_at: datetime
+    quantity_compatibility: PartRequestQuantityCompatibilityOut
     lines: list[PartRequestLineOut]
     approvals: list[PartRequestApprovalOut]
     attachments: list[AttachmentOut]

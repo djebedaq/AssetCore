@@ -231,6 +231,8 @@ Catalog cart изпраща `POST /api/part-requests/multi` с `submit_for_appro
 
 `POST /api/part-requests/multi` и `POST /api/part-requests/unknown` приемат само положително цяло `quantity >= 1`. `PATCH /api/part-requests/{id}/fulfillment` приема статус `ORDERED`, `PARTIALLY_DELIVERED`, `DELIVERED` или `CANCELLED`, доставчик, бележка и `lines[]` с `line_id` и натрупано цяло `delivered_quantity >= 0`. Дробните транзакционни стойности се отхвърлят с HTTP 422 и никога не се закръгляват или отрязват. Доставеното количество не може да намалява или да надвишава заявеното. `DELIVERED` изисква всички редове да са изпълнени, а всяка промяна се записва в одита. Manufacturer source полетата `quantity`/`quantity_raw` са отделни provenance данни и не се променят от това правило.
 
+Read отговорите включват `quantity_compatibility`. За legacy заявка с дробен исторически ред стойността е `LEGACY_FRACTIONAL`, заедно със засегнатите line identifiers и едно от `CREATE_REPLACEMENT`, `REJECT_AND_RECREATE`, `CANCEL_AND_RECREATE` или `HISTORICAL_ONLY`. Опит за submit, approve или normal fulfillment връща HTTP 409 `legacy_fractional_part_request_requires_recovery`; API не преобразува количеството. При приложим статус съществуващата отмяна се изпраща като `CANCELLED` с празен `lines[]`, запазва оригиналните редове и позволява създаване на нова integer заявка.
+
 ## Структурирани грешки
 
 Бизнес конфликтите използват следния общ формат:

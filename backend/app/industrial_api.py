@@ -114,8 +114,10 @@ from .models import (
 from .part_requests import (
     OFFICIAL_DOCUMENT_STATUSES,
     decide_request,
+    legacy_quantity_conflict,
     load_request,
     part_request_document_generation_guard,
+    part_request_quantity_compatibility,
     pending_action_count,
     submit_for_approval,
 )
@@ -369,6 +371,7 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
         "ordered_at": item.ordered_at,
         "delivered_at": item.delivered_at,
         "created_at": item.created_at,
+        "quantity_compatibility": part_request_quantity_compatibility(item),
         "lines": [
             {
                 "id": line.id,
@@ -1570,6 +1573,20 @@ def update_part_request_fulfillment(
             current_status=item.status,
             requested_status=next_status,
         )
+    compatibility = part_request_quantity_compatibility(item)
+    if compatibility["status"] == "LEGACY_FRACTIONAL":
+        if next_status != PartRequestStatus.CANCELLED.value:
+            raise legacy_quantity_conflict(item)
+        if payload.lines:
+            raise business_conflict(
+                "legacy_fractional_cancellation_requires_no_line_updates",
+                "Отмяната на историческа заявка с дробни количества трябва да бъде "
+                "изпратена без промени по редовете, за да се запази точната история.",
+                request_reference=item.request_reference,
+                current_status=item.status,
+                recovery_action="CANCEL_AND_RECREATE",
+                affected_line_ids=compatibility["affected_line_ids"],
+            )
     lines_by_id = {line.id: line for line in item.lines}
     requested_ids = {line.line_id for line in payload.lines}
     if not requested_ids.issubset(lines_by_id):

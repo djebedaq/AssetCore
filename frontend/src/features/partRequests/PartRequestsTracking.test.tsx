@@ -33,6 +33,7 @@ const request: MultiPartRequest = {
   approvals: [],
   attachments: [],
   documents: [{ id: 44, format: 'pdf', filename: 'safe.pdf', download_endpoint: '/generated-documents/44/download' }],
+  quantity_compatibility: { status: 'COMPATIBLE', affected_line_ids: [], recovery_action: 'NONE' },
 }
 
 function response(value: unknown) {
@@ -146,5 +147,84 @@ describe('Заявени части tracking', () => {
     expect(await screen.findByText('Доставено количество: 1 / 4 pcs')).toBeInTheDocument()
     expect(screen.getByText('Доставено количество: 0.5 / 1.5 pcs')).toBeInTheDocument()
     expect(screen.queryByText(/1\.0 \/ 4\.0/)).not.toBeInTheDocument()
+  })
+
+  it('identifies a legacy fractional draft and replaces the impossible submit action with recovery guidance', async () => {
+    setSessionUser({ role: 'mechanic', permissions: ['requests.view', 'requests.create', 'parts.view'] } as UserSession)
+    const legacyDraft: MultiPartRequest = {
+      ...request,
+      status: 'DRAFT',
+      submitted_at: null,
+      lines: [{ ...request.lines[0], quantity: 1.04, delivered_quantity: 0 }],
+      quantity_compatibility: {
+        status: 'LEGACY_FRACTIONAL',
+        affected_line_ids: [21],
+        recovery_action: 'CREATE_REPLACEMENT',
+      },
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => response([legacyDraft])))
+
+    render(<I18nProvider initialLocale="bg"><PartRequestsTracking /></I18nProvider>)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Несъвместимо историческо дробно количество')
+    expect(screen.getByRole('alert')).toHaveTextContent('Създайте нова заявка с цели количества')
+    expect(screen.getByRole('alert')).toHaveTextContent('Засегнати редове: 21')
+    expect(screen.queryByRole('button', { name: 'Подай за одобрение' })).not.toBeInTheDocument()
+  })
+
+  it('does not offer approval for a legacy fractional request and retains rejection recovery', async () => {
+    setSessionUser({ role: 'director', permissions: ['requests.view', 'requests.create', 'requests.approve', 'parts.view'] } as UserSession)
+    const legacyWaiting: MultiPartRequest = {
+      ...request,
+      lines: [{ ...request.lines[0], quantity: 1.04 }],
+      quantity_compatibility: {
+        status: 'LEGACY_FRACTIONAL',
+        affected_line_ids: [21],
+        recovery_action: 'REJECT_AND_RECREATE',
+      },
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => response([legacyWaiting])))
+
+    render(<I18nProvider initialLocale="bg"><PartRequestsTracking /></I18nProvider>)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Отхвърлете заявката')
+    expect(screen.queryByRole('button', { name: 'Одобри' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Отхвърли' })).toBeInTheDocument()
+  })
+
+  it('offers GET-listed legacy active requests only cancellation without line mutation', async () => {
+    setSessionUser({ role: 'mechanic', permissions: ['requests.view', 'requests.create', 'parts.view'] } as UserSession)
+    const legacyOrdered: MultiPartRequest = {
+      ...request,
+      status: 'ORDERED',
+      lines: [{ ...request.lines[0], quantity: 1.04, delivered_quantity: 0.5 }],
+      quantity_compatibility: {
+        status: 'LEGACY_FRACTIONAL',
+        affected_line_ids: [21],
+        recovery_action: 'CANCEL_AND_RECREATE',
+      },
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path.endsWith('/api/part-requests/multi')) return response([legacyOrdered])
+      if (path.endsWith('/api/part-requests/12/fulfillment') && init?.method === 'PATCH') {
+        return response({ ...legacyOrdered, status: 'CANCELLED' })
+      }
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    render(<I18nProvider initialLocale="bg"><PartRequestsTracking /></I18nProvider>)
+    await userEvent.click(await screen.findByRole('button', { name: 'Отмени и създай отново' }))
+
+    const status = screen.getByRole('combobox', { name: 'Статус' })
+    expect(status).toHaveValue('CANCELLED')
+    expect(screen.getAllByRole('option')).toHaveLength(1)
+    expect(screen.getByRole('spinbutton', { name: 'Доставено количество SOURCE-PART' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Запиши изпълнението' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([inputValue, init]) => String(inputValue).endsWith('/api/part-requests/12/fulfillment') && init?.method === 'PATCH')).toBe(true))
+    const mutation = fetchMock.mock.calls.find(([inputValue, init]) => String(inputValue).endsWith('/api/part-requests/12/fulfillment') && init?.method === 'PATCH')
+    expect(JSON.parse(String(mutation?.[1]?.body))).toEqual(expect.objectContaining({ status: 'CANCELLED', lines: [] }))
   })
 })

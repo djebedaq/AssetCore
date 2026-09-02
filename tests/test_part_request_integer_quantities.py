@@ -5,7 +5,7 @@ import io
 
 import pytest
 from app.industrial_schemas import PartRequestLineOut
-from app.models import GeneratedDocument, PartRequest, PartRequestLine, User
+from app.models import AuditLog, GeneratedDocument, PartRequest, PartRequestLine, User
 from docx import Document
 from pypdf import PdfReader
 from sqlalchemy import select
@@ -73,6 +73,40 @@ def _unknown_payload(machine_id: int, quantity: int | float) -> dict:
             ).decode(),
         },
     }
+
+
+def _create_legacy_request(
+    session_factory,
+    *,
+    status: str,
+    quantity: float = 1.04,
+    delivered_quantity: float = 0.0,
+) -> tuple[int, int]:
+    with session_factory() as session:
+        user_id = session.scalar(
+            select(User.id).where(User.email == "admin@assetcore.local")
+        )
+        request = PartRequest(
+            part_name="test-only legacy compatibility request",
+            quantity=quantity,
+            priority="NORMAL",
+            status=status,
+            language="bg",
+            requested_by_id=user_id,
+        )
+        session.add(request)
+        session.flush()
+        request.request_reference = f"PR-LEGACY-{request.id:06d}"
+        line = PartRequestLine(
+            request_id=request.id,
+            description="test-only preserved fractional line",
+            quantity=quantity,
+            delivered_quantity=delivered_quantity,
+            unit="бр.",
+        )
+        session.add(line)
+        session.commit()
+        return request.id, line.id
 
 
 def test_multi_part_request_accepts_whole_quantities_and_rejects_fractional_values(
@@ -247,6 +281,18 @@ def test_legacy_fractional_rows_remain_readable_without_mutation(
     body = next(item for item in listed.json() if item["id"] == request_id)
     assert body["lines"][0]["quantity"] == 1.5
     assert body["lines"][0]["delivered_quantity"] == 0.5
+    assert body["quantity_compatibility"] == {
+        "status": "LEGACY_FRACTIONAL",
+        "affected_line_ids": [line_id],
+        "recovery_action": "CANCEL_AND_RECREATE",
+        "affected_lines": [
+            {
+                "line_id": line_id,
+                "quantity": 1.5,
+                "delivered_quantity": 0.5,
+            }
+        ],
+    }
     PartRequestLineOut.model_validate(body["lines"][0])
 
     with session_factory() as session:
@@ -254,6 +300,176 @@ def test_legacy_fractional_rows_remain_readable_without_mutation(
         assert stored is not None
         assert stored.quantity == 1.5
         assert stored.delivered_quantity == 0.5
+
+
+def test_legacy_fractional_draft_is_identified_and_cannot_be_submitted(
+    client, auth_headers, session_factory
+):
+    request_id, line_id = _create_legacy_request(
+        session_factory, status="DRAFT"
+    )
+
+    listed = client.get("/api/part-requests/multi", headers=auth_headers)
+    assert listed.status_code == 200, listed.text
+    body = next(item for item in listed.json() if item["id"] == request_id)
+    assert body["quantity_compatibility"] == {
+        "status": "LEGACY_FRACTIONAL",
+        "affected_line_ids": [line_id],
+        "recovery_action": "CREATE_REPLACEMENT",
+        "affected_lines": [
+            {
+                "line_id": line_id,
+                "quantity": 1.04,
+                "delivered_quantity": 0.0,
+            }
+        ],
+    }
+
+    rejected = client.post(
+        f"/api/part-requests/{request_id}/submit", headers=auth_headers
+    )
+    assert rejected.status_code == 409, rejected.text
+    detail = rejected.json()["detail"]
+    assert detail["code"] == "legacy_fractional_part_request_requires_recovery"
+    assert detail["recovery_action"] == "CREATE_REPLACEMENT"
+    assert detail["affected_line_ids"] == [line_id]
+
+    with session_factory() as session:
+        request = session.get(PartRequest, request_id)
+        line = session.get(PartRequestLine, line_id)
+        assert request is not None and request.status == "DRAFT"
+        assert line is not None and line.quantity == 1.04
+        assert line.delivered_quantity == 0.0
+
+
+def test_legacy_fractional_waiting_request_cannot_be_approved_but_can_be_rejected(
+    client, auth_headers, session_factory
+):
+    request_id, line_id = _create_legacy_request(
+        session_factory, status="WAITING_APPROVAL"
+    )
+
+    approved = client.post(
+        f"/api/part-requests/{request_id}/decision",
+        headers=auth_headers,
+        json={"decision": "APPROVED"},
+    )
+    assert approved.status_code == 409, approved.text
+    assert approved.json()["detail"]["recovery_action"] == "REJECT_AND_RECREATE"
+
+    rejected = client.post(
+        f"/api/part-requests/{request_id}/decision",
+        headers=auth_headers,
+        json={"decision": "REJECTED", "note": "test-only legacy recovery"},
+    )
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["status"] == "REJECTED"
+    assert rejected.json()["quantity_compatibility"]["recovery_action"] == (
+        "HISTORICAL_ONLY"
+    )
+
+    with session_factory() as session:
+        line = session.get(PartRequestLine, line_id)
+        assert line is not None and line.quantity == 1.04
+        assert line.delivered_quantity == 0.0
+
+
+@pytest.mark.parametrize(
+    ("status", "next_status", "delivered_quantity"),
+    [
+        ("APPROVED", "ORDERED", None),
+        ("ORDERED", "PARTIALLY_DELIVERED", 1),
+        ("PARTIALLY_DELIVERED", "DELIVERED", 1),
+    ],
+)
+def test_active_legacy_fractional_request_rejects_normal_fulfillment_without_rounding(
+    client,
+    auth_headers,
+    session_factory,
+    status,
+    next_status,
+    delivered_quantity,
+):
+    initial_delivered = 1.0 if status == "PARTIALLY_DELIVERED" else 0.0
+    request_id, line_id = _create_legacy_request(
+        session_factory,
+        status=status,
+        delivered_quantity=initial_delivered,
+    )
+    lines = (
+        []
+        if delivered_quantity is None
+        else [{"line_id": line_id, "delivered_quantity": delivered_quantity}]
+    )
+
+    response = client.patch(
+        f"/api/part-requests/{request_id}/fulfillment",
+        headers=auth_headers,
+        json={"status": next_status, "lines": lines},
+    )
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "legacy_fractional_part_request_requires_recovery"
+    assert detail["recovery_action"] == "CANCEL_AND_RECREATE"
+    assert detail["affected_line_ids"] == [line_id]
+
+    with session_factory() as session:
+        request = session.get(PartRequest, request_id)
+        line = session.get(PartRequestLine, line_id)
+        assert request is not None and request.status == status
+        assert line is not None and line.quantity == 1.04
+        assert line.delivered_quantity == initial_delivered
+
+
+def test_legacy_fractional_cancellation_preserves_exact_lines_and_audit_history(
+    client, auth_headers, session_factory
+):
+    request_id, line_id = _create_legacy_request(
+        session_factory,
+        status="ORDERED",
+        delivered_quantity=0.5,
+    )
+
+    mutation_attempt = client.patch(
+        f"/api/part-requests/{request_id}/fulfillment",
+        headers=auth_headers,
+        json={
+            "status": "CANCELLED",
+            "lines": [{"line_id": line_id, "delivered_quantity": 1}],
+        },
+    )
+    assert mutation_attempt.status_code == 409, mutation_attempt.text
+    assert mutation_attempt.json()["detail"]["code"] == (
+        "legacy_fractional_cancellation_requires_no_line_updates"
+    )
+
+    cancelled = client.patch(
+        f"/api/part-requests/{request_id}/fulfillment",
+        headers=auth_headers,
+        json={"status": "CANCELLED", "lines": []},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    body = cancelled.json()
+    assert body["status"] == "CANCELLED"
+    assert body["lines"][0]["quantity"] == 1.04
+    assert body["lines"][0]["delivered_quantity"] == 0.5
+    assert body["quantity_compatibility"]["recovery_action"] == "HISTORICAL_ONLY"
+
+    with session_factory() as session:
+        line = session.get(PartRequestLine, line_id)
+        assert line is not None and line.quantity == 1.04
+        assert line.delivered_quantity == 0.5
+        audit = session.scalar(
+            select(AuditLog)
+            .where(
+                AuditLog.entity_type == "part_request",
+                AuditLog.entity_id == request_id,
+                AuditLog.action == "Обновено изпълнение на заявка за части",
+            )
+            .order_by(AuditLog.id.desc())
+        )
+        assert audit is not None
+        assert audit.operation_reference == f"PR-LEGACY-{request_id:06d}"
 
 
 def test_part_request_documents_render_integer_quantity_and_retries_preserve_integrity(
