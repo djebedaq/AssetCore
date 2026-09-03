@@ -8,11 +8,12 @@ import re
 import secrets
 from datetime import timedelta
 from pathlib import Path
+from typing import Annotated
 
 from cryptography.fernet import Fernet
 from docx import Document
 from docx.shared import Mm
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from PIL import Image
 from pypdf import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import A4
@@ -75,9 +76,18 @@ from .models import (
     UserRole,
     utcnow,
 )
-from .official_documents import build_official_document_registry
+from .official_documents import (
+    build_official_document_registry,
+    count_official_document_registry_items,
+    query_official_document_registry_items,
+)
 from .official_documents.integrity import require_current_version, set_current_version
-from .official_documents.schemas import OfficialDocumentRegistryOut
+from .official_documents.schemas import (
+    OfficialDocumentRegistryOut,
+    OfficialRegistryCategory,
+    OfficialRegistryCountsOut,
+    OfficialRegistryPageOut,
+)
 from .permissions import Permission, require_permission
 from .security import get_current_active_user
 from .settings import settings
@@ -617,6 +627,36 @@ def official_document_registry(
     db: Session = Depends(get_db),
 ) -> dict:
     return build_official_document_registry(db)
+
+
+@router.get(
+    "/official-documents/registry/items", response_model=OfficialRegistryPageOut
+)
+def official_document_registry_items(
+    category: Annotated[OfficialRegistryCategory, Query()],
+    q: Annotated[str, Query(max_length=200)] = "",
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 25,
+    _: User = Depends(require_permission(Permission.DOCUMENTS_VIEW)),
+    db: Session = Depends(get_db),
+) -> dict:
+    return query_official_document_registry_items(
+        db,
+        category=category,
+        query=q,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get(
+    "/official-documents/registry/counts", response_model=OfficialRegistryCountsOut
+)
+def official_document_registry_counts(
+    _: User = Depends(require_permission(Permission.DOCUMENTS_VIEW)),
+    db: Session = Depends(get_db),
+) -> dict:
+    return count_official_document_registry_items(db)
 
 
 @router.get("/official-documents/{document_id}", response_model=OfficialDocumentOut)
