@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 
+import app.official_documents.registry as registry_service
 from app.models import (
     AuditLog,
     DocumentParticipant,
@@ -12,12 +13,14 @@ from app.models import (
     OfficialDocument,
     OfficialDocumentVersion,
     PartRequest,
+    ProtocolDocument,
     Repair,
     TransferBatch,
     TransferProtocol,
     User,
 )
-from sqlalchemy import func, select
+from app.official_documents.schemas import OfficialRegistryCategory
+from sqlalchemy import event, func, select
 
 
 def _sha(value: bytes) -> str:
@@ -155,7 +158,7 @@ def _seed_registry_scenario(session_factory, machine_ids) -> dict[str, int]:
         incomplete_transfer = TransferProtocol(
             machine_id=machine_ids["9"],
             batch_id=batch.id,
-            protocol_number="TR-REG-009",
+            protocol_number="TP-REFERENCE-009",
             protocol_type="Предаване",
             is_active=True,
             issue_status="COMPLETED",
@@ -216,7 +219,7 @@ def _seed_registry_scenario(session_factory, machine_ids) -> dict[str, int]:
 
         repair = Repair(
             machine_id=machine_ids["11"],
-            repair_reference="REP-REG-011",
+            repair_reference="REPAIR-REFERENCE-011",
             reported_problem="Тестов регистров сценарий",
             status="COMPLETED",
             opened_at=datetime(2026, 8, 18, 8, 0),
@@ -266,7 +269,7 @@ def _seed_registry_scenario(session_factory, machine_ids) -> dict[str, int]:
             part_name="Тестов ред за регистъра",
             quantity=1,
             status="APPROVED",
-            request_reference="PR-REG-013",
+            request_reference="REQUEST-REFERENCE-013",
             requested_by_id=actor.id,
             created_at=datetime(2026, 8, 23, 9, 0),
         )
@@ -325,6 +328,81 @@ def _seed_registry_scenario(session_factory, machine_ids) -> dict[str, int]:
             "repair_document": repair_document.id,
             "part_document": part_document.id,
         }
+
+
+def _seed_paged_part_registry(
+    session_factory, machine_ids, *, count: int = 8
+) -> list[str]:
+    with session_factory() as session:
+        actor = session.scalar(select(User).where(User.email == "admin@assetcore.local"))
+        identities: list[tuple[datetime, str]] = []
+        for index in range(count):
+            created_at = datetime(2026, 7, 15, 12, 0) - timedelta(
+                days=max(index - 1, 0)
+            )
+            request = PartRequest(
+                machine_id=machine_ids["15"],
+                part_name=f"Registry pagination fixture {index}",
+                quantity=1,
+                status="APPROVED",
+                request_reference=f"REQUEST-PAGE-{index:03d}",
+                requested_by_id=actor.id,
+                created_at=created_at,
+            )
+            session.add(request)
+            session.flush()
+            _add_official_document(
+                session,
+                number=f"PART-DOCUMENT-{index:03d}",
+                document_type=DocumentType.PART_REQUEST.value,
+                actor_id=actor.id,
+                created_at=created_at,
+                machine_id=machine_ids["15"],
+                snapshot={"request_id": request.id},
+            )
+            identities.append((created_at, f"part-request:{request.id}"))
+        session.commit()
+    return [
+        registry_key
+        for _, registry_key in sorted(identities, reverse=True)
+    ]
+
+
+def _add_machine_search_transfer(session_factory, machine_ids) -> None:
+    with session_factory() as session:
+        actor = session.scalar(select(User).where(User.email == "admin@assetcore.local"))
+        batch = TransferBatch(
+            batch_reference="BATCH-ALPHA",
+            status="ACTIVE",
+            created_by_id=actor.id,
+            created_at=datetime(2026, 8, 25, 8, 0),
+        )
+        session.add(batch)
+        session.flush()
+        transfer = TransferProtocol(
+            machine_id=machine_ids["17"],
+            batch_id=batch.id,
+            protocol_number="TRANSFER-ALPHA",
+            protocol_type="Предаване",
+            is_active=True,
+            issue_status="COMPLETED",
+            issued_by_id=actor.id,
+            issued_at=datetime(2026, 8, 25, 9, 0),
+            created_at=datetime(2026, 8, 25, 8, 30),
+        )
+        session.add(transfer)
+        session.flush()
+        _add_official_document(
+            session,
+            number="ISSUE-ALPHA",
+            document_type=DocumentType.TRANSFER_ISSUE.value,
+            actor_id=actor.id,
+            created_at=datetime(2026, 8, 25, 9, 0),
+            machine_id=machine_ids["17"],
+            transfer_id=transfer.id,
+            status="FINALIZED",
+        )
+        session.commit()
 
 
 def test_registry_groups_canonical_and_historical_documents_without_duplicates(
@@ -435,6 +513,15 @@ def test_registry_does_not_complete_return_only_transfer_lifecycle(
         "TR-REG-RETURN-ONLY-016-R"
     )
 
+    paged = client.get(
+        "/api/official-documents/registry/items",
+        headers=auth_headers,
+        params={"category": "transfers"},
+    )
+    assert paged.status_code == 200, paged.text
+    assert paged.json()["total"] == 1
+    assert paged.json()["items"] == transfers["items"]
+
 
 def test_registry_and_preview_are_read_only_and_legacy_orphan_does_not_break_list(
     client, auth_headers, session_factory, machine_ids
@@ -488,3 +575,342 @@ def test_registry_requires_document_view_permission(
     response = client.get("/api/official-documents/registry", headers=viewer_headers)
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "permission_denied"
+
+
+def test_paged_registry_matches_legacy_sections_and_counts_without_category_leaks(
+    client, auth_headers, session_factory, machine_ids
+):
+    _seed_registry_scenario(session_factory, machine_ids)
+    _add_machine_search_transfer(session_factory, machine_ids)
+
+    legacy = client.get(
+        "/api/official-documents/registry", headers=auth_headers
+    ).json()
+    counts_response = client.get(
+        "/api/official-documents/registry/counts", headers=auth_headers
+    )
+    assert counts_response.status_code == 200, counts_response.text
+    counts = counts_response.json()
+    allowed_types = {
+        "transfers": {"TRANSFER_ISSUE", "TRANSFER_RETURN"},
+        "repairs": {"REPAIR_PROTOCOL"},
+        "parts": {"PART_REQUEST"},
+    }
+
+    for category in ("transfers", "repairs", "parts"):
+        response = client.get(
+            "/api/official-documents/registry/items",
+            headers=auth_headers,
+            params={"category": category, "page_size": 100},
+        )
+        assert response.status_code == 200, response.text
+        page = response.json()
+        assert page["category"] == category
+        assert page["total"] == counts[category] == legacy[category]["count"]
+        assert page["count"] == page["total"]
+        assert page["items"] == legacy[category]["items"]
+        assert {
+            document["document_type"]
+            for item in page["items"]
+            for document in item["documents"]
+        }.issubset(allowed_types[category])
+
+    assert counts == {"transfers": 3, "repairs": 2, "parts": 2}
+
+
+def test_category_search_uses_only_authoritative_identifiers_with_literal_matching(
+    client, auth_headers, session_factory, machine_ids
+):
+    _seed_registry_scenario(session_factory, machine_ids)
+    _add_machine_search_transfer(session_factory, machine_ids)
+
+    cases = (
+        ("transfers", "  17  ", {"17"}),
+        ("transfers", "issue-alpha", {"17"}),
+        ("transfers", "TRANSFER-alpha", {"17"}),
+        ("transfers", "batch-alpha", {"17"}),
+        ("transfers", "tr-reg-010-r", {"10"}),
+        ("repairs", "rep-reg-011", {"11"}),
+        ("repairs", "repair-reference-011", {"11"}),
+        ("parts", "pr-reg-013", {"13"}),
+        ("parts", "request-reference-013", {"13"}),
+        ("repairs", "rep-legacy-012", {"12"}),
+        ("parts", "pr-legacy-014", {"14"}),
+    )
+    for category, query, expected_machines in cases:
+        response = client.get(
+            "/api/official-documents/registry/items",
+            headers=auth_headers,
+            params={"category": category, "q": query, "page_size": 100},
+        )
+        assert response.status_code == 200, response.text
+        assert {item["machine_number"] for item in response.json()["items"]} == (
+            expected_machines
+        )
+
+    for literal in ("%", "_", "\\"):
+        response = client.get(
+            "/api/official-documents/registry/items",
+            headers=auth_headers,
+            params={"category": "transfers", "q": literal},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["total"] == 0
+
+    unfiltered = client.get(
+        "/api/official-documents/registry/items",
+        headers=auth_headers,
+        params={"category": "repairs"},
+    ).json()
+    whitespace = client.get(
+        "/api/official-documents/registry/items",
+        headers=auth_headers,
+        params={"category": "repairs", "q": "   "},
+    ).json()
+    assert whitespace == unfiltered
+
+    historical = client.get(
+        "/api/official-documents/registry/items",
+        headers=auth_headers,
+        params={"category": "repairs", "q": "rep-legacy-012"},
+    ).json()["items"][0]
+    assert historical["documents"][0]["official_document_id"] is None
+    assert {
+        file["download_endpoint"]
+        for file in historical["documents"][0]["files"]
+    } == {
+        "/generated-documents/3/download",
+        "/generated-documents/4/download",
+    }
+
+
+def test_registry_pagination_is_stable_complete_and_handles_empty_or_high_pages(
+    client, auth_headers, session_factory, machine_ids
+):
+    expected_order = _seed_paged_part_registry(session_factory, machine_ids, count=8)
+    collected: list[str] = []
+    first_page_keys: list[str] | None = None
+    for page_number in range(1, 4):
+        response = client.get(
+            "/api/official-documents/registry/items",
+            headers=auth_headers,
+            params={"category": "parts", "page": page_number, "page_size": 3},
+        )
+        assert response.status_code == 200, response.text
+        page = response.json()
+        assert page == {
+            **page,
+            "category": "parts",
+            "total": 8,
+            "count": 3 if page_number < 3 else 2,
+            "page": page_number,
+            "page_size": 3,
+            "total_pages": 3,
+            "has_previous": page_number > 1,
+            "has_next": page_number < 3,
+        }
+        keys = [item["registry_key"] for item in page["items"]]
+        if page_number == 1:
+            first_page_keys = keys
+        collected.extend(keys)
+
+    assert collected == expected_order
+    assert len(collected) == len(set(collected)) == 8
+    repeated = client.get(
+        "/api/official-documents/registry/items",
+        headers=auth_headers,
+        params={"category": "parts", "page": 1, "page_size": 3},
+    ).json()
+    assert [item["registry_key"] for item in repeated["items"]] == first_page_keys
+
+    high = client.get(
+        "/api/official-documents/registry/items",
+        headers=auth_headers,
+        params={"category": "parts", "page": 99, "page_size": 3},
+    ).json()
+    assert high["total"] == 8
+    assert high["count"] == 0
+    assert high["items"] == []
+    assert high["total_pages"] == 3
+    assert high["has_previous"] is True
+    assert high["has_next"] is False
+
+    empty_search = client.get(
+        "/api/official-documents/registry/items",
+        headers=auth_headers,
+        params={"category": "parts", "q": "NO-SUCH-IDENTIFIER"},
+    ).json()
+    assert empty_search["total"] == 0
+    assert empty_search["count"] == 0
+    assert empty_search["items"] == []
+    assert empty_search["total_pages"] == 0
+    assert empty_search["has_previous"] is False
+    assert empty_search["has_next"] is False
+
+    empty_category = client.get(
+        "/api/official-documents/registry/items",
+        headers=auth_headers,
+        params={"category": "transfers"},
+    ).json()
+    assert empty_category["total"] == empty_category["count"] == 0
+    assert empty_category["items"] == []
+    assert empty_category["total_pages"] == 0
+
+
+def test_registry_query_parameter_validation_and_permission_boundaries(
+    client, auth_headers, viewer_headers
+):
+    invalid_params = (
+        {"category": "unknown"},
+        {"category": "transfers", "page": 0},
+        {"category": "transfers", "page_size": 0},
+        {"category": "transfers", "page_size": 101},
+        {"category": "transfers", "q": "x" * 201},
+    )
+    for params in invalid_params:
+        response = client.get(
+            "/api/official-documents/registry/items",
+            headers=auth_headers,
+            params=params,
+        )
+        assert response.status_code == 422, response.text
+
+    for path in (
+        "/api/official-documents/registry/items?category=transfers",
+        "/api/official-documents/registry/counts",
+    ):
+        forbidden = client.get(path, headers=viewer_headers)
+        assert forbidden.status_code == 403
+        assert forbidden.json()["detail"] == {
+            "code": "permission_denied",
+            "message": "Нямате права за това действие.",
+            "permission": "documents.view",
+        }
+        no_session = client.get(path)
+        assert no_session.status_code == 401
+
+
+def test_paged_and_count_registry_reads_preserve_rows_versions_hashes_and_audit(
+    client, auth_headers, session_factory, machine_ids
+):
+    _seed_registry_scenario(session_factory, machine_ids)
+
+    def integrity_snapshot():
+        with session_factory() as session:
+            versions = list(
+                session.execute(
+                    select(
+                        OfficialDocumentVersion.id,
+                        OfficialDocumentVersion.document_id,
+                        OfficialDocumentVersion.snapshot_sha256,
+                        OfficialDocumentVersion.signing_sha256,
+                        OfficialDocumentVersion.docx_sha256,
+                        OfficialDocumentVersion.pdf_sha256,
+                    ).order_by(OfficialDocumentVersion.id)
+                )
+            )
+            return {
+                "official": list(
+                    session.execute(
+                        select(
+                            OfficialDocument.id,
+                            OfficialDocument.current_version_id,
+                        ).order_by(OfficialDocument.id)
+                    )
+                ),
+                "versions": versions,
+                "generated_count": session.scalar(
+                    select(func.count(GeneratedDocument.id))
+                ),
+                "protocol_count": session.scalar(
+                    select(func.count(ProtocolDocument.id))
+                ),
+                "transfer_count": session.scalar(
+                    select(func.count(TransferProtocol.id))
+                ),
+                "batch_count": session.scalar(select(func.count(TransferBatch.id))),
+                "repair_count": session.scalar(select(func.count(Repair.id))),
+                "request_count": session.scalar(select(func.count(PartRequest.id))),
+                "participant_count": session.scalar(
+                    select(func.count(DocumentParticipant.id))
+                ),
+                "signature_count": session.scalar(
+                    select(func.count(DocumentSignature.id))
+                ),
+                "audit_count": session.scalar(select(func.count(AuditLog.id))),
+            }
+
+    before = integrity_snapshot()
+    counts = client.get(
+        "/api/official-documents/registry/counts", headers=auth_headers
+    )
+    assert counts.status_code == 200, counts.text
+    for category in ("transfers", "repairs", "parts"):
+        response = client.get(
+            "/api/official-documents/registry/items",
+            headers=auth_headers,
+            params={"category": category, "q": "REG"},
+        )
+        assert response.status_code == 200, response.text
+    assert integrity_snapshot() == before
+
+
+def test_counts_skip_expensive_hydration_and_page_queries_do_not_scale_per_item(
+    session_factory, machine_ids, monkeypatch
+):
+    _seed_paged_part_registry(session_factory, machine_ids, count=24)
+    with session_factory() as session:
+        engine = session.get_bind()
+        statements: list[str] = []
+
+        def capture_statement(_conn, _cursor, statement, *_args):
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement.lower())
+
+        event.listen(engine, "before_cursor_execute", capture_statement)
+        try:
+            monkeypatch.setattr(
+                registry_service,
+                "_signature_states",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("counts must not hydrate signature state")
+                ),
+            )
+            counts = registry_service.count_official_document_registry_items(session)
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_statement)
+        assert counts == {"transfers": 0, "repairs": 0, "parts": 24}
+        assert not any("document_signatures" in statement for statement in statements)
+        assert not any("document_participants" in statement for statement in statements)
+        assert not any("docx_content" in statement for statement in statements)
+        assert not any("pdf_content" in statement for statement in statements)
+
+    monkeypatch.undo()
+
+    def select_count(page_size: int) -> tuple[int, dict]:
+        with session_factory() as measured_session:
+            engine = measured_session.get_bind()
+            count = 0
+
+            def count_selects(_conn, _cursor, statement, *_args):
+                nonlocal count
+                if statement.lstrip().upper().startswith("SELECT"):
+                    count += 1
+
+            event.listen(engine, "before_cursor_execute", count_selects)
+            try:
+                result = registry_service.query_official_document_registry_items(
+                    measured_session,
+                    category=OfficialRegistryCategory.PARTS,
+                    page_size=page_size,
+                )
+            finally:
+                event.remove(engine, "before_cursor_execute", count_selects)
+        return count, result
+
+    small_selects, small = select_count(1)
+    large_selects, large = select_count(20)
+    assert small["count"] == 1
+    assert large["count"] == 20
+    assert small["total"] == large["total"] == 24
+    assert large_selects <= small_selects + 1

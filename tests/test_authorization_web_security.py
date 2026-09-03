@@ -87,12 +87,12 @@ def test_complete_runtime_route_inventory_is_classified_and_deterministic():
     # The backend-only CI job intentionally has no compiled frontend/dist;
     # production/Docker has the mount plus SPA route. Both graphs are explicit.
     assert static_count in {0, 3}
-    assert summary["route_count"] == 164 + static_count
+    assert summary["route_count"] == 166 + static_count
     assert summary["mutating_route_count"] == 80
     assert summary["by_kind"] == {
         "authenticated": 6,
         "authenticated_special": 8,
-        "permission": 135,
+        "permission": 137,
         "public_exempt": 15,
         **({"static_public": 3} if static_count else {}),
     }
@@ -105,6 +105,21 @@ def test_complete_runtime_route_inventory_is_classified_and_deterministic():
         for row in inventory.routes
         if row.method in MUTATING_METHODS
     )
+
+    routes = _route_map()
+    for path, name in (
+        (
+            "/api/official-documents/registry/items",
+            "official_document_registry_items",
+        ),
+        (
+            "/api/official-documents/registry/counts",
+            "official_document_registry_counts",
+        ),
+    ):
+        row = routes[("GET", path, name)]
+        assert row.kind == AuthorizationKind.PERMISSION.value
+        assert row.permission == Permission.DOCUMENTS_VIEW.value
 
 
 def test_new_unprotected_mutation_fails_closed():

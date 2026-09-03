@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import (
@@ -23,16 +24,37 @@ from ..models import (
     Repair,
     RepairStatus,
     SignatureSlot,
+    TransferBatch,
     TransferOperationStatus,
     TransferProtocol,
 )
+from .schemas import OfficialRegistryCategory
 
 SignatureState = str
+
+_TRANSFER_DOCUMENT_TYPES = frozenset(
+    {
+        DocumentType.TRANSFER_ISSUE.value,
+        DocumentType.TRANSFER_RETURN.value,
+    }
+)
+_REPAIR_DOCUMENT_TYPES = frozenset({DocumentType.REPAIR_PROTOCOL.value})
+_PART_DOCUMENT_TYPES = frozenset({DocumentType.PART_REQUEST.value})
+_REGISTRY_DOCUMENT_TYPES = (
+    _TRANSFER_DOCUMENT_TYPES | _REPAIR_DOCUMENT_TYPES | _PART_DOCUMENT_TYPES
+)
+_DOCUMENT_TYPES_BY_CATEGORY = {
+    OfficialRegistryCategory.TRANSFERS: _TRANSFER_DOCUMENT_TYPES,
+    OfficialRegistryCategory.REPAIRS: _REPAIR_DOCUMENT_TYPES,
+    OfficialRegistryCategory.PARTS: _PART_DOCUMENT_TYPES,
+}
 
 
 @dataclass(frozen=True)
 class _DocumentRecord:
     source_key: str
+    source_family: str
+    source_ids: tuple[int, ...]
     document_type: str
     document_number: str
     machine_id: int | None
@@ -60,6 +82,24 @@ class _DocumentRecord:
             "version_status": self.version_status,
             "files": list(self.files),
         }
+
+
+@dataclass(frozen=True)
+class _RegistryCandidate:
+    registry_key: str
+    domain_id: int | None
+    created_at: datetime | None
+    started_at: datetime | None
+    search_values: tuple[str, ...]
+    records: tuple[_DocumentRecord, ...]
+
+    @property
+    def effective_at(self) -> datetime:
+        return self.created_at or self.started_at or datetime.min
+
+    def matches(self, query: str) -> bool:
+        folded = query.casefold()
+        return any(folded in value.casefold() for value in self.search_values)
 
 
 def _snapshot_id(snapshot: object, key: str) -> int | None:
@@ -133,64 +173,80 @@ def _signature_states(
     return states
 
 
-def _official_records(db: Session) -> list[_DocumentRecord]:
+def _official_records(
+    db: Session,
+    *,
+    document_types: Collection[str] = _REGISTRY_DOCUMENT_TYPES,
+    document_ids: Collection[int] | None = None,
+    include_signatures: bool = True,
+    include_files: bool = True,
+) -> list[_DocumentRecord]:
+    if not document_types or document_ids is not None and not document_ids:
+        return []
+    statement = (
+        select(
+            OfficialDocument.id,
+            OfficialDocument.document_number,
+            OfficialDocument.document_type,
+            OfficialDocument.machine_id,
+            OfficialDocument.transfer_id,
+            OfficialDocument.created_at,
+            OfficialDocumentVersion.id.label("version_id"),
+            OfficialDocumentVersion.version,
+            OfficialDocumentVersion.status,
+            OfficialDocumentVersion.snapshot,
+            OfficialDocumentVersion.docx_sha256,
+            OfficialDocumentVersion.pdf_sha256,
+            OfficialDocumentVersion.created_at.label("version_created_at"),
+            OfficialDocumentVersion.finalized_at,
+        )
+        .join(
+            OfficialDocumentVersion,
+            OfficialDocumentVersion.id == OfficialDocument.current_version_id,
+        )
+        .where(OfficialDocument.document_type.in_(document_types))
+    )
+    if document_ids is not None:
+        statement = statement.where(OfficialDocument.id.in_(document_ids))
     rows = list(
         db.execute(
-            select(
-                OfficialDocument.id,
-                OfficialDocument.document_number,
-                OfficialDocument.document_type,
-                OfficialDocument.machine_id,
-                OfficialDocument.transfer_id,
-                OfficialDocument.created_at,
-                OfficialDocumentVersion.id.label("version_id"),
-                OfficialDocumentVersion.version,
-                OfficialDocumentVersion.status,
-                OfficialDocumentVersion.snapshot,
-                OfficialDocumentVersion.docx_sha256,
-                OfficialDocumentVersion.pdf_sha256,
-                OfficialDocumentVersion.created_at.label("version_created_at"),
-                OfficialDocumentVersion.finalized_at,
+            statement.order_by(
+                OfficialDocument.created_at.desc(), OfficialDocument.id.desc()
             )
-            .join(
-                OfficialDocumentVersion,
-                OfficialDocumentVersion.id == OfficialDocument.current_version_id,
-            )
-            .where(
-                OfficialDocument.document_type.in_(
-                    {
-                        DocumentType.TRANSFER_ISSUE.value,
-                        DocumentType.TRANSFER_RETURN.value,
-                        DocumentType.REPAIR_PROTOCOL.value,
-                        DocumentType.PART_REQUEST.value,
-                    }
-                )
-            )
-            .order_by(OfficialDocument.created_at.desc(), OfficialDocument.id.desc())
         )
     )
-    signature_states = _signature_states(
-        db, [(row.version_id, row.document_type) for row in rows]
+    signature_states = (
+        _signature_states(db, [(row.version_id, row.document_type) for row in rows])
+        if include_signatures
+        else {}
     )
     records: list[_DocumentRecord] = []
     for row in rows:
         files: list[dict[str, Any]] = []
-        for file_format, sha256 in (("docx", row.docx_sha256), ("pdf", row.pdf_sha256)):
-            if sha256:
-                endpoint = (
-                    f"/official-documents/{row.id}/versions/"
-                    f"{row.version}/download/{file_format}"
-                )
-                files.append(
-                    {
-                        "format": file_format,
-                        "download_endpoint": endpoint,
-                        "preview_endpoint": f"/official-documents/{row.id}/preview/{file_format}",
-                    }
-                )
+        if include_files:
+            for file_format, sha256 in (
+                ("docx", row.docx_sha256),
+                ("pdf", row.pdf_sha256),
+            ):
+                if sha256:
+                    endpoint = (
+                        f"/official-documents/{row.id}/versions/"
+                        f"{row.version}/download/{file_format}"
+                    )
+                    files.append(
+                        {
+                            "format": file_format,
+                            "download_endpoint": endpoint,
+                            "preview_endpoint": (
+                                f"/official-documents/{row.id}/preview/{file_format}"
+                            ),
+                        }
+                    )
         records.append(
             _DocumentRecord(
                 source_key=f"official:{row.id}",
+                source_family="official",
+                source_ids=(row.id,),
                 document_type=row.document_type,
                 document_number=row.document_number,
                 machine_id=row.machine_id,
@@ -209,31 +265,33 @@ def _official_records(db: Session) -> list[_DocumentRecord]:
     return records
 
 
-def _legacy_generated_records(db: Session) -> list[_DocumentRecord]:
+def _legacy_generated_records(
+    db: Session,
+    *,
+    document_types: Collection[str] = _REGISTRY_DOCUMENT_TYPES,
+    row_ids: Collection[int] | None = None,
+    include_files: bool = True,
+) -> list[_DocumentRecord]:
+    if not document_types or row_ids is not None and not row_ids:
+        return []
+    statement = select(
+        GeneratedDocument.id,
+        GeneratedDocument.document_number,
+        GeneratedDocument.document_type,
+        GeneratedDocument.format,
+        GeneratedDocument.machine_id,
+        GeneratedDocument.repair_id,
+        GeneratedDocument.part_request_id,
+        GeneratedDocument.transfer_id,
+        GeneratedDocument.created_at,
+    ).where(GeneratedDocument.document_type.in_(document_types))
+    if row_ids is not None:
+        statement = statement.where(GeneratedDocument.id.in_(row_ids))
     rows = list(
         db.execute(
-            select(
-                GeneratedDocument.id,
-                GeneratedDocument.document_number,
-                GeneratedDocument.document_type,
-                GeneratedDocument.format,
-                GeneratedDocument.machine_id,
-                GeneratedDocument.repair_id,
-                GeneratedDocument.part_request_id,
-                GeneratedDocument.transfer_id,
-                GeneratedDocument.created_at,
+            statement.order_by(
+                GeneratedDocument.created_at.desc(), GeneratedDocument.id.desc()
             )
-            .where(
-                GeneratedDocument.document_type.in_(
-                    {
-                        DocumentType.TRANSFER_ISSUE.value,
-                        DocumentType.TRANSFER_RETURN.value,
-                        DocumentType.REPAIR_PROTOCOL.value,
-                        DocumentType.PART_REQUEST.value,
-                    }
-                )
-            )
-            .order_by(GeneratedDocument.created_at.desc(), GeneratedDocument.id.desc())
         )
     )
     grouped: dict[tuple[Any, ...], list[Any]] = defaultdict(list)
@@ -251,16 +309,22 @@ def _legacy_generated_records(db: Session) -> list[_DocumentRecord]:
     for group_rows in grouped.values():
         first = group_rows[0]
         files_by_format: dict[str, dict[str, Any]] = {}
-        for row in group_rows:
-            if row.format in {"docx", "pdf"} and row.format not in files_by_format:
-                files_by_format[row.format] = {
-                    "format": row.format,
-                    "download_endpoint": f"/generated-documents/{row.id}/download",
-                    "preview_endpoint": None,
-                }
+        if include_files:
+            for row in group_rows:
+                if (
+                    row.format in {"docx", "pdf"}
+                    and row.format not in files_by_format
+                ):
+                    files_by_format[row.format] = {
+                        "format": row.format,
+                        "download_endpoint": f"/generated-documents/{row.id}/download",
+                        "preview_endpoint": None,
+                    }
         records.append(
             _DocumentRecord(
                 source_key=f"generated:{first.id}",
+                source_family="generated",
+                source_ids=tuple(row.id for row in group_rows),
                 document_type=first.document_type,
                 document_number=first.document_number,
                 machine_id=first.machine_id,
@@ -279,20 +343,33 @@ def _legacy_generated_records(db: Session) -> list[_DocumentRecord]:
     return records
 
 
-def _legacy_issue_records(db: Session) -> list[_DocumentRecord]:
+def _legacy_issue_records(
+    db: Session,
+    *,
+    row_ids: Collection[int] | None = None,
+    include_files: bool = True,
+) -> list[_DocumentRecord]:
+    if row_ids is not None and not row_ids:
+        return []
+    statement = (
+        select(
+            ProtocolDocument.id,
+            ProtocolDocument.document_number,
+            ProtocolDocument.format,
+            ProtocolDocument.machine_id,
+            ProtocolDocument.transfer_id,
+            ProtocolDocument.created_at,
+            TransferProtocol.protocol_number,
+        )
+        .join(TransferProtocol, TransferProtocol.id == ProtocolDocument.transfer_id)
+    )
+    if row_ids is not None:
+        statement = statement.where(ProtocolDocument.id.in_(row_ids))
     rows = list(
         db.execute(
-            select(
-                ProtocolDocument.id,
-                ProtocolDocument.document_number,
-                ProtocolDocument.format,
-                ProtocolDocument.machine_id,
-                ProtocolDocument.transfer_id,
-                ProtocolDocument.created_at,
-                TransferProtocol.protocol_number,
+            statement.order_by(
+                ProtocolDocument.created_at.desc(), ProtocolDocument.id.desc()
             )
-            .join(TransferProtocol, TransferProtocol.id == ProtocolDocument.transfer_id)
-            .order_by(ProtocolDocument.created_at.desc(), ProtocolDocument.id.desc())
         )
     )
     grouped: dict[tuple[int, str], list[Any]] = defaultdict(list)
@@ -302,16 +379,22 @@ def _legacy_issue_records(db: Session) -> list[_DocumentRecord]:
     for (transfer_id, number), group_rows in grouped.items():
         first = group_rows[0]
         files_by_format: dict[str, dict[str, Any]] = {}
-        for row in group_rows:
-            if row.format in {"docx", "pdf"} and row.format not in files_by_format:
-                files_by_format[row.format] = {
-                    "format": row.format,
-                    "download_endpoint": f"/protocol-documents/{row.id}/download",
-                    "preview_endpoint": None,
-                }
+        if include_files:
+            for row in group_rows:
+                if (
+                    row.format in {"docx", "pdf"}
+                    and row.format not in files_by_format
+                ):
+                    files_by_format[row.format] = {
+                        "format": row.format,
+                        "download_endpoint": f"/protocol-documents/{row.id}/download",
+                        "preview_endpoint": None,
+                    }
         records.append(
             _DocumentRecord(
                 source_key=f"protocol:{first.id}",
+                source_family="protocol",
+                source_ids=tuple(row.id for row in group_rows),
                 document_type=DocumentType.TRANSFER_ISSUE.value,
                 document_number=number,
                 machine_id=first.machine_id,
@@ -370,6 +453,344 @@ def _deduplicate_records(
         )
         not in official_keys
     ]
+
+
+def _candidate_document_records(
+    db: Session, category: OfficialRegistryCategory
+) -> list[_DocumentRecord]:
+    """Load selected-category identity metadata without signatures or file payloads."""
+    document_types = _DOCUMENT_TYPES_BY_CATEGORY[category]
+    official = _official_records(
+        db,
+        document_types=document_types,
+        include_signatures=False,
+        include_files=False,
+    )
+    legacy = _legacy_generated_records(
+        db, document_types=document_types, include_files=False
+    )
+    if category == OfficialRegistryCategory.TRANSFERS:
+        legacy += _legacy_issue_records(db, include_files=False)
+    return _deduplicate_records(official, legacy)
+
+
+def _machine_number_map(
+    db: Session, machine_ids: Collection[int | None]
+) -> dict[int, str]:
+    ids = {machine_id for machine_id in machine_ids if machine_id is not None}
+    if not ids:
+        return {}
+    return dict(
+        db.execute(
+            select(Machine.id, Machine.inventory_number).where(Machine.id.in_(ids))
+        ).all()
+    )
+
+
+def _candidate_search_values(
+    records: Collection[_DocumentRecord], *values: object
+) -> tuple[str, ...]:
+    return tuple(
+        str(value)
+        for value in (
+            *(record.document_number for record in records),
+            *values,
+        )
+        if value is not None and str(value)
+    )
+
+
+def _transfer_candidates(
+    db: Session, records: list[_DocumentRecord]
+) -> list[_RegistryCandidate]:
+    by_transfer: dict[int, list[_DocumentRecord]] = defaultdict(list)
+    for record in records:
+        if record.transfer_id is not None and record.document_type in (
+            _TRANSFER_DOCUMENT_TYPES
+        ):
+            by_transfer[record.transfer_id].append(record)
+    if not by_transfer:
+        return []
+    rows = {
+        row.transfer_id: row
+        for row in db.execute(
+            select(
+                TransferProtocol.id.label("transfer_id"),
+                TransferProtocol.protocol_number,
+                TransferProtocol.issue_status,
+                TransferProtocol.return_status,
+                TransferProtocol.issued_at,
+                TransferProtocol.returned_at,
+                Machine.inventory_number.label("machine_number"),
+                TransferBatch.batch_reference,
+            )
+            .join(Machine, Machine.id == TransferProtocol.machine_id)
+            .outerjoin(TransferBatch, TransferBatch.id == TransferProtocol.batch_id)
+            .where(TransferProtocol.id.in_(by_transfer))
+        )
+    }
+    candidates: list[_RegistryCandidate] = []
+    for transfer_id, transfer_records in by_transfer.items():
+        row = rows.get(transfer_id)
+        if row is None:
+            continue
+        unique_records = list(
+            {record.source_key: record for record in transfer_records}.values()
+        )
+        unique_records.sort(
+            key=lambda record: (
+                record.document_type == DocumentType.TRANSFER_RETURN.value,
+                record.effective_at,
+                record.source_key,
+            )
+        )
+        issue_records = [
+            record
+            for record in unique_records
+            if record.document_type == DocumentType.TRANSFER_ISSUE.value
+        ]
+        return_records = [
+            record
+            for record in unique_records
+            if record.document_type == DocumentType.TRANSFER_RETURN.value
+        ]
+        completed = bool(issue_records) and bool(return_records) and (
+            row.return_status == TransferOperationStatus.COMPLETED.value
+            or row.returned_at is not None
+        )
+        started_candidates = [record.effective_at for record in issue_records]
+        if row.issued_at:
+            started_candidates.append(row.issued_at)
+        completed_candidates = [
+            record.finalized_at or record.created_at for record in return_records
+        ]
+        if row.returned_at:
+            completed_candidates.append(row.returned_at)
+        candidates.append(
+            _RegistryCandidate(
+                registry_key=f"transfer:{transfer_id}",
+                domain_id=transfer_id,
+                created_at=max(completed_candidates) if completed else None,
+                started_at=(
+                    max(started_candidates) if started_candidates else None
+                ),
+                search_values=_candidate_search_values(
+                    unique_records,
+                    row.machine_number,
+                    row.protocol_number,
+                    row.batch_reference,
+                ),
+                records=tuple(unique_records),
+            )
+        )
+    return candidates
+
+
+def _repair_candidates(
+    db: Session, records: list[_DocumentRecord]
+) -> list[_RegistryCandidate]:
+    repair_records = [
+        record
+        for record in records
+        if record.document_type == DocumentType.REPAIR_PROTOCOL.value
+    ]
+    if not repair_records:
+        return []
+    references = {record.document_number for record in repair_records}
+    repair_ids = {
+        record.repair_id
+        for record in repair_records
+        if record.repair_id is not None
+    }
+    predicates = []
+    if repair_ids:
+        predicates.append(Repair.id.in_(repair_ids))
+    if references:
+        predicates.append(Repair.repair_reference.in_(references))
+    rows = list(
+        db.execute(
+            select(
+                Repair.id.label("repair_id"),
+                Repair.repair_reference,
+                Repair.opened_at,
+                Repair.closed_at,
+                Machine.inventory_number.label("machine_number"),
+            )
+            .join(Machine, Machine.id == Repair.machine_id)
+            .where(or_(*predicates))
+        )
+    )
+    rows_by_id = {row.repair_id: row for row in rows}
+    rows_by_reference = {
+        row.repair_reference: row for row in rows if row.repair_reference
+    }
+    official_repair_ids: set[int] = set()
+    resolved: list[tuple[_DocumentRecord, Any | None]] = []
+    for record in repair_records:
+        row = rows_by_id.get(record.repair_id) or rows_by_reference.get(
+            record.document_number
+        )
+        resolved.append((record, row))
+        if record.official_document_id is not None and row is not None:
+            official_repair_ids.add(row.repair_id)
+
+    grouped: dict[str, list[tuple[_DocumentRecord, Any | None]]] = defaultdict(
+        list
+    )
+    for record, row in resolved:
+        if (
+            record.official_document_id is None
+            and row is not None
+            and row.repair_id in official_repair_ids
+        ):
+            continue
+        key = f"repair:{row.repair_id}" if row is not None else record.source_key
+        grouped[key].append((record, row))
+
+    machine_numbers = _machine_number_map(
+        db, [record.machine_id for record in repair_records]
+    )
+    candidates: list[_RegistryCandidate] = []
+    for registry_key, values in grouped.items():
+        records_for_item = [record for record, _ in values]
+        row = next((value for _, value in values if value is not None), None)
+        records_for_item.sort(key=lambda record: (record.effective_at, record.source_key))
+        machine_number = (
+            row.machine_number
+            if row is not None
+            else machine_numbers.get(records_for_item[-1].machine_id)
+        )
+        candidates.append(
+            _RegistryCandidate(
+                registry_key=registry_key,
+                domain_id=row.repair_id if row is not None else None,
+                created_at=max(
+                    [record.effective_at for record in records_for_item]
+                    + ([row.closed_at] if row is not None and row.closed_at else [])
+                ),
+                started_at=row.opened_at if row is not None else None,
+                search_values=_candidate_search_values(
+                    records_for_item,
+                    machine_number,
+                    row.repair_reference if row is not None else None,
+                ),
+                records=tuple(records_for_item),
+            )
+        )
+    return candidates
+
+
+def _part_candidates(
+    db: Session, records: list[_DocumentRecord]
+) -> list[_RegistryCandidate]:
+    part_records = [
+        record
+        for record in records
+        if record.document_type == DocumentType.PART_REQUEST.value
+    ]
+    if not part_records:
+        return []
+    references = {record.document_number for record in part_records}
+    request_ids = {
+        record.part_request_id
+        for record in part_records
+        if record.part_request_id is not None
+    }
+    predicates = []
+    if request_ids:
+        predicates.append(PartRequest.id.in_(request_ids))
+    if references:
+        predicates.append(PartRequest.request_reference.in_(references))
+    rows = list(
+        db.execute(
+            select(
+                PartRequest.id.label("request_id"),
+                PartRequest.request_reference,
+                PartRequest.created_at,
+                Machine.inventory_number.label("machine_number"),
+            )
+            .outerjoin(Machine, Machine.id == PartRequest.machine_id)
+            .where(or_(*predicates))
+        )
+    )
+    rows_by_id = {row.request_id: row for row in rows}
+    rows_by_reference = {
+        row.request_reference: row for row in rows if row.request_reference
+    }
+    official_request_ids: set[int] = set()
+    resolved: list[tuple[_DocumentRecord, Any | None]] = []
+    for record in part_records:
+        row = rows_by_id.get(record.part_request_id) or rows_by_reference.get(
+            record.document_number
+        )
+        resolved.append((record, row))
+        if record.official_document_id is not None and row is not None:
+            official_request_ids.add(row.request_id)
+
+    grouped: dict[str, list[tuple[_DocumentRecord, Any | None]]] = defaultdict(
+        list
+    )
+    for record, row in resolved:
+        if (
+            record.official_document_id is None
+            and row is not None
+            and row.request_id in official_request_ids
+        ):
+            continue
+        key = (
+            f"part-request:{row.request_id}"
+            if row is not None
+            else record.source_key
+        )
+        grouped[key].append((record, row))
+
+    machine_numbers = _machine_number_map(
+        db, [record.machine_id for record in part_records]
+    )
+    candidates: list[_RegistryCandidate] = []
+    for registry_key, values in grouped.items():
+        records_for_item = [record for record, _ in values]
+        row = next((value for _, value in values if value is not None), None)
+        records_for_item.sort(key=lambda record: (record.effective_at, record.source_key))
+        machine_number = (
+            row.machine_number
+            if row is not None
+            else machine_numbers.get(records_for_item[-1].machine_id)
+        )
+        candidates.append(
+            _RegistryCandidate(
+                registry_key=registry_key,
+                domain_id=row.request_id if row is not None else None,
+                created_at=max(record.effective_at for record in records_for_item),
+                started_at=row.created_at if row is not None else None,
+                search_values=_candidate_search_values(
+                    records_for_item,
+                    machine_number,
+                    row.request_reference if row is not None else None,
+                ),
+                records=tuple(records_for_item),
+            )
+        )
+    return candidates
+
+
+def _registry_candidates(
+    db: Session, category: OfficialRegistryCategory, query: str = ""
+) -> list[_RegistryCandidate]:
+    records = _candidate_document_records(db, category)
+    if category == OfficialRegistryCategory.TRANSFERS:
+        candidates = _transfer_candidates(db, records)
+    elif category == OfficialRegistryCategory.REPAIRS:
+        candidates = _repair_candidates(db, records)
+    else:
+        candidates = _part_candidates(db, records)
+    if query:
+        candidates = [candidate for candidate in candidates if candidate.matches(query)]
+    candidates.sort(
+        key=lambda candidate: (candidate.effective_at, candidate.registry_key),
+        reverse=True,
+    )
+    return candidates
 
 
 def _transfer_items(db: Session, records: list[_DocumentRecord]) -> list[dict[str, Any]]:
@@ -653,6 +1074,85 @@ def _sort_items(items: list[dict[str, Any]]) -> None:
         ),
         reverse=True,
     )
+
+
+def _hydrate_registry_candidates(
+    db: Session,
+    category: OfficialRegistryCategory,
+    candidates: list[_RegistryCandidate],
+) -> list[dict[str, Any]]:
+    if not candidates:
+        return []
+    source_ids: dict[str, set[int]] = defaultdict(set)
+    for candidate in candidates:
+        for record in candidate.records:
+            source_ids[record.source_family].update(record.source_ids)
+
+    document_types = _DOCUMENT_TYPES_BY_CATEGORY[category]
+    official = _official_records(
+        db,
+        document_types=document_types,
+        document_ids=source_ids["official"],
+    )
+    legacy = _legacy_generated_records(
+        db,
+        document_types=document_types,
+        row_ids=source_ids["generated"],
+    )
+    if category == OfficialRegistryCategory.TRANSFERS:
+        legacy += _legacy_issue_records(db, row_ids=source_ids["protocol"])
+    records = _deduplicate_records(official, legacy)
+
+    if category == OfficialRegistryCategory.TRANSFERS:
+        items = _transfer_items(db, records)
+    elif category == OfficialRegistryCategory.REPAIRS:
+        items = _repair_items(db, records)
+    else:
+        items = _part_items(db, records)
+    _fill_machine_numbers(db, [items])
+    items_by_key = {item["registry_key"]: item for item in items}
+    return [
+        items_by_key[candidate.registry_key]
+        for candidate in candidates
+        if candidate.registry_key in items_by_key
+    ]
+
+
+def query_official_document_registry_items(
+    db: Session,
+    *,
+    category: OfficialRegistryCategory,
+    query: str = "",
+    page: int = 1,
+    page_size: int = 25,
+) -> dict[str, Any]:
+    """Return one stable, category-scoped page without hydrating other pages."""
+    normalized_query = query.strip()
+    candidates = _registry_candidates(db, category, normalized_query)
+    total = len(candidates)
+    total_pages = (total + page_size - 1) // page_size if total else 0
+    offset = (page - 1) * page_size
+    page_candidates = candidates[offset : offset + page_size]
+    items = _hydrate_registry_candidates(db, category, page_candidates)
+    return {
+        "category": category.value,
+        "total": total,
+        "count": len(items),
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_previous": total > 0 and page > 1,
+        "has_next": page < total_pages,
+        "items": items,
+    }
+
+
+def count_official_document_registry_items(db: Session) -> dict[str, int]:
+    """Count grouped identities without signature, file, or binary hydration."""
+    return {
+        category.value: len(_registry_candidates(db, category))
+        for category in OfficialRegistryCategory
+    }
 
 
 def build_official_document_registry(db: Session) -> dict[str, Any]:

@@ -25,6 +25,8 @@
 | `GET/POST` | `/api/external-signers` | отделни външни участници без User акаунт |
 | `GET/POST` | `/api/official-documents` | неизменяеми официални документи и текущи версии |
 | `GET` | `/api/official-documents/registry` | read-only operational registry с отделни transfer, repair и parts секции |
+| `GET` | `/api/official-documents/registry/items` | category-scoped search и server-side pagination на registry items |
+| `GET` | `/api/official-documents/registry/counts` | lightweight брой на grouped/deduplicated items за трите категории |
 | `GET` | `/api/official-documents/{id}/versions` | пълна история на версиите |
 | `GET` | `/api/official-documents/{id}/versions/{v}/download/{docx|pdf}` | exact version download |
 | `POST` | `/api/official-documents/{id}/participants` | заключва участниците и отваря подписването |
@@ -220,6 +222,12 @@ Password policy: минимум 10 знака, поне една малка и �
 Новата версия приема `language`, проверен `filename`/`media_type`/`content_base64`, `layout_contract`, `effective_from`, `effective_to`, `required_fields`, `numbering_rule`, `department` и задължително `change_note`. Тя остава чернова. Само administrator с `templates.manage` може отделно да я изтегли за проверка и да извика publish endpoint-а. При генериране backend-ът избира само публикувана версия за точния език, чийто период на валидност е активен; иначе връща HTTP 409 `document_template_unavailable` и цялата бизнес операция се отменя.
 
 `GET /api/official-documents/registry` изисква `documents.view` и връща точно три секции: `transfers`, `repairs` и `parts`, всяка с реален `count` и собствен `items` списък, сортиран най-ново първо. Transfer редът е lifecycle по конкретно предаване и съдържа отделни actions с реалните номера за issue и return протокола; липсващ return protocol не се симулира. Signature status се изчислява от активните required slots и потвърдените подписи и е независим от lifecycle completion. Repair и parts редовете използват current canonical `OfficialDocumentVersion`, а съвместимите historical `GeneratedDocument`/`ProtocolDocument` записи се показват само когато няма съответстващ current official record. Endpoint-ът не генерира, не renumber-ва и не променя документи, версии, подписи, hash-ове или audit.
+
+`GET /api/official-documents/registry/items` запазва същата item/document семантика, но изисква една от точните категории `transfers`, `repairs` или `parts`. `q` е optional literal case-insensitive substring с максимум 200 знака; външните интервали се премахват, празна стойност означава без филтър, а `%`, `_` и `\` нямат wildcard значение. Transfer търсенето обхваща machine inventory number, реалните document/protocol numbers, `TransferProtocol.protocol_number` и batch reference. Repair търсенето обхваща machine number, document number и `Repair.repair_reference`; parts търсенето — machine number, document number и `PartRequest.request_reference`.
+
+`page` започва от 1, а `page_size` е между 1 и 100 с default 25. Отговорът съдържа `category`, `total`, `count`, `page`, `page_size`, `total_pages`, `has_previous`, `has_next` и `items`. Празен резултат има `total_pages=0`; валидна страница след края връща HTTP 200 и празен `items`. Редът е детерминиран: effective `created_at`, иначе `started_at`, низходящо, следван от `registry_key DESC`.
+
+`GET /api/official-documents/registry/counts` връща броя на deduplicated/grouped lifecycle items, не броя файлове или raw document редове. Count и candidate фазата зареждат само идентичност и chronology за съответната категория; пълните document actions и signature states се bulk-hydrate-ват само за избраната страница. Binary DOCX/PDF съдържание не се зарежда. И двата нови endpoint-а изискват `documents.view`, не правят записи и не променят current versions, snapshots, hashes, signatures или audit.
 
 ## Изпълнение на заявка за части
 
