@@ -111,7 +111,7 @@ describe('групови предавания', () => {
     }
     render(<BatchDetailsPanel details={details} onDownload={vi.fn()} />)
     expect(screen.getByText('Протокол за издаване')).toBeVisible()
-    expect(screen.getByText('Протокол за връщане')).toBeVisible()
+    expect(screen.queryByText('Протокол за връщане')).not.toBeInTheDocument()
     expect(screen.getByText('Машината все още не е приета')).toBeVisible()
   })
 

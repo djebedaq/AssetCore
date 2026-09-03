@@ -1,6 +1,19 @@
 import { Archive, Ban } from 'lucide-react'
 import { statusText, useI18n } from '../../i18n'
+import { DocumentButtons } from '../../industrialUi'
 import type { BatchDetails, BatchProgress, ProtocolDocument } from '../../types'
+
+function groupProtocolDocuments(documents: ProtocolDocument[], fallbackNumber?: string) {
+  const groups = new Map<string, { number: string | null; documents: ProtocolDocument[] }>()
+  documents.forEach((document, index) => {
+    const number = document.document_number?.trim() || fallbackNumber?.trim() || null
+    const key = number || `missing-${index}`
+    const group = groups.get(key)
+    if (group) group.documents.push(document)
+    else groups.set(key, { number, documents: [document] })
+  })
+  return [...groups.values()]
+}
 
 export function BatchProgressCard({ batch, onOpen, onCancel }: { batch: BatchProgress; onOpen?: (batch: BatchProgress) => void; onCancel?: (batch: BatchProgress) => void }) {
   const { date, t } = useI18n()
@@ -21,12 +34,35 @@ export function BatchDetailsPanel({ details, onDownload, onCancel }: { details: 
     <div className="batch-details">
       <div className="batch-detail-actions"><button className="secondary" disabled={!hasFinalDocuments} onClick={() => onDownload(details.zip_download_endpoint, `${details.batch_reference}-protocols.zip`)}><Archive size={16} />{hasFinalDocuments ? t('bulk.zipProtocols') : t('bulk.awaitingSignature')}</button>{details.awaiting_signature_machines > 0 && onCancel && <button className="danger" onClick={() => onCancel(details)}><Ban size={16} />{t('bulk.cancelPendingAction')}</button>}</div>
       {details.transfers.map((transfer) => (
-        <div key={transfer.transfer_id}>
-          <span><b>{t('bulk.batchMachine', { number: transfer.machine_number })}</b><small>{transfer.brand} · {transfer.protocol_number}</small></span>
-          <span className={`availability-pill ${transfer.is_active ? 'blocked' : 'available'}`}>{transfer.issue_status === 'AWAITING_SIGNATURE' || transfer.return_status === 'AWAITING_SIGNATURE' ? t('bulk.awaitingSignature') : transfer.is_active ? t('transfers.stillIssued') : t('transfers.returned')}</span>
-          <section className="transfer-document-group"><b>{t('bulk.issueProtocol')}</b><span>{transfer.issue_status === 'COMPLETED' ? transfer.issue_documents.map((document: ProtocolDocument) => <button className="link" key={document.id} onClick={() => onDownload(document.download_endpoint, document.filename)}>{document.format.toUpperCase()}</button>) : t('bulk.awaitingSignature')}</span></section>
-          <section className="transfer-document-group"><b>{t('bulk.returnProtocol')}</b><span>{transfer.return_status === 'COMPLETED' ? transfer.return_documents.map((document: ProtocolDocument) => <button className="link" key={document.id} onClick={() => onDownload(document.download_endpoint, document.filename)}>{document.format.toUpperCase()}</button>) : t('bulk.returnNotCompleted')}</span></section>
-        </div>
+        <article className="batch-transfer-item" data-transfer-id={transfer.transfer_id} key={transfer.transfer_id}>
+          <section className="batch-transfer-machine">
+            <h4>{t('bulk.batchMachine', { number: transfer.machine_number })}</h4>
+            <small>{transfer.brand}</small>
+            <span className={`availability-pill ${transfer.is_active ? 'blocked' : 'available'}`}>{transfer.issue_status === 'AWAITING_SIGNATURE' || transfer.return_status === 'AWAITING_SIGNATURE' ? t('bulk.awaitingSignature') : transfer.is_active ? t('transfers.stillIssued') : t('transfers.returned')}</span>
+          </section>
+          <div className="batch-transfer-protocols" aria-label={t('transfers.documents')}>
+            {transfer.issue_status === 'COMPLETED'
+              ? groupProtocolDocuments(transfer.issue_documents, transfer.protocol_number).map((protocol) => (
+                  <section className="batch-transfer-protocol" data-protocol-kind="issue" key={`issue-${protocol.number || protocol.documents[0].id}`}>
+                    <span>{t('bulk.issueProtocol')}</span>
+                    <strong>{protocol.number || t('common.noValue')}</strong>
+                    <div>{protocol.documents.map((document) => <DocumentButtons key={document.id} path={document.download_endpoint} filename={document.filename} format={document.format} />)}</div>
+                  </section>
+                ))
+              : <section className="batch-transfer-protocol pending" data-protocol-kind="issue"><span>{t('bulk.issueProtocol')}</span><em>{t('bulk.awaitingSignature')}</em></section>}
+            {transfer.return_status === 'COMPLETED'
+              ? groupProtocolDocuments(transfer.return_documents).map((protocol) => (
+                  <section className="batch-transfer-protocol" data-protocol-kind="return" key={`return-${protocol.number || protocol.documents[0].id}`}>
+                    <span>{t('bulk.returnProtocol')}</span>
+                    <strong>{protocol.number || t('common.noValue')}</strong>
+                    <div>{protocol.documents.map((document) => <DocumentButtons key={document.id} path={document.download_endpoint} filename={document.filename} format={document.format} />)}</div>
+                  </section>
+                ))
+              : transfer.return_status === 'AWAITING_SIGNATURE'
+                ? <section className="batch-transfer-protocol pending" data-protocol-kind="return"><span>{t('bulk.returnProtocol')}</span><em>{t('bulk.awaitingSignature')}</em></section>
+                : <p className="batch-transfer-return-pending">{t('bulk.returnNotCompleted')}</p>}
+          </div>
+        </article>
       ))}
     </div>
   )
