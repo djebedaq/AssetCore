@@ -100,6 +100,10 @@ export default function OfficialDocuments() {
       setLoadingMore(true)
       setLoadMoreError('')
     } else {
+      setItems([])
+      setPage(0)
+      setTotal(0)
+      setHasNext(false)
       setCategoryLoading(true)
       setCategoryError('')
       setLoadMoreError('')

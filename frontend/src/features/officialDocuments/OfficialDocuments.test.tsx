@@ -190,6 +190,57 @@ describe('OfficialDocuments category registry screen', () => {
     expectNoMassRegistryRequest(fetchMock)
   })
 
+  it('removes previous rows when a replacement search fails and keeps retry and back available', async () => {
+    const previous = registryItem('transfer:1', 'TR-PREVIOUS', 'TRANSFER_ISSUE')
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/registry/counts')) return json({ transfers: 1, repairs: 0, parts: 0 })
+      const query = new URL(url, 'http://assetcore.local').searchParams.get('q')
+      if (query === 'TR-NEW') throw new Error('replacement search failed')
+      return json(registryPage('transfers', [previous]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderOfficialDocuments()
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Отвори Приемане/ }))
+    expect(await screen.findByText('TR-PREVIOUS')).toBeVisible()
+    await userEvent.type(screen.getByLabelText('Търсене в избраната категория'), 'TR-NEW{Enter}')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Документите в избраната категория не могат да бъдат заредени.')
+    expect(screen.queryByText('TR-PREVIOUS')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Опитай отново' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Всички категории' })).toBeVisible()
+  })
+
+  it('removes filtered rows when clearing search starts an unfiltered request that fails', async () => {
+    const initial = registryItem('repair:1', 'REP-INITIAL', 'REPAIR_PROTOCOL')
+    const filtered = registryItem('repair:2', 'REP-FILTERED', 'REPAIR_PROTOCOL')
+    let unfilteredRequests = 0
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/registry/counts')) return json({ transfers: 0, repairs: 2, parts: 0 })
+      const query = new URL(url, 'http://assetcore.local').searchParams.get('q')
+      if (query === 'REP-FILTERED') return json(registryPage('repairs', [filtered]))
+      unfilteredRequests += 1
+      if (unfilteredRequests > 1) throw new Error('unfiltered replacement failed')
+      return json(registryPage('repairs', [initial]))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderOfficialDocuments()
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Отвори Ремонти/ }))
+    expect(await screen.findByText('REP-INITIAL')).toBeVisible()
+    await userEvent.type(screen.getByLabelText('Търсене в избраната категория'), 'REP-FILTERED{Enter}')
+    expect(await screen.findByText('REP-FILTERED')).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'Изчисти търсенето' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Документите в избраната категория не могат да бъдат заредени.')
+    expect(screen.queryByText('REP-FILTERED')).not.toBeInTheDocument()
+    expect(screen.queryByText('REP-INITIAL')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Опитай отново' })).toBeVisible()
+    expect(urls(fetchMock).at(-1)).toBe('/api/official-documents/registry/items?category=repairs&page=1&page_size=25')
+  })
+
   it('treats whitespace-only search as an unfiltered page-one request', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/registry/counts')
       ? json({ transfers: 0, repairs: 1, parts: 0 })
