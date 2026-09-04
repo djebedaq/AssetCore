@@ -7,11 +7,10 @@ type Props = {
   section: RegistrySection
   titleKey: TranslationKey
   emptyKey: TranslationKey
-  typeKey: TranslationKey
   statusDomain: 'transfer' | 'repair' | 'part'
 }
 
-export default function OfficialDocumentSection({ section, titleKey, emptyKey, typeKey, statusDomain }: Props) {
+export default function OfficialDocumentSection({ section, titleKey, emptyKey, statusDomain }: Props) {
   const { date, t } = useI18n()
   return (
     <section className="official-registry-section" aria-labelledby={`official-section-${statusDomain}`}>
@@ -24,9 +23,9 @@ export default function OfficialDocumentSection({ section, titleKey, emptyKey, t
       </header>
       <div className="table-card official-registry-table">
         <table>
-          <thead><tr><th>{t('official.number')}</th><th>{t('official.type')}</th><th>{t('common.status')}</th><th>{t('official.progress')}</th><th>{t('official.created')}</th><th>{t('transfers.documents')}</th></tr></thead>
+          <thead><tr><th>{t('official.number')}</th><th>{t('common.status')}</th><th>{t('official.progress')}</th><th>{t('official.created')}</th><th>{t('transfers.documents')}</th></tr></thead>
           <tbody>{section.items.map((item) => (
-            <OfficialDocumentRow key={item.registry_key} item={item} typeKey={typeKey} statusDomain={statusDomain} />
+            <OfficialDocumentRow key={item.registry_key} item={item} statusDomain={statusDomain} />
           ))}</tbody>
         </table>
         {!section.items.length && <div className="empty-state">{t(emptyKey)}</div>}
@@ -34,7 +33,7 @@ export default function OfficialDocumentSection({ section, titleKey, emptyKey, t
     </section>
   )
 
-  function OfficialDocumentRow({ item, typeKey: rowTypeKey, statusDomain: rowStatusDomain }: { item: OfficialRegistryItem; typeKey: TranslationKey; statusDomain: Props['statusDomain'] }) {
+  function OfficialDocumentRow({ item, statusDomain: rowStatusDomain }: { item: OfficialRegistryItem; statusDomain: Props['statusDomain'] }) {
     const created = item.created_at ? date(item.created_at) : t('common.noValue')
     return (
       <tr>
@@ -42,7 +41,6 @@ export default function OfficialDocumentSection({ section, titleKey, emptyKey, t
           {item.documents.map((document) => <span className="official-number" key={`${item.registry_key}-${document.document_type}-${document.document_number}`}><strong>{document.document_number}</strong>{item.documents.length > 1 && <small>{documentLabel(document)}</small>}</span>)}
           {item.machine_number && <small>{t('official.machineNumber', { number: item.machine_number })}</small>}
         </td>
-        <td data-label={t('official.type')}>{t(rowTypeKey)}</td>
         <td data-label={t('common.status')}><span className={`badge official-status ${item.status.toLowerCase()}`}>{registryStatus(item.status, rowStatusDomain)}</span></td>
         <td data-label={t('official.progress')}><span className={`official-signature ${item.signature_status.toLowerCase()}`}>{signatureLabel(item.signature_status)}</span></td>
         <td data-label={t('official.created')}>{created}{!item.created_at && item.started_at && <small>{t('official.startedAt', { date: date(item.started_at) })}</small>}</td>

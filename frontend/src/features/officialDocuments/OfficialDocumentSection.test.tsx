@@ -35,10 +35,10 @@ function section(document: OfficialRegistryDocument): OfficialRegistrySection {
 }
 
 function renderSection(document = issueDocument, domain: 'transfer' | 'repair' | 'part' = 'transfer') {
-  const keys: Record<typeof domain, { titleKey: TranslationKey; emptyKey: TranslationKey; typeKey: TranslationKey }> = {
-    transfer: { titleKey: 'official.sectionTransfers', emptyKey: 'official.emptyTransfers', typeKey: 'official.typeTransferLifecycle' },
-    repair: { titleKey: 'official.sectionRepairs', emptyKey: 'official.emptyRepairs', typeKey: 'official.typeRepair' },
-    part: { titleKey: 'official.sectionParts', emptyKey: 'official.emptyParts', typeKey: 'official.typeParts' },
+  const keys: Record<typeof domain, { titleKey: TranslationKey; emptyKey: TranslationKey }> = {
+    transfer: { titleKey: 'official.sectionTransfers', emptyKey: 'official.emptyTransfers' },
+    repair: { titleKey: 'official.sectionRepairs', emptyKey: 'official.emptyRepairs' },
+    part: { titleKey: 'official.sectionParts', emptyKey: 'official.emptyParts' },
   }
   return render(
     <I18nProvider initialLocale="bg">
@@ -61,7 +61,7 @@ describe('official-document registry restoration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('uses the pre-PR-65 generic table for transfers, repairs, and parts', () => {
+  it('uses the shared category result table for transfers, repairs, and parts', () => {
     const transferView = renderSection()
     expect(transferView.container.querySelector('.official-registry-table')).not.toBeNull()
     expect(transferView.container.querySelector('.official-transfer-registry')).toBeNull()
