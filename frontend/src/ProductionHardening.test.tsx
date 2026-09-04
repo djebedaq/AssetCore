@@ -70,11 +70,8 @@ describe('production hardening workflows', () => {
     )
   })
 
-  it('renders the three read-only registry sections with lifecycle and document actions', async () => {
-    const registry = {
-      transfers: {
-        count: 3,
-        items: [
+  it('opens one read-only registry category with lifecycle and document actions', async () => {
+    const transfers = [
           {
             registry_key: 'transfer:1', domain_id: 1, machine_number: '9', status: 'INCOMPLETE', signature_status: 'SIGNED', created_at: null, started_at: '2026-08-20T09:00:00Z',
             documents: [{ document_type: 'TRANSFER_ISSUE', document_number: 'TR-REG-009', official_document_id: 1, version: 1, version_status: 'SIGNED', files: [{ format: 'docx', download_endpoint: '/issue.docx', preview_endpoint: '/issue-preview.docx' }, { format: 'pdf', download_endpoint: '/issue.pdf', preview_endpoint: '/issue-preview.pdf' }] }],
@@ -90,23 +87,19 @@ describe('production hardening workflows', () => {
             registry_key: 'transfer:3', domain_id: 3, machine_number: '16', status: 'INCOMPLETE', signature_status: 'NOT_REQUIRED', created_at: null, started_at: null,
             documents: [{ document_type: 'TRANSFER_RETURN', document_number: 'TR-REG-RETURN-ONLY-016-R', official_document_id: 6, version: 1, version_status: 'FINALIZED', files: [{ format: 'pdf', download_endpoint: '/return-only-16.pdf', preview_endpoint: '/return-only-16-preview.pdf' }] }],
           },
-        ],
-      },
-      repairs: { count: 1, items: [{ registry_key: 'repair:1', domain_id: 1, machine_number: '11', status: 'COMPLETE', signature_status: 'NOT_REQUIRED', created_at: '2026-08-19T16:00:00Z', documents: [{ document_type: 'REPAIR_PROTOCOL', document_number: 'REP-REG-011', official_document_id: 4, version: 1, version_status: 'FINALIZED', files: [{ format: 'pdf', download_endpoint: '/repair.pdf', preview_endpoint: '/repair-preview.pdf' }] }] }] },
-      parts: { count: 1, items: [{ registry_key: 'part-request:1', domain_id: 1, machine_number: '13', status: 'COMPLETE', signature_status: 'UNSIGNED', created_at: '2026-08-23T10:00:00Z', documents: [{ document_type: 'PART_REQUEST', document_number: 'PR-REG-013', official_document_id: 5, version: 1, version_status: 'DRAFT', files: [{ format: 'docx', download_endpoint: '/parts.docx', preview_endpoint: '/parts-preview.docx' }, { format: 'pdf', download_endpoint: '/parts.pdf', preview_endpoint: '/parts-preview.pdf' }] }] }] },
-    }
+    ]
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      expect(String(input)).toContain('/official-documents/registry')
-      return response(registry)
+      const url = String(input)
+      if (url.endsWith('/official-documents/registry/counts')) return response({ transfers: 3, repairs: 1, parts: 1 })
+      expect(url).toContain('/official-documents/registry/items?category=transfers&page=1&page_size=25')
+      return response({ category: 'transfers', total: 3, count: 3, page: 1, page_size: 25, total_pages: 1, has_previous: false, has_next: false, items: transfers })
     })
     vi.stubGlobal('fetch', fetchMock)
     render(<I18nProvider initialLocale="bg"><OfficialDocuments /></I18nProvider>)
 
+    await userEvent.click(await screen.findByRole('button', { name: 'Отвори Приемане / предаване — документи: 3' }))
     expect(await screen.findByRole('heading', { name: 'Приемане / предаване' })).toBeVisible()
-    expect(screen.getByRole('heading', { name: 'Ремонти' })).toBeVisible()
-    expect(screen.getByRole('heading', { name: 'Заявени части' })).toBeVisible()
     expect(screen.getByLabelText('Документи в секцията: 3')).toBeVisible()
-    expect(screen.getAllByLabelText('Документи в секцията: 1')).toHaveLength(2)
 
     const incompleteRow = screen.getByText('TR-REG-009').closest('tr')
     expect(incompleteRow).not.toBeNull()
@@ -131,26 +124,24 @@ describe('production hardening workflows', () => {
     expect(within(returnOnlyRow!).queryByText('Протокол предаване')).not.toBeInTheDocument()
     expect(within(returnOnlyRow!).getByRole('button', { name: 'PDF' })).toBeVisible()
     expect(within(returnOnlyRow!).queryByRole('button', { name: 'Word' })).not.toBeInTheDocument()
-    expect(screen.getByText('Ремонтен протокол')).toBeVisible()
-    expect(screen.getByText('Протокол за заявка за части')).toBeVisible()
+    expect(screen.queryByText('Ремонтен протокол')).not.toBeInTheDocument()
+    expect(screen.queryByText('Протокол за заявка за части')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Нов външен подписващ' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Създай еднократна връзка' })).not.toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps a separate empty state and zero count for every registry section', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => response({
-      transfers: { count: 0, items: [] },
-      repairs: { count: 0, items: [] },
-      parts: { count: 0, items: [] },
-    })))
+  it('shows truthful zero counts on the category landing without loading item lists', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response({ transfers: 0, repairs: 0, parts: 0 }))
+    vi.stubGlobal('fetch', fetchMock)
 
     render(<I18nProvider initialLocale="bg"><OfficialDocuments /></I18nProvider>)
 
-    expect(await screen.findByText('Няма създадени протоколи за приемане / предаване.')).toBeVisible()
-    expect(screen.getByText('Няма създадени ремонтни протоколи.')).toBeVisible()
-    expect(screen.getByText('Няма създадени протоколи за заявени части.')).toBeVisible()
-    expect(screen.getAllByLabelText('Документи в секцията: 0')).toHaveLength(3)
+    expect(await screen.findByRole('button', { name: 'Отвори Приемане / предаване — документи: 0' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Отвори Ремонти — документи: 0' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Отвори Заявени части — документи: 0' })).toBeVisible()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toBe('/api/official-documents/registry/counts')
   })
 
   it('requires review and explicit confirmation for the mobile signature', async () => {

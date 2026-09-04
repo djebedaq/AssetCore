@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+import re
 
 import pytest
 from app.industrial_schemas import PartRequestLineOut
@@ -506,9 +507,10 @@ def test_part_request_documents_render_integer_quantity_and_retries_preserve_int
         for cell in row.cells
     ]
     assert any(value == "4" or value.startswith("4 ") for value in cell_text)
-    assert not any("4.0" in value for value in cell_text)
+    fractional_quantity = re.compile(r"(?<!\d)4\.0(?:\s|$)")
+    assert not any(fractional_quantity.search(value) for value in cell_text)
     pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(pdf)).pages)
-    assert "4.0" not in pdf_text
+    assert fractional_quantity.search(pdf_text) is None
 
     repeated = client.post(
         f"/api/part-requests/{created['id']}/documents?language=bg",

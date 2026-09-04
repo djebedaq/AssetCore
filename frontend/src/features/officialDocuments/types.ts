@@ -25,13 +25,23 @@ export type OfficialRegistryItem = {
   documents: OfficialRegistryDocument[]
 }
 
+export type OfficialRegistryCategory = 'transfers' | 'repairs' | 'parts'
+
+export type OfficialRegistryCounts = Record<OfficialRegistryCategory, number>
+
 export type OfficialRegistrySection = {
   count: number
   items: OfficialRegistryItem[]
 }
 
-export type OfficialDocumentRegistry = {
-  transfers: OfficialRegistrySection
-  repairs: OfficialRegistrySection
-  parts: OfficialRegistrySection
+export type OfficialRegistryPage = {
+  category: OfficialRegistryCategory
+  total: number
+  count: number
+  page: number
+  page_size: number
+  total_pages: number
+  has_previous: boolean
+  has_next: boolean
+  items: OfficialRegistryItem[]
 }
