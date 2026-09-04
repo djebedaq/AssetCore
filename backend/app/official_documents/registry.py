@@ -211,15 +211,26 @@ def _official_records(
     if document_ids is not None:
         statement = statement.where(OfficialDocument.id.in_(document_ids))
     if machine_id is not None:
-        statement = statement.where(
-            or_(
-                OfficialDocument.machine_id == machine_id,
-                OfficialDocument.transfer_id.in_(
-                    select(TransferProtocol.id).where(
-                        TransferProtocol.machine_id == machine_id
-                    )
-                ),
+        snapshot_linked_types = set(document_types) & (
+            _REPAIR_DOCUMENT_TYPES | _PART_DOCUMENT_TYPES
+        )
+        machine_predicates = [
+            OfficialDocument.machine_id == machine_id,
+            OfficialDocument.transfer_id.in_(
+                select(TransferProtocol.id).where(
+                    TransferProtocol.machine_id == machine_id
+                )
+            ),
+        ]
+        if snapshot_linked_types:
+            # JSON operators are deliberately avoided for SQLite/PostgreSQL parity.
+            # Only current-version metadata for the relevant document type is loaded;
+            # exact snapshot-domain filtering happens in one batched query below.
+            machine_predicates.append(
+                OfficialDocument.document_type.in_(snapshot_linked_types)
             )
+        statement = statement.where(
+            or_(*machine_predicates)
         )
     rows = list(
         db.execute(
@@ -516,7 +527,58 @@ def _candidate_document_records(
         legacy += _legacy_issue_records(
             db, machine_id=machine_id, include_files=False
         )
+    if machine_id is not None:
+        scoped_records = _machine_linked_document_records(
+            db, category, [*official, *legacy], machine_id
+        )
+        official = [
+            record for record in scoped_records if record.source_family == "official"
+        ]
+        legacy = [
+            record for record in scoped_records if record.source_family != "official"
+        ]
     return _deduplicate_records(official, legacy)
+
+
+def _machine_linked_document_records(
+    db: Session,
+    category: OfficialRegistryCategory,
+    records: list[_DocumentRecord],
+    machine_id: int,
+) -> list[_DocumentRecord]:
+    """Apply exact direct or domain linkage without per-document queries."""
+    if category == OfficialRegistryCategory.TRANSFERS:
+        domain_model = TransferProtocol
+        domain_attribute = "transfer_id"
+    elif category == OfficialRegistryCategory.REPAIRS:
+        domain_model = Repair
+        domain_attribute = "repair_id"
+    else:
+        domain_model = PartRequest
+        domain_attribute = "part_request_id"
+    candidate_ids = {
+        value
+        for record in records
+        if (value := getattr(record, domain_attribute)) is not None
+    }
+    linked_ids = (
+        set(
+            db.scalars(
+                select(domain_model.id).where(
+                    domain_model.id.in_(candidate_ids),
+                    domain_model.machine_id == machine_id,
+                )
+            )
+        )
+        if candidate_ids
+        else set()
+    )
+    return [
+        record
+        for record in records
+        if record.machine_id == machine_id
+        or getattr(record, domain_attribute) in linked_ids
+    ]
 
 
 def _machine_number_map(

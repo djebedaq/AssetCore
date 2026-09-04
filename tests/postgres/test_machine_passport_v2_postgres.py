@@ -130,7 +130,16 @@ def test_asset02_passport_summary_and_exact_documents_on_real_postgres(
             requested_by_id=actor.id,
             created_at=tie_at,
         )
-        db.add_all([first_pending, latest_pending, delivered])
+        other_pending = PartRequest(
+            machine_id=other.id,
+            part_name="PostgreSQL ASSET-02 cross-machine part fixture",
+            quantity=1,
+            status=PartRequestStatus.APPROVED.value,
+            request_reference="PG-ASSET02-REQUEST-MACHINE-14",
+            requested_by_id=actor.id,
+            created_at=tie_at,
+        )
+        db.add_all([first_pending, latest_pending, delivered, other_pending])
         db.flush()
 
         canonical = _add_canonical_document(
@@ -138,7 +147,7 @@ def test_asset02_passport_summary_and_exact_documents_on_real_postgres(
             number="PG-ASSET02-CANONICAL-MACHINE-4",
             document_type=DocumentType.REPAIR_PROTOCOL.value,
             actor_id=actor.id,
-            machine_id=target.id,
+            machine_id=None,
             snapshot={"repair_id": latest_repair.id},
             created_at=tie_at,
         )
@@ -156,14 +165,41 @@ def test_asset02_passport_summary_and_exact_documents_on_real_postgres(
             number="PG-ASSET02-CANONICAL-MACHINE-14",
             document_type=DocumentType.REPAIR_PROTOCOL.value,
             actor_id=actor.id,
-            machine_id=other.id,
+            machine_id=None,
             snapshot={"repair_id": other_repair.id},
+            created_at=tie_at,
+        )
+        canonical_part = _add_canonical_document(
+            db,
+            number="PG-ASSET02-CANONICAL-PART-MACHINE-4",
+            document_type=DocumentType.PART_REQUEST.value,
+            actor_id=actor.id,
+            machine_id=None,
+            snapshot={"request_id": latest_pending.id},
+            created_at=tie_at,
+        )
+        _add_matching_legacy_pair(
+            db,
+            number=canonical_part.document_number,
+            document_type=DocumentType.PART_REQUEST.value,
+            actor_id=actor.id,
+            machine_id=target.id,
+            part_request_id=latest_pending.id,
+            created_at=tie_at,
+        )
+        _add_canonical_document(
+            db,
+            number="PG-ASSET02-CANONICAL-PART-MACHINE-14",
+            document_type=DocumentType.PART_REQUEST.value,
+            actor_id=actor.id,
+            machine_id=None,
+            snapshot={"request_id": other_pending.id},
             created_at=tie_at,
         )
         db.commit()
 
         before = _read_only_snapshot(db)
-        canonical_id = canonical.id
+        canonical_ids = {canonical.id, canonical_part.id}
         latest_repair_id = latest_repair.id
         latest_transfer_id = latest_transfer.id
         passport = machine_passport(target.id, actor, db)
@@ -186,9 +222,14 @@ def test_asset02_passport_summary_and_exact_documents_on_real_postgres(
             for item in passport["official_documents"]
             for document in item["documents"]
         ]
-        assert len(documents) == 1
-        assert documents[0]["official_document_id"] == canonical_id
-        assert documents[0]["document_number"] == "PG-ASSET02-CANONICAL-MACHINE-4"
+        assert len(documents) == 2
+        assert {document["official_document_id"] for document in documents} == (
+            canonical_ids
+        )
+        assert {document["document_number"] for document in documents} == {
+            "PG-ASSET02-CANONICAL-MACHINE-4",
+            "PG-ASSET02-CANONICAL-PART-MACHINE-4",
+        }
         assert all(
             item["machine_id"] == target.id
             for item in passport["official_documents"]
@@ -198,6 +239,9 @@ def test_asset02_passport_summary_and_exact_documents_on_real_postgres(
             for document in passport["generated_documents"]
         )
         assert "PG-ASSET02-CANONICAL-MACHINE-14" not in str(
+            passport["official_documents"]
+        )
+        assert "PG-ASSET02-CANONICAL-PART-MACHINE-14" not in str(
             passport["official_documents"]
         )
 
