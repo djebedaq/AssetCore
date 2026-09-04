@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -15,12 +17,14 @@ from ..models import (
     MachineFieldValue,
     MachineStatus,
     PartRequest,
+    PartRequestStatus,
     Repair,
     RepairStatus,
     TechnicalDocument,
     TransferProtocol,
     User,
 )
+from ..official_documents.registry import machine_official_document_registry_items
 from ..permissions import Permission, has_permission, is_observer
 
 
@@ -53,20 +57,31 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
     )
     if machine is None:
         raise HTTPException(404, "Машината не е намерена.")
+    ordered_repairs = sorted(
+        machine.repairs,
+        key=lambda value: (value.opened_at, value.id),
+        reverse=True,
+    )
+    ordered_transfers = sorted(
+        machine.transfers,
+        key=lambda value: (
+            value.returned_at or value.issued_at or value.created_at,
+            value.id,
+        ),
+        reverse=True,
+    )
+    active_transfer = next(
+        (item for item in ordered_transfers if item.is_active), None
+    )
+    active_repair = next(
+        (
+            item
+            for item in ordered_repairs
+            if item.status != RepairStatus.COMPLETED.value
+        ),
+        None,
+    )
     if is_observer(user):
-        active_transfer = next((item for item in machine.transfers if item.is_active), None)
-        active_repair = next(
-            (
-                item
-                for item in sorted(
-                    machine.repairs,
-                    key=lambda value: value.opened_at,
-                    reverse=True,
-                )
-                if item.status != RepairStatus.COMPLETED.value
-            ),
-            None,
-        )
         return {
             "limited_view": True,
             "machine": {
@@ -91,6 +106,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             "part_requests": [],
             "parts_used": [],
             "generated_documents": [],
+            "official_documents": [],
             "technical_documents": [],
             "current_state": {
                 "available": _passport_available(
@@ -100,6 +116,12 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                 "active_repair": (
                     {"status": active_repair.status} if active_repair is not None else None
                 ),
+                "last_completed_repair": None,
+                "last_transfer": None,
+                "pending_part_requests": {
+                    "count": 0,
+                    "latest_request_reference": None,
+                },
                 "last_movement": None,
                 "last_inspection": None,
                 "last_test": None,
@@ -119,12 +141,12 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
     documents = db.scalars(
         select(GeneratedDocument)
         .where(GeneratedDocument.machine_id == machine.id)
-        .order_by(GeneratedDocument.created_at.desc())
+        .order_by(GeneratedDocument.created_at.desc(), GeneratedDocument.id.desc())
     ).all()
     part_requests = db.scalars(
         select(PartRequest)
         .where(PartRequest.machine_id == machine.id)
-        .order_by(PartRequest.created_at.desc())
+        .order_by(PartRequest.created_at.desc(), PartRequest.id.desc())
     ).all()
     technical_documents = [
         item
@@ -133,24 +155,55 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             .where(TechnicalDocument.is_active.is_(True))
             .options(selectinload(TechnicalDocument.revisions))
             .where(TechnicalDocument.linked_machine_numbers.is_not(None))
-            .order_by(TechnicalDocument.title)
+            .order_by(TechnicalDocument.title, TechnicalDocument.id)
         ).all()
         if machine.inventory_number in (item.linked_machine_numbers or [])
     ]
-    active_transfer = next((item for item in machine.transfers if item.is_active), None)
-    active_repair = next(
+    last_completed_repair = next(
         (
             item
-            for item in sorted(machine.repairs, key=lambda value: value.opened_at, reverse=True)
-            if item.status != RepairStatus.COMPLETED.value
+            for item in sorted(
+                machine.repairs,
+                key=lambda value: (value.closed_at or datetime.min, value.id),
+                reverse=True,
+            )
+            if item.status == RepairStatus.COMPLETED.value
         ),
         None,
     )
+    last_transfer = ordered_transfers[0] if ordered_transfers else None
+    terminal_request_statuses = {
+        PartRequestStatus.DELIVERED.value,
+        PartRequestStatus.REJECTED.value,
+        PartRequestStatus.CANCELLED.value,
+    }
+    pending_part_requests = [
+        item for item in part_requests if item.status not in terminal_request_statuses
+    ]
+    ordered_parts_used = sorted(
+        (
+            (repair, part)
+            for repair in machine.repairs
+            for part in repair.parts_used
+        ),
+        key=lambda value: (value[1].created_at, value[1].id),
+        reverse=True,
+    )
+    official_documents = machine_official_document_registry_items(db, machine.id)
+    registry_document_identities = {
+        (document["document_type"], document["document_number"])
+        for item in official_documents
+        for document in item["documents"]
+    }
     available = _passport_available(machine, active_transfer, active_repair)
     last_movement = next(
         (
             event
-            for event in sorted(machine.events, key=lambda value: value.created_at, reverse=True)
+            for event in sorted(
+                machine.events,
+                key=lambda value: (value.created_at, value.id),
+                reverse=True,
+            )
             if event.event_type in {"TRANSFER_ISSUED", "TRANSFER_RETURNED", "IMPORTED"}
         ),
         None,
@@ -160,7 +213,10 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             repair
             for repair in sorted(
                 machine.repairs,
-                key=lambda value: value.inspection_completed_at or value.opened_at,
+                key=lambda value: (
+                    value.inspection_completed_at or value.opened_at,
+                    value.id,
+                ),
                 reverse=True,
             )
             if repair.inspection_completed_at is not None
@@ -172,7 +228,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             repair
             for repair in sorted(
                 machine.repairs,
-                key=lambda value: value.closed_at or value.opened_at,
+                key=lambda value: (value.closed_at or value.opened_at, value.id),
                 reverse=True,
             )
             if repair.test_passed is not None
@@ -251,7 +307,14 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             }
             for field in sorted(fields, key=lambda item: (item.sort_order, item.id))
         ],
-        "attachments": [_attachment_dict(item, "machine") for item in machine.attachments],
+        "attachments": [
+            _attachment_dict(item, "machine")
+            for item in sorted(
+                machine.attachments,
+                key=lambda value: (value.created_at, value.id),
+                reverse=True,
+            )
+        ],
         "history": [
             {
                 "id": event.id,
@@ -265,7 +328,11 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                 "user_id": event.user_id,
                 "created_at": event.created_at,
             }
-            for event in sorted(machine.events, key=lambda item: item.created_at, reverse=True)
+            for event in sorted(
+                machine.events,
+                key=lambda item: (item.created_at, item.id),
+                reverse=True,
+            )
         ],
         "repairs": [
             {
@@ -276,7 +343,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                 "opened_at": repair.opened_at,
                 "closed_at": repair.closed_at,
             }
-            for repair in sorted(machine.repairs, key=lambda item: item.opened_at, reverse=True)
+            for repair in ordered_repairs
         ],
         "transfers": [
             {
@@ -289,9 +356,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                 "location_text": transfer.location_text,
                 "accepted_by": transfer.accepted_by,
             }
-            for transfer in sorted(
-                machine.transfers, key=lambda item: item.created_at, reverse=True
-            )
+            for transfer in ordered_transfers
         ],
         "part_requests": [
             {
@@ -316,8 +381,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                 "source": part.source,
                 "created_at": part.created_at,
             }
-            for repair in sorted(machine.repairs, key=lambda value: value.opened_at, reverse=True)
-            for part in sorted(repair.parts_used, key=lambda value: value.created_at, reverse=True)
+            for repair, part in ordered_parts_used
         ],
         "generated_documents": [
             {
@@ -328,9 +392,15 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                 "filename": item.filename,
                 "created_at": item.created_at,
                 "download_endpoint": f"/generated-documents/{item.id}/download",
+                "display_separately": (
+                    item.document_type,
+                    item.document_number,
+                )
+                not in registry_document_identities,
             }
             for item in documents
         ],
+        "official_documents": official_documents,
         "technical_documents": [
             {
                 "id": item.id,
@@ -364,7 +434,9 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                         ),
                     }
                     for revision in sorted(
-                        item.revisions, key=lambda value: value.version, reverse=True
+                        item.revisions,
+                        key=lambda value: (value.version, value.id),
+                        reverse=True,
                     )
                 ],
             }
@@ -401,6 +473,39 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                 if active_repair
                 else None
             ),
+            "last_completed_repair": (
+                {
+                    "id": last_completed_repair.id,
+                    "repair_reference": last_completed_repair.repair_reference,
+                    "status": last_completed_repair.status,
+                    "opened_at": last_completed_repair.opened_at,
+                    "closed_at": last_completed_repair.closed_at,
+                    "test_passed": last_completed_repair.test_passed,
+                }
+                if last_completed_repair
+                else None
+            ),
+            "last_transfer": (
+                {
+                    "id": last_transfer.id,
+                    "protocol_number": last_transfer.protocol_number,
+                    "batch_reference": last_transfer.batch_reference,
+                    "is_active": last_transfer.is_active,
+                    "issued_at": last_transfer.issued_at,
+                    "returned_at": last_transfer.returned_at,
+                    "location_text": last_transfer.location_text,
+                }
+                if last_transfer
+                else None
+            ),
+            "pending_part_requests": {
+                "count": len(pending_part_requests),
+                "latest_request_reference": (
+                    pending_part_requests[0].request_reference
+                    if pending_part_requests
+                    else None
+                ),
+            },
             "last_movement": (
                 {
                     "event_type": last_movement.event_type,
