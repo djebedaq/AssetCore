@@ -109,7 +109,7 @@ describe('ролево меню', () => {
 
     render(<I18nProvider initialLocale="bg"><MachinePassportModal machineId={1} onClose={vi.fn()} /></I18nProvider>)
 
-    expect(await screen.findByText('Недостъпна')).toBeVisible()
+    expect((await screen.findAllByText('Недостъпна')).length).toBeGreaterThan(0)
     expect(screen.getByText('REP-TEST-ONLY')).toBeVisible()
     expect(screen.queryByText('Издай')).not.toBeInTheDocument()
   })

@@ -192,7 +192,18 @@ export type MachinePassport = {
   transfers: Array<{ id: number; protocol_number: string; batch_reference?: string | null; is_active: boolean; issued_at?: string | null; returned_at?: string | null; location_text?: string | null; accepted_by?: string | null }>;
   part_requests: Array<{ id: number; request_reference?: string | null; status: string; priority: string; created_at: string }>;
   parts_used: Array<{ id: number; repair_id: number; repair_reference?: string | null; catalog_part_id?: number | null; part_number?: string | null; description: string; quantity: number; unit?: string | null; source?: string | null; created_at: string }>;
-  generated_documents: Array<{ id: number; document_number: string; document_type: string; format: string; filename: string; created_at: string; download_endpoint: string }>;
+  generated_documents: Array<{ id: number; document_number: string; document_type: string; format: string; filename: string; created_at: string; download_endpoint: string; display_separately?: boolean }>;
+  official_documents: Array<{
+    category: 'transfers' | 'repairs' | 'parts'; registry_key: string; domain_id?: number | null;
+    machine_id?: number | null; machine_number?: string | null; status: string;
+    signature_status: 'SIGNED' | 'PARTIALLY_SIGNED' | 'UNSIGNED' | 'NOT_REQUIRED' | 'UNKNOWN';
+    created_at?: string | null; started_at?: string | null;
+    documents: Array<{
+      document_type: string; document_number: string; official_document_id?: number | null;
+      version?: number | null; version_status?: string | null;
+      files: Array<{ format: 'docx' | 'pdf'; download_endpoint: string; preview_endpoint?: string | null }>;
+    }>;
+  }>;
   technical_documents: TechnicalLibraryDocument[];
   current_state: {
     available: boolean;
@@ -200,6 +211,9 @@ export type MachinePassport = {
       company_unit?: string | null; department?: string | null; vessel?: string | null; dock?: string | null;
       pier?: string | null; work_area?: string | null; location_text?: string | null; accepted_by?: string | null } | null;
     active_repair?: { id: number; repair_reference?: string | null; status: string; reported_problem: string; opened_at: string } | null;
+    last_completed_repair?: { id: number; repair_reference?: string | null; status: string; opened_at: string; closed_at?: string | null; test_passed?: boolean | null } | null;
+    last_transfer?: { id: number; protocol_number: string; batch_reference?: string | null; is_active: boolean; issued_at?: string | null; returned_at?: string | null; location_text?: string | null } | null;
+    pending_part_requests?: { count: number; latest_request_reference?: string | null };
     last_movement?: { event_type: string; reference?: string | null; created_at: string } | null;
     last_inspection?: { repair_reference?: string | null; completed_at: string } | null;
     last_test?: { repair_reference?: string | null; passed?: boolean | null; details?: string | null; completed_at?: string | null } | null;

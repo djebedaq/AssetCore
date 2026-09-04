@@ -88,6 +88,7 @@ class _DocumentRecord:
 class _RegistryCandidate:
     registry_key: str
     domain_id: int | None
+    machine_id: int | None
     created_at: datetime | None
     started_at: datetime | None
     search_values: tuple[str, ...]
@@ -178,6 +179,7 @@ def _official_records(
     *,
     document_types: Collection[str] = _REGISTRY_DOCUMENT_TYPES,
     document_ids: Collection[int] | None = None,
+    machine_id: int | None = None,
     include_signatures: bool = True,
     include_files: bool = True,
 ) -> list[_DocumentRecord]:
@@ -208,6 +210,28 @@ def _official_records(
     )
     if document_ids is not None:
         statement = statement.where(OfficialDocument.id.in_(document_ids))
+    if machine_id is not None:
+        snapshot_linked_types = set(document_types) & (
+            _REPAIR_DOCUMENT_TYPES | _PART_DOCUMENT_TYPES
+        )
+        machine_predicates = [
+            OfficialDocument.machine_id == machine_id,
+            OfficialDocument.transfer_id.in_(
+                select(TransferProtocol.id).where(
+                    TransferProtocol.machine_id == machine_id
+                )
+            ),
+        ]
+        if snapshot_linked_types:
+            # JSON operators are deliberately avoided for SQLite/PostgreSQL parity.
+            # Only current-version metadata for the relevant document type is loaded;
+            # exact snapshot-domain filtering happens in one batched query below.
+            machine_predicates.append(
+                OfficialDocument.document_type.in_(snapshot_linked_types)
+            )
+        statement = statement.where(
+            or_(*machine_predicates)
+        )
     rows = list(
         db.execute(
             statement.order_by(
@@ -270,6 +294,7 @@ def _legacy_generated_records(
     *,
     document_types: Collection[str] = _REGISTRY_DOCUMENT_TYPES,
     row_ids: Collection[int] | None = None,
+    machine_id: int | None = None,
     include_files: bool = True,
 ) -> list[_DocumentRecord]:
     if not document_types or row_ids is not None and not row_ids:
@@ -287,6 +312,25 @@ def _legacy_generated_records(
     ).where(GeneratedDocument.document_type.in_(document_types))
     if row_ids is not None:
         statement = statement.where(GeneratedDocument.id.in_(row_ids))
+    if machine_id is not None:
+        statement = statement.where(
+            or_(
+                GeneratedDocument.machine_id == machine_id,
+                GeneratedDocument.transfer_id.in_(
+                    select(TransferProtocol.id).where(
+                        TransferProtocol.machine_id == machine_id
+                    )
+                ),
+                GeneratedDocument.repair_id.in_(
+                    select(Repair.id).where(Repair.machine_id == machine_id)
+                ),
+                GeneratedDocument.part_request_id.in_(
+                    select(PartRequest.id).where(
+                        PartRequest.machine_id == machine_id
+                    )
+                ),
+            )
+        )
     rows = list(
         db.execute(
             statement.order_by(
@@ -347,6 +391,7 @@ def _legacy_issue_records(
     db: Session,
     *,
     row_ids: Collection[int] | None = None,
+    machine_id: int | None = None,
     include_files: bool = True,
 ) -> list[_DocumentRecord]:
     if row_ids is not None and not row_ids:
@@ -365,6 +410,8 @@ def _legacy_issue_records(
     )
     if row_ids is not None:
         statement = statement.where(ProtocolDocument.id.in_(row_ids))
+    if machine_id is not None:
+        statement = statement.where(ProtocolDocument.machine_id == machine_id)
     rows = list(
         db.execute(
             statement.order_by(
@@ -456,22 +503,82 @@ def _deduplicate_records(
 
 
 def _candidate_document_records(
-    db: Session, category: OfficialRegistryCategory
+    db: Session,
+    category: OfficialRegistryCategory,
+    *,
+    machine_id: int | None = None,
 ) -> list[_DocumentRecord]:
     """Load selected-category identity metadata without signatures or file payloads."""
     document_types = _DOCUMENT_TYPES_BY_CATEGORY[category]
     official = _official_records(
         db,
         document_types=document_types,
+        machine_id=machine_id,
         include_signatures=False,
         include_files=False,
     )
     legacy = _legacy_generated_records(
-        db, document_types=document_types, include_files=False
+        db,
+        document_types=document_types,
+        machine_id=machine_id,
+        include_files=False,
     )
     if category == OfficialRegistryCategory.TRANSFERS:
-        legacy += _legacy_issue_records(db, include_files=False)
+        legacy += _legacy_issue_records(
+            db, machine_id=machine_id, include_files=False
+        )
+    if machine_id is not None:
+        scoped_records = _machine_linked_document_records(
+            db, category, [*official, *legacy], machine_id
+        )
+        official = [
+            record for record in scoped_records if record.source_family == "official"
+        ]
+        legacy = [
+            record for record in scoped_records if record.source_family != "official"
+        ]
     return _deduplicate_records(official, legacy)
+
+
+def _machine_linked_document_records(
+    db: Session,
+    category: OfficialRegistryCategory,
+    records: list[_DocumentRecord],
+    machine_id: int,
+) -> list[_DocumentRecord]:
+    """Apply exact direct or domain linkage without per-document queries."""
+    if category == OfficialRegistryCategory.TRANSFERS:
+        domain_model = TransferProtocol
+        domain_attribute = "transfer_id"
+    elif category == OfficialRegistryCategory.REPAIRS:
+        domain_model = Repair
+        domain_attribute = "repair_id"
+    else:
+        domain_model = PartRequest
+        domain_attribute = "part_request_id"
+    candidate_ids = {
+        value
+        for record in records
+        if (value := getattr(record, domain_attribute)) is not None
+    }
+    linked_ids = (
+        set(
+            db.scalars(
+                select(domain_model.id).where(
+                    domain_model.id.in_(candidate_ids),
+                    domain_model.machine_id == machine_id,
+                )
+            )
+        )
+        if candidate_ids
+        else set()
+    )
+    return [
+        record
+        for record in records
+        if record.machine_id == machine_id
+        or getattr(record, domain_attribute) in linked_ids
+    ]
 
 
 def _machine_number_map(
@@ -516,6 +623,7 @@ def _transfer_candidates(
         for row in db.execute(
             select(
                 TransferProtocol.id.label("transfer_id"),
+                TransferProtocol.machine_id,
                 TransferProtocol.protocol_number,
                 TransferProtocol.issue_status,
                 TransferProtocol.return_status,
@@ -570,6 +678,7 @@ def _transfer_candidates(
             _RegistryCandidate(
                 registry_key=f"transfer:{transfer_id}",
                 domain_id=transfer_id,
+                machine_id=row.machine_id,
                 created_at=max(completed_candidates) if completed else None,
                 started_at=(
                     max(started_candidates) if started_candidates else None
@@ -611,6 +720,7 @@ def _repair_candidates(
         db.execute(
             select(
                 Repair.id.label("repair_id"),
+                Repair.machine_id,
                 Repair.repair_reference,
                 Repair.opened_at,
                 Repair.closed_at,
@@ -664,6 +774,11 @@ def _repair_candidates(
             _RegistryCandidate(
                 registry_key=registry_key,
                 domain_id=row.repair_id if row is not None else None,
+                machine_id=(
+                    row.machine_id
+                    if row is not None
+                    else records_for_item[-1].machine_id
+                ),
                 created_at=max(
                     [record.effective_at for record in records_for_item]
                     + ([row.closed_at] if row is not None and row.closed_at else [])
@@ -705,6 +820,7 @@ def _part_candidates(
         db.execute(
             select(
                 PartRequest.id.label("request_id"),
+                PartRequest.machine_id,
                 PartRequest.request_reference,
                 PartRequest.created_at,
                 Machine.inventory_number.label("machine_number"),
@@ -761,6 +877,11 @@ def _part_candidates(
             _RegistryCandidate(
                 registry_key=registry_key,
                 domain_id=row.request_id if row is not None else None,
+                machine_id=(
+                    row.machine_id
+                    if row is not None
+                    else records_for_item[-1].machine_id
+                ),
                 created_at=max(record.effective_at for record in records_for_item),
                 started_at=row.created_at if row is not None else None,
                 search_values=_candidate_search_values(
@@ -775,15 +896,25 @@ def _part_candidates(
 
 
 def _registry_candidates(
-    db: Session, category: OfficialRegistryCategory, query: str = ""
+    db: Session,
+    category: OfficialRegistryCategory,
+    query: str = "",
+    *,
+    machine_id: int | None = None,
 ) -> list[_RegistryCandidate]:
-    records = _candidate_document_records(db, category)
+    records = _candidate_document_records(db, category, machine_id=machine_id)
     if category == OfficialRegistryCategory.TRANSFERS:
         candidates = _transfer_candidates(db, records)
     elif category == OfficialRegistryCategory.REPAIRS:
         candidates = _repair_candidates(db, records)
     else:
         candidates = _part_candidates(db, records)
+    if machine_id is not None:
+        candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.machine_id == machine_id
+        ]
     if query:
         candidates = [candidate for candidate in candidates if candidate.matches(query)]
     candidates.sort(
@@ -1153,6 +1284,21 @@ def count_official_document_registry_items(db: Session) -> dict[str, int]:
         category.value: len(_registry_candidates(db, category))
         for category in OfficialRegistryCategory
     }
+
+
+def machine_official_document_registry_items(
+    db: Session, machine_id: int
+) -> list[dict[str, Any]]:
+    """Return exact machine-linked registry items using canonical DOCS-01 rules."""
+    items: list[dict[str, Any]] = []
+    for category in OfficialRegistryCategory:
+        candidates = _registry_candidates(db, category, machine_id=machine_id)
+        category_items = _hydrate_registry_candidates(db, category, candidates)
+        for item in category_items:
+            item["category"] = category.value
+        items.extend(category_items)
+    _sort_items(items)
+    return items
 
 
 def build_official_document_registry(db: Session) -> dict[str, Any]:
