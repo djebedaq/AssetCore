@@ -8,7 +8,8 @@ import re
 _PRIVATE_TEXT = re.compile(
     r"data:[^\s,]*[;,]|\bBearer\s+|[A-Za-z]:[\\/]|(?:^|\s)/(?:app|tmp|var|home|srv|etc)/"
     r"|\\\\[^\s]+|[A-Za-z0-9+/=_-]{160,}"
-    r"|\b(?:password|secret|token|api_key|private_key|encryption_key)\s*[:=]",
+    r"|\b(?:password|secret|token|api_key|private_key|encryption_key"
+    r"|csrf(?:_token)?|signature(?:_image|_bytes|_data)?)\s*[:=]",
     re.IGNORECASE,
 )
 

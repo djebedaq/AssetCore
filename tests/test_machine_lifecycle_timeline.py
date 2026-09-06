@@ -534,6 +534,14 @@ def test_metadata_reads_are_bounded_and_never_hydrate_binary_or_signatures(sessi
         "/app/private/file.pdf",
         "token=not-a-real-token",
         "A" * 200,
+        "csrf=short-test-value",
+        "csrf_token: short-test-value",
+        "signature=short-test-value",
+        "signature_image: short-test-value",
+        "signature_bytes=short-test-value",
+        "signature_data: short-test-value",
+        "CsRf_ToKeN = short-test-value",
+        "SiGnAtUrE_ImAgE : short-test-value",
     ],
 )
 def test_private_payloads_in_description_or_allowed_fields_are_not_exposed(context, private):
@@ -558,6 +566,27 @@ def test_private_payloads_in_description_or_allowed_fields_are_not_exposed(conte
     assert result.items[0].details["source"] is None
     assert result.items[0].details["quantity"] == 2
     assert private not in result.model_dump_json()
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Digital signature required before release", "CSRF verification completed"],
+)
+def test_legitimate_operational_text_without_assignments_remains_visible(context, text):
+    db, actor, machine_id = context
+    r = repair(db, machine_id)
+    repair_event(
+        db,
+        r.id,
+        actor.id,
+        "PART_ADDED",
+        description=text,
+        structured_data={"source": text, "quantity": 2},
+    )
+    result = read(context, category=TimelineCategory.PARTS)
+    assert result.count == 1
+    assert result.items[0].description == text
+    assert result.items[0].details == {"source": text, "quantity": 2}
 
 
 def test_existing_issue_return_writers_produce_single_timeline_milestones(
