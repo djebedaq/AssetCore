@@ -40,6 +40,15 @@
 - `frontend/src/features/partRequests/PartRequestsTracking.tsx` е history/action екранът „Заявени части“, а `PendingPartsBadge.tsx` визуализира permission-aware canonical count без unread/seen състояние.
 - `frontend/src/features/officialDocuments/OfficialDocumentSection.tsx` визуализира общата responsive структура на трите read-only registry секции; `OfficialDocuments.tsx` зарежда единствено агрегирания registry договор и не смесва прегледа със signing mutations.
 
+## ASSET-03A: read-only машинна хронология
+
+`assets/timeline.py` агрегира lifecycle факти от съществуващите machine/transfer/
+repair/parts източници; `timeline_details.py` има изрични безопасни projections,
+а `timeline_schemas.py` описва typed pagination/category договора. Официалните
+документи използват lightweight metadata helper в съществуващия registry, без
+нова document identity или signature hydration. Паспортът и workflow writer-ите
+остават непроменени. [Приоритети, ограничения и тестове](MACHINE_LIFECYCLE_TIMELINE_BG.md).
+
 ## Authoritative каталог за резервни части
 
 Активният dataset е само `PARTS_CATALOG_V2`: 611 source реда от FALCH_500, FALCH_1000 и HYDWIN_FUSSEN_500. Семейството се определя чрез exact brand/model плюс проверен inventory number от manifest-а; няма fuzzy matching. CombiJet, машина №19 и всеки неподдържан модел получават празен каталог, не чужди части.

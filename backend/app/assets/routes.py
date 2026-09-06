@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -10,7 +10,8 @@ from ..industrial_schemas import AttachmentCreate, CustomFieldValuesUpdate
 from ..models import Machine, User
 from ..permissions import Permission, require_permission
 from ..schemas import MachineCreate, MachineOut, MachineUpdate
-from . import attachments, custom_fields, passport, service
+from . import attachments, custom_fields, passport, service, timeline
+from .timeline_schemas import MachineTimelinePage, TimelineCategory
 
 legacy_router = APIRouter(prefix="/api")
 router = APIRouter()
@@ -72,6 +73,20 @@ def machine_passport(
     db: Session = Depends(get_db),
 ) -> dict:
     return passport.machine_passport(machine_id=machine_id, user=user, db=db)
+
+
+@router.get("/machines/{machine_id}/timeline", response_model=MachineTimelinePage)
+def machine_timeline(
+    machine_id: int,
+    category: TimelineCategory = TimelineCategory.ALL,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    user: User = Depends(require_asset_viewer),
+    db: Session = Depends(get_db),
+) -> MachineTimelinePage:
+    return timeline.machine_timeline(
+        db, machine_id=machine_id, user=user, category=category, page=page, page_size=page_size
+    )
 
 
 @router.put("/machines/{machine_id}/custom-fields")

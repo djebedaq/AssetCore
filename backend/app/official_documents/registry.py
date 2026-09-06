@@ -296,6 +296,7 @@ def _legacy_generated_records(
     row_ids: Collection[int] | None = None,
     machine_id: int | None = None,
     include_files: bool = True,
+    linked_request_ids: Collection[int] = (),
 ) -> list[_DocumentRecord]:
     if not document_types or row_ids is not None and not row_ids:
         return []
@@ -329,6 +330,7 @@ def _legacy_generated_records(
                         PartRequest.machine_id == machine_id
                     )
                 ),
+                GeneratedDocument.part_request_id.in_(linked_request_ids),
             )
         )
     rows = list(
@@ -507,6 +509,7 @@ def _candidate_document_records(
     category: OfficialRegistryCategory,
     *,
     machine_id: int | None = None,
+    linked_request_ids: Collection[int] = (),
 ) -> list[_DocumentRecord]:
     """Load selected-category identity metadata without signatures or file payloads."""
     document_types = _DOCUMENT_TYPES_BY_CATEGORY[category]
@@ -522,6 +525,7 @@ def _candidate_document_records(
         document_types=document_types,
         machine_id=machine_id,
         include_files=False,
+        linked_request_ids=linked_request_ids,
     )
     if category == OfficialRegistryCategory.TRANSFERS:
         legacy += _legacy_issue_records(
@@ -529,7 +533,7 @@ def _candidate_document_records(
         )
     if machine_id is not None:
         scoped_records = _machine_linked_document_records(
-            db, category, [*official, *legacy], machine_id
+            db, category, [*official, *legacy], machine_id, linked_request_ids
         )
         official = [
             record for record in scoped_records if record.source_family == "official"
@@ -545,6 +549,7 @@ def _machine_linked_document_records(
     category: OfficialRegistryCategory,
     records: list[_DocumentRecord],
     machine_id: int,
+    linked_request_ids: Collection[int] = (),
 ) -> list[_DocumentRecord]:
     """Apply exact direct or domain linkage without per-document queries."""
     if category == OfficialRegistryCategory.TRANSFERS:
@@ -578,6 +583,10 @@ def _machine_linked_document_records(
         for record in records
         if record.machine_id == machine_id
         or getattr(record, domain_attribute) in linked_ids
+        or (
+            category == OfficialRegistryCategory.PARTS
+            and record.part_request_id in linked_request_ids
+        )
     ]
 
 
@@ -901,8 +910,11 @@ def _registry_candidates(
     query: str = "",
     *,
     machine_id: int | None = None,
+    linked_request_ids: Collection[int] = (),
 ) -> list[_RegistryCandidate]:
-    records = _candidate_document_records(db, category, machine_id=machine_id)
+    records = _candidate_document_records(
+        db, category, machine_id=machine_id, linked_request_ids=linked_request_ids
+    )
     if category == OfficialRegistryCategory.TRANSFERS:
         candidates = _transfer_candidates(db, records)
     elif category == OfficialRegistryCategory.REPAIRS:
@@ -914,6 +926,11 @@ def _registry_candidates(
             candidate
             for candidate in candidates
             if candidate.machine_id == machine_id
+            or (
+                category == OfficialRegistryCategory.PARTS
+                and candidate.machine_id is None
+                and candidate.domain_id in linked_request_ids
+            )
         ]
     if query:
         candidates = [candidate for candidate in candidates if candidate.matches(query)]
@@ -1298,6 +1315,44 @@ def machine_official_document_registry_items(
             item["category"] = category.value
         items.extend(category_items)
     _sort_items(items)
+    return items
+
+
+def machine_official_document_metadata(db: Session, machine_id: int) -> list[dict[str, Any]]:
+    """Timeline projection of the existing exact, deduplicated current-version candidates.
+
+    No signature/file hydration. The optional historical request -> repair link
+    is resolved here by numeric IDs only; existing registry/passport callers keep
+    their current contract and default scope.
+    """
+    linked_request_ids = set(db.scalars(select(PartRequest.id).where(
+        PartRequest.machine_id.is_(None),
+        PartRequest.repair_id.in_(select(Repair.id).where(Repair.machine_id == machine_id)),
+    )))
+    items = []
+    for category in OfficialRegistryCategory:
+        for candidate in _registry_candidates(
+            db, category, machine_id=machine_id, linked_request_ids=linked_request_ids
+        ):
+            for record in candidate.records:
+                items.append({
+                    "source_key": record.source_key,
+                    "source_family": record.source_family,
+                    "source_id": record.source_ids[0],
+                    "document_type": record.document_type,
+                    "document_number": record.document_number,
+                    "official_document_id": record.official_document_id,
+                    "version": record.version,
+                    "version_status": record.version_status,
+                    "occurred_at": record.effective_at,
+                    "finalized": record.finalized_at is not None,
+                    "transfer_id": record.transfer_id,
+                    "repair_id": record.repair_id,
+                    "part_request_id": record.part_request_id,
+                    "registry_category": category.value,
+                    "registry_key": candidate.registry_key,
+                    "domain_id": candidate.domain_id,
+                })
     return items
 
 

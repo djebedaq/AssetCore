@@ -7,6 +7,7 @@ AssetCore е responsive PWA система за проследимо управ�
 ## Основни възможности
 
 - универсален регистър на индустриални активи с конфигурируеми категории, цифров паспорт, custom полета, снимки, файлове, QR и пълна хронология;
+- [ASSET-03A read-only lifecycle API](docs/MACHINE_LIFECYCLE_TIMELINE_BG.md) с канонични източници, category филтър, stable pagination и ограничен Observer отговор; бъдещият ASSET-03B интерфейс не е част от тази промяна;
 - единично и групово издаване със защита от двойно издаване;
 - защитена server-managed browser сесия без bearer credential в
   `localStorage`, session-bound CSRF и bounded login/reauth throttling;

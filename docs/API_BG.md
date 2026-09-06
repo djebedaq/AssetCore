@@ -50,6 +50,7 @@
 | `GET` | `/api/protocol-documents/{document_id}/download` | удостоверено изтегляне на индивидуален DOCX/PDF |
 | `GET` | `/api/transfer-batches/{batch_id}/documents.zip` | всички протоколи от партидата в ZIP |
 | `GET` | `/api/machines/{machine_id}/passport` | цифров паспорт, custom полета и свързана история |
+| `GET` | `/api/machines/{machine_id}/timeline` | read-only lifecycle: category, stable pagination, канонична дедупликация; [договор и източници](MACHINE_LIFECYCLE_TIMELINE_BG.md) |
 | `PUT` | `/api/machines/{machine_id}/custom-fields` | атомарно обновява валидирани category полета |
 | `POST` | `/api/machines/{machine_id}/attachments` | качва проверен файл със SHA-256 |
 | `GET/POST` | `/api/repair-cases` | списък и приемане за преглед/ремонт |
