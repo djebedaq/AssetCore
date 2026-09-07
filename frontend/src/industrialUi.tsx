@@ -6,6 +6,17 @@ import { useI18n, type TranslationKey } from './i18n'
 import type { StoredAttachment } from './types'
 
 const EVENT_KEYS: Record<string, TranslationKey> = {
+  LOCATION_CHANGED: 'event.locationChanged', MACHINE_LOCATION_CHANGED: 'event.locationChanged',
+  TRANSFER_RETURN_REQUESTED: 'event.returnRequested',
+  REPAIR_OPENED: 'event.repairOpened', REPAIR_COMPLETED: 'event.repairCompleted',
+  REPAIR_EVENT: 'event.repairEvent', PART_USED: 'event.partUsed',
+  PART_REQUEST_CREATED: 'event.requestCreated', PART_REQUEST_SUBMITTED: 'event.requestSubmitted',
+  PART_REQUEST_APPROVED: 'event.requestApproved', PART_REQUEST_REJECTED: 'event.requestRejected',
+  PART_REQUEST_RETURNED_FOR_CHANGES: 'event.requestReturned',
+  PART_REQUEST_ORDERED: 'event.requestOrdered', PART_REQUEST_PARTIALLY_DELIVERED: 'event.requestPartial',
+  PART_REQUEST_DELIVERED: 'event.requestDelivered', PART_REQUEST_CANCELLED: 'event.requestCancelled',
+  OFFICIAL_DOCUMENT_CREATED: 'event.officialCreated', OFFICIAL_DOCUMENT_FINALIZED: 'event.officialFinalized',
+  LEGACY_DOCUMENT_CREATED: 'event.legacyCreated',
   MACHINE_CREATED: 'event.machineCreated', MACHINE_UPDATED: 'event.machineUpdated',
   CUSTOM_FIELDS_UPDATED: 'event.customFieldsUpdated', ATTACHMENT_ADDED: 'event.attachmentAdded',
   TRANSFER_ISSUED: 'event.transferIssued', TRANSFER_RETURNED: 'event.transferReturned',

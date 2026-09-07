@@ -113,11 +113,6 @@ export function PassportOverviewTab({ passport, customValues, setCustomValues, o
   </div>
 }
 
-export function PassportHistoryTab({ passport }: CommonProps) {
-  const { date, t } = useI18n()
-  return <div className="timeline">{passport.history.map((event) => <div key={event.id}><i /><span><b>{translatedEventCode(t, event.event_type)}</b><small>{date(event.created_at)} · {event.reference || t('common.system')}</small>{(event.previous_status || event.new_status) && <em>{event.previous_status ? statusText(t, event.previous_status) : ''} → {event.new_status ? statusText(t, event.new_status) : ''}</em>}</span></div>)}{!passport.history.length && <div className="empty-state">{t('passport.noHistory')}</div>}</div>
-}
-
 export function PassportRepairsTab({ passport }: CommonProps) {
   const { date, t } = useI18n()
   return <div className="document-list">{passport.repairs.map((repair) => <div key={repair.id}><span><b>{repair.repair_reference || t('common.noValue')}</b><small>{statusText(t, repair.status, 'repair')} · {date(repair.opened_at)}{repair.closed_at ? ` · ${date(repair.closed_at)}` : ''}</small><em>{repair.reported_problem}</em></span></div>)}{!passport.repairs.length && <div className="empty-state">{t('passport.noRepairs')}</div>}</div>

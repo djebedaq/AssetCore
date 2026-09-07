@@ -348,3 +348,38 @@ export type GlobalSearchResults = {
   transfers: Array<{ id: number; protocol_number: string; batch_reference?: string | null; machine_number: string; company_unit?: string | null; vessel?: string | null; location_text?: string | null; is_active: boolean }>;
   generated_documents: Array<{ id: number; document_number: string; document_type: string; format: string; filename: string; download_endpoint: string }>
 }
+// ASSET-03A read-only contract. Event codes remain open for safe future fallbacks.
+export type TimelineCategory = 'all' | 'asset' | 'transfer' | 'repair' | 'parts' | 'document'
+export type MachineTimelineItem = {
+  event_key: string
+  category: TimelineCategory
+  event_type: string
+  occurred_at: string
+  reference: string | null
+  source_type: string
+  source_id: number
+  status_before: string | null
+  status_after: string | null
+  description: string | null
+  machine_id: number
+  related: {
+    transfer_id: number | null
+    repair_id: number | null
+    part_request_id: number | null
+    official_document_id: number | null
+  }
+  details: Record<string, string | number | boolean | null | (string | number)[]>
+}
+export type MachineTimelinePage = {
+  machine_id: number
+  limited_view: boolean
+  category: TimelineCategory
+  total: number
+  count: number
+  page: number
+  page_size: number
+  total_pages: number
+  has_previous: boolean
+  has_next: boolean
+  items: MachineTimelineItem[]
+}
