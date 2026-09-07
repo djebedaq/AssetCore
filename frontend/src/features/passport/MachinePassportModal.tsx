@@ -8,7 +8,6 @@ import { PassportHeroSummary } from './PassportHeroSummary'
 import {
   PassportAuditTab,
   PassportFilesTab,
-  PassportHistoryTab,
   PassportOverviewTab,
   PassportPartsTab,
   PassportProtocolsTab,
@@ -16,6 +15,8 @@ import {
   PassportTabList,
   type PassportTab,
 } from './PassportTabs'
+import { PassportTimelineTab } from './PassportTimelineTab'
+import { usePassportTimeline } from './usePassportTimeline'
 
 type Props = {
   machineId: number
@@ -23,13 +24,18 @@ type Props = {
   onOpenCatalog?: () => void
 }
 
-export function MachinePassportModal({ machineId, onClose, onOpenCatalog }: Props) {
+export function MachinePassportModal(props: Props) {
+  return <MachinePassportContent key={props.machineId} {...props} />
+}
+
+function MachinePassportContent({ machineId, onClose, onOpenCatalog }: Props) {
   const { t } = useI18n()
   const [passport, setPassport] = useState<MachinePassport | null>(null)
   const [tab, setTab] = useState<PassportTab>('overview')
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [customValues, setCustomValues] = useState<Record<number, string>>({})
+  const timeline = usePassportTimeline(machineId, tab === 'history' && passport?.limited_view === false)
 
   const load = () => api<MachinePassport>(`/machines/${machineId}/passport`)
     .then((data) => {
@@ -102,7 +108,7 @@ export function MachinePassportModal({ machineId, onClose, onOpenCatalog }: Prop
       <PassportTabList active={tab} auditVisible={passport.audit_visible} onChange={setTab} />
       <div id={`passport-panel-${tab}`} role="tabpanel" aria-labelledby={`passport-tab-${tab}`} className="passport-tab-panel">
         {tab === 'overview' && <PassportOverviewTab passport={passport} customValues={customValues} setCustomValues={setCustomValues} onSave={() => void saveCustomFields()} />}
-        {tab === 'history' && <PassportHistoryTab passport={passport} />}
+        {tab === 'history' && <PassportTimelineTab timeline={timeline} />}
         {tab === 'repairs' && <PassportRepairsTab passport={passport} />}
         {tab === 'protocols' && <PassportProtocolsTab passport={passport} />}
         {tab === 'parts' && <PassportPartsTab passport={passport} onOpenCatalog={onOpenCatalog} />}
