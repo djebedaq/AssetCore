@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import shlex
 from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,4 +33,13 @@ def test_ci_covers_frontend_backend_postgres_and_docker() -> None:
     assert "python -m pytest -q" in workflow
     assert "python scripts/postgres_smoke_test.py" in workflow
     assert "docker compose config --quiet" in workflow
-    assert "docker build --pull --tag assetcore:ci ." in workflow
+    steps = yaml.safe_load(workflow)["jobs"]["docker"]["steps"]
+    build = next(step["run"] for step in steps if step.get("name") == "Build production image")
+    arguments = shlex.split(build)
+    assert arguments[:2] == ["docker", "build"]
+    assert "--pull" in arguments and arguments[-1] == "."
+    assert {arguments[index + 1] for index, value in enumerate(arguments) if value == "--tag"} == {
+        "assetcore:ci", "assetcore:$GITHUB_SHA",
+    }
+    assert arguments[arguments.index("--build-arg") + 1] == "ASSETCORE_RELEASE_SHA=$GITHUB_SHA"
+    assert "python scripts/production_compose_smoke.py" in workflow

@@ -6,6 +6,8 @@ COPY frontend/ ./
 RUN pnpm build
 
 FROM python:3.12-slim AS runtime
+ARG ASSETCORE_RELEASE_SHA=development
+LABEL org.opencontainers.image.revision=$ASSETCORE_RELEASE_SHA
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOME=/tmp/assetcore-home \
@@ -27,6 +29,7 @@ COPY scripts/backup_database.py \
      scripts/restore_database.py \
      scripts/restore_assetcore.py \
      scripts/operations_audit.py \
+     scripts/production_container.py \
      ./scripts/
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 RUN chmod -R a-w /app

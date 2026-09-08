@@ -74,13 +74,15 @@ pnpm dev
 
 ## Docker и PostgreSQL
 
-Копирайте `.env.example` като `.env` в главната папка и задайте собствени стойности за `POSTGRES_PASSWORD`, URL-encoded `DATABASE_URL`, `SECRET_KEY`, всички `OWNER_*`, `INSTALLATION_ID`, `LICENSE_PUBLIC_KEY` и `SIGNATURE_ENCRYPTION_KEY`, след което:
+За production следвайте [PORTABLE_PRODUCTION_DEPLOYMENT_BG.md](docs/PORTABLE_PRODUCTION_DEPLOYMENT_BG.md): secret-free `.env.production.example`, read-only host preflight, exact clean release SHA/image и отделни init/start/upgrade операции. След попълване на локалния `.env`, **само за първа празна инсталация**:
 
 ```powershell
-docker compose up --build
+$ReleaseSha = git rev-parse HEAD
+python scripts/production_deploy.py build --sha $ReleaseSha
+python scripts/production_deploy.py init --sha $ReleaseSha --confirm-empty
 ```
 
-Основният Compose е production-style и трябва да стои зад HTTPS reverse proxy. PostgreSQL не публикува host port, migration/seed е отделна one-shot услуга, а web container-ът е non-root с read-only root filesystem. В `docker-compose.yml` няма записани пароли по подразбиране; липсващите задължителни стойности прекратяват старта с ясна грешка. `/api/health` е process-only liveness, а `/api/ready` проверява DB, exact Alembic head и critical startup state.
+Основният Compose е production-style и трябва да стои зад HTTPS reverse proxy; app host bind по подразбиране е `127.0.0.1`. PostgreSQL не публикува host port. Normal startup **не стартира migration/seed**; explicit `migrate` е в profile `operations`. Existing upgrade изисква backup → verify → prepare чрез helper-а, не `init` или обикновен `up --build`. Web container-ът остава non-root/read-only. `/api/health` е liveness, `/api/ready` проверява DB/schema/runtime, но не доказва full-write license commissioning.
 
 За локална разработка публикувайте PostgreSQL само към loopback и стартирайте backend/frontend по горните development инструкции:
 

@@ -10,7 +10,7 @@ in `frontend/pnpm-lock.yaml`; Python direct versions are authoritative in
 - Python 3.12; FastAPI 0.135.1; Starlette 1.3.1; Uvicorn 0.34.0;
   SQLAlchemy 2.0.36; Alembic 1.14.0;
   psycopg 3.2.3; Pydantic 2.10.4; pydantic-settings 2.7.0; qrcode 8.0;
-  ReportLab 4.2.5; python-docx 1.1.2; cryptography 50.0.0; pypdf 6.15.0;
+  ReportLab 4.2.5; python-docx 1.1.2; cryptography 50.0.0; pypdf 6.16.2;
   PyMuPDF 1.26.7.
 - Node.js 22; installed React/React DOM 19.2.8; Lucide React 0.468.0;
   Recharts 2.15.4; Vite 6.4.3. Manifest ranges and exact lockfile resolutions
@@ -20,11 +20,14 @@ in `frontend/pnpm-lock.yaml`; Python direct versions are authoritative in
 
 ## Development and QA
 
-- pytest 9.0.3; pytest-cov 6.0.0; Ruff 0.8.4.
+- pytest 9.1.1; pytest-cov 6.0.0; Ruff 0.16.4 (existing direct manifest pins).
 - CI inventory/audit tools: pip 26.2.1; pip-audit 2.10.1; PyYAML 6.0.3
   (`backend/requirements-ci.txt`). These are not production runtime requirements.
 - Installed TypeScript 5.9.3; ESLint 9.39.5; Vitest 3.2.7; jsdom 26.1.0;
   Testing Library React 16.3.2 and user-event 14.6.1.
+- PROD-01 qualification: ESLint's transitive `js-yaml` is locked to **4.3.2**
+  to resolve the inherited HIGH [GHSA-2883-xcg3-v3hh](https://github.com/advisories/GHSA-2883-xcg3-v3hh).
+  No application runtime dependency or audit severity policy is changed.
 
 ## Reproducibility
 
