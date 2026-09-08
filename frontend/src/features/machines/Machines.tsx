@@ -7,7 +7,7 @@ import type { AssetCategory, Department, Location, Machine } from '../../types'
 import MachineModal from './MachineModal'
 import { LazyMachinePassportModal as MachinePassportModal } from '../passport/LazyMachinePassportModal'
 
-export default function Machines({ onOpenCatalog }: { onOpenCatalog: (machineId: number) => void }) {
+export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCatalog: (machineId: number) => void; onOpenPassport?: (machineId: number) => void }) {
   const { t } = useI18n()
   const [items, setItems] = useState<Machine[]>([])
   const [locations, setLocations] = useState<Location[]>([])
@@ -72,7 +72,7 @@ export default function Machines({ onOpenCatalog }: { onOpenCatalog: (machineId:
                 {showTechnicalDetails && <td>{machine.pressure_bar} bar</td>}
                 <td><span className="badge">{statusText(t, machine.status)}</span></td>
                 <td>{machine.location?.name || t('common.notSpecified')}</td>
-                <td><button className="link" onClick={() => setPassportId(machine.id)}>{t('passport.tab.passport')}</button>{hasPermission('assets.edit') && <button className="link" onClick={() => setSelected(machine)}>{t('common.details')}</button>}</td>
+                <td><button className="link" onClick={() => onOpenPassport ? onOpenPassport(machine.id) : setPassportId(machine.id)}>{t('passport.tab.passport')}</button>{hasPermission('assets.edit') && <button className="link" onClick={() => setSelected(machine)}>{t('common.details')}</button>}</td>
               </tr>
             ))}
           </tbody>

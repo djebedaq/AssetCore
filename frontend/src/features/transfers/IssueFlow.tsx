@@ -13,14 +13,15 @@ import { ConfirmationSummary, IssueResult } from './TransferSummary'
 import { CancelBatchModal } from './CancelBatchModal'
 import { SignatureStep } from './SignatureStep'
 
-export function IssueModal({ items, locations, onClose, onComplete }: {
+export function IssueModal({ items, locations, onClose, onComplete, initialMachineId }: {
   items: TransferAvailability[]
   locations: Location[]
   onClose: () => void
   onComplete: () => void
+  initialMachineId?: number
 }) {
   const { t } = useI18n()
-  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [selected, setSelected] = useState<Set<number>>(() => new Set(items.filter((item) => item.machine_id === initialMachineId && item.available).map((item) => item.machine_id)))
   const [query, setQuery] = useState('')
   const [form, setForm] = useState<IssueForm>(EMPTY_ISSUE_FORM)
   const [step, setStep] = useState<'select' | 'confirm' | 'sign' | 'result'>('select')
@@ -120,6 +121,7 @@ export function IssueModal({ items, locations, onClose, onComplete }: {
         : <ConflictNotice error={error} />}
       {step === 'select' && (
         <>
+          {initialMachineId !== undefined && !items.some((item) => item.machine_id === initialMachineId && item.available) && <p className="conflict-notice" role="status">{t('entry.targetUnavailable')}</p>}
           <div className="bulk-step-head">
             <div><b>{t('bulk.selectedCount', { count: selected.size })}</b><small>{t('bulk.unavailableHint')}</small></div>
             <div className="search small-search"><Search size={17} /><input aria-label={t('bulk.machineSearch')} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('bulk.machineSearchPlaceholder')} /></div>

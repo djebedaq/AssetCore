@@ -11,6 +11,8 @@ import { PendingPartsBadge } from './features/partRequests/PendingPartsBadge'
 import Login from './features/auth/Login'
 import { GlobalSearchBox } from './features/search/GlobalSearchBox'
 import { LazyMachinePassportModal as MachinePassportModal } from './features/passport/LazyMachinePassportModal'
+import { useMachineEntryRoute } from './features/passport/useMachineEntryRoute'
+import type { MachineEntryIntent } from './features/passport/machineEntryIntent'
 import { LanguageSwitcher } from './shell/LanguageSwitcher'
 import { PageBoundary } from './shell/PageBoundary'
 import { Dashboard, Machines, Transfers, IndustrialRepairs, IndustrialCatalog, IndustrialPartRequests, TechnicalLibrary, OfficialDocuments, Reports, Audit, QrCodes, UserAdministration, SettingsPage, SignaturePage } from './shell/lazyPages'
@@ -44,11 +46,25 @@ function App() {
   const [catalogMachineId, setCatalogMachineId] = useState<number | null>(null)
   const [mobileMenu, setMobileMenu] = useState(false)
   const [emergencyAccess, setEmergencyAccess] = useState<EmergencyAccessStatus | null>(null)
-  const [passportMachineId, setPassportMachineId] = useState<number | null>(() => {
-    const match = window.location.pathname.match(/^\/machine\/(\d+)\/?$/)
-    return match ? Number(match[1]) : null
-  })
+  const machineEntry = useMachineEntryRoute()
+  const passportMachineId = machineEntry.machineId
+  const [entryIntent, setEntryIntent] = useState<MachineEntryIntent | null>(null)
+  const [workflowVisit, setWorkflowVisit] = useState(0)
   const signingMatch = window.location.pathname.match(/^\/sign\/([^/]+)\/?$/)
+
+  function openCatalog(machineId: number) {
+    machineEntry.leave()
+    setEntryIntent(null)
+    setCatalogMachineId(machineId)
+    setPage('catalog')
+  }
+
+  function openWorkflow(intent: MachineEntryIntent) {
+    machineEntry.leave()
+    setEntryIntent(intent)
+    setWorkflowVisit((value) => value + 1)
+    setPage(intent.action === 'issue' || intent.action === 'return' ? 'transfers' : 'repairs')
+  }
 
   useEffect(() => {
     clearLegacyAuthStorage()
@@ -84,6 +100,7 @@ function App() {
       setSession(null)
       setAuthenticated(false)
       setMobileMenu(false)
+      setEntryIntent(null)
     }
     window.addEventListener('assetcore:unauthorized', unauthenticated)
     return () => window.removeEventListener('assetcore:unauthorized', unauthenticated)
@@ -148,6 +165,8 @@ function App() {
               className={page === id ? 'active' : ''}
               onClick={() => {
                 setPage(id)
+                machineEntry.leave()
+                setEntryIntent(null)
                 setCatalogMachineId(null)
                 setMobileMenu(false)
               }}
@@ -157,7 +176,7 @@ function App() {
           ))}
         </nav>
         <div className="sidebar-actions">
-          <button className="logout" onClick={() => { setPage('password'); setMobileMenu(false) }}><UserRoundCog size={18} />{t('password.title')}</button>
+          <button className="logout" onClick={() => { machineEntry.leave(); setEntryIntent(null); setPage('password'); setMobileMenu(false) }}><UserRoundCog size={18} />{t('password.title')}</button>
           <button
             className="logout"
             onClick={() => {
@@ -166,6 +185,7 @@ function App() {
                 setSession(null)
                 setAuthenticated(false)
                 setMobileMenu(false)
+                setEntryIntent(null)
               })
             }}
           >
@@ -183,10 +203,10 @@ function App() {
             {mobileMenu ? <X /> : <Menu />}
           </button>
           <div className="header-copy">
-            <h2>{page === 'password' ? t('password.title') : t(nav.find((item) => item[0] === page)?.[1] || 'nav.machines')}</h2>
+            <h2 tabIndex={-1} data-shell-focus>{page === 'password' ? t('password.title') : t(nav.find((item) => item[0] === page)?.[1] || 'nav.machines')}</h2>
             <p>{t('app.headerSubtitle')}</p>
           </div>
-          <GlobalSearchBox onMachine={setPassportMachineId} />
+          <GlobalSearchBox onMachine={machineEntry.open} />
           <LanguageSwitcher compact />
           {session.is_system_owner && <span className="owner-badge"><ShieldCheck size={15} />{t('governance.ownerBadge')}</span>}
         </header>
@@ -194,9 +214,9 @@ function App() {
         <section className="content">
           <PageBoundary key={page}>
           {page === 'dashboard' && <Dashboard />}
-          {page === 'machines' && <Machines onOpenCatalog={(machineId) => { setCatalogMachineId(machineId); setPage('catalog') }} />}
-          {page === 'transfers' && <Transfers />}
-          {page === 'repairs' && <IndustrialRepairs />}
+          {page === 'machines' && <Machines onOpenCatalog={openCatalog} onOpenPassport={machineEntry.open} />}
+          {page === 'transfers' && <Transfers key={workflowVisit} entryIntent={entryIntent?.action === 'issue' || entryIntent?.action === 'return' ? entryIntent : undefined} onEntryConsumed={() => setEntryIntent(null)} />}
+          {page === 'repairs' && <IndustrialRepairs key={workflowVisit} entryIntent={entryIntent?.action === 'repair-create' || entryIntent?.action === 'repair-open' ? entryIntent : undefined} onEntryConsumed={() => setEntryIntent(null)} />}
           {page === 'catalog' && <IndustrialCatalog defaultMachineId={catalogMachineId || undefined} />}
           {page === 'parts' && <IndustrialPartRequests />}
           {page === 'documents' && <TechnicalLibrary />}
@@ -211,7 +231,7 @@ function App() {
         </section>
         <footer className="application-footer">{t('app.copyright')}</footer>
       </main>
-      {passportMachineId && <MachinePassportModal machineId={passportMachineId} onClose={() => setPassportMachineId(null)} onOpenCatalog={() => { setCatalogMachineId(passportMachineId); setPassportMachineId(null); setPage('catalog') }} />}
+      {passportMachineId && <MachinePassportModal machineId={passportMachineId} onClose={machineEntry.close} onOpenCatalog={() => openCatalog(passportMachineId)} onWorkflow={openWorkflow} />}
     </div>
   )
 }

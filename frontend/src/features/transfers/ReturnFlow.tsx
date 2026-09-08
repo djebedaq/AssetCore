@@ -13,14 +13,26 @@ import { BatchProgressCard } from './BatchHistory'
 import { CancelBatchModal } from './CancelBatchModal'
 import { SignatureStep } from './SignatureStep'
 
-export function ReturnModal({ items, onClose, onComplete }: {
+function returnDraft(item: TransferAvailability): ReturnDraft {
+  return {
+    transfer_id: item.active_transfer_id!, machine_id: item.machine_id,
+    condition_text: '', result_text: '', notes: '', missing_equipment: '', damage: '', contamination: '',
+    next_status: 'READY', checklist: CHECKLIST_ITEMS.map((entry) => ({ ...entry })),
+  }
+}
+
+export function ReturnModal({ items, onClose, onComplete, initialMachineId }: {
   items: TransferAvailability[]
   onClose: () => void
   onComplete: () => void
+  initialMachineId?: number
 }) {
   const { t } = useI18n()
   const activeItems = items.filter((item) => item.returnable)
-  const [drafts, setDrafts] = useState<Record<number, ReturnDraft>>({})
+  const [drafts, setDrafts] = useState<Record<number, ReturnDraft>>(() => {
+    const target = items.find((item) => item.machine_id === initialMachineId && item.returnable && item.active_transfer_id)
+    return target ? { [target.machine_id]: returnDraft(target) } : {}
+  })
   const [query, setQuery] = useState('')
   const [step, setStep] = useState<'edit' | 'confirm' | 'sign' | 'result'>('edit')
   const [result, setResult] = useState<BulkReturnResult | null>(null)
@@ -40,18 +52,7 @@ export function ReturnModal({ items, onClose, onComplete }: {
   const toggle = (item: TransferAvailability) => setDrafts((current) => {
     const next = { ...current }
     if (next[item.machine_id]) delete next[item.machine_id]
-    else next[item.machine_id] = {
-      transfer_id: item.active_transfer_id!,
-      machine_id: item.machine_id,
-      condition_text: '',
-      result_text: '',
-      notes: '',
-      missing_equipment: '',
-      damage: '',
-      contamination: '',
-      next_status: 'READY',
-      checklist: CHECKLIST_ITEMS.map((entry) => ({ ...entry })),
-    }
+    else next[item.machine_id] = returnDraft(item)
     return next
   })
   const update = <K extends keyof ReturnDraft>(machineId: number, field: K, value: ReturnDraft[K]) => setDrafts((current) => ({
@@ -159,6 +160,7 @@ export function ReturnModal({ items, onClose, onComplete }: {
         : <ConflictNotice error={error} />}
       {step === 'edit' && (
         <form onSubmit={confirm}>
+          {initialMachineId !== undefined && !items.some((item) => item.machine_id === initialMachineId && item.returnable && item.active_transfer_id) && <p className="conflict-notice" role="status">{t('entry.targetUnavailable')}</p>}
           <div className="bulk-step-head">
             <div><b>{t('bulk.selectedCount', { count: selectedItems.length })}</b><small>{t('bulk.mixedReturnHint')}</small></div>
             <div className="search small-search"><Search size={17} /><input aria-label={t('bulk.returnSearch')} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('bulk.returnSearchPlaceholder')} /></div>

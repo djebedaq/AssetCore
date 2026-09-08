@@ -49,10 +49,11 @@ export function PassportTabList({ active, auditVisible, onChange }: {
   </div>
 }
 
-export function PassportOverviewTab({ passport, customValues, setCustomValues, onSave }: CommonProps & {
+export function PassportOverviewTab({ passport, customValues, setCustomValues, onSave, showActionSummary = true }: CommonProps & {
   customValues: Record<number, string>
   setCustomValues: Dispatch<SetStateAction<Record<number, string>>>
   onSave: () => void
+  showActionSummary?: boolean
 }) {
   const { date, locale, t } = useI18n()
   const machine = passport.machine
@@ -103,13 +104,13 @@ export function PassportOverviewTab({ passport, customValues, setCustomValues, o
       <Detail label={t('passport.lastMovement')} value={passport.current_state.last_movement ? `${translatedEventCode(t, passport.current_state.last_movement.event_type)} · ${date(passport.current_state.last_movement.created_at)}` : t('common.noValue')} />
       <Detail label={t('passport.lastInspection')} value={passport.current_state.last_inspection ? date(passport.current_state.last_inspection.completed_at) : t('common.noValue')} />
       <Detail label={t('passport.lastTest')} value={passport.current_state.last_test ? `${passport.current_state.last_test.passed ? t('common.yes') : t('common.no')}${passport.current_state.last_test.completed_at ? ` · ${date(passport.current_state.last_test.completed_at)}` : ''}` : t('common.noValue')} />
-    </dl><div className="summary-chips" aria-label={t('passport.allowedActions')}>
+    </dl>{showActionSummary && machine.is_active !== false && <div className="summary-chips" aria-label={t('passport.allowedActions')}>
       {passport.current_state.allowed_actions.issue && <span>{t('bulk.issue')}</span>}
       {passport.current_state.allowed_actions.return && <span>{t('bulk.return')}</span>}
       {passport.current_state.allowed_actions.repair && <span>{t('nav.repairs')}</span>}
       {passport.current_state.allowed_actions.edit && <span>{t('common.edit')}</span>}
       {!Object.values(passport.current_state.allowed_actions).some(Boolean) && <span>{t('passport.noAllowedActions')}</span>}
-    </div></section>
+    </div>}</section>
   </div>
 }
 
