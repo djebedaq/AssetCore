@@ -36,6 +36,9 @@ it('caches a lazy page chunk after an online visit and serves its exact bytes of
 it('does not intercept authenticated API requests or mutating operations', () => {
   const qa = worker()
   expect(qa.request('/api/auth/me')).toBeUndefined()
+  expect(qa.request('/api/machines/13/passport')).toBeUndefined()
+  expect(qa.request('/api/machines/13/timeline')).toBeUndefined()
+  expect(qa.request('/api/machines/13/qr')).toBeUndefined()
   expect(qa.request('/api/documents/1/download')).toBeUndefined()
   expect(qa.request('/api/auth/login', 'POST')).toBeUndefined()
   expect(qa.request('/form', 'POST')).toBeUndefined()

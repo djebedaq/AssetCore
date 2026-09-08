@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import { api } from '../../api'
+import { ApiError, api } from '../../api'
 import { filePayload, friendlyError, Modal } from '../../industrialUi'
 import { statusText, useI18n } from '../../i18n'
 import type { MachinePassport } from '../../types'
@@ -17,18 +17,21 @@ import {
 } from './PassportTabs'
 import { PassportTimelineTab } from './PassportTimelineTab'
 import { usePassportTimeline } from './usePassportTimeline'
+import { PassportQuickActions } from './PassportQuickActions'
+import type { MachineEntryIntent } from './machineEntryIntent'
 
 type Props = {
   machineId: number
   onClose: () => void
   onOpenCatalog?: () => void
+  onWorkflow?: (intent: MachineEntryIntent) => void
 }
 
 export function MachinePassportModal(props: Props) {
   return <MachinePassportContent key={props.machineId} {...props} />
 }
 
-function MachinePassportContent({ machineId, onClose, onOpenCatalog }: Props) {
+function MachinePassportContent({ machineId, onClose, onOpenCatalog, onWorkflow }: Props) {
   const { t } = useI18n()
   const [passport, setPassport] = useState<MachinePassport | null>(null)
   const [tab, setTab] = useState<PassportTab>('overview')
@@ -36,6 +39,21 @@ function MachinePassportContent({ machineId, onClose, onOpenCatalog }: Props) {
   const [uploading, setUploading] = useState(false)
   const [customValues, setCustomValues] = useState<Record<number, string>>({})
   const timeline = usePassportTimeline(machineId, tab === 'history' && passport?.limited_view === false)
+  const entryRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    entryRef.current?.querySelector<HTMLButtonElement>('.modal-head button')?.focus()
+    return () => {
+      window.requestAnimationFrame(() => {
+        // A handoff may already have focused its new workflow. Never steal it.
+        if (document.activeElement !== document.body && document.activeElement?.isConnected) return
+        const target = document.querySelector<HTMLElement>('[role="dialog"] button')
+          || (previous?.isConnected && previous !== document.body ? previous : document.querySelector<HTMLElement>('[data-shell-focus]'))
+        target?.focus()
+      })
+    }
+  }, [])
 
   const load = () => api<MachinePassport>(`/machines/${machineId}/passport`)
     .then((data) => {
@@ -43,7 +61,7 @@ function MachinePassportContent({ machineId, onClose, onOpenCatalog }: Props) {
       setCustomValues(Object.fromEntries(data.custom_fields.map((field) => [field.field_id, field.value || ''])))
       setError('')
     })
-    .catch((caught) => setError(friendlyError(caught, t('passport.loadError'))))
+    .catch((caught) => setError(t(caught instanceof ApiError && caught.status === 404 ? 'entry.notFound' : 'passport.loadError')))
 
   useEffect(() => { void load() }, [machineId])
 
@@ -88,9 +106,11 @@ function MachinePassportContent({ machineId, onClose, onOpenCatalog }: Props) {
     ? t('passport.title', { number: passport.machine.inventory_number })
     : t('passport.loadingTitle')
 
-  return <Modal title={title} onClose={onClose} wide>
+  return <div ref={entryRef}><Modal title={title} onClose={onClose} wide>
     {error && <div className="error" role="alert">{error}</div>}
-    {!passport ? <div className="loading" role="status">{t('common.loading')}</div> : passport.limited_view ? (
+    {!passport && error && <button className="secondary" onClick={onClose}>{t('entry.recover')}</button>}
+    {passport?.machine.is_active === false && <p className="passport-inactive" role="status">{t('entry.inactive')}</p>}
+    {!passport ? !error && <div className="loading" role="status">{t('common.loading')}</div> : passport.limited_view ? (
       <section className="passport-limited-view" aria-labelledby="limited-passport-title">
         <span className="eyebrow">{t('passport.limitedView')}</span>
         <h2 id="limited-passport-title">{t('passport.machineNumber', { number: passport.machine.inventory_number })}</h2>
@@ -105,9 +125,13 @@ function MachinePassportContent({ machineId, onClose, onOpenCatalog }: Props) {
       </section>
     ) : <>
       <PassportHeroSummary machineId={machineId} passport={passport} />
+      <PassportQuickActions passport={passport} onWorkflow={onWorkflow} onCatalog={onOpenCatalog} onTab={(next) => {
+        setTab(next)
+        window.requestAnimationFrame(() => document.getElementById(`passport-tab-${next}`)?.focus())
+      }} />
       <PassportTabList active={tab} auditVisible={passport.audit_visible} onChange={setTab} />
       <div id={`passport-panel-${tab}`} role="tabpanel" aria-labelledby={`passport-tab-${tab}`} className="passport-tab-panel">
-        {tab === 'overview' && <PassportOverviewTab passport={passport} customValues={customValues} setCustomValues={setCustomValues} onSave={() => void saveCustomFields()} />}
+        {tab === 'overview' && <PassportOverviewTab passport={passport} showActionSummary={!onWorkflow} customValues={customValues} setCustomValues={setCustomValues} onSave={() => void saveCustomFields()} />}
         {tab === 'history' && <PassportTimelineTab timeline={timeline} />}
         {tab === 'repairs' && <PassportRepairsTab passport={passport} />}
         {tab === 'protocols' && <PassportProtocolsTab passport={passport} />}
@@ -116,5 +140,5 @@ function MachinePassportContent({ machineId, onClose, onOpenCatalog }: Props) {
         {tab === 'audit' && passport.audit_visible && <PassportAuditTab passport={passport} />}
       </div>
     </>}
-  </Modal>
+  </Modal></div>
 }

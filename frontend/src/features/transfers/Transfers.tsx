@@ -3,6 +3,7 @@ import { api, downloadApiFile } from '../../api'
 import BulkTransfers from './BulkTransfers'
 import { useI18n } from '../../i18n'
 import type { Machine } from '../../types'
+import type { TransferEntryIntent } from '../passport/machineEntryIntent'
 
 type TransferRecord = {
   id: number
@@ -18,7 +19,7 @@ type TransferRecord = {
   machine: Machine
 }
 
-export default function Transfers() {
+export default function Transfers({ entryIntent, onEntryConsumed }: { entryIntent?: TransferEntryIntent; onEntryConsumed?: () => void } = {}) {
   const { date, t } = useI18n()
   const [items, setItems] = useState<TransferRecord[]>([])
   const [error, setError] = useState('')
@@ -38,7 +39,7 @@ export default function Transfers() {
     <>
       <div className="toolbar"><div><h3>{t('transfers.title')}</h3><p className="muted">{t('transfers.subtitle')}</p></div></div>
       {error && <div className="error" role="alert">{error}</div>}
-      <BulkTransfers onChanged={() => { void load() }} />
+      <BulkTransfers entryIntent={entryIntent} onEntryConsumed={onEntryConsumed} onChanged={() => { void load() }} />
       <div className="toolbar protocol-history-title"><div><h3>{t('transfers.historyTitle')}</h3><p className="muted">{t('transfers.historySubtitle')}</p></div></div>
       <div className="table-card">
         <table>

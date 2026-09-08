@@ -11,6 +11,15 @@ import {
 } from './locale'
 
 export const bg = {
+  'entry.quickActions': 'Бързи действия',
+  'entry.issue': 'Предай машина',
+  'entry.return': 'Приеми машина',
+  'entry.startRepair': 'Приеми за ремонт',
+  'entry.openRepair': 'Отвори активния ремонт',
+  'entry.inactive': 'Неактивна машина — историята остава достъпна. Няма нови оперативни действия от този паспорт.',
+  'entry.notFound': 'Машината не е намерена. Проверете връзката или се върнете в AssetCore.',
+  'entry.recover': 'Обратно към AssetCore',
+  'entry.targetUnavailable': 'Избраната машина или ремонт вече не е достъпна за това действие. Проверете текущото състояние; операция не е извършена.',
   'timeline.title': 'Жизнен цикъл на машината',
   'timeline.filters': 'Категории събития',
   'timeline.all': 'Всички',
@@ -1043,6 +1052,15 @@ export const en: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(en, {
+  'entry.quickActions': 'Quick actions',
+  'entry.issue': 'Issue machine',
+  'entry.return': 'Return machine',
+  'entry.startRepair': 'Start repair',
+  'entry.openRepair': 'Open active repair',
+  'entry.inactive': 'Inactive machine — history remains available. No new operational actions from this passport.',
+  'entry.notFound': 'Machine not found. Check the link or return to AssetCore.',
+  'entry.recover': 'Back to AssetCore',
+  'entry.targetUnavailable': 'The selected machine or repair is no longer available for this action. Check its current state; no operation was performed.',
   'timeline.title': 'Machine lifecycle',
   'timeline.filters': 'Event categories',
   'timeline.all': 'All',
@@ -1460,6 +1478,15 @@ export const ru: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(ru, {
+  'entry.quickActions': 'Быстрые действия',
+  'entry.issue': 'Выдать машину',
+  'entry.return': 'Принять машину',
+  'entry.startRepair': 'Принять в ремонт',
+  'entry.openRepair': 'Открыть активный ремонт',
+  'entry.inactive': 'Неактивная машина — история доступна. Новые операции из этого паспорта недоступны.',
+  'entry.notFound': 'Машина не найдена. Проверьте ссылку или вернитесь в AssetCore.',
+  'entry.recover': 'Вернуться в AssetCore',
+  'entry.targetUnavailable': 'Выбранная машина или ремонт больше не доступны для этого действия. Проверьте текущее состояние; операция не выполнялась.',
   'timeline.title': 'Жизненный цикл машины',
   'timeline.filters': 'Категории событий',
   'timeline.all': 'Все',

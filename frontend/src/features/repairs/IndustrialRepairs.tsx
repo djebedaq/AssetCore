@@ -15,6 +15,7 @@ import { statusText, useI18n, type TranslationKey } from '../../i18n'
 import { hasPermission } from '../../permissions'
 import type { CatalogPartEnhanced, Machine, RepairCase } from '../../types'
 import { repairApi } from './repairApi'
+import type { RepairEntryIntent } from '../passport/machineEntryIntent'
 import {
   canonicalRepairStage,
   durationText,
@@ -25,10 +26,10 @@ import {
   type RepairFormState,
 } from './workflow'
 
-function RepairCreateModal({ machines, onClose, onSaved }: { machines: Machine[]; onClose: () => void; onSaved: () => void }) {
+function RepairCreateModal({ machines, onClose, onSaved, initialMachineId }: { machines: Machine[]; onClose: () => void; onSaved: () => void; initialMachineId?: number }) {
   const { t } = useI18n()
   const eligible = machines.filter((machine) => machine.status === 'READY')
-  const [form, setForm] = useState({ machine_id: eligible[0]?.id || 0, reported_problem: '', condition_before: '' })
+  const [form, setForm] = useState({ machine_id: initialMachineId === undefined ? eligible[0]?.id || 0 : eligible.find((machine) => machine.id === initialMachineId && machine.is_active)?.id || 0, reported_problem: '', condition_before: '' })
   const [error, setError] = useState('')
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -163,14 +164,33 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
   </Modal>
 }
 
-export function IndustrialRepairs() {
+export function IndustrialRepairs({ entryIntent, onEntryConsumed }: { entryIntent?: RepairEntryIntent; onEntryConsumed?: () => void } = {}) {
   const { date, t } = useI18n()
   const [items, setItems] = useState<RepairCase[]>([])
   const [machines, setMachines] = useState<Machine[]>([])
   const [selected, setSelected] = useState<number | null>(null)
   const [create, setCreate] = useState(false)
   const [error, setError] = useState('')
-  const load = () => Promise.all([repairApi.list(), repairApi.machines()]).then(([repairs, machineItems]) => { setItems(repairs); setMachines(machineItems); setError('') }).catch((caught) => setError(friendlyError(caught, t('repairCase.loadError'))))
+  const [loaded, setLoaded] = useState(false)
+  const [initialMachineId, setInitialMachineId] = useState<number>()
+  const consumed = useRef<RepairEntryIntent | null>(null)
+  const load = () => Promise.all([repairApi.list(), repairApi.machines()]).then(([repairs, machineItems]) => { setItems(repairs); setMachines(machineItems); setError('') }).catch((caught) => setError(friendlyError(caught, t('repairCase.loadError')))).finally(() => setLoaded(true))
   useEffect(() => { void load() }, [])
-  return <><div className="toolbar"><div><h3>{t('repairs.title')}</h3><p className="muted">{t('repairCase.workflowHint')}</p></div>{hasPermission('repairs.create') && <button className="primary" onClick={() => setCreate(true)}><Plus size={18} />{t('repairs.new')}</button>}</div>{error && <div className="error">{error}</div>}<div className="cards-list">{items.map((repair) => { const stage = canonicalRepairStage(repair); return <button className="repair-card repair-card-button" key={repair.id} onClick={() => setSelected(repair.id)}><div><span className="badge">{t(repairStageTitleKeys[repairStageOrder[stage]])}</span><h3>{repair.machine_name} · {repair.repair_reference}</h3><p><b>{t('repairs.problem')}</b> {repair.reported_problem}</p><div className="workflow-checks">{repairStageOrder.map((item, index) => <span className={repair.status === 'COMPLETED' || index <= stage ? 'done' : ''} key={item}>{t(repairStageTitleKeys[item])}</span>)}</div></div><div className="repair-side"><small>{date(repair.opened_at)}</small><ChevronRight /></div></button> })}{!items.length && <div className="empty-state">{t('repairs.empty')}</div>}</div>{create && <RepairCreateModal machines={machines} onClose={() => setCreate(false)} onSaved={() => { setCreate(false); void load() }} />}{selected && <RepairWorkspace repairId={selected} onClose={() => setSelected(null)} onChanged={() => void load()} />}</>
+  useEffect(() => {
+    if (!loaded || !entryIntent || consumed.current === entryIntent) return
+    consumed.current = entryIntent
+    if (!error) {
+      if (entryIntent.action === 'repair-create' && hasPermission('repairs.create') && machines.some((machine) => machine.id === entryIntent.machineId && machine.is_active && machine.status === 'READY')) {
+        setInitialMachineId(entryIntent.machineId)
+        setCreate(true)
+      } else if (entryIntent.action === 'repair-open' && hasPermission('repairs.view') && items.some((repair) => repair.id === entryIntent.repairId && repair.machine_id === entryIntent.machineId && repair.status !== 'COMPLETED')) {
+        setSelected(entryIntent.repairId)
+      } else setError(t('entry.targetUnavailable'))
+    }
+    onEntryConsumed?.()
+  }, [loaded, entryIntent, onEntryConsumed, machines, items, error, t])
+  useEffect(() => {
+    if (consumed.current && (create || selected)) document.querySelector<HTMLElement>('[role="dialog"] button')?.focus()
+  }, [create, selected])
+  return <><div className="toolbar"><div><h3>{t('repairs.title')}</h3><p className="muted">{t('repairCase.workflowHint')}</p></div>{hasPermission('repairs.create') && <button className="primary" onClick={() => { setInitialMachineId(undefined); setCreate(true) }}><Plus size={18} />{t('repairs.new')}</button>}</div>{error && <div className="error">{error}</div>}<div className="cards-list">{items.map((repair) => { const stage = canonicalRepairStage(repair); return <button className="repair-card repair-card-button" key={repair.id} onClick={() => setSelected(repair.id)}><div><span className="badge">{t(repairStageTitleKeys[repairStageOrder[stage]])}</span><h3>{repair.machine_name} · {repair.repair_reference}</h3><p><b>{t('repairs.problem')}</b> {repair.reported_problem}</p><div className="workflow-checks">{repairStageOrder.map((item, index) => <span className={repair.status === 'COMPLETED' || index <= stage ? 'done' : ''} key={item}>{t(repairStageTitleKeys[item])}</span>)}</div></div><div className="repair-side"><small>{date(repair.opened_at)}</small><ChevronRight /></div></button> })}{!items.length && <div className="empty-state">{t('repairs.empty')}</div>}</div>{create && <RepairCreateModal initialMachineId={initialMachineId} machines={machines} onClose={() => { setCreate(false); setInitialMachineId(undefined) }} onSaved={() => { setCreate(false); setInitialMachineId(undefined); void load() }} />}{selected && <RepairWorkspace repairId={selected} onClose={() => setSelected(null)} onChanged={() => void load()} />}</>
 }

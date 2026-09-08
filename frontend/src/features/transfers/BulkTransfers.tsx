@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RotateCcw, Send } from 'lucide-react'
 import { downloadApiFile } from '../../api'
 import { useI18n } from '../../i18n'
@@ -10,8 +10,9 @@ import { BatchDetailsPanel, BatchProgressCard } from './BatchHistory'
 import { IssueModal } from './IssueFlow'
 import { ReturnModal } from './ReturnFlow'
 import { CancelBatchModal } from './CancelBatchModal'
+import type { TransferEntryIntent } from '../passport/machineEntryIntent'
 
-type BulkTransfersProps = { onChanged: () => void }
+type BulkTransfersProps = { onChanged: () => void; entryIntent?: TransferEntryIntent; onEntryConsumed?: () => void }
 
 function canOperateTransfers(): boolean {
   return hasPermission('transfers.create', 'transfers.return')
@@ -21,7 +22,7 @@ function canCancelTransfers(): boolean {
   return hasPermission('transfers.create')
 }
 
-export default function BulkTransfers({ onChanged }: BulkTransfersProps) {
+export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed }: BulkTransfersProps) {
   const { t } = useI18n()
   const allowCancel = canCancelTransfers()
   const [availabilityItems, setAvailability] = useState<TransferAvailability[]>([])
@@ -32,6 +33,8 @@ export default function BulkTransfers({ onChanged }: BulkTransfersProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [cancelBatch, setCancelBatch] = useState<BatchDetails | null>(null)
+  const [initialMachineId, setInitialMachineId] = useState<number>()
+  const consumed = useRef<TransferEntryIntent | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -53,6 +56,21 @@ export default function BulkTransfers({ onChanged }: BulkTransfersProps) {
   }
 
   useEffect(() => { void load() }, [])
+  // App mounts a fresh workspace for each deliberate passport handoff. Wait for
+  // the normal availability read; never select from the old passport snapshot.
+  useEffect(() => {
+    if (loading || !entryIntent || consumed.current === entryIntent) return
+    consumed.current = entryIntent
+    if (!error && hasPermission(entryIntent.action === 'issue' ? 'transfers.create' : 'transfers.return')) {
+      setInitialMachineId(entryIntent.machineId)
+      setMode(entryIntent.action)
+    }
+    onEntryConsumed?.()
+  }, [loading, error, entryIntent, onEntryConsumed])
+  useEffect(() => {
+    if (consumed.current && mode) document.querySelector<HTMLElement>('.bulk-workspace [role="dialog"] button')?.focus()
+  }, [mode])
+  const openMode = (next: 'issue' | 'return') => { setInitialMachineId(undefined); setMode(next) }
   const completed = () => {
     void load()
     onChanged()
@@ -95,7 +113,7 @@ export default function BulkTransfers({ onChanged }: BulkTransfersProps) {
   return (
     <section className="bulk-workspace">
       {canOperateTransfers() && (
-        <div className="bulk-actions"><button className="primary" onClick={() => setMode('issue')}><Send size={18} />{t('bulk.issue')}</button><button className="secondary emphasized" onClick={() => setMode('return')}><RotateCcw size={18} />{t('bulk.return')}</button></div>
+        <div className="bulk-actions"><button className="primary" onClick={() => openMode('issue')}><Send size={18} />{t('bulk.issue')}</button><button className="secondary emphasized" onClick={() => openMode('return')}><RotateCcw size={18} />{t('bulk.return')}</button></div>
       )}
       <ConflictNotice error={error} />
       <div className="panel batch-panel">
@@ -106,8 +124,8 @@ export default function BulkTransfers({ onChanged }: BulkTransfersProps) {
             ? <div className="batch-list">{batches.map((batch) => <div key={batch.batch_id}><BatchProgressCard batch={batch} onOpen={openBatch} onCancel={allowCancel ? (value) => void requestCancel(value) : undefined} />{details[batch.batch_id] && <BatchDetailsPanel details={details[batch.batch_id]} onDownload={download} onCancel={allowCancel ? (value) => void requestCancel(value) : undefined} />}</div>)}</div>
             : <div className="empty-state">{t('bulk.noBatches')}</div>}
       </div>
-      {mode === 'issue' && <IssueModal items={availabilityItems} locations={locations} onClose={() => setMode(null)} onComplete={completed} />}
-      {mode === 'return' && <ReturnModal items={availabilityItems} onClose={() => setMode(null)} onComplete={completed} />}
+      {mode === 'issue' && <IssueModal initialMachineId={initialMachineId} items={availabilityItems} locations={locations} onClose={() => { setMode(null); setInitialMachineId(undefined) }} onComplete={completed} />}
+      {mode === 'return' && <ReturnModal initialMachineId={initialMachineId} items={availabilityItems} onClose={() => { setMode(null); setInitialMachineId(undefined) }} onComplete={completed} />}
       {cancelBatch && <CancelBatchModal batch={cancelBatch} onClose={() => setCancelBatch(null)} onCancelled={cancelled} />}
     </section>
   )
