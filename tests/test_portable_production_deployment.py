@@ -230,6 +230,20 @@ def test_command_failure_does_not_echo_subprocess_secrets(monkeypatch, capsys):
     assert "secret" not in str(caught.value) + capsys.readouterr().out
 
 
+@pytest.mark.parametrize(("diagnostic", "code"), [
+    ("Permission denied", "command_permission_denied"),
+    ("No space left on device", "command_storage_exhausted"),
+    ("server version mismatch", "command_postgres_client_version_mismatch"),
+    ("pg_dump failed", "command_postgres_dump_failed"),
+])
+def test_command_failure_classification_never_exposes_raw_output(monkeypatch, diagnostic, code):
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: SimpleNamespace(
+        returncode=1, stdout="sensitive-test-sentinel", stderr=diagnostic + " /private/internal/path"))
+    with pytest.raises(deploy.DeploymentError) as caught:
+        deploy.run(["docker", "test"], cwd=ROOT)
+    assert str(caught.value) == code
+
+
 def test_host_preflight_uses_only_read_only_commands_and_does_not_write(tmp_path, monkeypatch):
     queries = []
     def query(args):

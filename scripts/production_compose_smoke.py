@@ -72,6 +72,9 @@ def main() -> None:
             assert record["backup_file"].endswith(".acbackup")
             assert record["fully_commissioned"] is False
             print("PASS: real PostgreSQL stop -> encrypted backup -> verify -> prepare -> ready -> shell")
+        except DeploymentError as error:
+            # DeploymentError contains only a controlled code, never subprocess text.
+            raise SystemExit(f"Compose production QA failed safely; stage={subject.stage}; code={error}") from None
         except Exception:
             raise SystemExit(f"Compose production QA failed safely; stage={subject.stage}") from None
         finally:

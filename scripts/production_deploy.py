@@ -32,6 +32,15 @@ def run(command: list[str], *, cwd: Path, env: dict | None = None,
         raise DeploymentError("command_unavailable_or_timed_out") from None
     if result.returncode:
         # Even Docker config errors/build logs may contain secrets. Never echo them.
+        output = (result.stdout + result.stderr).casefold()
+        for marker, code in (
+            ("permission denied", "command_permission_denied"),
+            ("no space left on device", "command_storage_exhausted"),
+            ("server version mismatch", "command_postgres_client_version_mismatch"),
+            ("pg_dump failed", "command_postgres_dump_failed"),
+        ):
+            if marker in output:
+                raise DeploymentError(code)
         raise DeploymentError("command_failed")
     return result.stdout.strip()
 
