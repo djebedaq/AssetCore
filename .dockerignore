@@ -5,6 +5,9 @@
 *.sqlite3
 *.dump
 *.backup
+*.acbackup
+.tmp
+backups
 *.pem
 *.key
 *.p12

@@ -12,6 +12,17 @@ backup manifest.
 
 ## Production Compose one-shot процедура
 
+За production **upgrade** използвайте механично guarded процедурата в
+[PORTABLE_PRODUCTION_DEPLOYMENT_BG.md](PORTABLE_PRODUCTION_DEPLOYMENT_BG.md).
+Тя спира writers и изисква успешни backup + verify преди `prepare`. Командите
+по-долу са отделни backup/verify/restore операции, не shortcut за upgrade.
+Изберете изрично `ASSETCORE_IMAGE` с проверения immutable image ID и същите
+Compose project/env като инсталацията (helper default project е `assetcore`;
+за ръчните команди добавете `--project-name assetcore`). Добавете `--pull never`.
+Запазете поне една encrypted проверена copy извън физическия диск/host.
+Normal Compose start вече не пуска migrate; `--no-deps` остава задължително за
+operational изолацията. BACKUP_ENCRYPTION_KEY е само временен operational secret.
+
 Стандартният production image съдържа само минималните operational entry points
 за backup, verify и restore. Те се стартират чрез съществуващата `app` услуга,
 която запазва фиксирания потребител `10001:10001`, read-only root filesystem,

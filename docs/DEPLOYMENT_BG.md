@@ -21,7 +21,7 @@ full-stack production-style Docker трябва да е зад HTTPS reverse pro
 | staging | PostgreSQL | `false` | `startup` със advisory lock или отделна стъпка | изрично HTTPS | може да е изключен |
 | production | PostgreSQL | `true` | само `external` | изрично HTTPS | задължително включен |
 
-`render.yaml` е означен само за staging (`plan: free`, `DEPLOYMENT_ENVIRONMENT=staging`). Free Render web услугата няма платена pre-deploy стъпка, затова staging използва bounded `startup` migration под PostgreSQL advisory lock и една инстанция. Това не е production профил. За production използвайте платена услуга с отделна pre-deploy команда `python -m app.runtime prepare`, след което стартирайте неизменения web `CMD`.
+`render.yaml` е означен само за staging (`plan: free`, `DEPLOYMENT_ENVIRONMENT=staging`). Free Render web услугата няма платена pre-deploy стъпка, затова staging използва bounded `startup` migration под PostgreSQL advisory lock и една инстанция. Това не е production профил. Production не изисква Render или платен cloud: portable Docker договорът и explicit backup → verify → prepare gate са в [PORTABLE_PRODUCTION_DEPLOYMENT_BG.md](PORTABLE_PRODUCTION_DEPLOYMENT_BG.md).
 
 ### PostgreSQL pool и timeout настройки
 
@@ -111,13 +111,11 @@ Runtime image работи с фиксиран непривилегирован 
 PostgreSQL няма host `ports` в основния Compose файл и е достъпен само по вътрешната Compose мрежа. Ако операторът изрично се нуждае от локален development достъп, използвайте loopback-only override:
 
 ```bash
-docker compose config
-docker compose build
-docker compose up
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+docker compose config --quiet
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up db
 ```
 
-Последната команда е само за development и публикува `127.0.0.1:5432`, не публичен интерфейс.
+Последната команда е само за development и публикува `127.0.0.1:5432`, не публичен интерфейс. Production app bind е configurable с default `127.0.0.1`; normal `up` вече няма migration dependency. За production build/init/start/upgrade използвайте exact-SHA helper-а от portable runbook. Explicit `migrate` service е в profile `operations` и не се активира от normal app start.
 
 ## Liveness и readiness
 

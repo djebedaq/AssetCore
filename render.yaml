@@ -1,5 +1,5 @@
 services:
-  # STAGING-ONLY blueprint. Production requires a paid pre-deploy migration step.
+  # STAGING-ONLY blueprint. Production uses explicit verified-backup preparation.
   - type: web
     name: assetcore
     runtime: docker
