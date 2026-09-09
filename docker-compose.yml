@@ -33,6 +33,7 @@ x-assetcore-environment: &assetcore-environment
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: assetcore
       POSTGRES_USER: assetcore

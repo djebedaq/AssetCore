@@ -205,6 +205,9 @@ class Deployment:
         self.validate()
         if self.current_image(running=False) != self.image:
             raise DeploymentError("release_change_requires_upgrade")
+        self.stage = "database_start_and_readiness"
+        # Start only the existing database container; never create/build/pull it.
+        self.dc("start", "--wait", "--wait-timeout", "120", "db")
         self.probe("existing")  # Validate production configuration without preparing it.
         self.start()  # No migration/seed/prepare, including on failure.
 

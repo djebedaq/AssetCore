@@ -27,6 +27,7 @@ def test_compose_start_is_not_an_upgrade_and_network_is_private():
     assert app["environment"]["MIGRATION_STRATEGY"] == "external"
     assert "BACKUP_ENCRYPTION_KEY" not in app["environment"]
     assert "ports" not in db
+    assert db["restart"] == "unless-stopped"
     assert db["volumes"] == ["assetcore_pg:/var/lib/postgresql/data"]
     assert app["ports"] == ["${ASSETCORE_BIND_ADDRESS:-127.0.0.1}:${ASSETCORE_PORT:-10000}:10000"]
     assert app["image"] == migrate["image"] == "${ASSETCORE_IMAGE:-assetcore:local}"
@@ -167,7 +168,65 @@ def test_restart_cannot_bypass_release_upgrade_guard(operation):
 def test_same_release_start_never_prepares(operation, monkeypatch):
     monkeypatch.setattr(operation.subject, "current_image", lambda **_: NEW_IMAGE)
     operation.subject.restart()
-    assert not any("migrate" in call for call in operation.calls)
+    assert operation.calls == [
+        ("start", "--wait", "--wait-timeout", "120", "db"),
+        ("probe", "existing"),
+        ("up", "-d", "--no-deps", "--no-build", "--pull", "never",
+         "--wait", "--wait-timeout", "180", "app"),
+        ("probe", "smoke"),
+    ]  # Exhaustive: no migrate/prepare/seed/build/pull operation is permitted.
+
+
+def test_start_recovers_existing_stopped_containers_in_health_order(operation, monkeypatch):
+    subject = operation.subject
+    state = {"db": "stopped", "app": "stopped"}
+    calls = []
+
+    def dc(*args, **kwargs):
+        calls.append(args)
+        if args == ("ps", "--quiet", "--all", "app"):
+            assert state["app"] == "stopped"
+            return "a" * 64
+        if args == ("start", "--wait", "--wait-timeout", "120", "db"):
+            assert state == {"db": "stopped", "app": "stopped"}
+            state["db"] = "healthy"
+            return ""
+        if args == ("up", "-d", "--no-deps", "--no-build", "--pull", "never",
+                    "--wait", "--wait-timeout", "180", "app"):
+            assert state["db"] == "healthy"
+            state["app"] = "healthy"
+            return ""
+        pytest.fail(f"Unexpected normal-start command: {args}")
+
+    def command(args, **kwargs):
+        assert args == ["docker", "inspect", "--format", "{{.Image}}", "a" * 64]
+        return NEW_IMAGE
+
+    def probe(mode, **kwargs):
+        calls.append(("probe", mode))
+        assert state["db"] == "healthy"
+        if mode == "smoke":
+            assert state["app"] == "healthy" and kwargs["running"] is True
+        else:
+            assert mode == "existing" and state["app"] == "stopped"
+
+    monkeypatch.setattr(subject, "current_image", deploy.Deployment.current_image.__get__(subject))
+    monkeypatch.setattr(subject, "command", command)
+    monkeypatch.setattr(subject, "dc", dc)
+    monkeypatch.setattr(subject, "probe", probe)
+    monkeypatch.setattr(subject, "prepare", lambda: pytest.fail("Normal start invoked prepare"))
+    subject.restart()
+    assert state == {"db": "healthy", "app": "healthy"}
+    assert [call[0] for call in calls] == ["ps", "start", "probe", "up", "probe"]
+
+
+def test_failed_database_health_prevents_app_probe_and_start(operation, monkeypatch):
+    monkeypatch.setattr(operation.subject, "current_image", lambda **_: NEW_IMAGE)
+    operation.failure["at"] = "start"
+    with pytest.raises(deploy.DeploymentError, match="simulated_failure"):
+        operation.subject.restart()
+    assert operation.calls == [("start", "--wait", "--wait-timeout", "120", "db")]
+    assert operation.subject.stage == "database_start_and_readiness"
 
 
 def test_initialization_refuses_nonempty_database_before_prepare(operation, monkeypatch):

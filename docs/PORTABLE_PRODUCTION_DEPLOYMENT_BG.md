@@ -129,8 +129,19 @@ python3 scripts/production_deploy.py start --sha "$RELEASE_SHA"
 ```
 
 Допуска само image ID на съществуващия app container. Release change изисква
-`upgrade`, дори schema да не се променя. Проверява readiness и shell; при провал
-спира app. Ако DB е спряна, първо стартирайте **само db** със същия project/env.
+`upgrade`, дори schema да не се променя. След release guard helper-ът изпълнява
+`docker compose start --wait --wait-timeout 120 db` за **съществуващия** PostgreSQL
+container и изчаква healthy база преди DB probe и app start/readiness. Възстановява
+и едновременно спрени app/db, без отделна ръчна DB команда. При failed DB health
+не продължава към app. Няма migrate, prepare, seed, schema change, image build или
+pull на нов app release. Проверява app readiness и shell; при провал спира app.
+Липсващ container не се създава от DB start — първа инсталация остава explicit init.
+
+PostgreSQL и app са с `restart: unless-stopped`: след рестарт на host/Docker daemon
+Docker възстановява услугите, ако не са били изрично спрени. Ръчно спрени услуги
+се възстановяват чрез горната официална start команда. PG volume и private network
+са непроменени. Вижте [Compose start](https://docs.docker.com/reference/cli/docker/compose/start/)
+и [Docker restart policies](https://docs.docker.com/engine/containers/start-containers-automatically/).
 Обикновен `docker compose up` също вече не включва migration service, но не е
 заместител на production helper и неговите release/backup проверки.
 

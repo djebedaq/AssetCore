@@ -64,8 +64,29 @@ def main() -> None:
         try:
             subject.initialize()
             print("PASS: explicit empty PostgreSQL prepare and enforced-license readiness")
-            subject.restart()
-            print("PASS: same-image start without implicit prepare")
+            before_restart = subject.probe("existing", running=True)
+            db_container = subject.dc("ps", "--all", "--quiet", "db")
+            assert subject.command(["docker", "inspect", "--format",
+                                    "{{.HostConfig.RestartPolicy.Name}}", db_container]) == "unless-stopped"
+            subject.dc("stop", "app", "db")
+            assert not subject.dc("ps", "--status", "running", "--quiet", "app", "db")
+            normal_commands = []
+            original_dc = subject.dc
+
+            def record_normal_start(*command, **kwargs):
+                normal_commands.append(command)
+                return original_dc(*command, **kwargs)
+
+            subject.dc = record_normal_start
+            try:
+                subject.restart()
+            finally:
+                subject.dc = original_dc
+            assert not any("migrate" in command or "prepare" in command or "seed" in command
+                           or command[0] in {"build", "pull"} for command in normal_commands)
+            assert subject.dc("ps", "--all", "--quiet", "db") == db_container
+            assert subject.probe("existing", running=True) == before_restart
+            print("PASS: stopped app/db recovered through same-image start; DB healthy first; zero prepare/migrate")
             try:
                 subject.initialize()
             except DeploymentError:
