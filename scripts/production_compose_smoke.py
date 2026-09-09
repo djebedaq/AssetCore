@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import secrets
+import stat
 import subprocess
 import tempfile
 import uuid
@@ -53,7 +54,12 @@ def main() -> None:
         backups = directory / "backups"
         backups.mkdir()
         subprocess.run(["sudo", "chgrp", "10001", str(backups)], check=True, capture_output=True)
-        backups.chmod(0o2770)
+        # Runner is not a member of GID 10001: an unprivileged chmod can silently
+        # clear setgid. The CI administrator must establish the shared parent.
+        subprocess.run(["sudo", "chmod", "2770", str(backups)], check=True, capture_output=True)
+        permissions = backups.stat()
+        if permissions.st_gid != 10001 or not permissions.st_mode & stat.S_ISGID:
+            raise SystemExit("CI backup parent must retain shared GID and setgid.")
         subject = Deployment(ROOT, args.sha, env_file, project)
         try:
             subject.initialize()
