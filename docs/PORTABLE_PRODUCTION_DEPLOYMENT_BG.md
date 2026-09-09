@@ -130,8 +130,9 @@ python3 scripts/production_deploy.py start --sha "$RELEASE_SHA"
 
 Допуска само image ID на съществуващия app container. Release change изисква
 `upgrade`, дори schema да не се променя. След release guard helper-ът изпълнява
-`docker compose start --wait --wait-timeout 120 db` за **съществуващия** PostgreSQL
-container и изчаква healthy база преди DB probe и app start/readiness. Възстановява
+`docker compose start db` за **съществуващия** PostgreSQL container и проверява
+read-only неговия health статус до 120 секунди (съвместимо и с Compose 2.x без
+`start --wait`). Изчаква healthy база преди DB probe и app start/readiness. Възстановява
 и едновременно спрени app/db, без отделна ръчна DB команда. При failed DB health
 не продължава към app. Няма migrate, prepare, seed, schema change, image build или
 pull на нов app release. Проверява app readiness и shell; при провал спира app.

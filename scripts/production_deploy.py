@@ -10,6 +10,7 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -207,7 +208,25 @@ class Deployment:
             raise DeploymentError("release_change_requires_upgrade")
         self.stage = "database_start_and_readiness"
         # Start only the existing database container; never create/build/pull it.
-        self.dc("start", "--wait", "--wait-timeout", "120", "db")
+        containers = self.dc("ps", "--all", "--quiet", "db").splitlines()
+        if len(containers) != 1 or not re.fullmatch(r"[0-9a-f]{12,64}", containers[0]):
+            raise DeploymentError("one_existing_database_container_required")
+        self.dc("start", "db")
+        # Support Compose versions without start --wait; inspect only state, not logs/config.
+        deadline = time.monotonic() + 120
+        while True:
+            state = self.command([
+                "docker", "inspect", "--format",
+                "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}",
+                containers[0],
+            ])
+            if state == "running healthy":
+                break
+            if state != "running starting":
+                raise DeploymentError("database_not_healthy")
+            if time.monotonic() >= deadline:
+                raise DeploymentError("database_health_timed_out")
+            time.sleep(1)
         self.probe("existing")  # Validate production configuration without preparing it.
         self.start()  # No migration/seed/prepare, including on failure.
 

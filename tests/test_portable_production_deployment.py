@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 REVISION = "a" * 40
 OLD_IMAGE = "sha256:" + "1" * 64
 NEW_IMAGE = "sha256:" + "2" * 64
+DB_CONTAINER = "b" * 64
+DB_HEALTH_FORMAT = "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}"
 
 
 def test_compose_start_is_not_an_upgrade_and_network_is_private():
@@ -75,6 +77,8 @@ def operation(tmp_path, monkeypatch):
 
     def dc(*args, **kwargs):
         calls.append(args)
+        if args == ("ps", "--all", "--quiet", "db"):
+            return DB_CONTAINER
         stage = ("backup" if "scripts/backup_database.py" in args else
                  "verify" if "scripts/verify_backup.py" in args else
                  "prepare" if "migrate" in args else
@@ -94,6 +98,11 @@ def operation(tmp_path, monkeypatch):
 
     monkeypatch.setattr(subject, "probe", probe)
     monkeypatch.setattr(subject, "dc", dc)
+    def command(args, **kwargs):
+        assert args == ["docker", "inspect", "--format", DB_HEALTH_FORMAT, DB_CONTAINER]
+        calls.append(("inspect", "db_health"))
+        return "running healthy"
+    monkeypatch.setattr(subject, "command", command)
     return SimpleNamespace(subject=subject, calls=calls, failure=failure, directory=tmp_path)
 
 
@@ -169,7 +178,9 @@ def test_same_release_start_never_prepares(operation, monkeypatch):
     monkeypatch.setattr(operation.subject, "current_image", lambda **_: NEW_IMAGE)
     operation.subject.restart()
     assert operation.calls == [
-        ("start", "--wait", "--wait-timeout", "120", "db"),
+        ("ps", "--all", "--quiet", "db"),
+        ("start", "db"),
+        ("inspect", "db_health"),
         ("probe", "existing"),
         ("up", "-d", "--no-deps", "--no-build", "--pull", "never",
          "--wait", "--wait-timeout", "180", "app"),
@@ -187,9 +198,11 @@ def test_start_recovers_existing_stopped_containers_in_health_order(operation, m
         if args == ("ps", "--quiet", "--all", "app"):
             assert state["app"] == "stopped"
             return "a" * 64
-        if args == ("start", "--wait", "--wait-timeout", "120", "db"):
+        if args == ("ps", "--all", "--quiet", "db"):
+            return DB_CONTAINER
+        if args == ("start", "db"):
             assert state == {"db": "stopped", "app": "stopped"}
-            state["db"] = "healthy"
+            state["db"] = "starting"
             return ""
         if args == ("up", "-d", "--no-deps", "--no-build", "--pull", "never",
                     "--wait", "--wait-timeout", "180", "app"):
@@ -199,8 +212,16 @@ def test_start_recovers_existing_stopped_containers_in_health_order(operation, m
         pytest.fail(f"Unexpected normal-start command: {args}")
 
     def command(args, **kwargs):
+        if args == ["docker", "inspect", "--format", DB_HEALTH_FORMAT, DB_CONTAINER]:
+            calls.append(("inspect", "db_health"))
+            assert state["app"] == "stopped"
+            return "running " + state["db"]
         assert args == ["docker", "inspect", "--format", "{{.Image}}", "a" * 64]
         return NEW_IMAGE
+
+    def wait(seconds):
+        assert seconds == 1 and state == {"db": "starting", "app": "stopped"}
+        state["db"] = "healthy"
 
     def probe(mode, **kwargs):
         calls.append(("probe", mode))
@@ -215,9 +236,10 @@ def test_start_recovers_existing_stopped_containers_in_health_order(operation, m
     monkeypatch.setattr(subject, "dc", dc)
     monkeypatch.setattr(subject, "probe", probe)
     monkeypatch.setattr(subject, "prepare", lambda: pytest.fail("Normal start invoked prepare"))
+    monkeypatch.setattr(deploy.time, "sleep", wait)
     subject.restart()
     assert state == {"db": "healthy", "app": "healthy"}
-    assert [call[0] for call in calls] == ["ps", "start", "probe", "up", "probe"]
+    assert [call[0] for call in calls] == ["ps", "ps", "start", "inspect", "inspect", "probe", "up", "probe"]
 
 
 def test_failed_database_health_prevents_app_probe_and_start(operation, monkeypatch):
@@ -225,8 +247,43 @@ def test_failed_database_health_prevents_app_probe_and_start(operation, monkeypa
     operation.failure["at"] = "start"
     with pytest.raises(deploy.DeploymentError, match="simulated_failure"):
         operation.subject.restart()
-    assert operation.calls == [("start", "--wait", "--wait-timeout", "120", "db")]
+    assert operation.calls == [("ps", "--all", "--quiet", "db"), ("start", "db")]
     assert operation.subject.stage == "database_start_and_readiness"
+
+
+@pytest.mark.parametrize("state", ["running unhealthy", "exited", "running", "restarting starting"])
+def test_nonhealthy_or_missing_database_healthcheck_prevents_app_start(operation, monkeypatch, state):
+    monkeypatch.setattr(operation.subject, "current_image", lambda **_: NEW_IMAGE)
+    monkeypatch.setattr(operation.subject, "command", lambda *a, **kw: state)
+    with pytest.raises(deploy.DeploymentError, match="database_not_healthy"):
+        operation.subject.restart()
+    assert operation.calls == [("ps", "--all", "--quiet", "db"), ("start", "db")]
+
+
+def test_database_health_wait_is_bounded_and_never_prepares(operation, monkeypatch):
+    monkeypatch.setattr(operation.subject, "current_image", lambda **_: NEW_IMAGE)
+    monkeypatch.setattr(operation.subject, "command", lambda *a, **kw: "running starting")
+    clock = iter([0, 119, 120])
+    sleeps = []
+    monkeypatch.setattr(deploy.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(deploy.time, "sleep", sleeps.append)
+    with pytest.raises(deploy.DeploymentError, match="database_health_timed_out"):
+        operation.subject.restart()
+    assert sleeps == [1]
+    assert operation.calls == [("ps", "--all", "--quiet", "db"), ("start", "db")]
+
+
+@pytest.mark.parametrize("containers", ["", "not-a-container", DB_CONTAINER + "\n" + "c" * 64])
+def test_normal_start_requires_one_existing_database_and_never_creates_it(operation, monkeypatch, containers):
+    monkeypatch.setattr(operation.subject, "current_image", lambda **_: NEW_IMAGE)
+    calls = []
+    def dc(*args, **kwargs):
+        calls.append(args)
+        return containers
+    monkeypatch.setattr(operation.subject, "dc", dc)
+    with pytest.raises(deploy.DeploymentError, match="one_existing_database_container_required"):
+        operation.subject.restart()
+    assert calls == [("ps", "--all", "--quiet", "db")]
 
 
 def test_initialization_refuses_nonempty_database_before_prepare(operation, monkeypatch):

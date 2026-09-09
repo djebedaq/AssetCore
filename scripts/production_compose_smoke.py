@@ -75,6 +75,12 @@ def main() -> None:
 
             def record_normal_start(*command, **kwargs):
                 normal_commands.append(command)
+                if command[0] in {"run", "up"}:
+                    assert subject.command([
+                        "docker", "inspect", "--format",
+                        "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}",
+                        db_container,
+                    ]) == "running healthy"
                 return original_dc(*command, **kwargs)
 
             subject.dc = record_normal_start
