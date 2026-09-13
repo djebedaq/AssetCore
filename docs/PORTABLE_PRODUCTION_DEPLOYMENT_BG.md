@@ -153,7 +153,13 @@ Docker възстановява услугите, ако не са били из
 директория, writable от operator и container UID/GID `10001:10001`. На Linux
 използвайте отделна директория с обща GID 10001 и setgid (режим `2770`), без
 world-writable достъп; това се настройва изрично от host администратора. На
-Windows Docker Desktop проверете споделянето и ACL на точния mount.
+Windows Docker Desktop проверете споделянето и ACL на одобрената родителска
+директория. Helper създава уникалния `upgrade-*` подкаталог с обикновен
+`mkdir()`, който наследява нейния ACL, без `chmod` или допълнителни grants.
+Windows `mkdtemp()` използва `mkdir(0700)`; при съвременен Python този режим
+заменя наследения ACL с ограничен ACL, а последващ `chmod(0770)` не го
+възстановява. Не добавяйте `Everyone`/world-writable права. На POSIX остава
+`mkdtemp()` с изричен `0770` и наследената от setgid parent група.
 
 Подайте BACKUP_ENCRYPTION_KEY само в **текущата operational shell** чрез secret
 manager (Base64 на точно 32 bytes). Не го добавяйте в production `.env` или web
@@ -183,22 +189,30 @@ python3 scripts/production_deploy.py upgrade --sha "$RELEASE_SHA" --backup-dir "
 1. Exact clean SHA → immutable image/label → `compose config --quiet`.
 2. Един running old app, healthy readiness/shell; read-only existing revision и
    активен audit actor; old/new image конфигурациите трябва да сочат същата база.
-3. Запазва old/new image IDs, SHA, UTC и previous Alembic revision в `release.json`
-   в нов уникален `upgrade-*` backup подкаталог. Не записва secrets или DB URL.
-4. Read-only preflight изисква PostgreSQL server и tools major 16 преди
-   спирането на writers. Спира app writers. Старият **immutable image** изпълнява
+3. Read-only preflight изисква PostgreSQL server и tools major 16 за избрания
+   backup image и target image преди спирането на writers.
+4. Създава нов уникален `upgrade-*` backup подкаталог и проверява точния RW
+   bind mount чрез избрания **immutable backup image**. Пробата създава, прочита
+   и изтрива само временен `.mount-probe-*` файл; няма `.acbackup`, DB достъп,
+   Compose environment или подадени secrets. Изпълнява се с `--network none`,
+   `--read-only`, UID/GID `10001:10001`, `--cap-drop ALL` и
+   `--security-opt no-new-privileges:true`. При грешка в създаването, mount,
+   записа/прочитането или почистването helper отказва **преди stop writers**.
+   Запазва old/new/backup image IDs, SHA, UTC и previous Alembic revision в
+   `release.json`, без secrets или DB URL; отказ при този запис също е преди stop.
+5. Спира app writers и отново валидира DB състоянието. Старият **immutable image** изпълнява
    `backup_database.py --actor-user-id …`, `--no-deps`, operational key, RW mount,
    освен при строго ограничения първи преход, описан по-долу.
-5. Изисква точно един нов `.acbackup`, записва encrypted SHA-256, проверява
+6. Изисква точно един нов `.acbackup`, записва encrypted SHA-256, проверява
    **същия файл** с коригирания target `verify_backup.py
    --require-postgres-compatible` и RO mount. Освен AES-GCM и checksum изисква
    действителен PG16 custom dump, PG16 restore tool и целеви PG16 сървър.
    Проверява, че hash не се е променил по време на verify. Това е съществуващият
    AES-GCM/custom dump формат.
-6. Само при успешни backup **и** verify: новият exact image изпълнява
+7. Само при успешни backup **и** verify: новият exact image изпълнява
    `docker compose run --rm --no-deps --pull never -T migrate` →
    `python -m app.runtime prepare`.
-7. Стартира web от новия pinned ID, изчаква `/api/ready`, проверява liveness и
+8. Стартира web от новия pinned ID, изчаква `/api/ready`, проверява liveness и
    HTML shell. Записва `runtime_ready`, **не** „fully commissioned“.
 
 Backup/verify fail → няма prepare; prepare fail → няма нов web start. При
@@ -207,6 +221,16 @@ readiness/smoke fail app се спира. Няма автоматично връ
 CLI умишлено не препечатва Docker/SQL/settings exception с евентуални secrets.
 След прекъсване/timeout проверете останали one-shot containers и състоянието на
 DB, преди да предприемете recovery; не replay-вайте upgrade на сляпо.
+
+При `stage=recovery_directory_creation` или `stage=recovery_directory_qualification`
+writers още не са спрени и няма backup/prepare. Helper използва контролиран код
+`recovery_directory_creation_failed`, `recovery_directory_qualification_failed`
+или `recovery_metadata_write_failed`; CLI показва само failed stage, без суров
+Docker/OS exception.
+Проверете ACL/shared group и Docker достъпа до одобрения parent; не преизползвайте
+стар неуспешен `upgrade-*` подкаталог. Пробата проверява текущата mount/write
+възможност, но не гарантира свободно място за целия backup или бъдеща промяна на
+правата; реалните backup/verify проверки остават задължителни.
 
 При стара pre-PROD-01 инсталация helper изпраща само read-only state/smoke probe
 по stdin към текущия image. Няма инсталиране/промяна на файлове в него.
@@ -269,7 +293,8 @@ tmpfs. Текущият operational `/tmp` е 512 MiB. Измерете DB/docum
 Запазете exact old image ID, image archive, source SHA, `release.json`,
 проверения backup и отделно защитените operational secrets. Не изпълнявайте
 `docker compose down -v`, volume prune или произволен Alembic downgrade.
-След failed upgrade app остава спрян. Verify → restore rehearsal в отделна DB
+След failure, настъпил след stop writers, app остава спрян. Отказ преди stop
+writers оставя работещото приложение непроменено. Verify → restore rehearsal в отделна DB
 → проверка на historical documents/hashes/signatures → одобрено възстановяване
 и стар old image. Restore е разрушителен и изисква отделно потвърждение; helper
 не го изпълнява. Задължително запазете и post-failure състоянието за анализ.

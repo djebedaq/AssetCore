@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import ast
 import json
+import os
+import re
+import stat
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -59,6 +63,85 @@ def test_production_example_has_required_contract_without_usable_secrets():
             "DB_STATEMENT_TIMEOUT_MS", "FORWARDED_ALLOW_IPS"} <= values.keys()
 
 
+def test_windows_recovery_directory_uses_inherited_mkdir_without_mkdtemp_or_chmod(tmp_path,
+                                                                               monkeypatch):
+    # Replace only this module's OS view; changing global os.name breaks pathlib/pytest.
+    monkeypatch.setattr(deploy, "os", SimpleNamespace(name="nt"))
+    original_mkdir = type(tmp_path).mkdir
+    created = []
+
+    def inherited_mkdir(path, *args, **kwargs):
+        assert not args and not kwargs  # Default mkdir mode preserves parent ACL inheritance.
+        created.append(path)
+        return original_mkdir(path)
+
+    monkeypatch.setattr(type(tmp_path), "mkdir", inherited_mkdir)
+    monkeypatch.setattr(deploy.tempfile, "mkdtemp", lambda **_: pytest.fail("Windows used mkdtemp"))
+    monkeypatch.setattr(type(tmp_path), "chmod", lambda *_: pytest.fail("Windows used chmod"))
+    first = deploy.create_recovery_directory(tmp_path)
+    second = deploy.create_recovery_directory(tmp_path)
+    assert first != second and created == [first, second]
+    assert all(path.parent == tmp_path and path.is_dir() and
+               re.fullmatch(r"upgrade-[0-9a-f]{32}", path.name) for path in created)
+
+
+def test_windows_recovery_directory_retries_collision_without_reusing_existing_files(tmp_path,
+                                                                                    monkeypatch):
+    existing = tmp_path / ("upgrade-" + "a" * 32)
+    existing.mkdir()
+    retained = existing / "retained.acbackup"
+    retained.write_bytes(b"retained-test-backup")
+    identifiers = iter(["a" * 32, "b" * 32])
+    monkeypatch.setattr(deploy, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(deploy.uuid, "uuid4", lambda: SimpleNamespace(hex=next(identifiers)))
+    destination = deploy.create_recovery_directory(tmp_path)
+    assert destination == tmp_path / ("upgrade-" + "b" * 32)
+    assert destination.is_dir() and list(destination.iterdir()) == []
+    assert retained.read_bytes() == b"retained-test-backup"
+
+
+def test_windows_recovery_directory_collision_retries_are_bounded(tmp_path, monkeypatch):
+    existing = tmp_path / ("upgrade-" + "a" * 32)
+    existing.mkdir()
+    attempts = []
+
+    def collision():
+        attempts.append(True)
+        return SimpleNamespace(hex="a" * 32)
+
+    monkeypatch.setattr(deploy, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(deploy.uuid, "uuid4", collision)
+    with pytest.raises(deploy.DeploymentError, match="^recovery_directory_creation_failed$"):
+        deploy.create_recovery_directory(tmp_path)
+    assert len(attempts) == 10 and list(tmp_path.iterdir()) == [existing]
+
+
+def test_posix_recovery_directory_retains_unique_creation_and_restrictive_shared_mode(tmp_path,
+                                                                                    monkeypatch):
+    original_mkdtemp = deploy.tempfile.mkdtemp
+    original_chmod = type(tmp_path).chmod
+    calls = []
+
+    def unique_directory(*args, **kwargs):
+        assert not args and kwargs == {"prefix": "upgrade-", "dir": tmp_path}
+        calls.append("create")
+        return original_mkdtemp(**kwargs)
+
+    def shared_mode(path, mode):
+        assert calls == ["create"] and path.parent == tmp_path and path.is_dir()
+        calls.append(mode)
+        if os.name == "posix":
+            original_chmod(path, mode)
+
+    monkeypatch.setattr(deploy, "os", SimpleNamespace(name="posix"))
+    monkeypatch.setattr(deploy.tempfile, "mkdtemp", unique_directory)
+    monkeypatch.setattr(type(tmp_path), "chmod", shared_mode)
+    destination = deploy.create_recovery_directory(tmp_path)
+    assert calls == ["create", 0o770] and destination.is_dir()
+    if os.name == "posix":
+        assert stat.S_IMODE(destination.stat().st_mode) == 0o770
+
+
 @pytest.fixture()
 def operation(tmp_path, monkeypatch):
     subject = deploy.Deployment(ROOT, REVISION, ROOT / ".env")
@@ -112,6 +195,34 @@ def operation(tmp_path, monkeypatch):
     monkeypatch.setattr(subject, "probe", probe)
     monkeypatch.setattr(subject, "dc", dc)
     def command(args, **kwargs):
+        if args[:2] == ["docker", "run"]:
+            calls.append(("qualify", state["backup_image"]))
+            assert subject.stage == "recovery_directory_qualification"
+            mount = args[args.index("--mount") + 1]
+            assert mount.startswith("type=bind,source=") and mount.endswith(",target=/backups")
+            destination = Path(mount.removeprefix("type=bind,source=").removesuffix(",target=/backups"))
+            assert args[:-1] == [
+                "docker", "run", "--rm", "--pull", "never", "--network", "none",
+                "--read-only", "--user", "10001:10001", "--cap-drop", "ALL",
+                "--security-opt", "no-new-privileges:true", "--mount", mount,
+                "--entrypoint", "python", state["backup_image"], "-c",
+            ]
+            assert not kwargs.get("backup_secret") and "BACKUP_ENCRYPTION_KEY" not in args[-1]
+            assert list(destination.iterdir()) == []  # Qualify before recovery metadata or backup.
+            markers = re.findall(r"/backups/(\.mount-probe-[0-9a-f]{32})", args[-1])
+            assert len(markers) == 1
+            marker = destination / markers[0]
+            if failure["at"] == "qualification":
+                marker.write_bytes(b"partial-test-probe")
+                raise failure.get("error", deploy.DeploymentError("private-test-diagnostic"))
+            # Execute the actual stdlib probe with its bind path mapped into this test directory.
+            content = ast.parse(args[-1])
+            for node in ast.walk(content):
+                if isinstance(node, ast.Constant) and node.value == "/backups/" + marker.name:
+                    node.value = str(marker)
+            exec(compile(content, "<mount-qualification-test>", "exec"), {})
+            assert list(destination.iterdir()) == []
+            return ""
         if "merge-base" in args:
             return deploy.PG16_BASELINE_SHA
         if "diff" in args:
@@ -132,11 +243,14 @@ def test_upgrade_orders_stop_backup_verify_prepare_ready_and_retains_recovery(op
     preflights = [call for call in operation.calls if "--tools" in call]
     assert len(preflights) == 2
     mutations = [call for call in operation.calls if call[0] != "probe" and "--tools" not in call]
-    assert mutations[0] == ("stop", "app")
-    assert "scripts/backup_database.py" in mutations[1]
-    assert "scripts/verify_backup.py" in mutations[2]
-    assert mutations[3][-1] == "migrate"
-    assert mutations[4][0] == "up" and "--no-build" in mutations[4]
+    assert mutations[0] == ("qualify", OLD_IMAGE)
+    assert (max(index for index, call in enumerate(operation.calls) if "--tools" in call) <
+            operation.calls.index(mutations[0]))
+    assert mutations[1] == ("stop", "app")
+    assert "scripts/backup_database.py" in mutations[2]
+    assert "scripts/verify_backup.py" in mutations[3]
+    assert mutations[4][-1] == "migrate"
+    assert mutations[5][0] == "up" and "--no-build" in mutations[5]
     assert operation.calls[-1] == ("probe", "smoke")
     record = json.loads((destination / "release.json").read_text())
     assert record["status"] == "runtime_ready"
@@ -149,6 +263,110 @@ def test_upgrade_orders_stop_backup_verify_prepare_ready_and_retains_recovery(op
     assert record["encrypted_sha256"] == deploy.file_sha256(destination / "unique.acbackup")
     assert record["fully_commissioned"] is False
     assert "test-operation-only" not in json.dumps(record)
+
+
+@pytest.mark.parametrize(("platform", "failed_call"), [
+    ("nt", "mkdir"), ("posix", "mkdtemp"), ("posix", "chmod"),
+])
+def test_recovery_creation_failures_are_controlled_before_shutdown(operation, monkeypatch,
+                                                                 capsys, platform, failed_call):
+    monkeypatch.setattr(deploy, "os", SimpleNamespace(name=platform, environ=os.environ))
+
+    def unavailable(*args, **kwargs):
+        raise PermissionError("sensitive-test-sentinel /private/internal/path")
+
+    target = deploy.tempfile if failed_call == "mkdtemp" else type(operation.directory)
+    monkeypatch.setattr(target, failed_call, unavailable)
+    with pytest.raises(deploy.DeploymentError) as caught:
+        operation.subject.upgrade(operation.directory, 1)
+    assert str(caught.value) == "recovery_directory_creation_failed"
+    assert operation.subject.stage == "recovery_directory_creation"
+    assert len([call for call in operation.calls if "--tools" in call]) == 2
+    assert not any(call[0] in {"qualify", "stop", "up"} or "migrate" in call or
+                   "scripts/backup_database.py" in call for call in operation.calls)
+    assert not list(operation.directory.glob("*/release.json"))
+    assert not list(operation.directory.glob("*/*.acbackup"))
+    output = capsys.readouterr()
+    assert "sensitive-test-sentinel" not in str(caught.value) + output.out + output.err
+
+
+@pytest.mark.parametrize("error", [
+    deploy.DeploymentError("private-docker-diagnostic"),
+    PermissionError("private-host-diagnostic"),
+])
+def test_mount_qualification_failure_cleans_partial_probe_before_shutdown(operation, error, capsys):
+    operation.failure.update(at="qualification", error=error)
+    with pytest.raises(deploy.DeploymentError) as caught:
+        operation.subject.upgrade(operation.directory, 1)
+    assert str(caught.value) == "recovery_directory_qualification_failed"
+    assert operation.subject.stage == "recovery_directory_qualification"
+    assert operation.calls[-1] == ("qualify", OLD_IMAGE)
+    assert not any(call[0] in {"stop", "up"} or "migrate" in call or
+                   "scripts/backup_database.py" in call for call in operation.calls)
+    destinations = list(operation.directory.iterdir())
+    assert len(destinations) == 1 and list(destinations[0].iterdir()) == []
+    output = capsys.readouterr()
+    assert "private-" not in str(caught.value) + output.out + output.err
+
+
+def test_mount_probe_cleanup_failure_is_controlled_before_writer_shutdown(operation, monkeypatch):
+    original_unlink = type(operation.directory).unlink
+
+    def cleanup_refused(path, *args, **kwargs):
+        if path.name.startswith(".mount-probe-"):
+            raise PermissionError("private-cleanup-diagnostic")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(operation.directory), "unlink", cleanup_refused)
+    with pytest.raises(deploy.DeploymentError, match="^recovery_directory_qualification_failed$"):
+        operation.subject.upgrade(operation.directory, 1)
+    assert operation.subject.stage == "recovery_directory_qualification"
+    assert operation.calls[-1] == ("qualify", OLD_IMAGE)
+    assert not any(call[0] in {"stop", "up"} or "migrate" in call or
+                   "scripts/backup_database.py" in call for call in operation.calls)
+    assert len(list(operation.directory.glob("*/.mount-probe-*"))) == 1
+    assert not list(operation.directory.glob("*/release.json"))
+
+
+def test_interrupted_mount_qualification_cleans_partial_probe_without_stopping_writers(operation):
+    operation.failure.update(at="qualification", error=KeyboardInterrupt())
+    with pytest.raises(KeyboardInterrupt):
+        operation.subject.upgrade(operation.directory, 1)
+    assert operation.calls[-1] == ("qualify", OLD_IMAGE)
+    assert not any(call[0] in {"stop", "up"} or "migrate" in call or
+                   "scripts/backup_database.py" in call for call in operation.calls)
+    destinations = list(operation.directory.iterdir())
+    assert len(destinations) == 1 and list(destinations[0].iterdir()) == []
+
+
+def test_mount_qualification_cannot_receive_compose_environment_or_operational_secret(operation,
+                                                                                    monkeypatch):
+    simulated_command = operation.subject.command
+    environments = []
+
+    def run(args, **kwargs):
+        environments.append(kwargs["env"])
+        return simulated_command(args)
+
+    monkeypatch.setattr(deploy, "run", run)
+    monkeypatch.setattr(operation.subject, "command",
+                        deploy.Deployment.command.__get__(operation.subject))
+    operation.subject.upgrade(operation.directory, 1)
+    assert len(environments) == 1
+    assert "BACKUP_ENCRYPTION_KEY" not in environments[0]
+
+
+def test_initial_recovery_metadata_write_failure_prevents_writer_shutdown(operation, monkeypatch):
+    def unwritable(*args, **kwargs):
+        raise PermissionError("private-metadata-diagnostic")
+
+    monkeypatch.setattr(type(operation.directory), "write_text", unwritable)
+    with pytest.raises(deploy.DeploymentError, match="^recovery_metadata_write_failed$"):
+        operation.subject.upgrade(operation.directory, 1)
+    assert operation.calls[-1] == ("qualify", OLD_IMAGE)
+    assert not any(call[0] in {"stop", "up"} or "migrate" in call or
+                   "scripts/backup_database.py" in call for call in operation.calls)
+    assert not list(operation.directory.glob("*/release.json"))
 
 
 @pytest.mark.parametrize("image", [OLD_IMAGE, NEW_IMAGE])
@@ -181,10 +399,11 @@ def test_exact_baseline_bridge_creates_pg16_backup_with_target_before_prepare(op
     assert record["status"] == "runtime_ready"
     assert len([call for call in operation.calls if "--tools" in call]) == 1
     mutations = [call for call in operation.calls if call[0] != "probe" and "--tools" not in call]
-    assert mutations[0] == ("stop", "app")
-    assert "scripts/backup_database.py" in mutations[1]
-    assert mutations[2][-1] == "--require-postgres-compatible"
-    assert mutations[3][-1] == "migrate"
+    assert mutations[0] == ("qualify", NEW_IMAGE)
+    assert mutations[1] == ("stop", "app")
+    assert "scripts/backup_database.py" in mutations[2]
+    assert mutations[3][-1] == "--require-postgres-compatible"
+    assert mutations[4][-1] == "migrate"
 
 
 def test_baseline_bridge_rejects_another_immutable_old_image(operation):
