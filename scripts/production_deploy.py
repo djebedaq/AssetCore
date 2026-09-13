@@ -11,6 +11,7 @@ import subprocess
 import tarfile
 import tempfile
 import time
+import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -96,6 +97,28 @@ def operation_lock(root: Path, project: str):
 def file_sha256(path: Path) -> str:
     with path.open("rb") as source:
         return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+def create_recovery_directory(directory: Path) -> Path:
+    """Create a unique child of the operator-approved, shared backup parent."""
+    try:
+        if os.name == "nt":
+            # Windows mkdir(0700), including mkdtemp, replaces inherited ACLs.
+            # Ordinary mkdir inherits the approved parent ACL; chmod cannot restore it.
+            for _ in range(10):
+                destination = directory / f"upgrade-{uuid.uuid4().hex}"
+                try:
+                    destination.mkdir()
+                except FileExistsError:
+                    continue  # Never reuse an existing recovery directory.
+                return destination
+            raise DeploymentError("recovery_directory_creation_failed")
+        destination = Path(tempfile.mkdtemp(prefix="upgrade-", dir=directory))
+        # Preserve the Linux shared UID/GID 10001 contract and inherited parent GID.
+        destination.chmod(0o770)
+        return destination
+    except OSError:
+        raise DeploymentError("recovery_directory_creation_failed") from None
 
 
 class Deployment:
@@ -272,6 +295,36 @@ class Deployment:
         finally:
             self.env["ASSETCORE_IMAGE"] = self.image
 
+    def qualify_recovery_directory(self, destination: Path, image: str) -> None:
+        # Standalone Docker: no Compose environment, DB network or operational key.
+        # Use the exact backup image with the production runtime restrictions.
+        probe = destination / f".mount-probe-{uuid.uuid4().hex}"
+        content = (
+            "from pathlib import Path\n"
+            f"path = Path('/backups/{probe.name}')\n"
+            "with path.open('xb') as handle:\n"
+            "    handle.write(b'assetcore-mount-probe')\n"
+            "try:\n"
+            "    if path.read_bytes() != b'assetcore-mount-probe':\n"
+            "        raise RuntimeError('mount_probe_content_mismatch')\n"
+            "finally:\n"
+            "    path.unlink()\n"
+        )
+        try:
+            try:
+                self.command([
+                    "docker", "run", "--rm", "--pull", "never", "--network", "none",
+                    "--read-only", "--user", "10001:10001", "--cap-drop", "ALL",
+                    "--security-opt", "no-new-privileges:true",
+                    "--mount", f"type=bind,source={destination},target=/backups",
+                    "--entrypoint", "python", image, "-c", content,
+                ])
+            finally:
+                # Also clean up a partial probe after a container/process failure.
+                probe.unlink(missing_ok=True)
+        except (DeploymentError, OSError):
+            raise DeploymentError("recovery_directory_qualification_failed") from None
+
     def upgrade(self, backup_directory: Path, actor: int, *,
                 pg16_baseline_bridge: bool = False) -> Path:
         self.validate()
@@ -295,8 +348,10 @@ class Deployment:
             self.toolchain_preflight(self.image)
         # Unique directory: the existing backup tool's second-resolution filenames
         # cannot overwrite an earlier backup or be mistaken for this operation.
-        destination = Path(tempfile.mkdtemp(prefix="upgrade-", dir=directory))
-        destination.chmod(0o770)  # Linux: operator must share the UID/GID 10001 directory.
+        self.stage = "recovery_directory_creation"
+        destination = create_recovery_directory(directory)
+        self.stage = "recovery_directory_qualification"
+        self.qualify_recovery_directory(destination, backup_image)
         record = {"release_sha": self.sha, "image_id": self.image,
                   "previous_image_id": previous_image, "previous_revision": previous["revision"],
                   "backup_image_id": backup_image, "backup_toolchain": backup_toolchain,
@@ -307,7 +362,10 @@ class Deployment:
         def save(status: str) -> None:
             record["status"] = status
             record["stage"] = self.stage
-            (destination / "release.json").write_text(json.dumps(record, indent=2), "utf-8")
+            try:
+                (destination / "release.json").write_text(json.dumps(record, indent=2), "utf-8")
+            except OSError:
+                raise DeploymentError("recovery_metadata_write_failed") from None
 
         save("started")
         try:
