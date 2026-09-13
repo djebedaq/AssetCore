@@ -10,6 +10,45 @@ one-shot `python -m app.runtime prepare`. Не приемайте успешен
 доказателство за backup или актуална schema; използвайте `/api/ready` и отделния
 backup manifest.
 
+## PostgreSQL 16 договор за възстановяване
+
+Production сървърът остава `postgres:16-alpine`. Квалифицираните `pg_dump`,
+`pg_restore` и `psql` трябва да са **major 16**; еднаква patch версия със
+сървъра не е задължителна. По-нов major клиент не е приемлив за този договор.
+PG17 може да създаде успешно dump от PG16, който после да откаже restore заради
+`SET transaction_timeout = 0`. Успешно шифроване, AES-GCM authentication и SHA-256
+проверка доказват целостта на архива, но **не доказват възстановимостта му**.
+Реален restore rehearsal в отделна QA база остава задължителен.
+
+Runtime базата е изрично `python:3.12-slim-trixie` (Debian 13). Dockerfile
+инсталира versioned `postgresql-client-16` от официалното HTTPS PGDG хранилище
+с ограничен `Signed-By` ключ и проверен fingerprint. Не се използва floating
+`postgresql-client` metapackage. Пътят към инструментите е изрично за major 16;
+build и CI проверяват и трите реални executable версии. Patch обновяванията
+остават достъпни в рамките на major 16; exact release се идентифицира чрез
+проверения immutable image ID, а не чрез обещание за еднакъв бъдещ rebuild.
+
+Общият operational helper проверява версиите на инструментите и действителния
+сървър чрез read-only заявка. Несъвместим, липсващ или неразпознаваем инструмент
+отказва операцията с контролирана грешка без credentials. Backup отказва преди
+dump и публикуване на `.acbackup`. Restore първо удостоверява и проверява
+архива, после проверява PG16 клиента, целевия PG16 сървър и произхода на custom
+dump-а, преди да започне `pg_restore --clean --if-exists --exit-on-error`.
+Пароли и connection URL не се подават като аргументи към PostgreSQL tools.
+
+Новите архиви добавят безопасни PostgreSQL версии в authenticated manifest.
+Форматът остава `assetcore-backup-v1`, със същите header и AES-GCM associated
+data. Съществуващите v1 архиви продължават да се проверяват криптографски.
+При restore липсващата стара provenance се проверява чрез действителния custom
+dump header; архив от PG17 toolchain се отказва преди промяна на базата.
+Не редактирайте dump SQL и не премахвайте `--exit-on-error` за заобикаляне.
+
+За първото обновяване от известния PG17-client образ вижте ограничения режим
+`--pg16-baseline-bridge` в [production процедурата](PORTABLE_PRODUCTION_DEPLOYMENT_BG.md).
+При recovery използвайте коригирания PG16 operational образ за restore дори
+когато след възстановяването трябва да стартира старият application образ.
+Запазете и двата immutable image ID и съответните image archives.
+
 ## Production Compose one-shot процедура
 
 За production **upgrade** използвайте механично guarded процедурата в
@@ -109,6 +148,12 @@ docker compose run --rm --no-deps \
 
 Verify извършва authenticated AES-GCM decrypt, валидира manifest формата и
 сравнява checksum-а на database dump-а. Не променя базата.
+
+Добавете `--require-postgres-compatible` към същата verify команда за read-only
+проверка и на целевия PG16 сървър, `pg_restore`/`psql` и действителните версии в
+dump header. Guarded upgrade винаги изисква този режим. Обикновеният verify
+остава offline криптографска проверка за стари и нови v1 архиви; CLI показва
+само ограничено безопасно резюме, без произволни optional manifest полета.
 
 ### Destructive restore
 

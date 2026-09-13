@@ -67,30 +67,43 @@ def operation(tmp_path, monkeypatch):
     monkeypatch.setenv("BACKUP_ENCRYPTION_KEY", "test-operation-only")
     monkeypatch.setattr(subject, "validate", lambda: None)
     monkeypatch.setattr(deploy, "release_source", lambda *_: None)
-    monkeypatch.setattr(subject, "current_image", lambda **_: OLD_IMAGE)
+    state = {"current_image": OLD_IMAGE, "backup_image": OLD_IMAGE,
+             "revision": deploy.PG16_BASELINE_REVISION, "source_changes": ""}
+    toolchains = {OLD_IMAGE: 16, NEW_IMAGE: 16, deploy.PG16_BASELINE_IMAGE: 17}
+    monkeypatch.setattr(subject, "current_image", lambda **_: state["current_image"])
     calls = []
     failure = {"at": None}
 
     def probe(mode, actor=None, **kwargs):
         calls.append(("probe", mode))
-        return {"revision": "20260826_0021", "identity": ["same-test-db"]}
+        return {"revision": state["revision"], "identity": ["same-test-db"]}
 
     def dc(*args, **kwargs):
         calls.append(args)
         if args == ("ps", "--all", "--quiet", "db"):
             return DB_CONTAINER
-        stage = ("backup" if "scripts/backup_database.py" in args else
+        stage = ("toolchain" if "--tools" in args else
+                 "backup" if "scripts/backup_database.py" in args else
                  "verify" if "scripts/verify_backup.py" in args else
                  "prepare" if "migrate" in args else
                  "start" if args[0] == "up" else args[0])
         if stage == failure["at"]:
             raise deploy.DeploymentError("simulated_failure")
+        if stage == "toolchain":
+            assert args[-4:] == ("--tools", "pg_dump", "pg_restore", "psql")
+            assert "check_compatibility" in kwargs["input_text"]
+            assert not kwargs.get("backup_secret")
+            if toolchains[subject.env["ASSETCORE_IMAGE"]] != 16:
+                raise deploy.DeploymentError("incompatible_postgresql_toolchain")
+            return json.dumps({name: {"major": 16, "version": "16.15"}
+                               for name in ("server", "pg_dump", "pg_restore", "psql")})
         if stage == "backup":
-            assert subject.env["ASSETCORE_IMAGE"] == OLD_IMAGE
+            assert subject.env["ASSETCORE_IMAGE"] == state["backup_image"]
             mount = args[args.index("-v") + 1].removesuffix(":/backups:rw")
             (Path(mount) / "unique.acbackup").write_bytes(b"isolated-test-backup")
         if stage == "verify":
-            assert args[-1] == "/backups/unique.acbackup"
+            assert args[-2:] == ("/backups/unique.acbackup", "--require-postgres-compatible")
+            assert subject.env["ASSETCORE_IMAGE"] == NEW_IMAGE
             assert args[args.index("-v") + 1].endswith(":/backups:ro")
         if stage == "prepare":
             assert subject.env["ASSETCORE_IMAGE"] == NEW_IMAGE
@@ -99,16 +112,26 @@ def operation(tmp_path, monkeypatch):
     monkeypatch.setattr(subject, "probe", probe)
     monkeypatch.setattr(subject, "dc", dc)
     def command(args, **kwargs):
+        if "merge-base" in args:
+            return deploy.PG16_BASELINE_SHA
+        if "diff" in args:
+            return state["source_changes"]
+        if args[:3] == ["docker", "image", "inspect"]:
+            assert args[3] == deploy.PG16_BASELINE_IMAGE
+            return deploy.PG16_BASELINE_SHA
         assert args == ["docker", "inspect", "--format", DB_HEALTH_FORMAT, DB_CONTAINER]
         calls.append(("inspect", "db_health"))
         return "running healthy"
     monkeypatch.setattr(subject, "command", command)
-    return SimpleNamespace(subject=subject, calls=calls, failure=failure, directory=tmp_path)
+    return SimpleNamespace(subject=subject, calls=calls, failure=failure, directory=tmp_path,
+                           state=state, toolchains=toolchains)
 
 
 def test_upgrade_orders_stop_backup_verify_prepare_ready_and_retains_recovery(operation):
     destination = operation.subject.upgrade(operation.directory, 1)
-    mutations = [call for call in operation.calls if call[0] != "probe"]
+    preflights = [call for call in operation.calls if "--tools" in call]
+    assert len(preflights) == 2
+    mutations = [call for call in operation.calls if call[0] != "probe" and "--tools" not in call]
     assert mutations[0] == ("stop", "app")
     assert "scripts/backup_database.py" in mutations[1]
     assert "scripts/verify_backup.py" in mutations[2]
@@ -118,11 +141,144 @@ def test_upgrade_orders_stop_backup_verify_prepare_ready_and_retains_recovery(op
     record = json.loads((destination / "release.json").read_text())
     assert record["status"] == "runtime_ready"
     assert record["previous_image_id"] == OLD_IMAGE
+    assert record["backup_image_id"] == OLD_IMAGE
+    assert record["backup_mode"] == "previous_image"
+    assert record["backup_toolchain"]["pg_dump"]["major"] == 16
     assert record["image_id"] == NEW_IMAGE
     assert record["release_sha"] == REVISION
     assert record["encrypted_sha256"] == deploy.file_sha256(destination / "unique.acbackup")
     assert record["fully_commissioned"] is False
     assert "test-operation-only" not in json.dumps(record)
+
+
+@pytest.mark.parametrize("image", [OLD_IMAGE, NEW_IMAGE])
+def test_incompatible_backup_or_target_tools_fail_before_stopping_writers(operation, image):
+    operation.toolchains[image] = 17
+    with pytest.raises(deploy.DeploymentError, match="incompatible_postgresql_toolchain"):
+        operation.subject.upgrade(operation.directory, 1)
+    assert not any(call[0] == "stop" or "migrate" in call for call in operation.calls)
+    assert not any("scripts/backup_database.py" in call for call in operation.calls)
+    assert not list(operation.directory.iterdir())
+    assert operation.subject.env["ASSETCORE_IMAGE"] == NEW_IMAGE
+
+
+def test_real_pg17_baseline_requires_explicit_bridge_before_any_downtime(operation):
+    operation.state["current_image"] = deploy.PG16_BASELINE_IMAGE
+    with pytest.raises(deploy.DeploymentError, match="incompatible_postgresql_toolchain"):
+        operation.subject.upgrade(operation.directory, 1)
+    assert not any(call[0] == "stop" for call in operation.calls)
+    assert not list(operation.directory.iterdir())
+
+
+def test_exact_baseline_bridge_creates_pg16_backup_with_target_before_prepare(operation):
+    operation.state.update(current_image=deploy.PG16_BASELINE_IMAGE, backup_image=NEW_IMAGE)
+    destination = operation.subject.upgrade(operation.directory, 1, pg16_baseline_bridge=True)
+    record = json.loads((destination / "release.json").read_text())
+    assert record["previous_image_id"] == deploy.PG16_BASELINE_IMAGE
+    assert record["backup_image_id"] == NEW_IMAGE
+    assert record["backup_mode"] == "pg16_baseline_bridge"
+    assert record["backup_toolchain"]["pg_dump"]["major"] == 16
+    assert record["status"] == "runtime_ready"
+    assert len([call for call in operation.calls if "--tools" in call]) == 1
+    mutations = [call for call in operation.calls if call[0] != "probe" and "--tools" not in call]
+    assert mutations[0] == ("stop", "app")
+    assert "scripts/backup_database.py" in mutations[1]
+    assert mutations[2][-1] == "--require-postgres-compatible"
+    assert mutations[3][-1] == "migrate"
+
+
+def test_baseline_bridge_rejects_another_immutable_old_image(operation):
+    with pytest.raises(deploy.DeploymentError, match="exact_baseline_image"):
+        operation.subject.upgrade(operation.directory, 1, pg16_baseline_bridge=True)
+    assert not any(call[0] == "stop" for call in operation.calls)
+    assert not list(operation.directory.iterdir())
+
+
+def test_baseline_bridge_rejects_another_database_revision(operation):
+    operation.state.update(current_image=deploy.PG16_BASELINE_IMAGE, revision="older-revision")
+    with pytest.raises(deploy.DeploymentError, match="baseline_release_and_schema"):
+        operation.subject.upgrade(operation.directory, 1, pg16_baseline_bridge=True)
+    assert not any(call[0] == "stop" for call in operation.calls)
+
+
+@pytest.mark.parametrize("changed_path", deploy.PG16_BRIDGE_UNCHANGED_PATHS)
+def test_baseline_bridge_rejects_future_application_or_schema_changes(operation, changed_path):
+    operation.state.update(current_image=deploy.PG16_BASELINE_IMAGE, source_changes=changed_path)
+    with pytest.raises(deploy.DeploymentError, match="unchanged_database_application"):
+        operation.subject.upgrade(operation.directory, 1, pg16_baseline_bridge=True)
+    assert not any(call[0] == "stop" for call in operation.calls)
+    assert not list(operation.directory.iterdir())
+
+
+@pytest.mark.parametrize(("query", "reply", "error"), [
+    ("inspect", "b" * 40, "baseline_release_and_schema"),
+    ("merge-base", "b" * 40, "baseline_ancestor"),
+])
+def test_baseline_bridge_checks_image_label_and_commit_ancestry(operation, monkeypatch,
+                                                              query, reply, error):
+    original = operation.subject.command
+    monkeypatch.setattr(operation.subject, "command", lambda args, **kw:
+                        reply if query in args else original(args, **kw))
+    operation.state["current_image"] = deploy.PG16_BASELINE_IMAGE
+    with pytest.raises(deploy.DeploymentError, match=error):
+        operation.subject.upgrade(operation.directory, 1, pg16_baseline_bridge=True)
+    assert not any(call[0] == "stop" for call in operation.calls)
+
+
+def test_pg17_archive_is_not_a_verified_upgrade_backup_despite_crypto_success(operation,
+                                                                           monkeypatch):
+    original = operation.subject.dc
+
+    def incompatible_archive(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if "scripts/verify_backup.py" in args:
+            assert "--require-postgres-compatible" in args
+            raise deploy.DeploymentError("postgresql_archive_client_major_mismatch")
+        return result
+
+    monkeypatch.setattr(operation.subject, "dc", incompatible_archive)
+    with pytest.raises(deploy.DeploymentError, match="archive_client_major_mismatch"):
+        operation.subject.upgrade(operation.directory, 1)
+    assert not any("migrate" in call or call[0] == "up" for call in operation.calls)
+    record = json.loads(next(operation.directory.glob("*/release.json")).read_text())
+    assert record["status"] == "failed_operator_recovery_required"
+    assert record["stage"] == "verify"
+    assert "encrypted_sha256" not in record
+
+
+def test_archive_changed_during_qualification_never_prepares(operation, monkeypatch):
+    original = operation.subject.dc
+
+    def changed_archive(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if "scripts/verify_backup.py" in args:
+            next(operation.directory.glob("*/*.acbackup")).write_bytes(b"changed-test-backup")
+        return result
+
+    monkeypatch.setattr(operation.subject, "dc", changed_archive)
+    with pytest.raises(deploy.DeploymentError, match="backup_changed_during_verification"):
+        operation.subject.upgrade(operation.directory, 1)
+    assert not any("migrate" in call or call[0] == "up" for call in operation.calls)
+
+
+def test_changed_schema_after_stopping_writers_never_uses_baseline_bridge(operation, monkeypatch):
+    original = operation.subject.probe
+    operation.state.update(current_image=deploy.PG16_BASELINE_IMAGE, backup_image=NEW_IMAGE)
+
+    def changed_schema(*args, **kwargs):
+        if operation.subject.stage == "stopped_state_validation":
+            operation.state["revision"] = "unexpected-schema"
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(operation.subject, "probe", changed_schema)
+    with pytest.raises(deploy.DeploymentError, match="database_changed_before_backup"):
+        operation.subject.upgrade(operation.directory, 1, pg16_baseline_bridge=True)
+    assert ("stop", "app") in operation.calls
+    assert not any("scripts/backup_database.py" in call or "migrate" in call or call[0] == "up"
+                   for call in operation.calls)
+    record = json.loads(next(operation.directory.glob("*/release.json")).read_text())
+    assert record["status"] == "failed_operator_recovery_required"
+    assert record["stage"] == "stopped_state_validation"
 
 
 @pytest.mark.parametrize("failure", ["backup", "verify", "prepare"])

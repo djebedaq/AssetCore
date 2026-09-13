@@ -17,8 +17,22 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 try:
     from .operations_audit import record_operation
+    from .postgres_toolchain import (
+        ToolchainError,
+        check_archive_compatibility,
+        check_compatibility,
+        postgres_environment,
+        tool_executable,
+    )
 except ImportError:  # Direct script execution.
     from operations_audit import record_operation
+    from postgres_toolchain import (
+        ToolchainError,
+        check_archive_compatibility,
+        check_compatibility,
+        postgres_environment,
+        tool_executable,
+    )
 
 
 def _key() -> bytes:
@@ -40,7 +54,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def main() -> None:
+def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--documents-dir", type=Path)
@@ -49,7 +63,9 @@ def main() -> None:
     database_url = os.environ.get("DATABASE_URL", "")
     if not database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgres://")):
         raise SystemExit("DATABASE_URL must point to PostgreSQL.")
-    pg_url = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    key = _key()
+    provenance = check_compatibility(database_url)
+    pg_environment = postgres_environment(database_url)
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -58,16 +74,18 @@ def main() -> None:
         temp = Path(temp_name)
         dump = temp / "database.dump"
         result = subprocess.run(
-            [os.environ.get("PG_DUMP", "pg_dump"), "--format=custom", "--no-owner", "--no-acl", "--file", str(dump), pg_url],
-            check=False,
+            [tool_executable("pg_dump"), "--format=custom", "--no-owner", "--no-acl", "--file", str(dump)],
+            check=False, capture_output=True, env=pg_environment,
         )
         if result.returncode != 0 or not dump.is_file():
             raise SystemExit("pg_dump failed; no backup was published.")
+        check_archive_compatibility(dump, {"postgresql": provenance})
         manifest = {
             "format": "assetcore-backup-v1",
             "created_at": datetime.now(UTC).isoformat(),
             "database_sha256": _sha256(dump),
             "documents_included": bool(args.documents_dir),
+            "postgresql": provenance,
         }
         manifest_path = temp / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2), encoding="utf-8")
@@ -81,7 +99,7 @@ def main() -> None:
                     raise SystemExit("The configured document-storage directory does not exist.")
                 bundle.add(document_dir, arcname="documents")
         nonce = os.urandom(12)
-        ciphertext = AESGCM(_key()).encrypt(nonce, archive.read_bytes(), b"AssetCore backup v1")
+        ciphertext = AESGCM(key).encrypt(nonce, archive.read_bytes(), b"AssetCore backup v1")
         target.write_bytes(b"ASSETCORE-BACKUP-1\n" + nonce + ciphertext)
     print(f"Backup created: {target.name}")
     print(f"Encrypted backup SHA-256: {_sha256(target)}")
@@ -95,6 +113,15 @@ def main() -> None:
             "documents_included": bool(args.documents_dir),
         },
     )
+
+
+def main() -> None:
+    try:
+        _main()
+    except ToolchainError as exc:
+        raise SystemExit(f"Backup refused: {exc}; no backup was published.") from None
+    except Exception:
+        raise SystemExit("Backup operation failed; inspect backup and audit state before retrying.") from None
 
 
 if __name__ == "__main__":

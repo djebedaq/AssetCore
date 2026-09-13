@@ -18,8 +18,22 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 try:
     from .operations_audit import record_operation
+    from .postgres_toolchain import (
+        ToolchainError,
+        check_archive_compatibility,
+        check_compatibility,
+        postgres_environment,
+        tool_executable,
+    )
 except ImportError:  # Direct script execution.
     from operations_audit import record_operation
+    from postgres_toolchain import (
+        ToolchainError,
+        check_archive_compatibility,
+        check_compatibility,
+        postgres_environment,
+        tool_executable,
+    )
 
 
 def _key() -> bytes:
@@ -49,7 +63,7 @@ def _safe_extract(bundle: tarfile.TarFile, destination: Path) -> None:
     bundle.extractall(destination, filter="data")
 
 
-def main() -> None:
+def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("backup", type=Path)
     parser.add_argument("--confirm", required=True, help="Must equal RESTORE_ASSETCORE")
@@ -65,7 +79,6 @@ def main() -> None:
     database_url = os.environ.get("DATABASE_URL", "")
     if not database_url.startswith(("postgresql://", "postgresql+psycopg://", "postgres://")):
         raise SystemExit("DATABASE_URL must point to PostgreSQL.")
-    pg_url = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
     raw = args.backup.resolve().read_bytes()
     header = b"ASSETCORE-BACKUP-1\n"
     if not raw.startswith(header) or len(raw) <= len(header) + 12:
@@ -86,9 +99,12 @@ def main() -> None:
         dump = verified / "database.dump"
         if manifest.get("format") != "assetcore-backup-v1" or _sha256(dump) != manifest.get("database_sha256"):
             raise SystemExit("Backup checksum verification failed; nothing was restored.")
+        check_compatibility(database_url, ("pg_restore", "psql"))
+        check_archive_compatibility(dump, manifest)
+        pg_environment = postgres_environment(database_url)
         result = subprocess.run(
-            [os.environ.get("PG_RESTORE", "pg_restore"), "--clean", "--if-exists", "--exit-on-error", "--no-owner", "--no-acl", "--dbname", pg_url, str(dump)],
-            check=False,
+            [tool_executable("pg_restore"), "--clean", "--if-exists", "--exit-on-error", "--no-owner", "--no-acl", "--dbname", pg_environment["PGDATABASE"], str(dump)],
+            check=False, capture_output=True, env=pg_environment,
         )
         if result.returncode != 0:
             raise SystemExit("pg_restore failed; inspect PostgreSQL before retrying.")
@@ -108,6 +124,15 @@ def main() -> None:
             "documents_staged": bool(args.documents_staging),
         },
     )
+
+
+def main() -> None:
+    try:
+        _main()
+    except ToolchainError as exc:
+        raise SystemExit(f"Restore refused: {exc}; nothing was restored.") from None
+    except Exception:
+        raise SystemExit("Restore operation failed; inspect database and audit state before retrying.") from None
 
 
 if __name__ == "__main__":
