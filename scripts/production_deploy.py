@@ -18,6 +18,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
+# One documented repair transition, never a fallback for arbitrary old releases.
+PG16_BASELINE_SHA = "1de39f50dcd2d05fd298a6ea6a52ecca1e9ef160"
+PG16_BASELINE_IMAGE = "sha256:1cd58e1157504009af17e06d1830a05dddcf213d4371e30ed6142eac5249263a"
+PG16_BASELINE_REVISION = "20260826_0021"
+PG16_BRIDGE_UNCHANGED_PATHS = (
+    "backend/app", "backend/alembic", "backend/alembic.ini", "backend/requirements.txt",
+)
 
 
 class DeploymentError(RuntimeError):
@@ -230,7 +237,43 @@ class Deployment:
         self.probe("existing")  # Validate production configuration without preparing it.
         self.start()  # No migration/seed/prepare, including on failure.
 
-    def upgrade(self, backup_directory: Path, actor: int) -> Path:
+    def backup_image(self, previous_image: str, previous_revision: str, *,
+                     pg16_baseline_bridge: bool) -> str:
+        if not pg16_baseline_bridge:
+            return previous_image
+        if previous_image != PG16_BASELINE_IMAGE:
+            raise DeploymentError("pg16_bridge_requires_exact_baseline_image")
+        revision = self.command([
+            "docker", "image", "inspect", previous_image, "--format",
+            '{{index .Config.Labels "org.opencontainers.image.revision"}}',
+        ])
+        if revision != PG16_BASELINE_SHA or previous_revision != PG16_BASELINE_REVISION:
+            raise DeploymentError("pg16_bridge_requires_baseline_release_and_schema")
+        git = ["git", "-c", f"safe.directory={self.root}"]
+        if self.command([*git, "merge-base", PG16_BASELINE_SHA, self.sha]) != PG16_BASELINE_SHA:
+            raise DeploymentError("pg16_bridge_requires_baseline_ancestor")
+        # The corrected image can audit the old DB only for this same-schema repair.
+        # Future releases changing application/schema code must first deploy this repair.
+        if self.command([*git, "diff", "--name-only", PG16_BASELINE_SHA, self.sha,
+                         "--", *PG16_BRIDGE_UNCHANGED_PATHS]):
+            raise DeploymentError("pg16_bridge_requires_unchanged_database_application")
+        return self.image
+
+    def toolchain_preflight(self, image: str) -> dict:
+        self.env["ASSETCORE_IMAGE"] = image
+        try:
+            # Send the current standalone read-only guard even to a pre-PROD-03A image.
+            # This prevents old backup code without guards from bypassing the contract.
+            content = (self.root / "scripts" / "postgres_toolchain.py").read_text("utf-8")
+            result = self.dc("run", "--rm", "--no-deps", "--pull", "never", "-T",
+                             "app", "python", "-", "--tools", "pg_dump", "pg_restore", "psql",
+                             input_text=content)
+            return json.loads(result)
+        finally:
+            self.env["ASSETCORE_IMAGE"] = self.image
+
+    def upgrade(self, backup_directory: Path, actor: int, *,
+                pg16_baseline_bridge: bool = False) -> Path:
         self.validate()
         if actor < 1 or not os.environ.get("BACKUP_ENCRYPTION_KEY"):
             raise DeploymentError("active_actor_and_operational_key_required")
@@ -243,12 +286,21 @@ class Deployment:
         previous = self.probe("existing", actor, running=True)
         if self.probe("existing", actor) != previous:
             raise DeploymentError("current_and_target_database_must_match")
+        self.stage = "backup_toolchain_preflight"
+        backup_image = self.backup_image(
+            previous_image, previous["revision"], pg16_baseline_bridge=pg16_baseline_bridge,
+        )
+        backup_toolchain = self.toolchain_preflight(backup_image)
+        if backup_image != self.image:
+            self.toolchain_preflight(self.image)
         # Unique directory: the existing backup tool's second-resolution filenames
         # cannot overwrite an earlier backup or be mistaken for this operation.
         destination = Path(tempfile.mkdtemp(prefix="upgrade-", dir=directory))
         destination.chmod(0o770)  # Linux: operator must share the UID/GID 10001 directory.
         record = {"release_sha": self.sha, "image_id": self.image,
                   "previous_image_id": previous_image, "previous_revision": previous["revision"],
+                  "backup_image_id": backup_image, "backup_toolchain": backup_toolchain,
+                  "backup_mode": "pg16_baseline_bridge" if pg16_baseline_bridge else "previous_image",
                   "created_at": datetime.now(UTC).isoformat(), "project": self.project,
                   "fully_commissioned": False}
 
@@ -261,8 +313,11 @@ class Deployment:
         try:
             self.stage = "stop_writers"
             self.dc("stop", "app")
+            self.env["ASSETCORE_IMAGE"] = backup_image
+            self.stage = "stopped_state_validation"
+            if self.probe("existing", actor) != previous:
+                raise DeploymentError("database_changed_before_backup")
             self.stage = "backup"
-            self.env["ASSETCORE_IMAGE"] = previous_image
             self.dc("run", "--rm", "--no-deps", "--pull", "never", "-T",
                     "-e", "BACKUP_ENCRYPTION_KEY", "-v", f"{destination}:/backups:rw",
                     "app", "python", "scripts/backup_database.py", "--output-dir", "/backups",
@@ -273,9 +328,13 @@ class Deployment:
             backup = backups[0]
             digest = file_sha256(backup)
             self.stage = "verify"
+            # Always use the corrected target verifier: crypto/checksum success alone
+            # does not qualify a PG17-produced archive for recovery to PostgreSQL 16.
+            self.env["ASSETCORE_IMAGE"] = self.image
             self.dc("run", "--rm", "--no-deps", "--pull", "never", "-T",
                     "-e", "BACKUP_ENCRYPTION_KEY", "-v", f"{destination}:/backups:ro",
                     "app", "python", "scripts/verify_backup.py", f"/backups/{backup.name}",
+                    "--require-postgres-compatible",
                     backup_secret=True)
             if file_sha256(backup) != digest:
                 raise DeploymentError("backup_changed_during_verification")
@@ -304,6 +363,8 @@ def main() -> int:
     parser.add_argument("--backup-dir", type=Path)
     parser.add_argument("--actor-user-id", type=int)
     parser.add_argument("--confirm-empty", action="store_true")
+    parser.add_argument("--pg16-baseline-bridge", action="store_true",
+                        help="Use the corrected image for the exact PROD-03A baseline repair only")
     args = parser.parse_args()
     deployment = None
     try:
@@ -321,7 +382,8 @@ def main() -> int:
             elif args.operation == "upgrade":
                 if not args.backup_dir or not args.actor_user_id:
                     raise DeploymentError("backup_directory_and_actor_required")
-                deployment.upgrade(args.backup_dir, args.actor_user_id)
+                deployment.upgrade(args.backup_dir, args.actor_user_id,
+                                   pg16_baseline_bridge=args.pg16_baseline_bridge)
         print("production_operation_complete; licence_commissioning_requires_operator_verification")
         return 0
     except (Exception, KeyboardInterrupt):

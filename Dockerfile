@@ -5,7 +5,17 @@ RUN corepack enable && pnpm install --frozen-lockfile
 COPY frontend/ ./
 RUN pnpm build
 
-FROM python:3.12-slim AS runtime
+# Authenticate PGDG with its published signing key, scoped to this repository.
+# Bootstrap utilities remain outside the production runtime.
+FROM python:3.12-slim-trixie AS postgres-key
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && curl --fail --silent --show-error --location --proto '=https' \
+       https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /pgdg.asc \
+    && test "$(gpg --batch --show-keys --with-colons /pgdg.asc | awk -F: '$1 == "fpr" {print $10; exit}')" \
+       = B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+
+FROM python:3.12-slim-trixie AS runtime
 ARG ASSETCORE_RELEASE_SHA=development
 LABEL org.opencontainers.image.revision=$ASSETCORE_RELEASE_SHA
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -13,11 +23,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HOME=/tmp/assetcore-home \
     XDG_CACHE_HOME=/tmp/assetcore-cache \
     XDG_CONFIG_HOME=/tmp/assetcore-config \
-    XDG_DATA_HOME=/tmp/assetcore-data
+    XDG_DATA_HOME=/tmp/assetcore-data \
+    PATH=/usr/lib/postgresql/16/bin:$PATH
 WORKDIR /app
+COPY --from=postgres-key /pgdg.asc /usr/share/keyrings/pgdg.asc
 COPY backend/requirements.txt ./backend/requirements.txt
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core libreoffice-writer postgresql-client \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && printf '%s\n' 'Types: deb' 'URIs: https://apt.postgresql.org/pub/repos/apt' \
+       'Suites: trixie-pgdg' 'Components: main' 'Signed-By: /usr/share/keyrings/pgdg.asc' \
+       > /etc/apt/sources.list.d/pgdg.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core libreoffice-writer postgresql-client-16 \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir -r backend/requirements.txt \
     && groupadd --system --gid 10001 assetcore \
@@ -29,8 +46,10 @@ COPY scripts/backup_database.py \
      scripts/restore_database.py \
      scripts/restore_assetcore.py \
      scripts/operations_audit.py \
+     scripts/postgres_toolchain.py \
      scripts/production_container.py \
      ./scripts/
+RUN python scripts/postgres_toolchain.py --clients-only
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 RUN chmod -R a-w /app
 ENV PYTHONPATH=/app/backend

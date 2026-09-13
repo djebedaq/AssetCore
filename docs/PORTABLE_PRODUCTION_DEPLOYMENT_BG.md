@@ -185,11 +185,16 @@ python3 scripts/production_deploy.py upgrade --sha "$RELEASE_SHA" --backup-dir "
    активен audit actor; old/new image конфигурациите трябва да сочат същата база.
 3. Запазва old/new image IDs, SHA, UTC и previous Alembic revision в `release.json`
    в нов уникален `upgrade-*` backup подкаталог. Не записва secrets или DB URL.
-4. Спира app writers. Старият **immutable image** изпълнява съществуващия
-   `backup_database.py --actor-user-id …`, `--no-deps`, operational key, RW mount.
+4. Read-only preflight изисква PostgreSQL server и tools major 16 преди
+   спирането на writers. Спира app writers. Старият **immutable image** изпълнява
+   `backup_database.py --actor-user-id …`, `--no-deps`, operational key, RW mount,
+   освен при строго ограничения първи преход, описан по-долу.
 5. Изисква точно един нов `.acbackup`, записва encrypted SHA-256, проверява
-   **същия файл** с `verify_backup.py` и RO mount. Проверява, че hash не се е
-   променил по време на verify. Това е съществуващият AES-GCM/custom dump формат.
+   **същия файл** с коригирания target `verify_backup.py
+   --require-postgres-compatible` и RO mount. Освен AES-GCM и checksum изисква
+   действителен PG16 custom dump, PG16 restore tool и целеви PG16 сървър.
+   Проверява, че hash не се е променил по време на verify. Това е съществуващият
+   AES-GCM/custom dump формат.
 6. Само при успешни backup **и** verify: новият exact image изпълнява
    `docker compose run --rm --no-deps --pull never -T migrate` →
    `python -m app.runtime prepare`.
@@ -205,6 +210,39 @@ DB, преди да предприемете recovery; не replay-вайте up
 
 При стара pre-PROD-01 инсталация helper изпраща само read-only state/smoke probe
 по stdin към текущия image. Няма инсталиране/промяна на файлове в него.
+
+### Първи преход от известния PROD-03A baseline с PG17 tools
+
+Обичайният upgrade продължава да прави pre-migration backup със стария image.
+Той отказва, ако този image няма PG16 tools; не преминава автоматично към
+target image при несъвместимост. Това пази бъдещи upgrades от използване на
+нов application код срещу произволна стара schema.
+
+Само за известния release `1de39f50dcd2d05fd298a6ea6a52ecca1e9ef160` и immutable
+image `sha256:1cd58e1157504009af17e06d1830a05dddcf213d4371e30ed6142eac5249263a`
+е предвиден изричният аргумент `--pg16-baseline-bridge`. Добавете го към
+официалната `upgrade` команда след build на одобрения коригиращ release.
+Този режим проверява едновременно:
+
+- точния стар image ID и неговия OCI release label;
+- текущата Alembic revision `20260826_0021`;
+- непроменените спрямо baseline DB-facing application код, публикувани
+  migrations и runtime dependencies в новия committed release;
+- PG16 toolchain и реален PG16 сървър за избрания backup/restore operational image.
+
+Само след тези проверки и stop-writers новият **проверен immutable** PG16 image
+създава backup на текущата база, преди schema preparation. Следва удостоверена
+проверка на същия архив и на действителния dump произход. `release.json` запазва
+стария, target и backup image, избрания режим, проверените версии и encrypted
+hash за recovery. При липсващо или несъвместимо доказателство няма `prepare`.
+Няма обща опция за заобикаляне на версията или за произволен backup image.
+
+PG17-produced архив от предишна репетиция не покрива този gate дори да преминава
+AES-GCM/checksum verification. Запазете коригирания PG16 image за отделен QA
+restore rehearsal и за евентуално recovery. Старият application image може да
+бъде нужен след възстановяване на старата schema, но неговите PG17 restore
+tools не са квалифицирани за PG16. Операторът продължава да одобрява отделно
+реалното deployment/recovery изпълнение; този correction не го извършва.
 
 ## 6. Backup, verify и restore отделно
 

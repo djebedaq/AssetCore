@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 sys.path.insert(0, str(BACKEND))
+sys.path.insert(0, str(ROOT / "scripts"))
 
 from app.migrations import migration_lock_id, run_migrations  # noqa: E402
 from app.models import (  # noqa: E402
@@ -42,6 +43,7 @@ from app.official_documents.integrity import (  # noqa: E402
 )
 from app.seed import seed_database  # noqa: E402
 from app.settings import settings  # noqa: E402
+from postgres_toolchain import check_compatibility  # noqa: E402
 
 
 def _safe_test_url(variable: str) -> str:
@@ -242,6 +244,73 @@ def _verify_official_document_integrity(url: str, actor_id: int) -> None:
         engine.dispose()
 
 
+def _database_state(url: str) -> dict[str, object]:
+    """Capture schema/revision/row counts before a deliberately refused restore."""
+    engine = create_engine(url, pool_pre_ping=True)
+    try:
+        with engine.connect() as connection:
+            inspector = inspect(connection)
+            quote = connection.dialect.identifier_preparer.quote
+            counts = {
+                table: connection.execute(text(f"SELECT COUNT(*) FROM {quote(table)}")).scalar_one()
+                for table in sorted(inspector.get_table_names())
+            }
+            revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+        return {"counts": counts, "revision": revision}
+    finally:
+        engine.dispose()
+
+
+def _expect_compatibility_rejection(arguments: list[str], environment: dict[str, str]) -> None:
+    result = subprocess.run(
+        [sys.executable, *arguments], cwd=ROOT, env=environment,
+        capture_output=True, text=True, timeout=60, check=False,
+    )
+    output = result.stdout + result.stderr
+    # Captured output is never echoed, including unexpected subprocess failures.
+    if result.returncode == 0 or "postgresql_toolchain_incompatible" not in output:
+        raise RuntimeError("The incompatible PostgreSQL QA operation was not refused by the guard.")
+    password = urlparse(environment["DATABASE_URL"]).password
+    for secret in (environment["DATABASE_URL"], environment["BACKUP_ENCRYPTION_KEY"], password):
+        if secret and secret in output:
+            raise RuntimeError("The PostgreSQL compatibility guard exposed a QA credential.")
+
+
+def _verify_mismatched_toolchain_rejection(
+    temp: Path, backup: Path, environment: dict[str, str], restore_url: str, actor_id: int,
+) -> None:
+    mismatch_dump = os.environ.get("ASSETCORE_POSTGRES_MISMATCH_PG_DUMP")
+    mismatch_restore = os.environ.get("ASSETCORE_POSTGRES_MISMATCH_PG_RESTORE")
+    required = os.environ.get("ASSETCORE_REQUIRE_POSTGRES_MISMATCH_TEST") == "true"
+    if not mismatch_dump and not mismatch_restore and not required:
+        return
+    if not mismatch_dump or not mismatch_restore:
+        raise RuntimeError("Both incompatible PostgreSQL QA tools are required.")
+
+    rejected = temp / "rejected"
+    rejected.mkdir()
+    mismatch_environment = {**environment, "PG_DUMP": mismatch_dump}
+    _expect_compatibility_rejection(
+        [str(ROOT / "scripts" / "backup_database.py"), "--output-dir", str(rejected),
+         "--actor-user-id", str(actor_id)], mismatch_environment,
+    )
+    if list(rejected.iterdir()):
+        raise RuntimeError("An incompatible PostgreSQL backup published output.")
+
+    before = _database_state(restore_url)
+    mismatch_environment = {
+        **environment, "DATABASE_URL": restore_url, "PG_RESTORE": mismatch_restore,
+    }
+    _expect_compatibility_rejection(
+        [str(ROOT / "scripts" / "restore_database.py"), str(backup),
+         "--confirm", "RESTORE_ASSETCORE", "--actor-user-id", str(actor_id)],
+        mismatch_environment,
+    )
+    if _database_state(restore_url) != before:
+        raise RuntimeError("An incompatible PostgreSQL restore modified its QA target.")
+    print("PostgreSQL mismatched backup/restore toolchains rejected without publication or target changes.")
+
+
 def main() -> None:
     source_url = _safe_test_url("ASSETCORE_POSTGRES_SOURCE_URL")
     restore_url = _safe_test_url("ASSETCORE_POSTGRES_RESTORE_URL")
@@ -250,6 +319,10 @@ def main() -> None:
     if not os.environ.get("PG_DUMP") or not os.environ.get("PG_RESTORE"):
         raise SystemExit("PG_DUMP and PG_RESTORE must identify the PostgreSQL client tools.")
 
+    for url in (source_url, restore_url):
+        versions = check_compatibility(url)
+        if any(version["major"] != 16 for version in versions.values()):
+            raise RuntimeError("PostgreSQL QA requires major 16 for the server and all three clients.")
     _upgrade(source_url)
     _verify_migration_start_is_concurrency_safe(source_url)
     _verify_safe_catalog_downgrade_round_trip(source_url)
@@ -315,6 +388,7 @@ def main() -> None:
             check=True,
         )
         _upgrade(restore_url)
+        _verify_mismatched_toolchain_rejection(temp, backups[0], environment, restore_url, actor_id)
         environment["DATABASE_URL"] = restore_url
         subprocess.run(
             [
