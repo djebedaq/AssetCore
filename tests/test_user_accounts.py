@@ -324,16 +324,40 @@ def test_duplicate_email_invalid_role_and_language_are_rejected(
 
 
 @pytest.mark.parametrize(
-    "password",
-    ["short1!A", "alllowercase1!", "ALLUPPERCASE1!", "NoDigits!!!", "NoSpecial123"],
+    ("email", "password"),
+    [
+        ("policy-short@example.invalid", "short1"),
+        ("policy-nodigit@example.invalid", "abcdefgh"),
+        ("policy-weak@example.invalid", "password123"),
+        ("emailpolicy1@example.invalid", "emailpolicy1"),
+    ],
 )
 def test_password_policy_rejects_weak_temporary_passwords(
-    client, auth_headers, password
+    client, auth_headers, email, password
 ):
-    payload = _create_payload("policy@example.invalid", "observer")
+    payload = _create_payload(email, "observer")
     payload["temporary_password"] = password
     payload["confirm_password"] = password
     assert client.post("/api/users", headers=auth_headers, json=payload).status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("email", "password"),
+    [
+        ("policy-lower@example.invalid", "lowercase1"),
+        ("policy-upper@example.invalid", "UPPERCASE1"),
+        ("policy-nospecial@example.invalid", "Mixed123"),
+        ("policy-minimum@example.invalid", "abcdefg1"),
+    ],
+)
+def test_password_policy_accepts_relaxed_requirements(
+    client, auth_headers, email, password
+):
+    payload = _create_payload(email, "observer")
+    payload["temporary_password"] = password
+    payload["confirm_password"] = password
+    response = client.post("/api/users", headers=auth_headers, json=payload)
+    assert response.status_code == 201, response.text
 
 
 def test_reset_forces_password_change_and_never_audits_secrets(
