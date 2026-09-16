@@ -28,6 +28,8 @@ DUMMY_PASSWORD_HASH = (
     "Sa7JKlG6aohdH_BI-nuzDe5O_CV5KaSdf046o4V4B7I"
 )
 
+PASSWORD_MIN_LENGTH = 8
+
 OBVIOUSLY_WEAK_PASSWORDS = {
     "password",
     "password1",
@@ -37,6 +39,11 @@ OBVIOUSLY_WEAK_PASSWORDS = {
     "changeme",
     "letmein123",
     "assetcore",
+    "12345678",
+    "123456789",
+    "1234567890",
+    "00000000",
+    "11111111",
 }
 
 
@@ -70,19 +77,16 @@ def validate_password_policy(password: str, email: str | None = None) -> None:
     email_value = (email or "").strip().casefold()
     email_local_part = email_value.split("@", 1)[0]
     valid = (
-        len(password) >= 10
-        and any(character.islower() for character in password)
-        and any(character.isupper() for character in password)
+        len(password) >= PASSWORD_MIN_LENGTH
         and any(character.isdigit() for character in password)
-        and any(not character.isalnum() for character in password)
         and normalized not in OBVIOUSLY_WEAK_PASSWORDS
         and normalized != email_value
         and (not email_local_part or normalized != email_local_part)
     )
     if not valid:
         raise ValueError(
-            "Паролата трябва да е поне 10 знака и да съдържа малка и главна "
-            "буква, цифра и специален знак."
+            "Паролата трябва да е поне 8 знака, да съдържа поне една цифра и "
+            "да не е очевидно слаба или идентична със служебния имейл."
         )
 
 
