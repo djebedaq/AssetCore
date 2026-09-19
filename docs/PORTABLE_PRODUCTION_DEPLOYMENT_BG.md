@@ -5,6 +5,11 @@
 и Linux + Docker Engine използват същия image, PostgreSQL и приложение.
 Render free blueprint остава само staging. Няма cloud/registry изискване.
 
+След внедряване на PROD-05 нормалните операторски операции използват
+[`production_manager.py`](../scripts/production_manager.py), описан в
+[раздел 11](#11-prod-05--операторски-manager-за-последващи-обновявания).
+Ниското ниво и процедурите за първоначално внедряване/recovery остават по-долу.
+
 ## Какво се променя
 
 | Преди | Сега |
@@ -363,6 +368,209 @@ app/container/DB/browser/production `.env`. До реален verified intended 
 5. Изпълнете отделно одобрения restore/HTTPS/license commissioning план; спрете
    старите writers преди cutover. Няма едновременно независимо production
    писане на двата host-а. Същият image/data model, без пренаписване на app.
+
+## 11. PROD-05 — операторски manager за последващи обновявания
+
+PROD-05 се внедрява **за първи път чрез съществуващата ръчна процедура** с
+`production_deploy.py`, след независим review, merge и успешен `push` CI върху
+точния post-merge SHA. Следващите команди са за вече инсталиран PROD-05 и
+съществуваща production инсталация. Те не извършват първоначална инсталация.
+
+Актуалната база при подготовка на PROD-05 (19.09.2026) е
+`ab2d4db4fe5f844f90c81156ee8c376e69c005d5`, след PR #76. Операторът е потвърдил,
+че това е и текущият live release; тази задача не проверява live инсталацията.
+Първото внедряване на PROD-05 се планира от тази база чрез ръчната процедура.
+Manager-ът не hardcode-ва базов SHA: бъдещите проверки използват действителния
+OCI SHA на работещото приложение и изрично одобрения target.
+
+Host изискванията остават Python 3.12+, Git, Docker и Docker Compose, с вече
+одобрения Docker достъп на оператора. Manager-ът използва standard library и
+не изисква допълнителен GitHub token. Изпълнява се от постоянния production
+checkout. На Linux използвайте `python3` вместо `python`.
+
+### Еднократна локална конфигурация
+
+Заменете всички placeholders с одобрените стойности за съществуващата
+инсталация. Backup parent трябва предварително да съществува, да е абсолютна
+директория извън checkout, без symlink и с правилните ACL/shared-group права
+от раздел 5; на POSIX world-writable parent се отказва. Actor ID е реален
+положителен ID на активен audit оператор; не използвайте примерен или измислен
+потребител. Project е точното **вече съществуващо** Compose project име.
+
+```powershell
+python scripts/production_manager.py configure --backup-dir "<APPROVED_ABSOLUTE_BACKUP_PARENT>" --actor-user-id <ACTIVE_OPERATOR_USER_ID> --project <EXISTING_COMPOSE_PROJECT> --public-origin "<APPROVED_HTTPS_ORIGIN>"
+```
+
+`--public-origin` е по избор за инсталации без публична проверка. За инсталация
+с публичен HTTPS достъп го конфигурирайте изрично: публично DNS име с HTTPS на
+порт 443, без credentials, path, query или fragment. IP адреси, нестандартен
+порт и имена с локални суфикси се отказват; завършващ `/` се нормализира.
+Manager-ът добавя точно `/api/ready`. Не използвайте временен или неодобрен
+адрес. Локалният порт се установява от действителния
+loopback-only Docker binding, без подразбиращ се installation-specific порт.
+
+Единственият локален конфигурационен файл е `.assetcore-operator.json`, включен
+в `.gitignore`. Съдържа точно `version`, `backup_dir`, `actor_user_id`, `project`
+и `public_origin` (`null`, ако опцията е пропусната); непознати/secret полета
+се отказват. Повторно configure не допуска смяна на записания Compose project;
+това изисква отделна процедура.
+Файлът не съдържа backup key, DB credentials, application/signature keys или
+лицензен материал. Не го commit-вайте и не копирайте `.env` в него.
+Съществуващият `.env` остава в постоянния checkout; manager-ът не чете и не
+копира съдържанието му. Guarded executor/Compose продължават да използват
+същата защитена конфигурация по съществуващия договор.
+
+### Ежедневни команди
+
+```powershell
+python scripts/production_manager.py status
+python scripts/production_manager.py restart
+python scripts/production_manager.py update --sha <EXACT_APPROVED_40_CHAR_SHA>
+```
+
+`status` е read-only. Показва Docker наличност, app и DB running/health статус,
+точния immutable app image ID, OCI release SHA, checkout SHA/clean state,
+локална readiness и публична readiness при конфигуриран origin. `null` означава
+недостъпна проверка, не успех. При неуспешна задължителна проверка командата
+връща ненулев exit code, без да променя услугите. Отговорите
+се свеждат до разрешени status/code полета; няма container environment, DB
+URL, сурови HTTP тела, licence payload, credentials или вътрешни пътища.
+
+`restart` използва guarded `production_deploy.py start` за съществуващия
+release и контейнери. Не build-ва, pull-ва, мигрира, създава база/volume или
+сменя image. Несъответствие между checkout SHA, OCI revision и разрешения
+immutable image води до отказ; смяната на release изисква update. Readiness и
+post-start smoke проверките от раздел 4 остават задължителни.
+
+### Одобрено обновяване към точен SHA
+
+`--sha` е задължителен: точно 40 малки hexadecimal знака. `main`, `latest`,
+съкратен SHA, непознат commit, downgrade и несвързана история се отказват.
+Няма „обнови до най-новото“, автоматично/scheduled deployment, `--force` или
+`--skip-ci`. Операторът получава одобрения SHA от review/release процеса.
+
+Manager-ът изпълнява следната последователност:
+
+1. Взема host operator lock и съществуващия lock на guarded executor за
+   checkout/project. Валидира локалната конфигурация, read-only текущото
+   състояние, чистия Git checkout и identity на origin като официалното
+   `djebedaq/AssetCore` repository. Друг оператор не може паралелно да изпълни
+   manager update/restart за същата инсталация. Това не е distributed lock;
+   отделни host-ове не трябва да имат едновременни writers към една база.
+   Windows използва global named mutex между процеси/акаунти и отказва при
+   недостъпно заключване; low-level checkout/project lock остава общ с ръчния executor.
+2. Fetch-ва официалния origin, установява точния target commit в одобрената
+   `origin/main` история и доказва forward ancestry от текущия running release.
+   Локални tracked/untracked промени се отказват; те не участват в build.
+3. Чрез публичния GitHub API проверява `Build check` workflow за **същия exact
+   SHA**: `event=push`, `head_sha=<TARGET_SHA>`, `status=completed`,
+   `conclusion=success`. Всички jobs `backend`, `frontend`, `postgres` и
+   `docker` трябва също да са completed/success за текущия attempt на последния
+   подходящ run; по-стар успешен run не прикрива по-нов failed/pending run.
+   PR CI за друг SHA не е
+   deployment qualification. При липсваща, pending, failed или недостъпна
+   информация няма build или downtime.
+4. Представя текущия и target SHA, CI run identity, задължителния backup и
+   очакваните deployment фази. Операторът въвежда точно
+   `APPLY <FULL_40_CHAR_SHA>`. Отказ или друго въведено потвърждение прекратява
+   операцията **преди промяна на checkout, build или stop writers**.
+5. Иска `BACKUP_ENCRYPTION_KEY` чрез интерактивен prompt **без echo** и изисква
+   валиден Base64 на точно 32 decoded bytes. Няма fallback към видимо въвеждане.
+   Ключът не се поставя ръчно в PowerShell environment, CLI аргумент, config,
+   `.env`, log или `release.json`. Предава се само в environment на child
+   операцията, която го изисква, и се премахва възможно най-рано; не се запазва
+   в Credential Manager/keychain. Невалиден ключ прекратява преди target
+   preparation и downtime.
+6. Подготвя чист detached checkout на точния target SHA и build-ва чрез
+   съществуващия `Deployment.build`/`git archive` договор. Потвърждава immutable
+   image ID и OCI revision срещу одобрения SHA **преди stop writers**.
+7. Извиква съществуващия guarded `Deployment.upgrade` с точния SHA, project,
+   approved backup parent и active actor ID. Остават authoritative всички
+   проверки от раздел 5: PG16 toolchain, backup-directory ACL/mount проба и
+   recovery record преди stop; stop writers → stopped-state revalidation →
+   точно един AES-GCM `.acbackup` → SHA-256 и target strict PG16 verify на
+   същия непроменен файл → explicit prepare → readiness и smoke. Нормалният
+   manager не предлага и никога не подава `--pg16-baseline-bridge`.
+   CI се проверява повторно след build, преди guarded upgrade; нов pending или
+   failed rerun през това време прекратява операцията без stop writers.
+8. Независимо сверява running image ID с току-що построения ID, OCI revision с
+   target SHA, app/DB health, локални `/api/ready` и `/api/health`, както и
+   публичен `/api/ready`, когато е конфигуриран. Едва тогава връща успешен
+   операторски резултат.
+
+### Как се обновява самият manager
+
+Началният процес създава временен snapshot на текущите manager/CI/deploy
+модули и изпълнява отделен bootstrap от него. Така промяната на постоянния
+checkout не променя изходния код, от който продължава действащият bootstrap.
+След SHA-bound потвърждението и валидния ключ checkout става detached на
+одобрения target. Нов child процес зарежда `Deployment` от този target и
+използва неговите непроменени guarded build/upgrade методи. Parent държи
+операторския и low-level lock през цялата операция. Временният snapshot не
+включва `.env`, бизнес данни, конфигурационни secrets или target build context;
+build context идва само от committed `git archive`.
+
+### Readiness, резултати и действия при отказ
+
+Успешната manager квалификация изисква readiness `service=AssetCore`,
+`status=ready`, liveness `status=ok` и `status=pass` за всяка от проверките:
+
+| Проверка | Задължителен readiness code |
+|---|---|
+| `runtime` | `runtime_ready` |
+| `database` | `database_connected` |
+| `schema` | `database_schema_current` |
+| `configuration` | `configuration_valid` |
+| `catalog` | `catalog_integrity_verified` |
+| `cryptography` | `cryptography_operational` |
+| `license` | `license_evaluated` |
+
+Readiness с `license_evaluated_read_only` или `license_not_applicable`
+не покрива този production qualification gate. Това не променя съществуващото
+поведение на приложението при изтекъл лиценз: данните и разрешените
+read/export/backup операции остават защитени по настоящия договор.
+
+Публичната проверка използва HTTPS с нормална TLS certificate verification и
+не следва redirects. Няма Cloudflare API, промяна на tunnel или автоматична
+proxy конфигурация. Ако локалният deployment е успешен, но публичната проверка
+се провали, manager-ът връща **ненулев exit code / операторска намеса** и пази
+успешно стартираното локално приложение. Операторът проверява одобрения origin,
+TLS и proxy маршрута; няма DB rollback.
+
+При неуспех на независимата **локална** проверка след upgrade manager-ът
+спира само app, ако отново потвърди точния target image. Не стартира стария
+image и не връща база/миграции назад. `release.json` запазва резултата от
+low-level executor; последвалият операторски резултат показва тази допълнителна
+проверка. Запазете и двата при recovery анализ.
+Изключение е самостоятелен лицензен отказ при иначе потвърден точен image и
+изправно локално приложение: резултатът остава ненулев, но app не се спира.
+Така изтичане на лиценз по време на операцията не отнема разрешените
+read/export/backup операции; няма обявяване на успешна production qualification.
+
+Изходът използва стабилни технически stage/result кодове и JSON metadata с
+български операторски обяснения. Пазете exact SHA, immutable image ID, CI run
+identity, readiness резултатите и recovery directory **basename**, ако е
+наличен. Не добавяйте secrets или суров Docker/SQL/HTTP изход към support ticket.
+Съществуващият `release.json` остава authoritative recovery запис.
+
+При отказ **преди stop writers** работещото приложение остава непроменено.
+Ако checkout вече е преместен на target, source SHA може да е новият, докато
+старият app продължава да работи; това е видимо в `status`. `restart` отказва
+такова release несъответствие. Не правете сляп retry или произволен checkout.
+
+При отказ **след stop writers** се запазват fail-closed правилата на guarded
+executor: няма unsafe old-image restart след потенциално частично prepare,
+автоматичен retry или автоматичен rollback. Проверете безопасния failed stage,
+`release.json`, backup/verify evidence, останали one-shot containers и реалното
+DB състояние. Ескалирайте към отговорния release/recovery оператор и следвайте
+отделната контролирана процедура от раздел 7 и
+[BACKUP_RESTORE_BG.md](BACKUP_RESTORE_BG.md). Не изтривайте volume, не
+изпълнявайте произволен downgrade и не възстановявайте „последния backup“
+автоматично. Запазете post-failure състоянието за анализ.
+
+PROD-05 не променя schema, Docker/Compose конфигурация или verified business
+материали. Тестовете използват fakes/mocks и временни repositories; не
+квалифицират реалния production host, HTTPS route или production secrets.
 
 ## Qualification boundary
 
