@@ -5,8 +5,10 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import uuid
 import warnings
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.error import HTTPError, URLError
@@ -276,26 +278,49 @@ class HTTPResponse:
         return False
 
 
-def test_https_readiness_keeps_tls_and_disables_redirects_and_proxy(monkeypatch):
-    url = "https://status.example.com/api/ready"
+@pytest.fixture()
+def probe_environment(monkeypatch):
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy",
+                 "GITHUB_TOKEN", "GH_TOKEN", "ASSETCORE_TEST_SECRET"):
+        monkeypatch.setenv(name, "synthetic-probe-environment-value")
+
+
+@pytest.mark.parametrize(("url", "payload"), [
+    ("https://status.example.com/api/ready", ready_payload()),
+    ("http://127.0.0.1:12345/api/ready", ready_payload()),
+    ("http://127.0.0.1:12345/api/health", {"status": "ok"}),
+], ids=["public-ready", "local-ready", "local-health"])
+def test_http_request_contract_keeps_tls_and_disables_redirects_and_proxy(
+        monkeypatch, probe_environment, url, payload):
     observed = []
+
+    def open_request(request, timeout):
+        assert isinstance(request, manager.urllib.request.Request)
+        assert request.full_url == url
+        assert request.get_method() == "GET" and request.data is None
+        assert timeout == 10
+        assert {name.lower(): value for name, value in request.header_items()} == {
+            "user-agent": "AssetCore-production-manager",
+            "accept": "application/json", "cache-control": "no-cache",
+        }
+        return HTTPResponse(url, json.dumps(payload).encode())
 
     def build(*handlers):
         observed.extend(handlers)
-        return SimpleNamespace(open=lambda value, timeout: HTTPResponse(
-            value, json.dumps(ready_payload()).encode()))
+        return SimpleNamespace(open=open_request)
 
     monkeypatch.setattr(manager.urllib.request, "build_opener", build)
-    assert manager.readiness(manager.read_endpoint(url))["ready"]
-    assert any(isinstance(item, manager.NoRedirect) for item in observed)
-    assert any(isinstance(item, manager.urllib.request.ProxyHandler) and item.proxies == {}
-               for item in observed)
+    assert manager.read_endpoint(url) == payload
+    # No custom HTTPS handler/context: urllib's verified TLS defaults remain in use.
+    assert [type(item) for item in observed] == [manager.urllib.request.ProxyHandler,
+                                              manager.NoRedirect]
+    assert observed[0].proxies == {}
     assert manager.NoRedirect().redirect_request(None) is None
 
 
 @pytest.mark.parametrize("failure", [URLError("secret TLS diagnostic"),
                                      HTTPError("https://private.invalid", 302, "secret", {}, None)])
-def test_tls_redirect_errors_are_safe(failure, monkeypatch):
+def test_tls_redirect_errors_are_safe(failure, monkeypatch, capsys):
     def fail(*_args, **_kwargs):
         raise failure
     monkeypatch.setattr(manager.urllib.request, "build_opener",
@@ -303,20 +328,81 @@ def test_tls_redirect_errors_are_safe(failure, monkeypatch):
     with pytest.raises(manager.ManagerError) as caught:
         manager.read_endpoint("https://status.example.com/api/ready")
     assert str(caught.value) == "readiness_transport_or_response_failed"
+    assert caught.value.__suppress_context__
+    assert capsys.readouterr() == ("", "")
 
 
 @pytest.mark.parametrize(("body", "status", "response_url"), [
     (b"secret invalid json", 200, "https://status.example.com/api/ready"),
+    (b'{"private":"\xff"}', 200, "https://status.example.com/api/ready"),
     (b"[]", 200, "https://status.example.com/api/ready"),
+    (b"null", 200, "https://status.example.com/api/ready"),
+    (b'"private scalar"', 200, "https://status.example.com/api/ready"),
+    (b"1", 200, "https://status.example.com/api/ready"),
+    (b"true", 200, "https://status.example.com/api/ready"),
     (b"x" * 65537, 200, "https://status.example.com/api/ready"),
+    (b"{}", 201, "https://status.example.com/api/ready"),
+    (b"{}", 302, "https://status.example.com/api/ready"),
+    (b"{}", 403, "https://status.example.com/api/ready"),
     (b"{}", 503, "https://status.example.com/api/ready"),
     (b"{}", 200, "https://different.example.com/api/ready"),
-], ids=["invalid-json", "wrong-shape", "oversized", "unavailable", "redirect"])
-def test_http_metadata_and_unbounded_responses_refused(body, status, response_url, monkeypatch):
+], ids=["invalid-json", "invalid-utf8", "array", "null", "string", "number", "boolean",
+        "oversized", "created", "redirect-status", "forbidden", "unavailable", "changed-url"])
+def test_http_metadata_and_unbounded_responses_refused(body, status, response_url, monkeypatch,
+                                                     capsys):
     monkeypatch.setattr(manager.urllib.request, "build_opener", lambda *_: SimpleNamespace(
         open=lambda *_a, **_k: HTTPResponse(response_url, body, status=status)))
-    with pytest.raises(manager.ManagerError, match="readiness_transport_or_response_failed"):
+    with pytest.raises(manager.ManagerError) as caught:
         manager.read_endpoint("https://status.example.com/api/ready")
+    assert str(caught.value) == "readiness_transport_or_response_failed"
+    assert caught.value.__suppress_context__
+    assert capsys.readouterr() == ("", "")
+
+
+def test_http_body_at_existing_size_limit_is_accepted(monkeypatch):
+    url = "https://status.example.com/api/ready"
+    monkeypatch.setattr(manager.urllib.request, "build_opener", lambda *_: SimpleNamespace(
+        open=lambda *_a, **_k: HTTPResponse(url, b"{}" + b" " * 65534)))
+    assert manager.read_endpoint(url) == {}
+
+
+def test_local_wire_headers_and_redirect_refusal(probe_environment):
+    observed = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            observed.append((self.path, {k.lower(): v for k, v in self.headers.items()}))
+            body = json.dumps({"status": "ok"}).encode()
+            self.send_response(302 if self.path == "/redirect" else 200)
+            self.send_header("Location", "/must-not-follow")
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args):
+            pass
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        origin = f"http://127.0.0.1:{server.server_port}"
+        try:
+            assert manager.read_endpoint(origin + "/api/health") == {"status": "ok"}
+            with pytest.raises(manager.ManagerError,
+                               match="^readiness_transport_or_response_failed$"):
+                manager.read_endpoint(origin + "/redirect")
+        finally:
+            server.shutdown()
+            worker.join(timeout=5)
+        assert not worker.is_alive()
+    assert [path for path, _headers in observed] == ["/api/health", "/redirect"]
+    for _path, headers in observed:
+        assert headers["user-agent"] == "AssetCore-production-manager"
+        assert headers["accept"] == "application/json"
+        assert headers["cache-control"] == "no-cache"
+        assert not {"authorization", "cookie", "proxy-authorization"}.intersection(headers)
+        assert "synthetic-probe-environment-value" not in headers.values()
 
 
 def intercept_fetch(monkeypatch):
@@ -487,6 +573,42 @@ def test_status_is_read_only_and_does_not_create_files(configuration, monkeypatc
     assert endpoints == ["http://127.0.0.1:10000/api/ready", "http://127.0.0.1:10000/api/health",
                          "https://status.example.com/api/ready"]
     assert list(root.iterdir()) == before
+
+
+@pytest.mark.parametrize("public_result", ["ready", "not-ready", "http-error", "invalid-json"])
+def test_status_exit_code_tracks_public_http_qualification(configuration, monkeypatch, capsys,
+                                                         public_result):
+    root, config = configuration
+    config["public_origin"] = "https://status.example.com"
+    monkeypatch.setattr(manager, "load_config", lambda _root: config)
+    monkeypatch.setattr(manager, "source_state", lambda _root: {
+        "source_sha": OLD_SHA, "git_clean": True})
+    monkeypatch.setattr(manager, "command", lambda *_a, **_k: "")
+    monkeypatch.setattr(manager, "container_status", lambda _root, _project, service:
+                        production_report()[service])
+
+    def open_request(request, timeout):
+        url = request.full_url
+        payload = {"status": "ok"} if url.endswith("/api/health") else ready_payload()
+        if url.startswith(config["public_origin"]):
+            if public_result == "http-error":
+                raise HTTPError(url, 403, "private diagnostic", {}, None)
+            if public_result == "invalid-json":
+                return HTTPResponse(url, b"private response body")
+            if public_result == "not-ready":
+                payload["status"] = "not_ready"
+        return HTTPResponse(url, json.dumps(payload).encode())
+
+    monkeypatch.setattr(manager.urllib.request, "build_opener",
+                        lambda *_: SimpleNamespace(open=open_request))
+    assert manager.main(["status"], root=root) == (0 if public_result == "ready" else 1)
+    output = capsys.readouterr().out
+    reports = [json.loads(line) for line in output.splitlines()]
+    assert reports[0]["local"]["ready"] and reports[0]["health"]
+    assert reports[0]["public"]["ready"] == (public_result == "ready")
+    assert reports[-1]["result"] == (
+        "status" if public_result == "ready" else "public_qualification_failed")
+    assert "private" not in output and "Traceback" not in output
 
 
 def test_status_reports_unavailable_docker_without_echoing_error(configuration, monkeypatch,
@@ -667,16 +789,24 @@ def test_expiry_during_upgrade_does_not_remove_verified_export_access(update_flo
     assert "stop_failed_target" not in subject.calls
 
 
-def test_restart_uses_existing_guarded_start_without_release_changes(configuration, monkeypatch):
+@pytest.mark.parametrize("public_ready", [None, True, False])
+def test_restart_uses_existing_guarded_start_without_release_changes(configuration, monkeypatch,
+                                                                   public_ready):
     root, config = configuration
     calls = []
     monkeypatch.setattr(manager, "source_state", lambda _root: {
         "source_sha": OLD_SHA, "git_clean": True})
     monkeypatch.setattr(manager, "container_status", lambda *_: production_report()["app"])
     monkeypatch.setattr(manager, "executor", lambda *args, **kwargs: calls.append((args, kwargs)))
-    monkeypatch.setattr(manager, "status", lambda *_: production_report())
+    public = None if public_ready is None else {"ready": public_ready}
+    monkeypatch.setattr(manager, "status", lambda *_: production_report(public=public))
     monkeypatch.setattr(manager, "git", lambda *_: pytest.fail("restart changed checkout"))
-    manager.restart(root, config)
+    if public_ready is False:
+        with pytest.raises(manager.ManagerError,
+                           match="public_qualification_failed_local_application_preserved"):
+            manager.restart(root, config)
+    else:
+        manager.restart(root, config)
     assert calls == [((root, config, "start", OLD_SHA), {"image": OLD_IMAGE})]
 
 

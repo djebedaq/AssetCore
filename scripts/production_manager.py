@@ -222,7 +222,12 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 def read_endpoint(url: str) -> dict:
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     try:
-        with opener.open(url, timeout=10) as response:
+        request = urllib.request.Request(url, headers={
+            "User-Agent": "AssetCore-production-manager",
+            "Accept": "application/json",
+            "Cache-Control": "no-cache",
+        })
+        with opener.open(request, timeout=10) as response:
             if response.status != 200 or response.geturl() != url:
                 raise ValueError
             data = response.read(65537)
