@@ -517,6 +517,10 @@ def update_flow(configuration, monkeypatch):
         result["source_sha"] = state["source"]
         if state["running"] == NEW_SHA and not state["final_local"]:
             result["local"]["ready"] = False
+        if state["running"] == NEW_SHA and state.get("license_failed"):
+            payload = ready_payload()
+            payload["checks"]["license"]["code"] = "license_evaluated_read_only"
+            result["local"] = manager.readiness(payload)
         return result
 
     def source(_root, target, running):
@@ -652,6 +656,15 @@ def test_public_failure_preserves_successfully_deployed_local_app(update_flow):
     assert subject.state["running"] == NEW_SHA and subject.state["image"] == NEW_IMAGE
     assert subject.calls.count("upgrade") == 1
     assert not {"start", "rollback", "stop", "restore"}.intersection(subject.calls)
+
+
+def test_expiry_during_upgrade_does_not_remove_verified_export_access(update_flow):
+    subject = update_flow
+    subject.state["license_failed"] = True
+    with pytest.raises(manager.ManagerError, match="license_qualification_failed_application_preserved"):
+        manager.update(subject.root, subject.config, NEW_SHA)
+    assert subject.state["running"] == NEW_SHA
+    assert "stop_failed_target" not in subject.calls
 
 
 def test_restart_uses_existing_guarded_start_without_release_changes(configuration, monkeypatch):

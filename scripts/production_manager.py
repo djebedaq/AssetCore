@@ -429,6 +429,8 @@ def emit(code: str, **fields) -> None:
         "operator_cancelled": "Операцията е отказана преди промяна на версията.",
         "public_qualification_failed_local_application_preserved":
             "Публичната проверка е неуспешна. Локалното приложение остава стартирано.",
+        "license_qualification_failed_application_preserved":
+            "Лицензната проверка изисква намеса. Приложението остава достъпно за разрешените read/export/backup операции.",
     }
     fallback = ("GitHub CI не е положително потвърден; няма спиране на приложението."
                 if code.startswith("ci_") else
@@ -472,6 +474,16 @@ def update(root: Path, config: dict, target: str) -> None:
     try:
         require_local(final, target, built["image_id"])
     except ManagerError:
+        # Expiry must not take away the application's verified read/export/backup
+        # paths. A licence-only qualification failure is nonzero, never success,
+        # but must not add a shutdown absent from the authoritative executor.
+        if final["local"].get("checks") == {**dict.fromkeys(CHECKS, True), "license": False}:
+            try:
+                require_local({**final, "local": {"ready": True}}, target, built["image_id"])
+            except ManagerError:
+                pass
+            else:
+                raise ManagerError("license_qualification_failed_application_preserved") from None
         # Match the existing executor's local smoke failure semantics: stop only
         # the confirmed target app, never restart an old image or roll back data.
         executor(root, config, "stop_failed_target", target, image=built["image_id"])
