@@ -349,7 +349,13 @@ def scoped_run(command, *, cwd, env=None, **kwargs):
         env.pop("BACKUP_ENCRYPTION_KEY", None)
     return original_run(command, cwd=cwd, env=env, **kwargs)
 d.run = scoped_run
-job = d.Deployment(Path(root), sha, Path(root) / ".env", project)
+class PinnedDeployment(d.Deployment):
+    def image_identity(self):
+        identity = super().image_identity()
+        if expected and identity != expected:
+            raise d.DeploymentError("immutable_target_changed")
+        return identity
+job = PinnedDeployment(Path(root), sha, Path(root) / ".env", project)
 try:
     if operation == "build":
         result = {"image_id": job.build()}
@@ -409,7 +415,26 @@ def executor(root: Path, config: dict, operation: str, sha: str, *,
 
 
 def emit(code: str, **fields) -> None:
-    print(json.dumps({"result": code, **fields}, ensure_ascii=True), flush=True)
+    messages = {
+        "current_status": "Текущо състояние преди обновяване.",
+        "status": "Състояние на инсталацията; проверката не променя услугите.",
+        "confirmation_required": "Проверете точните версии и потвърдете одобрения SHA.",
+        "building_exact_target": "Подготвя се image от точната одобрена версия.",
+        "guarded_upgrade_starting": "Започва защитеното обновяване с проверен backup.",
+        "post_update_status": "Независима проверка след обновяването.",
+        "post_restart_status": "Проверка след стартиране на същата версия.",
+        "update_complete": "Обновяването и задължителните проверки са успешни.",
+        "restart_complete": "Същата версия е стартирана успешно.",
+        "operator_configured": "Локалната несекретна конфигурация е записана.",
+        "operator_cancelled": "Операцията е отказана преди промяна на версията.",
+        "public_qualification_failed_local_application_preserved":
+            "Публичната проверка е неуспешна. Локалното приложение остава стартирано.",
+    }
+    fallback = ("GitHub CI не е положително потвърден; няма спиране на приложението."
+                if code.startswith("ci_") else
+                "Операцията е прекратена. Проверете кода и recovery процедурата; няма автоматичен retry или rollback.")
+    print(json.dumps({"result": code, "message": messages.get(code, fallback), **fields},
+                     ensure_ascii=False), flush=True)
 
 
 def update(root: Path, config: dict, target: str) -> None:
@@ -544,6 +569,9 @@ def frozen_run(root: Path, argv: list[str]) -> int:
 
 def main(argv: list[str] | None = None, *, root: Path = ROOT, frozen: bool = False) -> int:
     try:
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
         argv = list(sys.argv[1:] if argv is None else argv)
         parser = SafeParser(description="AssetCore: защитени операторски операции")
         commands = parser.add_subparsers(dest="operation", required=True, parser_class=SafeParser)

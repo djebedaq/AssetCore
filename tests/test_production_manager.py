@@ -5,8 +5,8 @@ import json
 import os
 import subprocess
 import sys
+import uuid
 import warnings
-from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.error import HTTPError, URLError
@@ -311,7 +311,7 @@ def test_tls_redirect_errors_are_safe(failure, monkeypatch):
     (b"x" * 65537, 200, "https://status.example.com/api/ready"),
     (b"{}", 503, "https://status.example.com/api/ready"),
     (b"{}", 200, "https://different.example.com/api/ready"),
-])
+], ids=["invalid-json", "wrong-shape", "oversized", "unavailable", "redirect"])
 def test_http_metadata_and_unbounded_responses_refused(body, status, response_url, monkeypatch):
     monkeypatch.setattr(manager.urllib.request, "build_opener", lambda *_: SimpleNamespace(
         open=lambda *_a, **_k: HTTPResponse(response_url, body, status=status)))
@@ -557,6 +557,10 @@ def update_flow(configuration, monkeypatch):
             if state["failure"] == "build":
                 raise manager.ManagerError("guarded_operation_failed_image_build_operator_attention_required")
             return {"image_id": NEW_IMAGE}
+        if operation == "stop_failed_target":
+            assert kwargs == {"image": NEW_IMAGE}
+            state["running"] = None
+            return {}
         assert operation == "upgrade" and kwargs == {"image": NEW_IMAGE, "key": BACKUP_KEY}
         if state["failure"] == "upgrade":
             raise manager.ManagerError("guarded_operation_failed_prepare_operator_attention_required")
@@ -580,7 +584,7 @@ def test_update_orders_qualification_confirmation_build_and_guarded_upgrade(upda
     subject = update_flow
     manager.update(subject.root, subject.config, NEW_SHA)
     assert subject.calls == ["status", "qualify_source", "ci", "confirm", "key", "status",
-                             "checkout", "release_source", "build", "status", "upgrade", "status"]
+                             "checkout", "release_source", "build", "status", "ci", "upgrade", "status"]
     assert subject.state["running"] == NEW_SHA and subject.state["image"] == NEW_IMAGE
     output = capsys.readouterr().out
     assert '"result": "update_complete"' in output and BACKUP_KEY not in output
@@ -635,7 +639,8 @@ def test_post_update_local_readiness_is_required(update_flow):
     subject.state["final_local"] = False
     with pytest.raises(manager.ManagerError, match="local_production_qualification_failed"):
         manager.update(subject.root, subject.config, NEW_SHA)
-    assert subject.calls.count("upgrade") == 1 and subject.calls[-1] == "status"
+    assert subject.calls.count("upgrade") == 1 and subject.calls[-1] == "stop_failed_target"
+    assert subject.state["running"] is None
 
 
 def test_public_failure_preserves_successfully_deployed_local_app(update_flow):
@@ -670,3 +675,237 @@ def test_restart_refuses_a_release_mismatch(configuration, monkeypatch):
     monkeypatch.setattr(manager, "executor", lambda *_a, **_k: pytest.fail("restart changed release"))
     with pytest.raises(manager.ManagerError, match="release_change_requires_upgrade"):
         manager.restart(root, config)
+
+
+@pytest.mark.parametrize("mode", ["replace", "grafts", "assume", "skip", "tls"])
+def test_local_git_overrides_cannot_change_release_trust(release_repository, monkeypatch, mode):
+    root, current, target = release_repository
+    if mode == "replace":
+        git(root, "replace", current, target)
+    elif mode == "grafts":
+        (root / ".git/info/grafts").write_text(current + "\n", "utf-8")
+    elif mode in {"assume", "skip"}:
+        flag = "--assume-unchanged" if mode == "assume" else "--skip-worktree"
+        git(root, "update-index", flag, "release-marker.txt")
+    else:
+        git(root, "config", "http.https://github.com/.sslVerify", "false")
+    calls = intercept_fetch(monkeypatch)
+    with pytest.raises(manager.ManagerError):
+        manager.qualify_source(root, target, current)
+    assert not any("fetch" in call for call in calls)
+
+
+def test_stopped_app_uses_configured_binding_for_guarded_restart(configuration, monkeypatch):
+    root, config = configuration
+    calls = []
+    replies = iter(["c" * 64, "exited unhealthy", OLD_IMAGE, OLD_SHA,
+                    json.dumps([{"HostIp": "127.0.0.1", "HostPort": "10000"}])])
+
+    def query(_root, args, **_kwargs):
+        calls.append(args)
+        return next(replies)
+
+    monkeypatch.setattr(manager, "command", query)
+    assert not manager.container_status(root, config["project"], "app")["running"]
+    assert ".HostConfig.PortBindings" in calls[-1][-2]
+
+
+def test_ci_rerun_during_build_blocks_shutdown(update_flow, monkeypatch):
+    subject = update_flow
+    attempts = []
+
+    def qualification(_sha):
+        attempts.append(True)
+        if len(attempts) == 2:
+            raise manager.CIError("CI_RUN_PENDING")
+        return {"qualified": True, "run_id": 1, "run_attempt": 1}
+
+    monkeypatch.setattr(manager, "qualify_ci", qualification)
+    with pytest.raises(manager.CIError, match="CI_RUN_PENDING"):
+        manager.update(subject.root, subject.config, NEW_SHA)
+    assert "build" in subject.calls and "upgrade" not in subject.calls
+    assert subject.state["running"] == OLD_SHA
+
+
+@pytest.fixture()
+def target_executor(configuration):
+    """Fresh child interpreter with test-only primitives; no Docker, DB or network."""
+    root, config = configuration
+    (root / "scripts").mkdir()
+    source = '''
+import json, os
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+IMAGE = "sha256:" + "2" * 64
+class DeploymentError(RuntimeError):
+    pass
+def record(event):
+    with (ROOT / "events.jsonl").open("a") as output:
+        output.write(json.dumps(event) + "\\n")
+def run(command, *, cwd, env=None, **kwargs):
+    assert env is not None
+    if command[0] == "git":
+        assert "BACKUP_ENCRYPTION_KEY" not in env
+    else:
+        assert "BACKUP_ENCRYPTION_KEY" in env
+    record(command[0])
+class Deployment:
+    def __init__(self, root, sha, env_file, project):
+        self.stage = "release_validation"
+        self.image = ""
+        self.identities = 0
+        assert env_file == root / ".env"
+    def image_identity(self):
+        self.identities += 1
+        if (ROOT / "changed-tag").exists() and self.identities > 1:
+            return "sha256:" + "3" * 64
+        return IMAGE
+    def validate(self):
+        self.image = self.image_identity()
+        run(["git"], cwd=ROOT)
+    def build(self):
+        assert "BACKUP_ENCRYPTION_KEY" not in os.environ
+        record("build")
+        return self.image_identity()
+    def upgrade(self, backup, actor, *, pg16_baseline_bridge=False):
+        self.validate()
+        assert actor == 17 and not pg16_baseline_bridge
+        run(["backup"], cwd=ROOT, env={"BACKUP_ENCRYPTION_KEY": os.environ["BACKUP_ENCRYPTION_KEY"]})
+        record("upgrade")
+        return backup / "upgrade-isolated123"
+    def restart(self):
+        assert "BACKUP_ENCRYPTION_KEY" not in os.environ
+        self.validate()
+        record("start")
+'''
+    (root / "scripts/production_deploy.py").write_text(source, "utf-8")
+    return root, config
+
+
+def test_fresh_executor_uses_target_primitives_and_limits_secret_environment(target_executor,
+                                                                          monkeypatch, capsys):
+    root, config = target_executor
+    monkeypatch.setenv("BACKUP_ENCRYPTION_KEY", "inherited-key-must-not-reach-build")
+    assert manager.executor(root, config, "build", NEW_SHA) == {"image_id": NEW_IMAGE}
+    assert manager.executor(root, config, "upgrade", NEW_SHA, image=NEW_IMAGE, key=BACKUP_KEY) == {
+        "recovery_directory": "upgrade-isolated123"}
+    manager.executor(root, config, "start", NEW_SHA, image=NEW_IMAGE)
+    events = (root / "events.jsonl").read_text()
+    assert [json.loads(line) for line in events.splitlines()] == [
+        "build", "git", "git", "backup", "upgrade", "git", "git", "start"]
+    assert BACKUP_KEY not in events + capsys.readouterr().out
+    assert not (root / ".env").exists()
+
+
+def test_exact_image_is_pinned_again_on_upgrade_validation(target_executor):
+    root, config = target_executor
+    (root / "changed-tag").touch()
+    with pytest.raises(manager.ManagerError, match="guarded_operation_failed_release_validation"):
+        manager.executor(root, config, "upgrade", NEW_SHA, image=NEW_IMAGE, key=BACKUP_KEY)
+    assert '"upgrade"' not in (root / "events.jsonl").read_text()
+
+
+def test_secret_never_appears_in_argv_and_child_environment_is_cleared(configuration, monkeypatch):
+    root, config = configuration
+    environments = []
+
+    def query(_root, argv, *, env, timeout):
+        assert BACKUP_KEY not in " ".join(argv)
+        assert env["BACKUP_ENCRYPTION_KEY"] == BACKUP_KEY
+        environments.append(env)
+        raise RuntimeError("untrusted child error " + BACKUP_KEY)
+
+    monkeypatch.setattr(manager, "command", query)
+    with pytest.raises(RuntimeError):
+        manager.executor(root, config, "upgrade", NEW_SHA, image=NEW_IMAGE, key=BACKUP_KEY)
+    assert "BACKUP_ENCRYPTION_KEY" not in environments[0]
+
+
+def test_frozen_snapshot_survives_replacing_original_manager_and_imports_target(tmp_path, capfd,
+                                                                             monkeypatch):
+    root = tmp_path / "installation with spaces"
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True)
+    original = '''
+import os, subprocess, sys
+from pathlib import Path
+def main(argv, *, root, frozen):
+    assert frozen and argv == ["restart"]
+    assert "BACKUP_ENCRYPTION_KEY" not in os.environ
+    assert Path(__file__).parent != root / "scripts"
+    assert {p.name for p in Path(__file__).parent.iterdir()} == {
+        "production_manager.py", "production_manager_ci.py", "production_deploy.py"}
+    target = root / "scripts/production_manager.py"
+    target.write_text("print('fresh-target')", encoding="utf-8")
+    assert old_code() == "frozen-manager"
+    result = subprocess.run([sys.executable, "-I", "-B", str(target)],
+                            capture_output=True, text=True, check=True)
+    assert result.stdout.strip() == "fresh-target"
+    print(old_code())
+    return 0
+def old_code():
+    return "frozen-manager"
+'''
+    (scripts / "production_manager.py").write_text(original, "utf-8")
+    for name in ("production_deploy.py", "production_manager_ci.py"):
+        (scripts / name).write_text("# isolated bootstrap fixture\n", "utf-8")
+    (root / ".env").write_text("not-a-real-secret", "utf-8")
+    monkeypatch.setenv("BACKUP_ENCRYPTION_KEY", BACKUP_KEY)
+    assert manager.frozen_run(root, ["restart"]) == 0
+    assert "frozen-manager" in capfd.readouterr().out
+    assert not list((root / ".tmp").glob("operator-bootstrap-*"))
+    assert (root / ".env").read_text() == "not-a-real-secret"
+
+
+def test_executor_os_lock_blocks_another_process_and_releases(tmp_path):
+    code = '''
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from scripts.production_deploy import operation_lock, DeploymentError
+try:
+    with operation_lock(Path(sys.argv[2]), "isolated-project"):
+        print("acquired")
+except DeploymentError:
+    print("blocked")
+'''
+    command = [sys.executable, "-I", "-B", "-c", code, str(ROOT), str(tmp_path)]
+    with manager.deploy.operation_lock(tmp_path, "isolated-project"):
+        child = subprocess.run(command, capture_output=True, text=True, timeout=20, check=True)
+        assert child.stdout.strip() == "blocked"
+    child = subprocess.run(command, capture_output=True, text=True, timeout=20, check=True)
+    assert child.stdout.strip() == "acquired"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows host named mutex")
+def test_windows_host_mutex_blocks_other_processes_without_production_lock():
+    name = "Global\\AssetCore-QA-" + uuid.uuid4().hex
+    code = '''
+import sys
+sys.path.insert(0, sys.argv[1])
+from scripts.production_manager import windows_host_lock, ManagerError
+try:
+    with windows_host_lock(sys.argv[2]):
+        print("acquired")
+except ManagerError:
+    print("blocked")
+'''
+    command = [sys.executable, "-I", "-B", "-c", code, str(ROOT), name]
+    with manager.windows_host_lock(name):
+        child = subprocess.run(command, capture_output=True, text=True, timeout=20, check=True)
+        assert child.stdout.strip() == "blocked"
+    child = subprocess.run(command, capture_output=True, text=True, timeout=20, check=True)
+    assert child.stdout.strip() == "acquired"
+
+
+def test_main_does_not_echo_untrusted_exception_or_secret(configuration, monkeypatch, capsys):
+    root, _ = configuration
+
+    def fail(_root):
+        raise RuntimeError("internal path and credential " + BACKUP_KEY)
+
+    monkeypatch.setattr(manager, "load_config", fail)
+    assert manager.main(["status"], root=root) == 1
+    output = capsys.readouterr()
+    assert BACKUP_KEY not in output.out + output.err
+    assert '"result": "operator_operation_failed"' in output.out

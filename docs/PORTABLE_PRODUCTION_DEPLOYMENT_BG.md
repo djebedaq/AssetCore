@@ -376,6 +376,13 @@ PROD-05 се внедрява **за първи път чрез съществу
 точния post-merge SHA. Следващите команди са за вече инсталиран PROD-05 и
 съществуваща production инсталация. Те не извършват първоначална инсталация.
 
+Актуалната база при подготовка на PROD-05 (19.09.2026) е
+`ab2d4db4fe5f844f90c81156ee8c376e69c005d5`, след PR #76. Операторът е потвърдил,
+че това е и текущият live release; тази задача не проверява live инсталацията.
+Първото внедряване на PROD-05 се планира от тази база чрез ръчната процедура.
+Manager-ът не hardcode-ва базов SHA: бъдещите проверки използват действителния
+OCI SHA на работещото приложение и изрично одобрения target.
+
 Host изискванията остават Python 3.12+, Git, Docker и Docker Compose, с вече
 одобрения Docker достъп на оператора. Manager-ът използва standard library и
 не изисква допълнителен GitHub token. Изпълнява се от постоянния production
@@ -450,6 +457,8 @@ Manager-ът изпълнява следната последователнос�
    `djebedaq/AssetCore` repository. Друг оператор не може паралелно да изпълни
    manager update/restart за същата инсталация. Това не е distributed lock;
    отделни host-ове не трябва да имат едновременни writers към една база.
+   Windows използва global named mutex между процеси/акаунти и отказва при
+   недостъпно заключване; low-level checkout/project lock остава общ с ръчния executor.
 2. Fetch-ва официалния origin, установява точния target commit в одобрената
    `origin/main` история и доказва forward ancestry от текущия running release.
    Локални tracked/untracked промени се отказват; те не участват в build.
@@ -482,6 +491,8 @@ Manager-ът изпълнява следната последователнос�
    точно един AES-GCM `.acbackup` → SHA-256 и target strict PG16 verify на
    същия непроменен файл → explicit prepare → readiness и smoke. Нормалният
    manager не предлага и никога не подава `--pg16-baseline-bridge`.
+   CI се проверява повторно след build, преди guarded upgrade; нов pending или
+   failed rerun през това време прекратява операцията без stop writers.
 8. Независимо сверява running image ID с току-що построения ID, OCI revision с
    target SHA, app/DB health, локални `/api/ready` и `/api/health`, както и
    публичен `/api/ready`, когато е конфигуриран. Едва тогава връща успешен
@@ -525,6 +536,12 @@ proxy конфигурация. Ако локалният deployment е успе
 се провали, manager-ът връща **ненулев exit code / операторска намеса** и пази
 успешно стартираното локално приложение. Операторът проверява одобрения origin,
 TLS и proxy маршрута; няма DB rollback.
+
+При неуспех на независимата **локална** проверка след upgrade manager-ът
+спира само app, ако отново потвърди точния target image. Не стартира стария
+image и не връща база/миграции назад. `release.json` запазва резултата от
+low-level executor; последвалият операторски резултат показва тази допълнителна
+проверка. Запазете и двата при recovery анализ.
 
 Изходът използва стабилни технически stage/result кодове и JSON metadata с
 български операторски обяснения. Пазете exact SHA, immutable image ID, CI run
