@@ -226,7 +226,7 @@ describe('bulk transfer HTTP and state contracts (characterized before extractio
     const request = mockApi((path, init) => {
       if (path === '/api/transfers/availability') return response(machines)
       if (path === '/api/locations') return response(locations)
-      if (path === '/api/transfer-batches') {
+      if (path === '/api/transfer-batches?view=lifecycles') {
         // The summary response has no individual transfer rows.
         return response([{ ...details(), transfers: undefined }])
       }
@@ -236,18 +236,18 @@ describe('bulk transfer HTTP and state contracts (characterized before extractio
     })
     render(<BulkTransfers onChanged={done} />)
     await screen.findByRole('heading', { name: '№4, №5' })
-    expect(request.mock.calls.map(([path]) => path)).toEqual(['/api/transfers/availability', '/api/locations', '/api/transfer-batches'])
+    expect(request.mock.calls.map(([path]) => path)).toEqual(['/api/transfers/availability', '/api/locations', '/api/transfer-batches?view=lifecycles'])
     await user.click(screen.getByRole('button', { name: t('bulk.cancelPendingAction') }))
     await screen.findByLabelText(t('bulk.cancelReason'))
     expect(done).not.toHaveBeenCalled()
     change(t('bulk.cancelReason'), 'QA reason')
     await user.click(screen.getByRole('button', { name: t('bulk.cancelConfirm') }))
     await waitFor(() => expect(done).toHaveBeenCalledTimes(1))
-    expect(request.mock.calls.map(([path]) => path)).toEqual(['/api/transfers/availability', '/api/locations', '/api/transfer-batches', '/api/transfer-batches/11', '/api/transfer-batches/11/cancel', '/api/transfers/availability', '/api/locations', '/api/transfer-batches'])
+    expect(request.mock.calls.map(([path]) => path)).toEqual(['/api/transfers/availability', '/api/locations', '/api/transfer-batches?view=lifecycles', '/api/transfer-batches/11', '/api/transfer-batches/11/cancel', '/api/transfers/availability', '/api/locations', '/api/transfer-batches?view=lifecycles'])
   })
 
   it('keeps read-only workspace controls unavailable without transfer permissions', async () => {
-    const request = mockApi(path => response(path === '/api/transfer-batches' ? [details()] : []))
+    const request = mockApi(path => response(path === '/api/transfer-batches?view=lifecycles' ? [details()] : []))
     render(<BulkTransfers onChanged={vi.fn()} />)
     await screen.findByRole('heading', { name: '№4, №5' })
     expect(screen.queryByRole('button', { name: t('bulk.issue') })).not.toBeInTheDocument()

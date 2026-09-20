@@ -232,6 +232,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Enter the returner's full three-part name, job title, and company or department.",
         "ru": "Укажите три имени, должность и компанию или отдел возвращающего.",
     },
+    "batch.not_pending": {
+        "bg": "Изберете точната незавършена операция за анулиране.",
+        "en": "Select the exact pending operation to cancel.",
+        "ru": "Выберите конкретную незавершённую операцию для отмены.",
+    },
     "batch.not_found": {
         "bg": "Партидата не е намерена.",
         "en": "The batch was not found.",

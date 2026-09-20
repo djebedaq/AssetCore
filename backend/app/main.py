@@ -4,6 +4,7 @@ import io
 import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.encoders import jsonable_encoder
@@ -57,7 +58,6 @@ from .master_data.routes import legacy_router as master_data_legacy_router
 from .master_data.routes import locations as locations
 from .models import (
     AuditLog,
-    DocumentType,
     GeneratedDocument,
     Machine,
     MachineStatus,
@@ -125,6 +125,7 @@ from .transfer_service import (
     availability,
     batch_details,
     batch_progress,
+    batch_return_documents,
     bulk_issue,
     bulk_return,
     cancel_pending_batch,
@@ -991,9 +992,10 @@ def create_transfer(
 
 @app.get("/api/transfer-batches", response_model=list[BatchSummaryOut])
 def transfer_batches(
+    view: Literal["operations", "lifecycles"] = "operations",
     _: User = Depends(require_transfer_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
-    return list_batches(db)
+    return list_batches(db, view=view)
 
 
 @app.get("/api/transfer-batches/{batch_id}", response_model=BatchDetailsOut)
@@ -1081,15 +1083,8 @@ def batch_documents_zip(
             for item in batch.return_manifest.get("machines", [])
             if isinstance(item, dict) and item.get("transfer_id") is not None
         ]
-    generated_query = select(GeneratedDocument).where(
-        GeneratedDocument.batch_id == batch.id
-    )
-    if return_transfer_ids:
-        generated_query = select(GeneratedDocument).where(
-            GeneratedDocument.transfer_id.in_(return_transfer_ids),
-            GeneratedDocument.document_type == DocumentType.TRANSFER_RETURN.value,
-        )
-    generated = db.scalars(generated_query).all()
+    document_transfer_ids = return_transfer_ids or [item.id for item in batch.transfers]
+    generated = batch_return_documents(db, batch, document_transfer_ids)
     issue_documents = list(batch.documents)
     if return_transfer_ids:
         issue_documents = list(

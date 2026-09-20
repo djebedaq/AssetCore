@@ -6,7 +6,7 @@ import type { buildIssuePayload, buildReturnPayload } from './transferState'
 export const transferApi = {
   availability: () => api<TransferAvailability[]>('/transfers/availability'),
   locations: () => api<Location[]>('/locations'),
-  batches: () => api<BatchProgress[]>('/transfer-batches'),
+  batches: () => api<BatchProgress[]>('/transfer-batches?view=lifecycles'),
   batch: (batchId: number) => api<BatchDetails>(`/transfer-batches/${batchId}`),
   issue: (payload: ReturnType<typeof buildIssuePayload>) =>
     api<BulkIssueResult>('/transfers/bulk-issue', { method: 'POST', body: JSON.stringify(payload) }),

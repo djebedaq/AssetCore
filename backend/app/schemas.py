@@ -586,6 +586,19 @@ class CancelTransferBatchResponse(BaseModel):
     message: str
 
 
+class ReturnOperationOut(BaseModel):
+    batch_id: int
+    batch_reference: str
+    created_at: datetime
+    status: str
+    signing_status: str | None = None
+    transfer_ids: list[int]
+    issue_batch_ids: list[int]
+    machine_numbers: list[str]
+    signing_document_id: int | None = None
+    batch_manifest_sha256: str | None = None
+
+
 class BatchProgressOut(BaseModel):
     batch_id: int
     batch_reference: str
@@ -595,6 +608,9 @@ class BatchProgressOut(BaseModel):
     still_issued_machines: int
     awaiting_signature_machines: int = 0
     machine_numbers: list[str] = Field(default_factory=list)
+    operation: str = "ISSUE"
+    cancellable_batch_ids: list[int] = Field(default_factory=list)
+    return_operations: list[ReturnOperationOut] = Field(default_factory=list)
 
 
 class BatchSummaryOut(BatchProgressOut):
