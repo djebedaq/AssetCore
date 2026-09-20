@@ -11,4 +11,4 @@ reportlab==4.2.5
 python-docx==1.1.2
 cryptography==50.0.0
 pypdf==6.16.2
-PyMuPDF==1.26.7
+PyMuPDF==1.28.2
