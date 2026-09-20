@@ -13,6 +13,7 @@ from .models import (
     RepairEventType,
     RepairStatus,
 )
+from .part_requests.visual_schemas import VisualReferenceOut
 
 
 class CategoryCreate(BaseModel):
@@ -391,6 +392,7 @@ class PartRequestLineOut(BaseModel):
     linked_by_id: int | None = None
     linked_at: datetime | None = None
     link_note: str | None = None
+    visual_reference: VisualReferenceOut | None = None
 
 
 class PartRequestApprovalOut(BaseModel):

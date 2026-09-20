@@ -24,6 +24,7 @@ from ..models import (
     PartRequest,
     PartRequestLine,
 )
+from ..part_requests.visual_snapshots import snapshot_document_reference
 from ..template_engine import convert_docx_to_pdf, render_docx
 from .common import (
     PARTS_REFERENCE,
@@ -89,6 +90,8 @@ def _request_snapshot(request: PartRequest) -> dict:
                 "linked_catalog_part_id": line.linked_catalog_part_id,
                 "linked_part_number": line.linked_catalog_part.part_number if line.linked_catalog_part else None,
                 "linked_at": line.linked_at.isoformat() if line.linked_at else None,
+                **({"visual_snapshot": snapshot_document_reference(line)}
+                   if line.visual_snapshot is not None else {}),
             }
             for line in request.lines
         ],

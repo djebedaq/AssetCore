@@ -121,6 +121,8 @@ from .part_requests import (
     pending_action_count,
     submit_for_approval,
 )
+from .part_requests.visual_routes import router as visual_snapshot_router
+from .part_requests.visual_snapshots import capture_snapshot, create_request_line, snapshot_response
 from .permissions import (
     Permission,
     ensure_permission,
@@ -142,6 +144,7 @@ from .workflow import (
 )
 
 router = APIRouter(prefix="/api", tags=["industrial-platform"])
+router.include_router(visual_snapshot_router)
 
 PROTECTED_HPWJ_NUMBERS = {
     "4", "5", "7", "9", "10", "11", "12", "13", "14", "15", "16",
@@ -395,6 +398,7 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
                 "linked_by_id": line.linked_by_id,
                 "linked_at": line.linked_at,
                 "link_note": line.link_note,
+                "visual_reference": snapshot_response(line),
             }
             for line in item.lines
         ],
@@ -1135,6 +1139,7 @@ def create_multi_part_request(
             item.id: item
             for item in db.scalars(
                 select(PartCatalog).where(PartCatalog.id.in_(catalog_ids))
+                .order_by(PartCatalog.id).with_for_update(read=True)
             ).all()
         }
         if set(catalog_parts) != catalog_ids:
@@ -1230,19 +1235,7 @@ def create_multi_part_request(
                     "source_page": kit.source_page,
                 }
             )
-        elif line.catalog_part_id is not None:
-            part = catalog_parts[line.catalog_part_id]
-            values.update(
-                {
-                    "position": part.position,
-                    "part_number": part.replaced_by_part_number or part.part_number,
-                    "description": part.description,
-                    "unit": part.unit,
-                    "source_document": part.source_document,
-                    "source_page": part.source_page,
-                }
-            )
-        db.add(PartRequestLine(request_id=request_item.id, **values))
+        create_request_line(db, request_item.id, values, user)
     add_audit_log(db, user, "part_request", request_item.id, "Създадена многоредова заявка за части", {"request_reference": request_item.request_reference, "machine_number": machine.inventory_number if machine else None, "repair_id": payload.repair_id, "repair_reference": repair.repair_reference if repair else None, "repair_kit_id": payload.repair_kit_id, "line_count": len(payload.lines), "catalog_part_ids": sorted(catalog_ids), "priority": request_item.priority})
     if payload.submit_for_approval:
         submit_for_approval(
@@ -1364,17 +1357,7 @@ def link_unknown_part_to_catalog(
     user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> dict:
-    request_item = db.scalar(
-        select(PartRequest)
-        .options(
-            joinedload(PartRequest.machine),
-            joinedload(PartRequest.repair),
-            selectinload(PartRequest.lines).selectinload(PartRequestLine.linked_catalog_part),
-            selectinload(PartRequest.approvals),
-            selectinload(PartRequest.attachments),
-        )
-        .where(PartRequest.id == request_id)
-    )
+    request_item = load_request(db, request_id, lock=True)
     if request_item is None:
         raise HTTPException(404, "Заявката не е намерена.")
     line = next((value for value in request_item.lines if value.id == line_id), None)
@@ -1386,7 +1369,10 @@ def link_unknown_part_to_catalog(
             "Само част без потвърден part number може да бъде свързана по този начин.",
             line_id=line.id,
         )
-    part = db.get(PartCatalog, payload.catalog_part_id)
+    part = db.scalar(
+        select(PartCatalog).where(PartCatalog.id == payload.catalog_part_id)
+        .with_for_update(read=True).execution_options(populate_existing=True)
+    )
     if part is None:
         raise HTTPException(404, "Каталожната част не е намерена.")
     if not part.is_verified or not str(part.verification_status or "").startswith("VERIFIED") or not part.is_active:
@@ -1418,6 +1404,7 @@ def link_unknown_part_to_catalog(
     line.linked_by_id = user.id
     line.linked_at = utcnow()
     line.link_note = payload.note
+    capture_snapshot(db, line, user, origin="CATALOG_LINK")
     add_audit_log(
         db, user, "part_request_line", line.id,
         "Част без потвърден part number е свързана с потвърдена каталожна част",
