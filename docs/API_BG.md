@@ -72,6 +72,8 @@
 | `GET` | `/api/part-request-attachments/{id}/download` | удостоверено изтегляне на приложение |
 | `POST` | `/api/part-requests/unknown` | заявка за част без потвърден part number със снимка |
 | `POST` | `/api/part-requests/{id}/lines/{line_id}/link-catalog-part` | административно свързване с потвърдена съвместима каталожна част |
+| `GET` | `/api/part-requests/{id}/lines/{line_id}/visual-snapshot` | неизменим catalog/visual snapshot; изисква `requests.view` |
+| `GET` | `/api/part-requests/{id}/lines/{line_id}/visual-snapshot/artifacts/{sha256}` | точни исторически source bytes само за този ред; изисква `requests.view` и `documents.view` |
 | `GET` | `/api/catalog/v2/machines/{machine_id}` | exact family mapping, налични възли, схеми и бройки; unsupported модел връща празен контекст |
 | `GET` | `/api/catalog/v2/assemblies/{source_id}?machine_id=...` | focused source възел с всички source variants и diagram metadata |
 | `GET` | `/api/catalog/v2/search?machine_id=...&q=...` | търсене по Part No., replaced number, source описание, EN/BG display име, позиция, Valid for и repair kit |

@@ -22,6 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+from .visual_snapshot_schema import install_metadata_guards
 
 
 def utcnow() -> datetime:
@@ -1238,6 +1239,95 @@ class PartRequestLine(Base):
         foreign_keys=[linked_catalog_part_id]
     )
     linked_by: Mapped[User | None] = relationship(foreign_keys=[linked_by_id])
+    visual_snapshot: Mapped[PartVisualSnapshot | None] = relationship(
+        back_populates="line", uselist=False, passive_deletes="all", lazy="selectin"
+    )
+
+
+class PartVisualArtifact(Base):
+    """Content-addressed, retained source bytes; never a live document pointer."""
+
+    __tablename__ = "part_visual_artifacts"
+    __table_args__ = (
+        CheckConstraint("length(sha256) = 64", name="ck_visual_artifact_hash"),
+        CheckConstraint("byte_length > 0 AND length(content) = byte_length",
+                        name="ck_visual_artifact_length"),
+    )
+
+    sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    content: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    byte_length: Mapped[int] = mapped_column(Integer)
+
+
+class PartVisualSnapshot(Base):
+    """One immutable aggregate per line's sole permitted catalog binding."""
+
+    __tablename__ = "part_visual_snapshots"
+    __table_args__ = (
+        UniqueConstraint("line_id", name="uq_part_visual_snapshot_line"),
+        CheckConstraint("schema_version = 1", name="ck_visual_snapshot_version"),
+        CheckConstraint("capture_origin IN ('REQUEST_CREATION', 'CATALOG_LINK')",
+                        name="ck_visual_snapshot_origin"),
+        CheckConstraint("occurrence_count >= 0", name="ck_visual_snapshot_count"),
+        CheckConstraint("length(sha256) = 64", name="ck_visual_snapshot_hash"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    line_id: Mapped[int] = mapped_column(ForeignKey("part_request_lines.id", ondelete="RESTRICT"))
+    catalog_part_id: Mapped[int] = mapped_column(Integer, index=True)
+    source_id: Mapped[str | None] = mapped_column(String(120), index=True)
+    source_record_key: Mapped[str | None] = mapped_column(String(500), index=True)
+    schema_version: Mapped[int] = mapped_column(Integer)
+    captured_at: Mapped[datetime] = mapped_column(DateTime)
+    capture_origin: Mapped[str] = mapped_column(String(24))
+    # Dedicated versioned value object, not the unrelated document snapshot JSON.
+    catalog: Mapped[dict] = mapped_column(JSON)
+    occurrence_count: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+
+    line: Mapped[PartRequestLine] = relationship(back_populates="visual_snapshot")
+    occurrences: Mapped[list[PartVisualOccurrence]] = relationship(
+        back_populates="snapshot", order_by="PartVisualOccurrence.ordinal",
+        passive_deletes="all", lazy="selectin",
+    )
+
+
+class PartVisualOccurrence(Base):
+    __tablename__ = "part_visual_occurrences"
+    __table_args__ = (
+        UniqueConstraint("snapshot_id", "ordinal", name="uq_visual_occurrence_order"),
+        UniqueConstraint("snapshot_id", "source_kind", "hotspot_id",
+                         name="uq_visual_occurrence_source"),
+        CheckConstraint("ordinal > 0 AND page_number > 0", name="ck_visual_occurrence_page"),
+        CheckConstraint("source_kind IN ('PART_HOTSPOT', 'POSITION_HOTSPOT')",
+                        name="ck_visual_occurrence_kind"),
+        CheckConstraint("x >= 0 AND y >= 0 AND width > 0 AND height > 0 "
+                        "AND x + width <= 1.000001 AND y + height <= 1.000001",
+                        name="ck_visual_occurrence_geometry"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    snapshot_id: Mapped[int] = mapped_column(ForeignKey("part_visual_snapshots.id", ondelete="RESTRICT"))
+    ordinal: Mapped[int] = mapped_column(Integer)
+    source_kind: Mapped[str] = mapped_column(String(24))
+    hotspot_id: Mapped[int] = mapped_column(Integer)
+    technical_document_id: Mapped[int] = mapped_column(Integer)
+    diagram_id: Mapped[int | None] = mapped_column(Integer)
+    page_number: Mapped[int] = mapped_column(Integer)
+    x: Mapped[float] = mapped_column(Float)
+    y: Mapped[float] = mapped_column(Float)
+    width: Mapped[float] = mapped_column(Float)
+    height: Mapped[float] = mapped_column(Float)
+    artifact_sha256: Mapped[str] = mapped_column(
+        ForeignKey("part_visual_artifacts.sha256", ondelete="RESTRICT"), index=True
+    )
+    # Frozen source/revision/verification labels, never dereferenced to live rows.
+    source_metadata: Mapped[dict] = mapped_column(JSON)
+
+    snapshot: Mapped[PartVisualSnapshot] = relationship(back_populates="occurrences")
+
+
+install_metadata_guards(PartVisualOccurrence.__table__)
 
 
 class PartRequestApproval(Base):

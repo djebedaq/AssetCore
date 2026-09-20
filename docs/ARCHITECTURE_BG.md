@@ -30,6 +30,9 @@
 - `backend/resources/catalog/enrichment/v1/` е отделен non-authoritative EN/BG display слой. Генерираният record map е keyed единствено по canonical `source_record_key`; `translations.py` валидира пълно 611-record coverage и source fingerprint binding, без да записва translation текст в source projection или PDF fingerprint.
 - `backend/app/localization.py` локализира backend съобщения и статусни етикети без промяна на съхранените стойности.
 - `backend/alembic` е единственият поддържан път за промяна на схемата.
+- `backend/app/part_requests/visual_snapshots.py` пази immutable catalog bindings,
+  visual occurrences и content-addressed source bytes; snapshot capture е част
+  от транзакцията за създаване/unknown link. [Домейн договор](PARTS_DOC_VISUAL_SNAPSHOT_BG.md).
 - `frontend/src/api.ts` е удостовереният API клиент и изпраща `Accept-Language`.
 - `frontend/src/i18n.tsx` съдържа централния BG/EN/RU речник, форматиране и status mapping.
 - `frontend/src/App.tsx` притежава session bootstrap, sidebar/header, избора на страница и top-level boundaries. `shell/lazyPages.ts` разделя page-level bundle-ите; `shell/PageBoundary.tsx` пази навигацията достъпна при pending/failed import. Екраните са в focused `features/` пакети; `IndustrialPlatform.tsx` е само временна explicit compatibility повърхност, без production callers. `industrialUi.tsx` запазва общите modal/document/attachment действия. Вж. [frontend ownership, bundle и QA отчета](FRONTEND_MODULARIZATION_BG.md).
