@@ -815,7 +815,62 @@ def bulk_issue(
         return _bulk_issue_impl(db, user, data)
 
 
-def _batch_progress(db: Session, batch: TransferBatch) -> dict[str, Any]:
+def _return_operations(db: Session, issue_batch_ids: set[int]) -> dict[int, list[dict]]:
+    """Resolve operation membership through manifest transfer IDs and their real FK.
+
+    A return may span several issues. Never infer membership from a machine,
+    reference, date or progress, and never rewrite historical manifests.
+    """
+    result: dict[int, list[dict]] = {batch_id: [] for batch_id in issue_batch_ids}
+    if not result:
+        return result
+    batches = db.scalars(
+        select(TransferBatch)
+        .where(TransferBatch.return_manifest.is_not(None))
+        .order_by(TransferBatch.created_at.desc(), TransferBatch.id.desc())
+    ).all()
+    manifests = {
+        batch.id: [
+            item["transfer_id"] for item in batch.return_manifest.get("machines", [])
+            if isinstance(item, dict) and type(item.get("transfer_id")) is int
+        ]
+        for batch in batches
+        if isinstance(batch.return_manifest, dict)
+        and batch.return_manifest.get("operation") == "RETURN"
+    }
+    transfer_ids = {value for values in manifests.values() for value in values}
+    origins = dict(db.execute(
+        select(TransferProtocol.id, TransferProtocol.batch_id)
+        .where(TransferProtocol.id.in_(transfer_ids))
+    ).all()) if transfer_ids else {}
+    for batch in batches:
+        ids = manifests.get(batch.id, [])
+        parents = sorted({origins[tid] for tid in ids if origins.get(tid) is not None})
+        targets = issue_batch_ids.intersection(parents)
+        if not targets:
+            continue
+        operation = {
+            "batch_id": batch.id,
+            "batch_reference": batch.batch_reference,
+            "created_at": batch.created_at,
+            "status": batch.status,
+            "signing_status": batch.return_signing_status,
+            "transfer_ids": ids,
+            "issue_batch_ids": parents,
+            "machine_numbers": [str(item["machine_number"])
+                                for item in batch.return_manifest.get("machines", [])
+                                if isinstance(item, dict) and item.get("machine_number") is not None],
+            "signing_document_id": batch.return_signing_document_id,
+            "batch_manifest_sha256": batch.return_manifest_sha256,
+        }
+        for parent in targets:
+            result[parent].append(operation)
+    return result
+
+
+def _batch_progress(
+    db: Session, batch: TransferBatch, *, return_operations: list[dict] | None = None
+) -> dict[str, Any]:
     direct_total = db.scalar(
         select(func.count(TransferProtocol.id)).where(
             TransferProtocol.batch_id == batch.id
@@ -873,6 +928,29 @@ def _batch_progress(db: Session, batch: TransferBatch) -> dict[str, Any]:
                 .order_by(TransferProtocol.id)
             ).all()
         )
+    is_return = (
+        isinstance(batch.return_manifest, dict)
+        and batch.return_manifest.get("operation") == "RETURN"
+    )
+    operations = [] if is_return else (
+        return_operations if return_operations is not None
+        else _return_operations(db, {batch.id})[batch.id]
+    )
+    pending_returns = [item["batch_id"] for item in operations
+                       if item["signing_status"] == TransferOperationStatus.AWAITING_SIGNATURE.value]
+    if is_return:
+        # Shared transfer state may belong to a later retry. An operation's
+        # signing state is authoritative for its own progress and actions.
+        awaiting_signature = total if batch.return_signing_status == TransferOperationStatus.AWAITING_SIGNATURE.value else 0
+        returned = total if batch.return_signing_status == TransferOperationStatus.COMPLETED.value else 0
+        cancellable_ids = [batch.id] if (
+            batch.return_signing_status == TransferOperationStatus.AWAITING_SIGNATURE.value
+        ) else []
+    else:
+        cancellable_ids = pending_returns or (
+            [batch.id] if awaiting_signature and batch.status != TransferBatchStatus.CANCELLED.value
+            else []
+        )
     return {
         "batch_id": batch.id,
         "batch_reference": batch.batch_reference,
@@ -882,6 +960,9 @@ def _batch_progress(db: Session, batch: TransferBatch) -> dict[str, Any]:
         "still_issued_machines": still_issued,
         "awaiting_signature_machines": awaiting_signature,
         "machine_numbers": machine_numbers,
+        "operation": "RETURN" if is_return else "ISSUE",
+        "cancellable_batch_ids": cancellable_ids,
+        "return_operations": operations,
     }
 
 
@@ -2260,6 +2341,33 @@ def batch_progress(
     return _batch_progress(db, batch)
 
 
+def batch_return_documents(
+    db: Session, batch: TransferBatch, transfer_ids: list[int]
+) -> list[GeneratedDocument]:
+    """Published return files, scoped to this act for a RETURN operation.
+
+    Exact official document IDs distinguish a cancelled attempt from a retry;
+    current transfer state must never publish the older unsigned draft files.
+    Legacy files without an official record retain their existing visibility.
+    """
+    statement = (
+        select(GeneratedDocument)
+        .outerjoin(OfficialDocument, OfficialDocument.document_number == GeneratedDocument.document_number)
+        .outerjoin(OfficialDocumentVersion, OfficialDocumentVersion.id == OfficialDocument.current_version_id)
+        .where(
+            GeneratedDocument.transfer_id.in_(transfer_ids),
+            GeneratedDocument.document_type == DocumentType.TRANSFER_RETURN.value,
+            or_(OfficialDocument.id.is_(None), OfficialDocumentVersion.status == OfficialDocumentStatus.SIGNED.value),
+        )
+    )
+    if isinstance(batch.return_manifest, dict) and batch.return_manifest.get("operation") == "RETURN":
+        document_ids = [item["official_document_id"]
+                        for item in batch.return_manifest.get("machines", [])
+                        if isinstance(item, dict) and type(item.get("official_document_id")) is int]
+        statement = statement.where(OfficialDocument.id.in_(document_ids))
+    return list(db.scalars(statement.order_by(GeneratedDocument.id)))
+
+
 def batch_details(
     db: Session, batch_id: int, language: str = "bg"
 ) -> dict[str, Any]:
@@ -2303,15 +2411,7 @@ def batch_details(
     detail_transfer_ids = [transfer.id for transfer in detail_transfers]
     return_documents_by_transfer: dict[int, list[GeneratedDocument]] = {}
     if detail_transfer_ids:
-        for generated in db.scalars(
-            select(GeneratedDocument)
-            .where(
-                GeneratedDocument.transfer_id.in_(detail_transfer_ids),
-                GeneratedDocument.document_type
-                == DocumentType.TRANSFER_RETURN.value,
-            )
-            .order_by(GeneratedDocument.id)
-        ).all():
+        for generated in batch_return_documents(db, batch, detail_transfer_ids):
             if generated.transfer_id is not None:
                 return_documents_by_transfer.setdefault(
                     generated.transfer_id, []
@@ -2333,7 +2433,7 @@ def batch_details(
         ]
 
     def return_document_payload(transfer: TransferProtocol) -> list[dict[str, Any]]:
-        if transfer.return_status != TransferOperationStatus.COMPLETED.value:
+        if return_status(transfer) != TransferOperationStatus.COMPLETED.value:
             return []
         return [
             {
@@ -2349,6 +2449,9 @@ def batch_details(
                 key=lambda item: item.format,
             )
         ]
+
+    def return_status(transfer: TransferProtocol) -> str | None:
+        return batch.return_signing_status if progress["operation"] == "RETURN" else transfer.return_status
 
     return {
         **progress,
@@ -2371,9 +2474,13 @@ def batch_details(
                 "protocol_number": transfer.protocol_number,
                 "is_active": transfer.is_active,
                 "issue_status": transfer.issue_status,
-                "return_status": transfer.return_status,
+                "return_status": return_status(transfer),
                 "issued_at": transfer.issued_at,
-                "returned_at": transfer.returned_at,
+                "returned_at": (
+                    transfer.returned_at
+                    if return_status(transfer) == TransferOperationStatus.COMPLETED.value
+                    else None
+                ),
                 "current_status": transfer.machine.status,
                 "location": transfer.machine.location.name
                 if transfer.machine.location
@@ -2388,11 +2495,21 @@ def batch_details(
     }
 
 
-def list_batches(db: Session) -> list[dict[str, Any]]:
+def list_batches(db: Session, *, view: str = "operations") -> list[dict[str, Any]]:
+    # Keep the original operation inventory for existing integrations. The
+    # progress screen explicitly requests one lifecycle per owning issue FK.
+    statement = select(TransferBatch)
+    if view == "lifecycles":
+        statement = statement.where(TransferBatch.transfers.any())
     batches = db.scalars(
-        select(TransferBatch).order_by(TransferBatch.created_at.desc())
+        statement.order_by(TransferBatch.created_at.desc(), TransferBatch.id.desc())
     ).all()
-    return [_batch_progress(db, batch) | {"created_at": batch.created_at} for batch in batches]
+    operations = _return_operations(db, {batch.id for batch in batches})
+    return [
+        _batch_progress(db, batch, return_operations=operations[batch.id])
+        | {"created_at": batch.created_at}
+        for batch in batches
+    ]
 
 
 def get_protocol_document(
@@ -2431,6 +2548,19 @@ def cancel_pending_batch(
                 "invalidated_signing_sessions": 0,
                 "message": "Операцията вече е анулирана.",
             }
+
+        pending_return_ids = [
+            item["batch_id"] for item in _return_operations(db, {batch.id})[batch.id]
+            if item["signing_status"] == TransferOperationStatus.AWAITING_SIGNATURE.value
+        ]
+        if pending_return_ids:
+            # A lifecycle is not the cancellation target for a separate return
+            # signing act (which may also include another issue's transfers).
+            raise TransferServiceError(
+                409, "batch_not_pending",
+                translate("batch.not_pending", language),
+                {"batch_id": batch.id, "cancellable_batch_ids": pending_return_ids},
+            )
 
         pending = [
             t

@@ -44,7 +44,8 @@
 | `GET` | `/api/transfers/availability` | наличност и причина за недостъпност за всяка машина |
 | `POST` | `/api/transfers/bulk-issue` | атомарно групово издаване, HTTP 201 |
 | `POST` | `/api/transfers/bulk-return` | атомарно пълно или частично връщане, HTTP 200 |
-| `GET` | `/api/transfer-batches` | партиди и обобщен прогрес |
+| `GET` | `/api/transfer-batches` | всички ISSUE/RETURN операции; default `view=operations` запазва съвместимостта |
+| `GET` | `/api/transfer-batches?view=lifecycles` | един жизнен цикъл за всеки ISSUE batch с директни transfer FK; отделни `return_operations` и точни `cancellable_batch_ids` |
 | `GET` | `/api/transfer-batches/{batch_id}` | партида, индивидуални предавания и документи |
 | `GET` | `/api/transfer-batches/{batch_id}/progress` | общо, върнати и все още издадени машини |
 | `GET` | `/api/protocol-documents/{document_id}/download` | удостоверено изтегляне на индивидуален DOCX/PDF |

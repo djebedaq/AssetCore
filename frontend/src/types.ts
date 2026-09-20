@@ -133,10 +133,17 @@ export type BulkIssueResult = {
   zip_download_endpoint: string
 }
 
+export type ReturnOperation = {
+  batch_id: number; batch_reference: string; created_at: string; status: string;
+  signing_status: string | null; transfer_ids: number[]; issue_batch_ids: number[];
+  machine_numbers: string[]; signing_document_id: number | null; batch_manifest_sha256: string | null
+}
+
 export type BatchProgress = {
   batch_id: number; batch_reference: string; status: string; total_machines: number;
   returned_machines: number; still_issued_machines: number; awaiting_signature_machines: number;
-  machine_numbers: string[]; created_at?: string
+  machine_numbers: string[]; created_at?: string; operation?: string;
+  cancellable_batch_ids?: number[]; return_operations?: ReturnOperation[]
 }
 
 export type CancelTransferBatchResponse = {
