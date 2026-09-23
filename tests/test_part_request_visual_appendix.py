@@ -772,6 +772,47 @@ def test_catalog_revision_a_b_c_preserves_captured_scheme_and_list_pages(
         }
 
 
+def test_captured_visual_source_hash_selects_document_revision_not_library_current(
+    client, auth_headers, session_factory
+):
+    data = future_catalog(session_factory)
+    with fitz.open() as pdf:
+        for page in (1, 2):
+            pdf.new_page().insert_text((70, 90), f"QA unrelated library revision {page}")
+        later_bytes = pdf.tobytes()
+    later_hash = hashlib.sha256(later_bytes).hexdigest()
+    with session_factory() as db:
+        part = db.get(PartCatalog, data["part_id"])
+        document = db.get(TechnicalDocument, data["document_id"])
+        for page in (1, 2):
+            db.add(CatalogVisualSource(
+                source_id=part.source_id, catalog_revision=part.source_version,
+                technical_document_id=document.id, page_number=page,
+                role="EXPLODED_SCHEME", source_sha256=data["sha256"],
+            ))
+        db.add(TechnicalDocumentRevision(
+            document_id=document.id, version=43,
+            revision_label="QA library revision after catalog publication",
+            filename="qa-library-later.pdf", media_type="application/pdf",
+            content=later_bytes, sha256=later_hash,
+        ))
+        document.sha256 = later_hash
+        document.uploaded_content = later_bytes
+        db.commit()
+    request = _request(client, auth_headers, data)
+    with session_factory() as db:
+        line = load_request(db, request["id"]).lines[0]
+        assert line.visual_snapshot.catalog["source_version"] == "QA-REV-42"
+        assert {value.artifact_sha256 for value in line.visual_snapshot.occurrences} == {
+            data["sha256"]
+        }
+        assert all(value.source_metadata["revision_version"] == 42
+                   for value in line.visual_snapshot.occurrences)
+        assert {page.artifact_sha256 for page in prepare_appendix(
+            db, load_request(db, request["id"])
+        ).pages} == {data["sha256"]}
+
+
 def test_unknown_part_uses_link_time_snapshot_without_rewriting_original(
     client, auth_headers, session_factory, monkeypatch
 ):

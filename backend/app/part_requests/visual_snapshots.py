@@ -333,15 +333,22 @@ def _occurrences(db: Session, part: PartCatalog) -> list[dict]:
     captured = []
     sources = {}
     for ordinal, (kind, hotspot, diagram, document) in enumerate(references, 1):
-        expected_hash = diagram.source_pdf_sha256 if diagram else None
-        key = (document.id if document else None, expected_hash)
+        if document is None:
+            raise _integrity_error()
+        page = diagram.page_number if diagram else hotspot.page_number
+        visual_source = _visual_source(db, part, document, page, diagram=diagram)
+        expected_hash = (
+            diagram.source_pdf_sha256 if diagram else
+            visual_source.source_sha256 if visual_source else None
+        )
+        if visual_source is not None and diagram is not None and (
+            visual_source.source_sha256 != expected_hash
+        ):
+            raise _integrity_error()
+        key = (document.id, expected_hash)
         if key not in sources:
             sources[key] = _source_artifact(db, document, expected_hash)
         digest, metadata, content = sources[key]
-        page = diagram.page_number if diagram else hotspot.page_number
-        visual_source = _visual_source(db, part, document, page, diagram=diagram)
-        if visual_source is not None and visual_source.source_sha256 != digest:
-            raise _integrity_error()
         geometry = {name: float(getattr(hotspot, name)) for name in ("x", "y", "width", "height")}
         _validate_visual(content, metadata["media_type"], page, geometry)
         captured.append(
