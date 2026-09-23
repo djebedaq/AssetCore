@@ -24,7 +24,7 @@ def main() -> None:
     try:
         with tempfile.TemporaryDirectory(prefix="assetcore-visual-qa-") as directory:
             result = generate(Path(directory))
-            if len(converted) != 1 or result["part_request"]["visual_appendix"]["rendered_images"] != 1:
+            if len(converted) != 1 or result["part_request"]["visual_appendix"]["rendered_images"] != 2:
                 raise RuntimeError("Isolated document QA failed.")
             docx, pdf = converted[0]
             if pdf is None:
@@ -34,13 +34,14 @@ def main() -> None:
             if hashlib.sha256(pdf).hexdigest() != result["part_request"]["pdf"]["sha256"]:
                 raise RuntimeError("The registered PDF differs from LibreOffice output.")
             with fitz.open(stream=pdf, filetype="pdf") as document:
-                appendix = document[-1]
+                visual_pages = list(document)[-2:]
                 if (
-                    document.page_count < 2
-                    or "Визуално приложение към заявката" not in appendix.get_text()
-                    or not appendix.get_images()
+                    document.page_count < 3
+                    or "Разглобена схема" not in visual_pages[0].get_text()
+                    or "Списък резервни части" not in visual_pages[1].get_text()
+                    or not all(page.get_images() for page in visual_pages)
                 ):
-                    raise RuntimeError("LibreOffice PDF lost the visual appendix.")
+                    raise RuntimeError("LibreOffice PDF lost grouped visual pages.")
     finally:
         part_request_documents.convert_docx_to_pdf = original
     print("part_visual_appendix_libreoffice=passed")

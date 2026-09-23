@@ -18,6 +18,8 @@ from ..audit import add_audit_log
 from ..models import (
     CatalogDiagram,
     CatalogPositionHotspot,
+    CatalogVisualPartMap,
+    CatalogVisualSource,
     PartCatalog,
     PartHotspot,
     PartRequestLine,
@@ -199,6 +201,12 @@ def _validate_visual(content: bytes, media_type: str, page: int, geometry: dict)
     x, y, width, height = (geometry[name] for name in ("x", "y", "width", "height"))
     if min(x, y) < 0 or min(width, height) <= 0 or x + width > 1.000001 or y + height > 1.000001:
         raise _integrity_error()
+    _validate_page(content, media_type, page)
+
+
+def _validate_page(content: bytes, media_type: str, page: int) -> None:
+    if page < 1:
+        raise _integrity_error()
     # Verify that the retained bytes can reproduce the declared visual page.
     try:
         import fitz
@@ -210,6 +218,58 @@ def _validate_visual(content: bytes, media_type: str, page: int, geometry: dict)
         raise
     except Exception as exc:
         raise _integrity_error() from exc
+
+
+def _visual_source(
+    db: Session, part: PartCatalog, document: TechnicalDocument, page: int,
+    *, diagram: CatalogDiagram | None = None,
+) -> CatalogVisualSource | None:
+    candidates = db.scalars(select(CatalogVisualSource).where(
+        CatalogVisualSource.source_id == part.source_id,
+        CatalogVisualSource.technical_document_id == document.id,
+        CatalogVisualSource.page_number == page,
+    )).all()
+    if diagram is not None:
+        candidates = [value for value in candidates if value.role == "EXPLODED_SCHEME"]
+    if len(candidates) > 1:
+        raise _integrity_error()
+    visual = candidates[0] if candidates else None
+    if visual and part.source_version and visual.catalog_revision != part.source_version:
+        raise _integrity_error()
+    return visual
+
+
+def _page_references(db: Session, part: PartCatalog) -> list[dict]:
+    mapped = db.scalars(
+        select(CatalogVisualPartMap)
+        .join(CatalogVisualSource)
+        .options(joinedload(CatalogVisualPartMap.visual_source).joinedload(
+            CatalogVisualSource.technical_document
+        ))
+        .where(CatalogVisualPartMap.part_id == part.id)
+        .order_by(CatalogVisualSource.role, CatalogVisualSource.source_sha256,
+                  CatalogVisualSource.page_number, CatalogVisualPartMap.id)
+    ).all()
+    references = []
+    for mapping in mapped:
+        source = mapping.visual_source
+        if (source.source_id != part.source_id or source.role != "SPARE_PARTS_LIST"
+                or (part.source_version and source.catalog_revision != part.source_version)):
+            raise _integrity_error()
+        digest, metadata, content = _source_artifact(
+            db, source.technical_document, source.source_sha256
+        )
+        _validate_page(content, metadata["media_type"], source.page_number)
+        references.append({
+            "visual_role": source.role,
+            "catalog_visual_source_id": source.id,
+            "catalog_visual_part_map_id": mapping.id,
+            "catalog_revision": source.catalog_revision,
+            "artifact_sha256": digest,
+            "page_number": source.page_number,
+            "source_metadata": metadata,
+        })
+    return references
 
 
 def _occurrences(db: Session, part: PartCatalog) -> list[dict]:
@@ -264,6 +324,9 @@ def _occurrences(db: Session, part: PartCatalog) -> list[dict]:
             sources[key] = _source_artifact(db, document, expected_hash)
         digest, metadata, content = sources[key]
         page = diagram.page_number if diagram else hotspot.page_number
+        visual_source = _visual_source(db, part, document, page, diagram=diagram)
+        if visual_source is not None and visual_source.source_sha256 != digest:
+            raise _integrity_error()
         geometry = {name: float(getattr(hotspot, name)) for name in ("x", "y", "width", "height")}
         _validate_visual(content, metadata["media_type"], page, geometry)
         captured.append(
@@ -293,6 +356,13 @@ def _occurrences(db: Session, part: PartCatalog) -> list[dict]:
                     "diagram_source_id": diagram.source_id if diagram else None,
                     "diagram_source_sha256": expected_hash,
                     "render_version": diagram.render_version if diagram else None,
+                    "visual_role": visual_source.role if visual_source else (
+                        "EXPLODED_SCHEME" if diagram else None
+                    ),
+                    "catalog_visual_source_id": visual_source.id if visual_source else None,
+                    "catalog_revision": (
+                        visual_source.catalog_revision if visual_source else part.source_version
+                    ),
                 },
             }
         )
@@ -338,6 +408,7 @@ def _capture_snapshot(
     catalog["verified_at"] = part.verified_at.isoformat() if part.verified_at else None
     catalog["source_document"] = _filename(part.source_document)
     catalog["requested_part_number"] = part.replaced_by_part_number or part.part_number
+    catalog["visual_pages"] = _page_references(db, part)
     references = _occurrences(db, part)
     snapshot = PartVisualSnapshot(
         line=line,
@@ -432,7 +503,7 @@ def snapshot_response(line: PartRequestLine) -> dict:
         raise _integrity_error()
     return {
         "state": "verified_visual_references"
-        if snapshot.occurrence_count
+        if snapshot.occurrence_count or payload["catalog"].get("visual_pages")
         else "no_visual_reference_at_capture",
         "snapshot": {"id": snapshot.id, "sha256": snapshot.sha256, **payload},
     }

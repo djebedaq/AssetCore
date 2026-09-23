@@ -12,6 +12,8 @@ from ..audit import add_audit_log
 from ..models import (
     CatalogDiagram,
     CatalogPositionHotspot,
+    CatalogVisualPartMap,
+    CatalogVisualSource,
     Machine,
     PartCatalog,
     RepairKit,
@@ -344,6 +346,57 @@ def _upsert_diagrams_and_hotspots(
                 ) if hotspot.is_verified else None
 
 
+def _upsert_visual_sources(
+    db: Session,
+    documents: dict[str, TechnicalDocument],
+    parts: dict[str, PartCatalog],
+    counters: dict[str, int],
+) -> None:
+    """Register roles declared by the controlled catalog, never by file names."""
+    for source in dataset_sources():
+        document = documents[source["source_id"]]
+        declarations = (
+            ("EXPLODED_SCHEME", source.get("diagram_pages") or []),
+            ("SPARE_PARTS_LIST", source.get("record_pages") or []),
+        )
+        rows = load_source_dataset(source).get("records") or []
+        for role, pages in declarations:
+            for page in pages:
+                visual = db.scalar(select(CatalogVisualSource).where(
+                    CatalogVisualSource.source_id == source["source_id"],
+                    CatalogVisualSource.technical_document_id == document.id,
+                    CatalogVisualSource.page_number == page,
+                    CatalogVisualSource.role == role,
+                ))
+                if visual is None:
+                    visual = CatalogVisualSource(
+                        source_id=source["source_id"],
+                        technical_document_id=document.id,
+                        page_number=page,
+                        role=role,
+                        source_sha256=source["sha256"],
+                        catalog_revision=CATALOG_VERSION,
+                    )
+                    db.add(visual)
+                    db.flush()
+                    counters["created_visual_sources"] += 1
+                elif (visual.source_sha256 != source["sha256"] or
+                      visual.catalog_revision != CATALOG_VERSION):
+                    raise CatalogImportError("Конфликт в ревизията на визуален източник.")
+                if role == "SPARE_PARTS_LIST":
+                    for row in rows:
+                        if row["source_page"] != page:
+                            continue
+                        part = parts[row["source_record_key"]]
+                        existing = db.scalar(select(CatalogVisualPartMap.id).where(
+                            CatalogVisualPartMap.visual_source_id == visual.id,
+                            CatalogVisualPartMap.part_id == part.id,
+                        ))
+                        if existing is None:
+                            db.add(CatalogVisualPartMap(visual_source_id=visual.id, part_id=part.id))
+                            counters["created_visual_part_maps"] += 1
+
+
 def _upsert_repair_kits(
     db: Session,
     verifier: User,
@@ -435,6 +488,7 @@ def import_authoritative_catalog(db: Session, verifier: User) -> dict[str, Any]:
     documents = _upsert_documents(db, verifier, counters)
     parts = _upsert_parts(db, verifier, counters)
     _upsert_diagrams_and_hotspots(db, verifier, documents, counters)
+    _upsert_visual_sources(db, documents, parts, counters)
     _upsert_repair_kits(db, verifier, parts, counters)
     db.flush()
 

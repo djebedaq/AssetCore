@@ -50,12 +50,12 @@ def test_pg_official_visual_document_and_failed_render_rollback(pg_factory, monk
             db.get(User, data["actor_id"]),
             db,
         )
-    from app.documents import part_request_visual_appendix
+    from app.documents import part_request_grouped_visuals
 
     def fail(*_args, **_kwargs):
         raise RuntimeError("QA forced raster failure")
 
-    monkeypatch.setattr(part_request_visual_appendix, "_render_page", fail)
+    monkeypatch.setattr(part_request_grouped_visuals, "_render_page", fail)
     with pg_factory() as db, pytest.raises(RuntimeError, match="QA forced raster"):
         make_part_request_documents(db, db.get(PartRequest, second["id"]), data["actor_id"])
         db.commit()

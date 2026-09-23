@@ -36,6 +36,8 @@ from app.document_generation import (  # noqa: E402
     make_return_documents,
 )
 from app.models import (  # noqa: E402
+    CatalogVisualPartMap,
+    CatalogVisualSource,
     DocumentTemplateVersion,
     Machine,
     PartCatalog,
@@ -157,9 +159,9 @@ def generate(output: Path) -> dict:
 
         # Entirely synthetic source, retained only in this in-memory QA session.
         with fitz.open() as source_pdf:
-            source_pdf.new_page().insert_text((60, 80), "QA source page 1")
+            source_pdf.new_page().insert_text((60, 80), "QA combined exploded scheme")
             page = source_pdf.new_page()
-            page.insert_text((60, 80), "QA source page 2 / position QA-P7")
+            page.insert_text((60, 80), "QA shared spare parts list / positions QA-P7 and QA-P8")
             page.draw_rect(fitz.Rect(119, 253, 190, 337), color=(0, 0, 0))
             visual_source = source_pdf.tobytes()
         visual_sha256 = hashlib.sha256(visual_source).hexdigest()
@@ -187,26 +189,46 @@ def generate(output: Path) -> dict:
             title="QA synthetic visual source",
             file_path="qa-only/visual-source.pdf",
             revision="QA-REV-1",
+            source_id="QA-ONLY-VISUAL",
+            dataset_version="QA-REV-1",
             uploaded_content=visual_source,
             uploaded_filename="qa-visual-source.pdf",
             media_type="application/pdf",
             sha256=visual_sha256,
             page_count=2,
         )
-        db.add_all([part, source_document])
+        second_part = PartCatalog(
+            source_record_key="QA-ONLY-VISUAL:2", source_id="QA-ONLY-VISUAL",
+            source_version="QA-REV-1", source_document_sha256=visual_sha256,
+            brand="QA-SYNTHETIC", model="QA-MODEL", position="QA-P8",
+            part_number="QA-VISUAL-02", description="QA second synthetic visual part",
+            source_document="qa-visual-source.pdf", source_page=2, unit="pcs",
+            is_verified=True, verification_status="VERIFIED_QA",
+            verified_by_id=user.id, verified_at=utcnow(),
+        )
+        db.add_all([part, second_part, source_document])
         db.flush()
-        db.add(PartHotspot(
-            part_id=part.id,
-            technical_document_id=source_document.id,
-            page_number=2,
-            x=0.2,
-            y=0.3,
-            width=0.12,
-            height=0.1,
-            label="QA-P7",
-            is_verified=True,
-            created_by_id=user.id,
-        ))
+        scheme_source = CatalogVisualSource(
+            source_id="QA-ONLY-VISUAL", catalog_revision="QA-REV-1",
+            technical_document_id=source_document.id, page_number=1,
+            role="EXPLODED_SCHEME", source_sha256=visual_sha256,
+        )
+        list_source = CatalogVisualSource(
+            source_id="QA-ONLY-VISUAL", catalog_revision="QA-REV-1",
+            technical_document_id=source_document.id, page_number=2,
+            role="SPARE_PARTS_LIST", source_sha256=visual_sha256,
+        )
+        db.add_all([scheme_source, list_source])
+        db.flush()
+        for index, item in enumerate((part, second_part)):
+            db.add(CatalogVisualPartMap(visual_source_id=list_source.id, part_id=item.id))
+            for page_number, y in ((1, 0.3), (2, 0.55)):
+                db.add(PartHotspot(
+                    part_id=item.id, technical_document_id=source_document.id,
+                    page_number=page_number, x=0.2 + index * 0.45, y=y,
+                    width=0.12, height=0.1, label=item.position,
+                    is_verified=True, created_by_id=user.id,
+                ))
         db.flush()
 
         now = utcnow()
@@ -336,6 +358,12 @@ def generate(output: Path) -> dict:
             },
             user,
         )
+        create_request_line(
+            db, request.id,
+            {"catalog_part_id": second_part.id, "description": second_part.description,
+             "quantity": 2},
+            user,
+        )
         db.flush()
         db.refresh(transfer)
         db.refresh(repair)
@@ -394,7 +422,7 @@ def generate(output: Path) -> dict:
             "manifest": request_documents[0].snapshot["visual_appendix"],
             "artifact_sha256": visual_sha256,
             "snapshot_sha256": request.lines[0].visual_snapshot.sha256,
-            "rendered_images": len(request_documents[0].snapshot["visual_appendix"]["lines"][0]["blocks"]),
+            "rendered_images": len(request_documents[0].snapshot["visual_appendix"]["pages"]),
         }
         results["template_validation"] = {
             str(version.id): validate_template(version)

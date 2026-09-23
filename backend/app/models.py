@@ -1481,6 +1481,47 @@ class CatalogDiagram(Base):
     )
 
 
+class CatalogVisualSource(Base):
+    """Explicit semantic role for one page of a catalog revision's source."""
+
+    __tablename__ = "catalog_visual_sources"
+    __table_args__ = (
+        UniqueConstraint("source_id", "technical_document_id", "page_number", "role",
+                         name="uq_catalog_visual_source_page_role"),
+        CheckConstraint("page_number > 0", name="ck_catalog_visual_source_page"),
+        CheckConstraint("role IN ('EXPLODED_SCHEME', 'SPARE_PARTS_LIST')",
+                        name="ck_catalog_visual_source_role"),
+        CheckConstraint("length(source_sha256) = 64", name="ck_catalog_visual_source_hash"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(120), index=True)
+    catalog_revision: Mapped[str | None] = mapped_column(String(80))
+    technical_document_id: Mapped[int] = mapped_column(
+        ForeignKey("technical_documents.id"), index=True
+    )
+    page_number: Mapped[int] = mapped_column(Integer)
+    role: Mapped[str] = mapped_column(String(32))
+    source_sha256: Mapped[str] = mapped_column(String(64))
+    technical_document: Mapped[TechnicalDocument] = relationship()
+
+
+class CatalogVisualPartMap(Base):
+    """A verified part's relevant list page; geometry remains optional."""
+
+    __tablename__ = "catalog_visual_part_maps"
+    __table_args__ = (
+        UniqueConstraint("visual_source_id", "part_id", name="uq_catalog_visual_part_map"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    visual_source_id: Mapped[int] = mapped_column(
+        ForeignKey("catalog_visual_sources.id", ondelete="RESTRICT"), index=True
+    )
+    part_id: Mapped[int] = mapped_column(ForeignKey("part_catalog.id"), index=True)
+    visual_source: Mapped[CatalogVisualSource] = relationship()
+
+
 class CatalogPositionHotspot(Base):
     """Position-centric mapping; one position may resolve to multiple part rows."""
 

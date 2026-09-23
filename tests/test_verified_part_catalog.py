@@ -13,6 +13,8 @@ from app.models import (
     AuditLog,
     CatalogDiagram,
     CatalogPositionHotspot,
+    CatalogVisualPartMap,
+    CatalogVisualSource,
     Machine,
     PartCatalog,
     PartRequest,
@@ -95,6 +97,26 @@ def test_authoritative_catalog_import_preserves_all_source_rows_and_traceability
             and len(part.source_document_sha256) == 64
             for part in active
         )
+
+
+def test_controlled_catalog_registers_explicit_visual_roles_and_part_pages(session_factory):
+    with session_factory() as session:
+        sources = list(session.scalars(select(CatalogVisualSource)))
+        maps = list(session.scalars(select(CatalogVisualPartMap)))
+        assert Counter(source.role for source in sources) == Counter({
+            "EXPLODED_SCHEME": sum(
+                len(source.get("diagram_pages") or []) for source in dataset_sources()
+            ),
+            "SPARE_PARTS_LIST": sum(
+                len(source.get("record_pages") or []) for source in dataset_sources()
+            ),
+        })
+        assert len(maps) == 611
+        assert {mapping.part_id for mapping in maps} == {
+            part.id for part in session.scalars(select(PartCatalog)) if part.is_active
+        }
+        assert all(source.source_sha256 and source.catalog_revision == CATALOG_VERSION
+                   for source in sources)
 
 
 def test_source_hashes_pages_scope_and_old_catalog_sources_are_absent(session_factory):
