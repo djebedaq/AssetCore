@@ -56,6 +56,45 @@ def test_published_industrial_platform_migration_content_is_immutable():
     )
 
 
+def test_catalog_visual_roles_migration_allows_distinct_revisions_on_existing_database(
+    tmp_path: Path,
+):
+    database_path = tmp_path / "catalog-visual-revisions.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260920_0022")
+    # The bootstrap migration creates current metadata on fresh databases.
+    # Recreate the actual deployed 0022 shape, which has neither new table.
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("DROP TABLE catalog_visual_part_maps")
+        connection.execute("DROP TABLE catalog_visual_sources")
+        connection.commit()
+    _run_sqlite_revision(database_path, command.upgrade, "head")
+    with sqlite3.connect(database_path) as connection:
+        columns = {row[1]: row for row in connection.execute(
+            "PRAGMA table_info(catalog_visual_sources)"
+        )}
+        assert columns["catalog_revision"][3] == 1  # NOT NULL
+        for revision, digest in (("QA-A", "a" * 64), ("QA-B", "b" * 64),
+                                 ("QA-C", "c" * 64)):
+            connection.execute(
+                """INSERT INTO catalog_visual_sources
+                   (source_id, catalog_revision, technical_document_id,
+                    page_number, role, source_sha256)
+                   VALUES ('QA-SOURCE', ?, 1, 1, 'EXPLODED_SCHEME', ?)""",
+                (revision, digest),
+            )
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                """INSERT INTO catalog_visual_sources
+                   (source_id, catalog_revision, technical_document_id,
+                    page_number, role, source_sha256)
+                   VALUES ('QA-SOURCE', 'QA-B', 1, 1, 'EXPLODED_SCHEME', ?)""",
+                ("d" * 64,),
+            )
+        assert connection.execute(
+            "SELECT count(*) FROM catalog_visual_sources"
+        ).fetchone()[0] == 3
+
+
 def test_official_document_integrity_migration_preserves_malformed_history_and_signed_data(
     tmp_path: Path,
 ):
