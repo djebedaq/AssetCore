@@ -298,13 +298,13 @@ def _seed_document_templates(db: Session) -> None:
             "name_en": "Technical specification for spare-parts supply",
             "name_ru": "Техническая спецификация на поставку запасных частей",
             "template_stem": "part_request",
-            "template_version": 2,
+            "template_version": 3,
             "required_fields": ["MACHINE_NUMBER", "REMARKS", "DECISION"],
             "contract": {
                 "page": "A4 portrait",
-                "sections": ["technical_specification_title", "machine_identity", "parts_table", "remarks", "request_reference_date_requester"],
+                "sections": ["official_header", "technical_specification_title", "document_identity", "machine_identity", "four_column_parts_table", "signatures"],
                 "reference_only": False,
-                "controlled_reference": "reference_protocols/controlled_parts_request_layout_reference.docx",
+                "controlled_reference": "ZAYAVKA FALCH 500.docx (visual structure only; original retained outside repository)",
             },
         },
     ]

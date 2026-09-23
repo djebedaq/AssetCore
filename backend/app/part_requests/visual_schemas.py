@@ -30,9 +30,10 @@ class CapturedCatalog(BaseModel):
     source_page: int | None
     source_figure: str | None
     diagram_page: int | None
+    visual_pages: list["CapturedVisualPage"] = []
 
 
-class CapturedVisualSource(BaseModel):
+class CapturedPageSource(BaseModel):
     document_title: str
     document_source_id: str | None
     document_dataset_version: str | None
@@ -44,6 +45,9 @@ class CapturedVisualSource(BaseModel):
     filename: str | None
     media_type: str
     byte_length: int
+
+
+class CapturedVisualSource(CapturedPageSource):
     hotspot_key: str | None
     label: str | None
     provenance: str | None
@@ -55,6 +59,19 @@ class CapturedVisualSource(BaseModel):
     diagram_source_id: str | None
     diagram_source_sha256: str | None
     render_version: str | None
+    visual_role: Literal["EXPLODED_SCHEME", "SPARE_PARTS_LIST"] | None = None
+    catalog_visual_source_id: int | None = None
+    catalog_revision: str | None = None
+
+
+class CapturedVisualPage(BaseModel):
+    visual_role: Literal["EXPLODED_SCHEME", "SPARE_PARTS_LIST"]
+    catalog_visual_source_id: int
+    catalog_visual_part_map_id: int
+    catalog_revision: str | None
+    artifact_sha256: str
+    page_number: int
+    source_metadata: CapturedPageSource
 
 
 class CapturedVisualOccurrence(BaseModel):

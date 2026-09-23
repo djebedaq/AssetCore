@@ -160,15 +160,18 @@ def test_canonical_builders_preserve_pre_extraction_output(monkeypatch, tmp_path
     actual = collect_generation_evidence(monkeypatch, tmp_path, language)
     for kind in ("issue", "return", "repair"):
         assert actual[kind] == expected[kind]
-    # 01B deliberately extends only the PART_REQUEST document and its snapshot.
-    # Its approved source template and all canonical registration fields remain.
+    # 01C publishes a new PART_REQUEST layout; registry fields remain stable.
     stable = (
-        "number", "type", "language", "version", "status", "template_version",
-        "template_sha256", "filenames", "media_types",
+        "number", "type", "language", "version", "status", "filenames", "media_types",
     )
     assert {key: actual["part_request"][key] for key in stable} == {
         key: expected["part_request"][key] for key in stable
     }
+    template = Path(__file__).resolve().parents[1] / "backend" / "resources" / "templates"
+    assert actual["part_request"]["template_version"] == 3
+    assert actual["part_request"]["template_sha256"] == hashlib.sha256(
+        (template / f"part_request-{language}-v3.docx").read_bytes()
+    ).hexdigest()
 
 
 @pytest.mark.parametrize("kind", BUILDERS)

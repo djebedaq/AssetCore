@@ -8,12 +8,16 @@ import shutil
 import signal
 import subprocess
 import tempfile
+from copy import deepcopy
 from pathlib import Path
 from threading import RLock
 
 from docx import Document
 from docx.document import Document as DocumentObject
 from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt
+from docx.table import _Row
 from docx.text.paragraph import Paragraph
 
 from .models import DocumentTemplateVersion, DocumentType
@@ -175,6 +179,42 @@ def _insert_table_after(paragraph: Paragraph, rows: list[list[object]]) -> None:
     paragraph._element.getparent().remove(paragraph._element)
 
 
+def _fill_marker_tables(document: DocumentObject, tables: dict[str, list[list[object]]]) -> None:
+    """Grow a styled reference table from its marked exemplar row."""
+    for table in document.tables:
+        for row in list(table.rows):
+            marker = row.cells[0].text.strip()
+            match = re.fullmatch(r"\{\{TABLE:([A-Z0-9_.-]+)\}\}", marker)
+            if not match:
+                continue
+            code = match.group(1)
+            if code not in tables:
+                raise TemplateValidationError(f"Няма таблични данни за {code}.")
+            values = tables[code]
+            if not values or len(values[0]) != len(row.cells):
+                raise TemplateValidationError("Невалиден брой колони в таблицата.")
+            # The first source row is the approved localized header.
+            if [cell.text for cell in table.rows[0].cells] != [str(v) for v in values[0]]:
+                raise TemplateValidationError("Заглавията на таблицата не съвпадат с шаблона.")
+            header_properties = table.rows[0]._tr.get_or_add_trPr()
+            if header_properties.find(qn("w:tblHeader")) is None:
+                header_properties.append(OxmlElement("w:tblHeader"))
+            for data in values[1:]:
+                if len(data) != len(row.cells):
+                    raise TemplateValidationError("Невалиден ред в таблицата.")
+                copied = deepcopy(row._tr)
+                row._tr.addprevious(copied)
+                rendered_row = _Row(copied, table)
+                rendered_row.height = None
+                for cell, value in zip(rendered_row.cells, data, strict=True):
+                    cell.text = "" if value is None else str(value)
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            run.font.name = "Arial"
+                            run.font.size = Pt(8)
+            row._tr.getparent().remove(row._tr)
+
+
 def render_docx(
     version: DocumentTemplateVersion,
     values: dict[str, object],
@@ -185,6 +225,7 @@ def render_docx(
         raise TemplateValidationError("; ".join(validation["errors"]))
     document = _load_docx(source_bytes(version))
     table_values = tables or {}
+    _fill_marker_tables(document, table_values)
     for paragraph in list(document.paragraphs):
         match = re.fullmatch(r"\s*\{\{TABLE:([A-Z0-9_.-]+)\}\}\s*", paragraph.text)
         if match:

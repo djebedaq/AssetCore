@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 from xml.sax.saxutils import escape
 
 from docx.enum.table import WD_TABLE_ALIGNMENT
@@ -10,6 +11,9 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Mm, Pt
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
+from reportlab.platypus import (
+    Image as PdfImage,
+)
 from reportlab.platypus import (
     Paragraph,
     SimpleDocTemplate,
@@ -31,20 +35,19 @@ from .common import (
     TEXT,
     _language,
 )
-from .part_request_visual_appendix import (
-    VisualLine,
+from .part_request_grouped_visuals import (
     append_docx,
     appendix_manifest,
     pdf_flowables,
     prepare_appendix,
 )
+from .part_request_visual_appendix import VisualPlan
 from .registration import (
     _generated_documents,
     _register_official_version,
 )
 from .rendering import (
     _add_centered,
-    _pdf_header,
     _pdf_styles,
     _pdf_table_style,
     _prepare_document,
@@ -58,8 +61,22 @@ from .templates import (
     _template_version,
 )
 
+REQUEST_HEADERS = {
+    "bg": ["Поз.", "PART №", "Описание", "Количество"],
+    "en": ["Pos.", "PART No.", "Description", "Quantity"],
+    "ru": ["Поз.", "PART №", "Описание", "Количество"],
+}
 
-def _request_snapshot(request: PartRequest, appendix: tuple[VisualLine, ...] | None = None) -> dict:
+REQUEST_META_LABELS = {
+    "bg": ("Машина", "Инвентарен №", "Марка", "Модел", "Сериен №", "Налягане", "Партида", "Документ №", "Дата", "Съставил", "Длъжност", "Заявител", "Приел", "Подпис", "Статус на подписите"),
+    "en": ("Machine", "Inventory No.", "Brand", "Model", "Serial No.", "Pressure", "Batch", "Document No.", "Date", "Prepared by", "Job title", "Requester", "Accepted by", "Signature", "Signature status"),
+    "ru": ("Машина", "Инвентарный №", "Марка", "Модель", "Серийный №", "Давление", "Партия", "Документ №", "Дата", "Составил", "Должность", "Заявитель", "Принял", "Подпись", "Статус подписей"),
+}
+
+OFFICIAL_HEADER = Path(__file__).resolve().parents[2] / "resources" / "assets" / "odessos_part_request_header.png"
+
+
+def _request_snapshot(request: PartRequest, appendix: VisualPlan | None = None) -> dict:
     result = {
         "request_id": request.id,
         "request_reference": request.request_reference,
@@ -158,11 +175,6 @@ def build_part_request_docx(request: PartRequest, language: str = "bg") -> bytes
         paragraph = document.add_paragraph()
         _set_run_font(paragraph.add_run(f'{t["remarks"]}: '), 8.5, True)
         _set_run_font(paragraph.add_run(request.reason), 8.5)
-    provenance = [f"{line.source_document}, p. {line.source_page}" for line in request.lines if line.source_document and line.source_page]
-    if provenance:
-        paragraph = document.add_paragraph()
-        _set_run_font(paragraph.add_run(f'{t["source"]}: '), 8, True)
-        _set_run_font(paragraph.add_run("; ".join(provenance)), 8)
     footer = document.add_table(rows=1, cols=3)
     footer.style = "Table Grid"
     request_ref = request.request_reference or f"PR-{request.id:06d}"
@@ -176,37 +188,63 @@ def build_part_request_docx(request: PartRequest, language: str = "bg") -> bytes
 
 
 def build_part_request_pdf(
-    request: PartRequest, language: str = "bg", *, appendix: tuple[VisualLine, ...] = ()
+    request: PartRequest, language: str = "bg", *, appendix: VisualPlan | None = None
 ) -> bytes:
     language = _language(language)
     t = TEXT[language]
+    (
+        machine_label, inventory_label, brand_label, model_label, serial_label,
+        pressure_label, batch_label, document_label, date_label, _prepared_label,
+        _job_label, requester_label, accepted_label, _signature_label, status_label,
+    ) = REQUEST_META_LABELS[language]
     _, _, body, label, title, small = _pdf_styles()
     output = io.BytesIO()
     request_ref = request.request_reference or f"PR-{request.id:06d}"
-    pdf = SimpleDocTemplate(output, pagesize=A4, leftMargin=10 * mm, rightMargin=8 * mm, topMargin=7 * mm, bottomMargin=8 * mm, title=request_ref, author="AssetCore")
-    story = [_pdf_header(), Spacer(1, 3 * mm)]
-    story.extend(Paragraph(escape(line), title) for line in t["part_request_title"].splitlines())
+    pdf = SimpleDocTemplate(
+        output, pagesize=A4, leftMargin=11 * mm, rightMargin=11 * mm,
+        topMargin=8 * mm, bottomMargin=9 * mm, title=request_ref, author="AssetCore",
+    )
+    story = [PdfImage(str(OFFICIAL_HEADER), width=188 * mm, height=27 * mm), Spacer(1, 4 * mm)]
+    title.fontSize = 13
+    title.leading = 15
+    story.append(Paragraph(escape(t["part_request_title"].replace("\n", " ")), title))
+    story.append(Spacer(1, 4 * mm))
+    metadata = Table([[
+        Paragraph(f"{escape(document_label)}: {escape(request_ref)}", body),
+        Paragraph(f"{escape(date_label)}: {request.created_at:%d.%m.%Y}", body),
+    ]], colWidths=[94 * mm, 94 * mm])
+    metadata.setStyle(_pdf_table_style())
+    story.extend([metadata, Spacer(1, 2 * mm)])
     if request.machine:
         machine = request.machine
-        for label_text, value in ((t["machine"], f"{machine.name}; {machine.brand} {machine.model or ''}".strip()), (t["inventory"], machine.inventory_number), (t["serial"], machine.serial_number or "")):
-            story.append(Paragraph(f"<b>{escape(label_text)}:</b> {escape(value)}", body))
-    story.append(Spacer(1, 3 * mm))
-    data = [[Paragraph(escape(value), label) for value in (t["position"], t["part_number"], t["description"], t["quantity"])]]
+        machine_rows = [
+            (machine_label, machine.name, inventory_label, machine.inventory_number),
+            (brand_label, machine.brand, model_label, machine.model or ""),
+            (serial_label, machine.serial_number or "", pressure_label,
+             f"{machine.pressure_bar:g} bar" if machine.pressure_bar is not None else ""),
+            (batch_label, "", "", ""),
+        ]
+        machine_table = Table([
+            [Paragraph(escape(str(value)), body) for value in row]
+            for row in machine_rows
+        ], colWidths=[47 * mm] * 4)
+        machine_table.setStyle(_pdf_table_style())
+        story.extend([machine_table, Spacer(1, 3 * mm)])
+    data = [[Paragraph(escape(value), label) for value in REQUEST_HEADERS[language]]]
     data.extend([[Paragraph(escape(line.position or ""), small), Paragraph(escape(line.part_number or ""), small), Paragraph(escape(_part_request_line_description(line, language)), small), Paragraph(escape(f"{line.quantity:g} {line.unit or ''}".strip()), small)] for line in request.lines])
-    table = Table(data, colWidths=[14 * mm, 31 * mm, 127 * mm, 20 * mm], repeatRows=1)
+    table = Table(data, colWidths=[25 * mm, 44 * mm, 68 * mm, 51 * mm], repeatRows=1)
     table.setStyle(_pdf_table_style(header_rows=1))
     story.append(table)
     if request.reason:
         story.extend([Spacer(1, 2 * mm), Paragraph(f'<b>{escape(t["remarks"])}:</b> {escape(request.reason)}', body)])
-    provenance = [f"{line.source_document}, p. {line.source_page}" for line in request.lines if line.source_document and line.source_page]
-    if provenance:
-        story.append(Paragraph(f'<b>{escape(t["source"])}:</b> {escape("; ".join(provenance))}', small))
-    requester = request.requested_by.full_name if request.requested_by else ""
-    decision = request.decision_note or request.status
-    footer = Table([[Paragraph(f'{escape(t["request_number"])}: {escape(request_ref)}', small), Paragraph(f'{escape(t["date"])}: {request.created_at:%d.%m.%Y}', small), Paragraph(f'{escape(t["requester"])}: {escape(requester)}<br/>{escape(t["decision"])}: {escape(decision)}', small)]], colWidths=[64 * mm, 52 * mm, 76 * mm])
-    footer.setStyle(_pdf_table_style())
-    story.extend([Spacer(1, 4 * mm), footer])
-    story.extend(pdf_flowables(appendix, language))
+    story.extend([
+        Paragraph(f"{escape(t['decision'])}: {escape(request.decision_note or request.status)}", small),
+        Paragraph(f"{escape(requester_label)}: {escape(request.requested_by.full_name if request.requested_by else '')}", small),
+        Paragraph(f"{escape(accepted_label)}: {escape(request.decided_by.full_name if request.decided_by else '')}", small),
+        Paragraph(f"{escape(status_label)}: {escape(_signature_status(language))}", small),
+    ])
+    if appendix is not None:
+        story.extend(pdf_flowables(appendix, language))
     pdf.build(story)
     return output.getvalue()
 
@@ -238,8 +276,8 @@ def make_part_request_documents(
         "SIGNATURE_STATUS": _signature_status(language),
     }
     values.update(_preparer_values(db, created_by_id))
-    line_rows = [["Поз.", "PART №", "Описание", "Количество", "Източник"]] + [
-        [line.position or "", line.part_number or "", _part_request_line_description(line, language), f"{line.quantity:g} {line.unit or ''}".strip(), f"{line.source_document or ''} / {line.source_page or ''}".strip(" /")]
+    line_rows = [REQUEST_HEADERS[_language(language)]] + [
+        [line.position or "", line.part_number or "", _part_request_line_description(line, language), f"{line.quantity:g} {line.unit or ''}".strip()]
         for line in request.lines
     ]
     appendix = prepare_appendix(db, request)
