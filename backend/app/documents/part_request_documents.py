@@ -31,6 +31,13 @@ from .common import (
     TEXT,
     _language,
 )
+from .part_request_visual_appendix import (
+    VisualLine,
+    append_docx,
+    appendix_manifest,
+    pdf_flowables,
+    prepare_appendix,
+)
 from .registration import (
     _generated_documents,
     _register_official_version,
@@ -52,8 +59,8 @@ from .templates import (
 )
 
 
-def _request_snapshot(request: PartRequest) -> dict:
-    return {
+def _request_snapshot(request: PartRequest, appendix: tuple[VisualLine, ...] | None = None) -> dict:
+    result = {
         "request_id": request.id,
         "request_reference": request.request_reference,
         "machine_id": request.machine_id,
@@ -96,6 +103,9 @@ def _request_snapshot(request: PartRequest) -> dict:
             for line in request.lines
         ],
     }
+    if appendix is not None:
+        result["visual_appendix"] = appendix_manifest(appendix)
+    return result
 
 
 def _part_request_line_description(line: PartRequestLine, language: str) -> str:
@@ -165,7 +175,9 @@ def build_part_request_docx(request: PartRequest, language: str = "bg") -> bytes
     return output.getvalue()
 
 
-def build_part_request_pdf(request: PartRequest, language: str = "bg") -> bytes:
+def build_part_request_pdf(
+    request: PartRequest, language: str = "bg", *, appendix: tuple[VisualLine, ...] = ()
+) -> bytes:
     language = _language(language)
     t = TEXT[language]
     _, _, body, label, title, small = _pdf_styles()
@@ -194,6 +206,7 @@ def build_part_request_pdf(request: PartRequest, language: str = "bg") -> bytes:
     footer = Table([[Paragraph(f'{escape(t["request_number"])}: {escape(request_ref)}', small), Paragraph(f'{escape(t["date"])}: {request.created_at:%d.%m.%Y}', small), Paragraph(f'{escape(t["requester"])}: {escape(requester)}<br/>{escape(t["decision"])}: {escape(decision)}', small)]], colWidths=[64 * mm, 52 * mm, 76 * mm])
     footer.setStyle(_pdf_table_style())
     story.extend([Spacer(1, 4 * mm), footer])
+    story.extend(pdf_flowables(appendix, language))
     pdf.build(story)
     return output.getvalue()
 
@@ -229,9 +242,14 @@ def make_part_request_documents(
         [line.position or "", line.part_number or "", _part_request_line_description(line, language), f"{line.quantity:g} {line.unit or ''}".strip(), f"{line.source_document or ''} / {line.source_page or ''}".strip(" /")]
         for line in request.lines
     ]
-    docx = render_docx(template, values, {"REQUEST_LINES": line_rows})
-    pdf = convert_docx_to_pdf(docx) or build_part_request_pdf(request, language)
-    snapshot = _request_snapshot(request)
+    appendix = prepare_appendix(db, request)
+    docx = append_docx(
+        render_docx(template, values, {"REQUEST_LINES": line_rows}), appendix, language
+    )
+    pdf = convert_docx_to_pdf(docx) or build_part_request_pdf(
+        request, language, appendix=appendix
+    )
+    snapshot = _request_snapshot(request, appendix)
     _register_official_version(
         db,
         number=number,

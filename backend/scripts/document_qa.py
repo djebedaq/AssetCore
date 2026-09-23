@@ -16,6 +16,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+import fitz
 from docx import Document
 from pypdf import PdfReader
 from sqlalchemy import create_engine, select
@@ -38,8 +39,8 @@ from app.models import (  # noqa: E402
     DocumentTemplateVersion,
     Machine,
     PartCatalog,
+    PartHotspot,
     PartRequest,
-    PartRequestLine,
     PartRequestPriority,
     PartRequestStatus,
     Repair,
@@ -47,12 +48,14 @@ from app.models import (  # noqa: E402
     RepairEventType,
     RepairParticipant,
     RepairStatus,
+    TechnicalDocument,
     TransferBatch,
     TransferBatchStatus,
     TransferProtocol,
     User,
     utcnow,
 )
+from app.part_requests.visual_snapshots import create_request_line  # noqa: E402
 from app.seed import seed_database  # noqa: E402
 from app.settings import settings  # noqa: E402
 from app.template_engine import TOKEN_RE, validate_template  # noqa: E402
@@ -142,12 +145,7 @@ def generate(output: Path) -> dict:
         seed_database(db)
         machine = db.scalar(select(Machine).where(Machine.inventory_number == "4"))
         user = db.scalar(select(User).order_by(User.id))
-        part = db.scalar(
-            select(PartCatalog)
-            .where(PartCatalog.is_verified.is_(True))
-            .order_by(PartCatalog.id)
-        )
-        if machine is None or user is None or part is None:
+        if machine is None or user is None:
             raise RuntimeError("Verified seed prerequisites are missing.")
 
         user.first_name = "Тест"
@@ -156,6 +154,60 @@ def generate(output: Path) -> dict:
         user.full_name = "Тест Само Проверка"
         user.job_title = "QA оператор"
         user.profile_status = "PROFILE_COMPLETE"
+
+        # Entirely synthetic source, retained only in this in-memory QA session.
+        with fitz.open() as source_pdf:
+            source_pdf.new_page().insert_text((60, 80), "QA source page 1")
+            page = source_pdf.new_page()
+            page.insert_text((60, 80), "QA source page 2 / position QA-P7")
+            page.draw_rect(fitz.Rect(119, 253, 190, 337), color=(0, 0, 0))
+            visual_source = source_pdf.tobytes()
+        visual_sha256 = hashlib.sha256(visual_source).hexdigest()
+        part = PartCatalog(
+            source_record_key="QA-ONLY-VISUAL:1",
+            source_id="QA-ONLY-VISUAL",
+            source_version="QA-REV-1",
+            source_document_sha256=visual_sha256,
+            brand="QA-SYNTHETIC",
+            model="QA-MODEL",
+            position="QA-P7",
+            part_number="QA-VISUAL-01",
+            description="QA synthetic visual part",
+            source_document="qa-visual-source.pdf",
+            source_page=2,
+            unit="pcs",
+            is_verified=True,
+            verification_status="VERIFIED_QA",
+            verified_by_id=user.id,
+            verified_at=utcnow(),
+        )
+        source_document = TechnicalDocument(
+            brand="QA-SYNTHETIC",
+            category="QA",
+            title="QA synthetic visual source",
+            file_path="qa-only/visual-source.pdf",
+            revision="QA-REV-1",
+            uploaded_content=visual_source,
+            uploaded_filename="qa-visual-source.pdf",
+            media_type="application/pdf",
+            sha256=visual_sha256,
+            page_count=2,
+        )
+        db.add_all([part, source_document])
+        db.flush()
+        db.add(PartHotspot(
+            part_id=part.id,
+            technical_document_id=source_document.id,
+            page_number=2,
+            x=0.2,
+            y=0.3,
+            width=0.12,
+            height=0.1,
+            label="QA-P7",
+            is_verified=True,
+            created_by_id=user.id,
+        ))
+        db.flush()
 
         now = utcnow()
         batch = TransferBatch(
@@ -270,18 +322,19 @@ def generate(output: Path) -> dict:
         )
         db.add(request)
         db.flush()
-        db.add(
-            PartRequestLine(
-                request_id=request.id,
-                catalog_part_id=part.id,
-                position=part.position,
-                part_number=part.part_number,
-                description=part.description,
-                quantity=1,
-                unit=part.unit,
-                source_document=part.source_document,
-                source_page=part.source_page,
-            )
+        create_request_line(
+            db, request.id,
+            {
+                "catalog_part_id": part.id,
+                "position": part.position,
+                "part_number": part.part_number,
+                "description": part.description,
+                "quantity": 1,
+                "unit": part.unit,
+                "source_document": part.source_document,
+                "source_page": part.source_page,
+            },
+            user,
         )
         db.flush()
         db.refresh(transfer)
@@ -336,6 +389,12 @@ def generate(output: Path) -> dict:
                 request_docx,
                 request_pdf,
             ),
+        }
+        results["part_request"]["visual_appendix"] = {
+            "manifest": request_documents[0].snapshot["visual_appendix"],
+            "artifact_sha256": visual_sha256,
+            "snapshot_sha256": request.lines[0].visual_snapshot.sha256,
+            "rendered_images": len(request_documents[0].snapshot["visual_appendix"]["lines"][0]["blocks"]),
         }
         results["template_validation"] = {
             str(version.id): validate_template(version)

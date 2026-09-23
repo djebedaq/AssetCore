@@ -252,6 +252,11 @@ jobs:
           docker run --rm --read-only
           --tmpfs /tmp:rw,nosuid,noexec,size=512m
           assetcore:ci python backend/scripts/container_runtime_smoke.py
+      - name: Verify official visual appendix through LibreOffice
+        run: >-
+          docker run --rm --read-only --network none
+          --tmpfs /tmp:rw,nosuid,noexec,size=512m
+          assetcore:ci python backend/scripts/part_visual_appendix_smoke.py
       - name: Run liveness and readiness smoke in the production image
         shell: bash
         run: |
