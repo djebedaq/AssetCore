@@ -157,7 +157,18 @@ def collect_generation_evidence(monkeypatch, output: Path, language: str) -> dic
 @pytest.mark.parametrize("language", ["bg", "en", "ru"])
 def test_canonical_builders_preserve_pre_extraction_output(monkeypatch, tmp_path, language):
     expected = json.loads(GOLDEN.read_text(encoding="utf-8"))["languages"][language]
-    assert collect_generation_evidence(monkeypatch, tmp_path, language) == expected
+    actual = collect_generation_evidence(monkeypatch, tmp_path, language)
+    for kind in ("issue", "return", "repair"):
+        assert actual[kind] == expected[kind]
+    # 01B deliberately extends only the PART_REQUEST document and its snapshot.
+    # Its approved source template and all canonical registration fields remain.
+    stable = (
+        "number", "type", "language", "version", "status", "template_version",
+        "template_sha256", "filenames", "media_types",
+    )
+    assert {key: actual["part_request"][key] for key in stable} == {
+        key: expected["part_request"][key] for key in stable
+    }
 
 
 @pytest.mark.parametrize("kind", BUILDERS)
