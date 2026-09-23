@@ -1486,8 +1486,9 @@ class CatalogVisualSource(Base):
 
     __tablename__ = "catalog_visual_sources"
     __table_args__ = (
-        UniqueConstraint("source_id", "technical_document_id", "page_number", "role",
-                         name="uq_catalog_visual_source_page_role"),
+        UniqueConstraint("source_id", "catalog_revision", "technical_document_id",
+                         "page_number", "role", name="uq_catalog_visual_source_revision_page_role"),
+        CheckConstraint("length(catalog_revision) > 0", name="ck_catalog_visual_source_revision"),
         CheckConstraint("page_number > 0", name="ck_catalog_visual_source_page"),
         CheckConstraint("role IN ('EXPLODED_SCHEME', 'SPARE_PARTS_LIST')",
                         name="ck_catalog_visual_source_role"),
@@ -1496,7 +1497,7 @@ class CatalogVisualSource(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     source_id: Mapped[str] = mapped_column(String(120), index=True)
-    catalog_revision: Mapped[str | None] = mapped_column(String(80))
+    catalog_revision: Mapped[str] = mapped_column(String(255), nullable=False)
     technical_document_id: Mapped[int] = mapped_column(
         ForeignKey("technical_documents.id"), index=True
     )

@@ -364,6 +364,7 @@ def _upsert_visual_sources(
             for page in pages:
                 visual = db.scalar(select(CatalogVisualSource).where(
                     CatalogVisualSource.source_id == source["source_id"],
+                    CatalogVisualSource.catalog_revision == CATALOG_VERSION,
                     CatalogVisualSource.technical_document_id == document.id,
                     CatalogVisualSource.page_number == page,
                     CatalogVisualSource.role == role,
@@ -380,8 +381,7 @@ def _upsert_visual_sources(
                     db.add(visual)
                     db.flush()
                     counters["created_visual_sources"] += 1
-                elif (visual.source_sha256 != source["sha256"] or
-                      visual.catalog_revision != CATALOG_VERSION):
+                elif visual.source_sha256 != source["sha256"]:
                     raise CatalogImportError("Конфликт в ревизията на визуален източник.")
                 if role == "SPARE_PARTS_LIST":
                     for row in rows:

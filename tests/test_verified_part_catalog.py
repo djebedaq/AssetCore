@@ -5,6 +5,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+import pytest
+from app.catalog import importer
 from app.catalog.importer import import_authoritative_catalog
 from app.catalog.position_mapping import AUTO_MATCHED, MANUALLY_CONFIRMED
 from app.catalog.sources import CATALOG_VERSION, dataset_sources, source_relative_path
@@ -117,6 +119,63 @@ def test_controlled_catalog_registers_explicit_visual_roles_and_part_pages(sessi
         }
         assert all(source.source_sha256 and source.catalog_revision == CATALOG_VERSION
                    for source in sources)
+
+
+def test_controlled_visual_source_import_allows_revision_rollover_and_rejects_hash_conflict(
+    session_factory, monkeypatch
+):
+    source = {
+        "source_id": "QA-REVISION-ROLLOVER",
+        "sha256": "a" * 64,
+        "diagram_pages": [1],
+        "record_pages": [2],
+    }
+    monkeypatch.setattr(importer, "dataset_sources", lambda: [source])
+    monkeypatch.setattr(importer, "load_source_dataset", lambda _: {
+        "records": [{"source_record_key": "QA-REVISION-ROW", "source_page": 2}]
+    })
+    with session_factory() as db:
+        document = TechnicalDocument(
+            brand="QA", category="QA", title="QA revision source",
+            file_path="qa-only/revision-rollover.pdf", source_id=source["source_id"],
+        )
+        part = PartCatalog(
+            source_record_key="QA-REVISION-ROW", source_id=source["source_id"],
+            source_version="QA-A", brand="QA", part_number="QA-ROW",
+            description="QA revision row", source_page=2,
+        )
+        db.add_all([document, part])
+        db.flush()
+        for revision, digest in (("QA-A", "a" * 64), ("QA-B", "b" * 64),
+                                 ("QA-C", "c" * 64)):
+            monkeypatch.setattr(importer, "CATALOG_VERSION", revision)
+            source["sha256"] = digest
+            part.source_version = revision
+            counters = {"created_visual_sources": 0, "created_visual_part_maps": 0}
+            importer._upsert_visual_sources(
+                db, {source["source_id"]: document}, {part.source_record_key: part},
+                counters,
+            )
+            assert counters == {"created_visual_sources": 2, "created_visual_part_maps": 1}
+            db.flush()
+        counters = {"created_visual_sources": 0, "created_visual_part_maps": 0}
+        importer._upsert_visual_sources(
+            db, {source["source_id"]: document}, {part.source_record_key: part},
+            counters,
+        )
+        assert counters == {"created_visual_sources": 0, "created_visual_part_maps": 0}
+        assert len(db.scalars(select(CatalogVisualSource).where(
+            CatalogVisualSource.source_id == source["source_id"]
+        )).all()) == 6
+        assert len(db.scalars(select(CatalogVisualPartMap).where(
+            CatalogVisualPartMap.part_id == part.id
+        )).all()) == 3
+        source["sha256"] = "d" * 64
+        with pytest.raises(importer.CatalogImportError, match="Конфликт в ревизията"):
+            importer._upsert_visual_sources(
+                db, {source["source_id"]: document}, {part.source_record_key: part},
+                counters,
+            )
 
 
 def test_source_hashes_pages_scope_and_old_catalog_sources_are_absent(session_factory):

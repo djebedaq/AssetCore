@@ -224,17 +224,23 @@ def _visual_source(
     db: Session, part: PartCatalog, document: TechnicalDocument, page: int,
     *, diagram: CatalogDiagram | None = None,
 ) -> CatalogVisualSource | None:
-    candidates = db.scalars(select(CatalogVisualSource).where(
+    identity = (
         CatalogVisualSource.source_id == part.source_id,
         CatalogVisualSource.technical_document_id == document.id,
         CatalogVisualSource.page_number == page,
-    )).all()
+    )
     if diagram is not None:
-        candidates = [value for value in candidates if value.role == "EXPLODED_SCHEME"]
+        identity += (CatalogVisualSource.role == "EXPLODED_SCHEME",)
+    candidates = db.scalars(select(CatalogVisualSource).where(
+        *identity, CatalogVisualSource.catalog_revision == part.source_version,
+    )).all()
     if len(candidates) > 1:
         raise _integrity_error()
     visual = candidates[0] if candidates else None
-    if visual and part.source_version and visual.catalog_revision != part.source_version:
+    if visual is None and db.scalar(
+        select(CatalogVisualSource.id).where(*identity).limit(1)
+    ) is not None:
+        # A source exists, but only for another revision. Never silently use it.
         raise _integrity_error()
     return visual
 
@@ -246,15 +252,24 @@ def _page_references(db: Session, part: PartCatalog) -> list[dict]:
         .options(joinedload(CatalogVisualPartMap.visual_source).joinedload(
             CatalogVisualSource.technical_document
         ))
-        .where(CatalogVisualPartMap.part_id == part.id)
+        .where(
+            CatalogVisualPartMap.part_id == part.id,
+            CatalogVisualSource.catalog_revision == part.source_version,
+        )
         .order_by(CatalogVisualSource.role, CatalogVisualSource.source_sha256,
                   CatalogVisualSource.page_number, CatalogVisualPartMap.id)
     ).all()
+    if not mapped and db.scalar(
+        select(CatalogVisualPartMap.id)
+        .where(CatalogVisualPartMap.part_id == part.id)
+        .limit(1)
+    ) is not None:
+        # Historical mappings may remain, but a new request needs this revision.
+        raise _integrity_error()
     references = []
     for mapping in mapped:
         source = mapping.visual_source
-        if (source.source_id != part.source_id or source.role != "SPARE_PARTS_LIST"
-                or (part.source_version and source.catalog_revision != part.source_version)):
+        if source.source_id != part.source_id or source.role != "SPARE_PARTS_LIST":
             raise _integrity_error()
         digest, metadata, content = _source_artifact(
             db, source.technical_document, source.source_sha256

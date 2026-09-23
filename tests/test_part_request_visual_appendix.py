@@ -14,6 +14,7 @@ from app.documents import part_request_documents
 from app.documents.part_request_grouped_visuals import prepare_appendix
 from app.documents.part_request_visual_appendix import LABELS, _render_page
 from app.models import (
+    CatalogDiagram,
     CatalogVisualPartMap,
     CatalogVisualSource,
     DocumentTemplateVersion,
@@ -25,11 +26,14 @@ from app.models import (
     PartRequestLine,
     PartVisualArtifact,
     TechnicalDocument,
+    TechnicalDocumentRevision,
     User,
 )
 from app.part_requests.service import load_request
 from app.part_requests.visual_snapshots import (
+    _page_references,
     _snapshot_payload,
+    _visual_source,
     create_request_line,
     fingerprint,
 )
@@ -599,6 +603,173 @@ def test_explicit_roles_group_shared_scheme_and_list_pages(
     assert [hashlib.sha256(page.image).hexdigest() for page in unchanged.pages] == [
         hashlib.sha256(page.image).hexdigest() for page in plan.pages
     ]
+
+
+def test_catalog_revision_a_b_c_preserves_captured_scheme_and_list_pages(
+    client, auth_headers, session_factory, monkeypatch
+):
+    data = future_catalog(session_factory)
+    monkeypatch.setattr(part_request_documents, "convert_docx_to_pdf", lambda _: None)
+
+    def pdf_bytes(revision: str) -> bytes:
+        with fitz.open() as pdf:
+            for page in (1, 2):
+                pdf.new_page().insert_text((70, 90), f"QA {revision} page {page}")
+            return pdf.tobytes()
+
+    list_bytes = {revision: pdf_bytes(f"list-{revision}") for revision in "ABC"}
+    scheme_bytes = {"A": data["content"], **{
+        revision: pdf_bytes(f"scheme-{revision}") for revision in "BC"
+    }}
+    scheme_hashes = {
+        revision: hashlib.sha256(content).hexdigest()
+        for revision, content in scheme_bytes.items()
+    }
+    list_hashes = {
+        revision: hashlib.sha256(content).hexdigest()
+        for revision, content in list_bytes.items()
+    }
+    with session_factory() as db:
+        part = db.get(PartCatalog, data["part_id"])
+        list_document = TechnicalDocument(
+            brand=part.brand, category="QA", title="QA versioned parts list",
+            file_path="qa-only/versioned-list.pdf", source_id=part.source_id,
+            dataset_version=part.source_version, sha256=list_hashes["A"],
+            uploaded_content=list_bytes["A"], uploaded_filename="qa-list.pdf",
+            media_type="application/pdf", page_count=2,
+        )
+        db.add(list_document)
+        db.flush()
+        list_document_id = list_document.id
+        db.add(TechnicalDocumentRevision(
+            document_id=list_document_id, version=1, revision_label="A",
+            filename="qa-list.pdf", media_type="application/pdf",
+            content=list_bytes["A"], sha256=list_hashes["A"],
+        ))
+        db.commit()
+
+    def publish(revision: str, list_page: int) -> None:
+        with session_factory() as db:
+            part = db.get(PartCatalog, data["part_id"])
+            scheme_document = db.get(TechnicalDocument, data["document_id"])
+            list_document = db.get(TechnicalDocument, list_document_id)
+            catalog_revision = "QA-REV-42" if revision == "A" else f"QA-REV-{revision}"
+            if revision != "A":
+                version = {"B": 43, "C": 44}[revision]
+                for document, content, digest, number in (
+                    (scheme_document, scheme_bytes[revision], scheme_hashes[revision], version),
+                    (list_document, list_bytes[revision], list_hashes[revision], version - 41),
+                ):
+                    db.add(TechnicalDocumentRevision(
+                        document_id=document.id, version=number,
+                        revision_label=revision, filename="qa-source.pdf",
+                        media_type="application/pdf", content=content, sha256=digest,
+                    ))
+                    document.sha256 = digest
+                    document.uploaded_content = content
+                    document.dataset_version = catalog_revision
+                    document.revision = revision
+                part.source_version = catalog_revision
+                part.source_document_sha256 = scheme_hashes[revision]
+                for diagram in db.scalars(select(CatalogDiagram).where(
+                    CatalogDiagram.source_id == part.source_id
+                )):
+                    diagram.source_pdf_sha256 = scheme_hashes[revision]
+                db.flush()
+                if revision == "B":
+                    diagram = db.get(CatalogDiagram, data["diagram_ids"][0])
+                    with pytest.raises(HTTPException):
+                        _visual_source(db, part, scheme_document, 1, diagram=diagram)
+                    with pytest.raises(HTTPException):
+                        _page_references(db, part)
+            for document, role, digest in (
+                (scheme_document, "EXPLODED_SCHEME", scheme_hashes[revision]),
+                (list_document, "SPARE_PARTS_LIST", list_hashes[revision]),
+            ):
+                for page in (1, 2):
+                    source = CatalogVisualSource(
+                        source_id=part.source_id, catalog_revision=catalog_revision,
+                        technical_document_id=document.id, page_number=page,
+                        role=role, source_sha256=digest,
+                    )
+                    db.add(source)
+                    db.flush()
+                    if role == "SPARE_PARTS_LIST" and page == list_page:
+                        db.add(CatalogVisualPartMap(
+                            visual_source_id=source.id, part_id=part.id,
+                        ))
+            db.commit()
+
+    def evidence(request: dict, revision: str, list_page: int) -> list[tuple[str, str, int, str]]:
+        with session_factory() as db:
+            line = load_request(db, request["id"]).lines[0]
+            snapshot = line.visual_snapshot
+            catalog_revision = "QA-REV-42" if revision == "A" else f"QA-REV-{revision}"
+            assert snapshot.catalog["source_version"] == catalog_revision
+            assert [(value["visual_role"], value["artifact_sha256"], value["page_number"])
+                    for value in snapshot.catalog["visual_pages"]] == [
+                ("SPARE_PARTS_LIST", list_hashes[revision], list_page)
+            ]
+            assert snapshot.catalog["visual_pages"][0]["catalog_revision"] == catalog_revision
+            assert {value.artifact_sha256 for value in snapshot.occurrences} == {
+                scheme_hashes[revision]
+            }
+            assert {value.page_number for value in snapshot.occurrences} == {1, 2}
+            assert all(value.source_metadata["visual_role"] == "EXPLODED_SCHEME"
+                       and value.source_metadata["catalog_revision"] == catalog_revision
+                       for value in snapshot.occurrences)
+            plan = prepare_appendix(db, load_request(db, request["id"]))
+            return [
+                (page.role, page.artifact_sha256, page.page_number,
+                 hashlib.sha256(page.image).hexdigest())
+                for page in plan.pages
+            ]
+
+    # The fixture's initial published catalog revision is QA-REV-42.
+    publish("A", 1)
+    request_a = _request(client, auth_headers, data)
+    pages_a = evidence(request_a, "A", 1)
+    publish("B", 2)
+    request_b = _request(client, auth_headers, data)
+    pages_b = evidence(request_b, "B", 2)
+    publish("C", 1)
+    request_c = _request(client, auth_headers, data)
+    pages_c = evidence(request_c, "C", 1)
+
+    assert evidence(request_a, "A", 1) == pages_a
+    assert evidence(request_b, "B", 2) == pages_b
+    assert evidence(request_c, "C", 1) == pages_c
+    assert {page[1] for page in pages_a} == {scheme_hashes["A"], list_hashes["A"]}
+    assert {page[1] for page in pages_b} == {scheme_hashes["B"], list_hashes["B"]}
+    assert {page[1] for page in pages_c} == {scheme_hashes["C"], list_hashes["C"]}
+    assert [page[:3] for page in pages_b if page[0] == "SPARE_PARTS_LIST"] == [
+        ("SPARE_PARTS_LIST", list_hashes["B"], 2)
+    ]
+    with session_factory() as db:
+        sources = db.scalars(select(CatalogVisualSource).where(
+            CatalogVisualSource.source_id == "QA-FUTURE-SOURCE"
+        )).all()
+        maps = db.scalars(select(CatalogVisualPartMap).where(
+            CatalogVisualPartMap.part_id == data["part_id"]
+        )).all()
+        assert len(sources) == 12  # Two pages per role in each of three revisions.
+        assert len(maps) == 3
+        assert {mapping.visual_source.catalog_revision for mapping in maps} == {
+            "QA-REV-42", "QA-REV-B", "QA-REV-C"
+        }
+        assert {revision.sha256 for revision in db.get(
+            TechnicalDocument, data["document_id"]
+        ).revisions} == set(scheme_hashes.values())
+        assert {revision.sha256 for revision in db.get(
+            TechnicalDocument, list_document_id
+        ).revisions} == set(list_hashes.values())
+    for request, revision in ((request_a, "A"), (request_b, "B"), (request_c, "C")):
+        response = _generate(client, auth_headers, request)
+        assert response.status_code == 201, response.text
+        manifest = _records(session_factory, request["id"])["docx"][2]["visual_appendix"]
+        assert {page["artifact_sha256"] for page in manifest["pages"]} == {
+            scheme_hashes[revision], list_hashes[revision]
+        }
 
 
 def test_unknown_part_uses_link_time_snapshot_without_rewriting_original(
