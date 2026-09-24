@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from contextlib import nullcontext
 from threading import RLock
 from typing import Any
@@ -497,7 +498,9 @@ def _bulk_issue_impl(
         db.add(batch)
         db.flush()
         batch_id = batch.id
-        batch.batch_reference = f"HPWJ-B-{now:%Y%m%d}-{batch.id:06d}"
+        prefixes = {_transfer_reference_prefix(machine) for machine in machines}
+        batch_prefix = next(iter(prefixes)) if len(prefixes) == 1 else "ASSET"
+        batch.batch_reference = f"{batch_prefix}-B-{now:%Y%m%d}-{batch.id:06d}"
 
         machine_by_id = {machine.id: machine for machine in machines}
         transfers: list[TransferProtocol] = []
@@ -540,7 +543,9 @@ def _bulk_issue_impl(
             db.add(transfer)
             db.flush()
             current_transfer_id = transfer.id
-            transfer.protocol_number = f"HPWJ-{now:%Y%m%d}-{transfer.id:06d}"
+            transfer.protocol_number = (
+                f"{_transfer_reference_prefix(machine)}-{now:%Y%m%d}-{transfer.id:06d}"
+            )
             transfer.machine = machine
             stage = f"generate_issue_documents:machine_{machine.inventory_number}"
             documents = make_protocol_documents(
@@ -2647,3 +2652,9 @@ def cancel_pending_batch(
             "invalidated_signing_sessions": len(sessions),
             "message": "Незавършената операция е анулирана безопасно.",
         }
+
+
+def _transfer_reference_prefix(machine: Machine) -> str:
+    """Use a linked category code for new references, with a neutral legacy fallback."""
+    code = machine.category if machine.category_id is not None else None
+    return code if code and re.fullmatch(r"[A-Z0-9_-]{2,40}", code) else "ASSET"

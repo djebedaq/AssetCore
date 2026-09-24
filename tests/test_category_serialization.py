@@ -16,6 +16,7 @@ CATEGORY_KEYS = {
     "document_types",
     "checklists",
     "status_codes",
+    "capabilities",
     "is_active",
     "created_at",
     "fields",

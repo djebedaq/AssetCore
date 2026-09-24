@@ -75,6 +75,7 @@ from .master_data.routes import update_location as update_location
 from .master_data.serializers import _department_dict as _department_dict
 from .master_data.serializers import _location_dict as _location_dict
 from .models import (
+    AssetCategory,
     AuditLog,
     DocumentTemplate,
     DocumentTemplateVersion,
@@ -2741,12 +2742,17 @@ def _validate_import_records(records: list[dict], db: Session) -> tuple[list[dic
         if missing:
             errors.append({"row": index + 1, "message": f"Липсват задължителни полета: {', '.join(missing)}."})
             continue
+        category_definition = db.scalar(select(AssetCategory).where(AssetCategory.code == category))
+        if category_definition is None:
+            errors.append({"row": index + 1, "message": "Категорията трябва да съществува предварително."})
+            continue
         try:
-            pressure = int(record.get("pressure_bar") or 0)
+            pressure = int(record["pressure_bar"]) if record.get("pressure_bar") not in (None, "") else None
         except (ValueError, TypeError):
             errors.append({"row": index + 1, "message": "Налягането трябва да бъде цяло число."})
             continue
         record["inventory_number"] = number
+        record["category_id"] = category_definition.id
         record["pressure_bar"] = pressure
         valid.append(record)
     return valid, errors

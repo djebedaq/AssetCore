@@ -77,7 +77,7 @@ export function PassportOverviewTab({ passport, customValues, setCustomValues, o
       <Detail label={t('machines.inventoryNumber')} value={machine.inventory_number} />
       <Detail label={t('machines.brand')} value={machine.brand} />
       <Detail label={t('machines.model')} value={machine.model || t('common.noValue')} />
-      {machine.pressure_bar ? <Detail label={t('machines.pressure')} value={`${machine.pressure_bar} bar`} /> : null}
+      {machine.category_definition?.capabilities?.includes('HAS_PRESSURE') && machine.pressure_bar != null ? <Detail label={t('machines.pressure')} value={`${machine.pressure_bar} bar`} /> : null}
       <Detail label={t('machines.serialNumber')} value={machine.serial_number || t('common.noValue')} />
       <Detail label={t('common.location')} value={machine.location?.name || t('common.notSpecified')} />
       <Detail label={t('passport.category')} value={machine.category_definition?.[`name_${locale}` as 'name_bg'] || machine.category || t('common.notSpecified')} />

@@ -263,7 +263,7 @@ def make_part_request_documents(
         "BRAND": machine.brand if machine else "",
         "MODEL": machine.model or "" if machine else "",
         "SERIAL_NUMBER": machine.serial_number or "" if machine else "",
-        "PRESSURE_BAR": machine.pressure_bar if machine else "",
+        "PRESSURE_BAR": machine.pressure_bar if machine and machine.pressure_bar is not None else "",
         "BATCH_REFERENCE": "",
         "REMARKS": request.reason or "",
         "DECISION": request.decision_note or request.status,

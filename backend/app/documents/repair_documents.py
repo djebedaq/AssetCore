@@ -197,7 +197,7 @@ def make_repair_documents(
         "BRAND": machine.brand,
         "MODEL": machine.model or "",
         "SERIAL_NUMBER": machine.serial_number or "",
-        "PRESSURE_BAR": machine.pressure_bar,
+        "PRESSURE_BAR": machine.pressure_bar if machine.pressure_bar is not None else "",
         "BATCH_REFERENCE": "",
         "REPAIR_REFERENCE": repair.repair_reference or base,
         "SOURCE_RETURN_REFERENCE": source_reference,

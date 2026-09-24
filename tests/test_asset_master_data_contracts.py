@@ -74,7 +74,7 @@ def test_machine_read_and_qr_contract(
     assert listing.status_code == 200
     rows = listing.json()
     assert len(rows) == 19
-    assert rows == sorted(rows, key=lambda row: (-row["pressure_bar"], row["inventory_number"]))
+    assert rows == sorted(rows, key=lambda row: row["inventory_number"])
     machine_id = machine_ids["7"]
     full = client.get(f"/api/machines/{machine_id}", headers=auth_headers)
     assert full.json() == next(row for row in rows if row["id"] == machine_id)

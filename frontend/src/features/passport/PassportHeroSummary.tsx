@@ -34,7 +34,7 @@ export function PassportHeroSummary({ machineId, passport }: Props) {
         <h2 id="passport-machine-title">{t('passport.machineNumber', { number: machine.inventory_number })}</h2>
         <strong>{machine.name}</strong>
         {machineDetails && <p>{machineDetails}</p>}
-        {machine.pressure_bar ? <small>{t('machines.pressure')}: {machine.pressure_bar} bar</small> : null}
+        {machine.category_definition?.capabilities?.includes('HAS_PRESSURE') && machine.pressure_bar != null ? <small>{t('machines.pressure')}: {machine.pressure_bar} bar</small> : null}
       </div>
       <dl className="passport-v2-state">
         <div><dt>{t('common.status')}</dt><dd><span className="badge">{statusText(t, machine.status)}</span></dd></div>

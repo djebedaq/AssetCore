@@ -40,7 +40,7 @@ LOCATIONS = [
 ]
 
 # Проверен начален регистър, възстановен от протоколи, снимки и наличната база.
-# Системата засега съдържа САМО HPWJ машини.
+# Провереният начален регистър съдържа само HPWJ машини.
 MACHINES = [
     {"inventory_number": "4", "brand": "CombiJet", "model": "JE60-500", "pressure_bar": 500, "serial_number": None},
     {"inventory_number": "5", "brand": "CombiJet", "model": "JE60-500", "pressure_bar": 500, "serial_number": None},
@@ -187,6 +187,9 @@ def _seed_verified_registry(db: Session) -> None:
         )
         db.add(hpwj_category)
         db.flush()
+    hpwj_category.capabilities = [
+        "HAS_PRESSURE", "HAS_PARTS_CATALOG", "HAS_REPAIR_WORKFLOW", "HAS_TRANSFER_WORKFLOW"
+    ]
     existing = {m.inventory_number: m for m in db.scalars(select(Machine)).all()}
     for item in MACHINES:
         machine = existing.get(item["inventory_number"])

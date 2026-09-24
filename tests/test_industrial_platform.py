@@ -29,6 +29,11 @@ from sqlalchemy import func, select
 def test_machine_crud_preserves_unknown_serial_and_records_history(
     client, auth_headers, session_factory
 ):
+    category = client.post(
+        "/api/categories", headers=auth_headers,
+        json={"code": "TEST_ONLY_CATEGORY", "name_bg": "Тестова категория"},
+    )
+    assert category.status_code == 201, category.text
     created = client.post(
         "/api/machines",
         headers=auth_headers,
@@ -37,7 +42,6 @@ def test_machine_crud_preserves_unknown_serial_and_records_history(
             "name": "test-only asset",
             "category": "TEST_ONLY_CATEGORY",
             "brand": "test-only brand",
-            "pressure_bar": 0,
             "serial_number": None,
             "status": "READY",
         },

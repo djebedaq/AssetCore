@@ -309,13 +309,13 @@ class Machine(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     inventory_number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
-    category: Mapped[str] = mapped_column(String(120), default="HPWJ")
+    category: Mapped[str] = mapped_column(String(120))
     category_id: Mapped[int | None] = mapped_column(
         ForeignKey("asset_categories.id"), nullable=True, index=True
     )
     brand: Mapped[str] = mapped_column(String(120))
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    pressure_bar: Mapped[int] = mapped_column(Integer, default=500)
+    pressure_bar: Mapped[int | None] = mapped_column(Integer, nullable=True)
     serial_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(String(80), default=MachineStatus.READY.value)
     location_id: Mapped[int | None] = mapped_column(ForeignKey("locations.id"), nullable=True)
@@ -875,6 +875,9 @@ class AssetCategory(Base):
     document_types: Mapped[list | None] = mapped_column(JSON, nullable=True)
     checklists: Mapped[list | None] = mapped_column(JSON, nullable=True)
     status_codes: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    capabilities: Mapped[list] = mapped_column(
+        JSON, default=list, server_default=text("'[]'"), nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=text("true"), nullable=False
     )

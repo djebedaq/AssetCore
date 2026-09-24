@@ -184,11 +184,11 @@ class LocationOut(BaseModel):
 class MachineBase(BaseModel):
     inventory_number: str
     name: str
-    category: str = "HPWJ"
+    category: str | None = None
     category_id: int | None = None
     brand: str
     model: str | None = None
-    pressure_bar: int = 500
+    pressure_bar: int | None = None
     serial_number: str | None = None
     status: MachineStatus = MachineStatus.READY
     location_id: int | None = None
@@ -216,6 +216,7 @@ class MachineCreate(MachineBase):
 
 
 class MachineUpdate(BaseModel):
+    category: str | None = None
     category_id: int | None = None
     name: str | None = None
     brand: str | None = None
@@ -644,7 +645,7 @@ class AvailabilityOut(BaseModel):
     machine_id: int
     machine_number: str
     brand: str
-    pressure_bar: int
+    pressure_bar: int | None
     status: MachineStatus | str
     status_label: str
     location: str | None = None
@@ -665,7 +666,7 @@ class BatchTransferOut(BaseModel):
     machine_number: str
     machine_name: str
     brand: str
-    pressure_bar: int
+    pressure_bar: int | None
     protocol_number: str
     is_active: bool
     issue_status: str = "COMPLETED"
