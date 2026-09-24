@@ -286,6 +286,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                     "name_bg": machine.category_definition.name_bg,
                     "name_en": machine.category_definition.name_en,
                     "name_ru": machine.category_definition.name_ru,
+                    "capabilities": machine.category_definition.capabilities,
                 }
                 if machine.category_definition
                 else None

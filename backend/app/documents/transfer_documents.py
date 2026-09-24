@@ -238,7 +238,7 @@ def _identity_rows(transfer: TransferProtocol, operation: str, language: str) ->
     ) or transfer.created_at
     return [
         (t["date"], date_value.strftime("%d.%m.%Y")),
-        (t["equipment"], transfer.machine.category or "HPWJ"),
+        (t["equipment"], transfer.machine.category or ""),
         (t["model"], _machine_model(transfer)),
         (t["inventory"], f"№ {transfer.machine.inventory_number}"),
         (t["serial"], transfer.machine.serial_number or ""),
@@ -538,14 +538,14 @@ def _protocol_template_values(
     values: dict[str, object] = {
         "DOCUMENT_NUMBER": f"{transfer.protocol_number}-R" if operation == "return" else transfer.protocol_number,
         "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
-        "EQUIPMENT_TYPE": transfer.machine.category or "HPWJ",
+        "EQUIPMENT_TYPE": transfer.machine.category or "",
         "MACHINE_NAME": transfer.machine.name,
         "MACHINE_NUMBER": transfer.machine.inventory_number,
         "BRAND": transfer.machine.brand,
         "MODEL": transfer.machine.model or "",
         "MODEL_DISPLAY": _machine_model(transfer),
         "SERIAL_NUMBER": transfer.machine.serial_number or "",
-        "PRESSURE_BAR": transfer.machine.pressure_bar,
+        "PRESSURE_BAR": transfer.machine.pressure_bar if transfer.machine.pressure_bar is not None else "",
         "BATCH_REFERENCE": batch_reference,
         "CONDITION_LABEL": t["overall_condition"],
         "CONDITION_TEXT": transfer.return_condition_text if operation == "return" else transfer.condition_text,

@@ -8,6 +8,7 @@ from datetime import datetime
 
 import pytest
 from app.models import (
+    AssetCategory,
     AuditLog,
     DocumentParticipant,
     DocumentSignature,
@@ -28,8 +29,12 @@ from test_bulk_transfers import complete_signing, return_payload
 @pytest.fixture()
 def qa_machines(session_factory):
     with session_factory() as db:
+        category = AssetCategory(code="QA_LIFECYCLE", name_bg="Тестови активи")
+        db.add(category)
+        db.flush()
         machines = [Machine(inventory_number=f"QA-LIFECYCLE-{letter}",
-                            name=f"Synthetic QA machine {letter}", brand="SYNTHETIC QA",
+                            name=f"Synthetic QA machine {letter}", category=category.code,
+                            category_id=category.id, brand="SYNTHETIC QA",
                             status="READY", location_id=1) for letter in "ABCDEFGH"]
         db.add_all(machines)
         db.commit()

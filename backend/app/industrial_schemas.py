@@ -27,6 +27,17 @@ class CategoryCreate(BaseModel):
     document_types: list[str] | None = None
     checklists: list[dict] | None = None
     status_codes: list[str] | None = None
+    capabilities: list[str] = Field(default_factory=list)
+
+    @field_validator("capabilities")
+    @classmethod
+    def validate_capabilities(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)) or any(
+            not code or len(code) > 80 or not all(c.isupper() or c.isdigit() or c == "_" for c in code)
+            for code in value
+        ):
+            raise ValueError("Невалиден списък с възможности на категорията.")
+        return value
 
 
 class CategoryOut(CategoryCreate):

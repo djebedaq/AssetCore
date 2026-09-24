@@ -91,7 +91,7 @@ export type OfficialDocument = {
 }
 export type Machine = {
   id: number; inventory_number: string; name: string; category?: string; brand: string;
-  model?: string | null; pressure_bar?: number; serial_number?: string | null; status: string;
+  model?: string | null; pressure_bar?: number | null; serial_number?: string | null; status: string;
   location_id?: number | null; location?: Location | null; notes?: string | null;
   created_at: string; updated_at: string
   category_id?: number | null; asset_type?: string | null; subtype?: string | null;
@@ -114,7 +114,7 @@ export type ProtocolDocument = {
 }
 
 export type TransferAvailability = {
-  machine_id: number; machine_number: string; brand: string; pressure_bar: number; status: string;
+  machine_id: number; machine_number: string; brand: string; pressure_bar: number | null; status: string;
   status_label?: string;
   location?: string | null; available: boolean; returnable: boolean; operation_status?: string | null;
   unavailable_reason?: string | null;
@@ -157,7 +157,7 @@ export type BatchDetails = BatchProgress & {
   zip_download_endpoint: string;
   transfers: Array<{
     transfer_id: number; machine_id: number; machine_number: string; machine_name: string; brand: string;
-    pressure_bar: number; protocol_number: string; is_active: boolean; issue_status: string; return_status?: string | null; issued_at?: string | null;
+    pressure_bar: number | null; protocol_number: string; is_active: boolean; issue_status: string; return_status?: string | null; issued_at?: string | null;
     returned_at?: string | null; current_status: string; location?: string | null;
     documents: ProtocolDocument[]; issue_documents: ProtocolDocument[]; return_documents: ProtocolDocument[]
   }>
@@ -180,7 +180,7 @@ export type AssetCategory = {
   id: number; code: string; name_bg: string; name_en?: string | null; name_ru?: string | null;
   description?: string | null; icon?: string | null; validation_rules?: Record<string, unknown> | null;
   document_types?: string[] | null; checklists?: Array<Record<string, unknown>> | null; status_codes?: string[] | null;
-  is_active: boolean; created_at: string; fields: AssetCategoryField[]
+  is_active: boolean; created_at: string; fields: AssetCategoryField[]; capabilities?: string[]
 }
 
 export type StoredAttachment = {

@@ -6,7 +6,7 @@ export const passport: MachinePassport = {
   machine: {
     id: 13, inventory_number: '13', name: 'Test-only machine', brand: 'Falch', model: 'Test model', pressure_bar: 500,
     serial_number: 'TEST-SERIAL', status: 'REPAIR', location_id: 1, location: { id: 1, name: 'Test workshop', is_active: true },
-    category: 'HPWJ', category_definition: { id: 1, code: 'HPWJ', name_bg: 'Водоструйни машини', name_en: 'Water-jet machines', name_ru: 'Водоструйные машины', is_active: true, created_at: '2026-09-01T00:00:00Z', fields: [] },
+    category: 'HPWJ', category_definition: { id: 1, code: 'HPWJ', name_bg: 'Водоструйни машини', name_en: 'Water-jet machines', name_ru: 'Водоструйные машины', is_active: true, created_at: '2026-09-01T00:00:00Z', fields: [], capabilities: ['HAS_PRESSURE'] },
     notes: null, asset_type: 'Test asset', subtype: 'Test subtype', manufacturer: 'Test manufacturer', manufacture_year: 2024,
     commissioning_date: '2025-01-02T00:00:00Z', ownership: 'Test ownership', department: 'Test department', responsible_person: 'Test owner',
     capacity: 'Test capacity', dimensions: 'Test dimensions', is_active: true, created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z',

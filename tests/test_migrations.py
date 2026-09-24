@@ -8,15 +8,58 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from app.models import AuthenticationThrottle, AuthSession, Repair, RepairParticipant, User
 from app.official_documents.integrity import validate_official_document_integrity
 from app.settings import Settings, settings
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import Integer, create_engine, inspect, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_generic_asset_migration_upgrades_existing_0023_shape(tmp_path: Path):
+    database_path = tmp_path / "asset-0023.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260923_0023")
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with engine.begin() as connection:
+        operations = Operations(MigrationContext.configure(connection))
+        with operations.batch_alter_table("machines") as batch:
+            batch.alter_column("pressure_bar", existing_type=Integer(),
+                               nullable=False)
+        operations.drop_column("asset_categories", "capabilities")
+        connection.execute(text(
+            "INSERT INTO asset_categories (id, code, name_bg, is_active, created_at) "
+            "VALUES (100, 'HPWJ', 'HPWJ', 1, CURRENT_TIMESTAMP), "
+            "(101, 'QA_GENERIC_ASSET', 'QA', 1, CURRENT_TIMESTAMP)"
+        ))
+        connection.execute(text(
+            "INSERT INTO machines (id, inventory_number, name, category, category_id, "
+            "brand, pressure_bar, status, is_active, created_at, updated_at) VALUES "
+            "(100, 'QA-OLD-HPWJ', 'QA HPWJ', 'HPWJ', NULL, 'QA', 500, 'READY', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
+            "(101, 'QA-OLD-GENERIC', 'QA asset', 'HPWJ', 101, 'QA', 700, 'READY', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+    engine.dispose()
+    _run_sqlite_revision(database_path, command.upgrade, "head")
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(
+            "SELECT id, category, category_id, pressure_bar FROM machines ORDER BY id"
+        ).fetchall()
+        assert rows == [
+            (100, "HPWJ", 100, 500),
+            (101, "QA_GENERIC_ASSET", 101, 700),
+        ]
+        assert connection.execute("SELECT capabilities FROM asset_categories WHERE id = 100").fetchone()[0]
+        pressure = next(row for row in connection.execute("PRAGMA table_info(machines)")
+                        if row[1] == "pressure_bar")
+        assert pressure[3] == 0  # nullable
+        connection.execute("UPDATE machines SET pressure_bar = NULL WHERE id = 101")
+        connection.commit()
+    with pytest.raises(RuntimeError, match="invented values"):
+        _run_sqlite_revision(database_path, command.downgrade, "20260923_0023")
 
 
 def _migration_config() -> Config:

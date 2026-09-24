@@ -15,6 +15,7 @@ from ..permissions import is_observer
 from ..schemas import MachineCreate, MachineUpdate
 from ..settings import settings
 from ..workflow import add_machine_event, ensure_machine_transition
+from .native_fields import NativeFieldCapabilityError, validate_native_asset_fields
 from .queries import _active_transfer
 from .serializers import _limited_machine
 
@@ -23,7 +24,7 @@ def machines(user: User, db: Session) -> list[Machine] | list[dict]:
     items = db.scalars(
         select(Machine)
         .options(joinedload(Machine.location))
-        .order_by(Machine.pressure_bar.desc(), Machine.inventory_number)
+        .order_by(Machine.inventory_number)
     ).all()
     return [_limited_machine(item) for item in items] if is_observer(user) else items
 
@@ -40,12 +41,11 @@ def machine(machine_id: int, user: User, db: Session) -> Machine | dict:
 def create_machine(data: MachineCreate, user: User, db: Session) -> Machine:
     if db.scalar(select(Machine).where(Machine.inventory_number == data.inventory_number)):
         raise HTTPException(409, "Дублиран инвентарен номер")
-    category = db.get(AssetCategory, data.category_id) if data.category_id is not None else None
-    if data.category_id is not None and category is None:
-        raise HTTPException(404, "Категорията не е намерена")
+    category = _resolve_category(db, data.category_id, data.category)
     values = data.model_dump(mode="json")
-    if category is not None:
-        values["category"] = category.code
+    values["category_id"] = category.id
+    values["category"] = category.code
+    _require_native_fields(category, pressure_bar=values["pressure_bar"])
     item = Machine(**values)
     db.add(item)
     db.flush()
@@ -70,13 +70,24 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
     if not item:
         raise HTTPException(404, "Машината не е намерена")
     changes = data.model_dump(exclude_unset=True, mode="json")
-    category = (
-        db.get(AssetCategory, changes["category_id"])
-        if changes.get("category_id") is not None
-        else None
-    )
-    if changes.get("category_id") is not None and category is None:
-        raise HTTPException(404, "Категорията не е намерена")
+    category = None
+    if "category_id" in changes or "category" in changes:
+        category = _resolve_category(
+            db, changes.get("category_id"), changes.get("category"),
+            current=item.category_definition,
+        )
+        changes["category_id"] = category.id
+        changes["category"] = category.code
+    resolved_category = category or item.category_definition
+    if resolved_category is not None:
+        _require_native_fields(
+            resolved_category,
+            pressure_bar=changes.get("pressure_bar", item.pressure_bar),
+        )
+    elif "pressure_bar" in changes:
+        raise HTTPException(
+            422, detail={"code": "category_required", "message": "Изберете съществуваща категория."},
+        )
     active = _active_transfer(db, machine_id)
     if "status" in changes:
         requested_status = changes["status"]
@@ -109,8 +120,6 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
     before = {"status": item.status, "location_id": item.location_id}
     for key, value in changes.items():
         setattr(item, key, value)
-    if category is not None:
-        item.category = category.code
     item.updated_at = utcnow()
     add_machine_event(
         db,
@@ -135,6 +144,35 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
     return db.scalar(
         select(Machine).options(joinedload(Machine.location)).where(Machine.id == item.id)
     )
+
+
+def _resolve_category(
+    db: Session, category_id: int | None, code: str | None,
+    *, current: AssetCategory | None = None,
+) -> AssetCategory:
+    """Resolve legacy code writes and reject contradictory category identities."""
+    if category_id is not None:
+        category = db.get(AssetCategory, category_id)
+        if category is None:
+            raise HTTPException(404, "Категорията не е намерена")
+    elif code:
+        category = db.scalar(select(AssetCategory).where(AssetCategory.code == code))
+    else:
+        category = current
+    if category is None:
+        raise HTTPException(422, detail={"code": "category_required", "message": "Изберете съществуваща категория."})
+    if code is not None and code != category.code:
+        raise HTTPException(409, detail={"code": "category_mismatch", "message": "Категорията не съответства на category_id."})
+    return category
+
+
+def _require_native_fields(category: AssetCategory, *, pressure_bar: int | None) -> None:
+    try:
+        validate_native_asset_fields(category, pressure_bar=pressure_bar)
+    except NativeFieldCapabilityError as exc:
+        raise HTTPException(
+            422, detail={"code": exc.code, "message": str(exc)},
+        ) from exc
 
 
 def qr(machine_id: int, request: Request, _: User, db: Session) -> Response:

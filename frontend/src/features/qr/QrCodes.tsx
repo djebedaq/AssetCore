@@ -14,7 +14,7 @@ export default function QrCodes() {
       {machines.map((machine) => (
         <div className="qr-card" key={machine.id}>
           <AuthenticatedImage src={`/machines/${machine.id}/qr`} alt={t('qr.alt', { number: machine.inventory_number })} />
-          <strong>{machine.name}</strong><span>{machine.brand} · {machine.pressure_bar} bar</span>
+          <strong>{machine.name}</strong><span>{machine.brand}{machine.pressure_bar != null ? ` · ${machine.pressure_bar} bar` : ''}</span>
         </div>
       ))}
       {!machines.length && <div className="empty-state">{t('qr.empty')}</div>}

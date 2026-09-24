@@ -1375,6 +1375,13 @@
             }
           ],
           "title": "Status Codes"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "title": "Capabilities"
         }
       },
       "type": "object",
@@ -1539,9 +1546,15 @@
           "title": "Name"
         },
         "category": {
-          "type": "string",
-          "title": "Category",
-          "default": "HPWJ"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Category"
         },
         "category_id": {
           "anyOf": [
@@ -1570,9 +1583,15 @@
           "title": "Model"
         },
         "pressure_bar": {
-          "type": "integer",
-          "title": "Pressure Bar",
-          "default": 500
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pressure Bar"
         },
         "serial_number": {
           "anyOf": [
@@ -1648,8 +1667,8 @@
           "anyOf": [
             {
               "type": "integer",
-              "maximum": 2200,
-              "minimum": 1800
+              "maximum": 2200.0,
+              "minimum": 1800.0
             },
             {
               "type": "null"
@@ -1758,9 +1777,15 @@
           "title": "Name"
         },
         "category": {
-          "type": "string",
-          "title": "Category",
-          "default": "HPWJ"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Category"
         },
         "category_id": {
           "anyOf": [
@@ -1789,9 +1814,15 @@
           "title": "Model"
         },
         "pressure_bar": {
-          "type": "integer",
-          "title": "Pressure Bar",
-          "default": 500
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pressure Bar"
         },
         "serial_number": {
           "anyOf": [
@@ -1874,8 +1905,8 @@
           "anyOf": [
             {
               "type": "integer",
-              "maximum": 2200,
-              "minimum": 1800
+              "maximum": 2200.0,
+              "minimum": 1800.0
             },
             {
               "type": "null"
@@ -1994,6 +2025,17 @@
     },
     "MachineUpdate": {
       "properties": {
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Category"
+        },
         "category_id": {
           "anyOf": [
             {
@@ -2129,8 +2171,8 @@
           "anyOf": [
             {
               "type": "integer",
-              "maximum": 2200,
-              "minimum": 1800
+              "maximum": 2200.0,
+              "minimum": 1800.0
             },
             {
               "type": "null"

@@ -15,11 +15,10 @@ const MACHINE_STATUS_CODES = [
 type MachineForm = {
   inventory_number: string
   name: string
-  category: string
   brand: string
   model: string
   serial_number: string
-  pressure_bar: number
+  pressure_bar: number | ''
   status: string
   location_id: number | ''
   notes: string
@@ -49,11 +48,10 @@ export default function MachineModal({ machine, locations, departments, categori
   const [form, setForm] = useState<MachineForm>({
     inventory_number: machine?.inventory_number || '',
     name: machine?.name || '',
-    category: machine?.category || 'HPWJ',
     brand: machine?.brand || '',
     model: machine?.model || '',
     serial_number: machine?.serial_number || '',
-    pressure_bar: machine?.pressure_bar || 500,
+    pressure_bar: machine?.pressure_bar ?? '',
     status: machine?.status || 'READY',
     location_id: machine?.location_id || locations.find((item) => item.is_active)?.id || '',
     notes: machine?.notes || '',
@@ -72,14 +70,18 @@ export default function MachineModal({ machine, locations, departments, categori
   })
   const [error, setError] = useState('')
   const canEdit = !machine ? hasPermission('assets.create') : hasPermission('assets.edit')
+  const selectedCategory = categories.find((item) => item.id === form.category_id)
+  const hasPressure = selectedCategory?.capabilities?.includes('HAS_PRESSURE') ?? false
 
   async function save(event: FormEvent) {
     event.preventDefault()
     setError('')
     try {
+      const { pressure_bar, ...identity } = form
+      const includePressure = !machine || hasPressure || form.category_id !== machine.category_id
       await api(machine ? `/machines/${machine.id}` : '/machines', {
         method: machine ? 'PATCH' : 'POST',
-        body: JSON.stringify({ ...form, category_id: form.category_id || null, location_id: form.location_id || null, manufacture_year: form.manufacture_year || null, commissioning_date: form.commissioning_date || null }),
+        body: JSON.stringify({ ...identity, category_id: form.category_id || null, ...(includePressure ? { pressure_bar: hasPressure && pressure_bar !== '' ? pressure_bar : null } : {}), location_id: form.location_id || null, manufacture_year: form.manufacture_year || null, commissioning_date: form.commissioning_date || null }),
       })
       onSaved()
     } catch {
@@ -101,11 +103,11 @@ export default function MachineModal({ machine, locations, departments, categori
         <form onSubmit={save} className="form-grid">
           <label>{t('machines.inventoryNumber')}<input required disabled={Boolean(machine)} value={form.inventory_number} onChange={(event) => field('inventory_number', event.target.value)} /></label>
           <label>{t('machines.name')}<input required disabled={!canEdit} value={form.name} onChange={(event) => field('name', event.target.value)} /></label>
-          <label>{t('machines.category')}<select required disabled={!canEdit} value={form.category_id} onChange={(event) => { const selectedCategory = categories.find((item) => item.id === Number(event.target.value)); field('category_id', event.target.value ? Number(event.target.value) : ''); if (selectedCategory) field('category', selectedCategory.code) }}><option value="">{t('common.notSpecified')}</option>{categories.map((category) => <option value={category.id} key={category.id}>{category[`name_${locale}` as 'name_bg'] || category.name_bg}</option>)}</select></label>
+          <label>{t('machines.category')}<select required disabled={!canEdit} value={form.category_id} onChange={(event) => { const categoryId = event.target.value ? Number(event.target.value) : ''; setForm((current) => ({ ...current, category_id: categoryId, pressure_bar: categories.find((item) => item.id === categoryId)?.capabilities?.includes('HAS_PRESSURE') ? current.pressure_bar : '' })) }}><option value="">{t('common.notSpecified')}</option>{categories.map((category) => <option value={category.id} key={category.id}>{category[`name_${locale}` as 'name_bg'] || category.name_bg}</option>)}</select></label>
           <label>{t('machines.brand')}<input required disabled={!canEdit} value={form.brand} onChange={(event) => field('brand', event.target.value)} /></label>
           <label>{t('machines.model')}<input disabled={!canEdit} value={form.model} onChange={(event) => field('model', event.target.value)} /></label>
           <label>{t('machines.serialNumber')}<input disabled={!canEdit} value={form.serial_number} onChange={(event) => field('serial_number', event.target.value)} /></label>
-          <label>{t('machines.pressure')}<input disabled={!canEdit} type="number" min="0" value={form.pressure_bar} onChange={(event) => field('pressure_bar', Number(event.target.value))} /></label>
+          {hasPressure && <label>{t('machines.pressure')}<input disabled={!canEdit} type="number" min="0" value={form.pressure_bar} onChange={(event) => field('pressure_bar', event.target.value === '' ? '' : Number(event.target.value))} /></label>}
           <label>{t('common.status')}<select disabled={!canEdit} value={form.status} onChange={(event) => field('status', event.target.value)}>{MACHINE_STATUS_CODES.map((status) => <option key={status} value={status}>{statusText(t, status)}</option>)}</select></label>
           <label>{t('common.location')}<select disabled={!canEdit} value={form.location_id} onChange={(event) => field('location_id', event.target.value ? Number(event.target.value) : '')}><option value="">{t('common.notSpecified')}</option>{locations.map((location) => <option disabled={!location.is_active && location.id !== form.location_id} key={location.id} value={location.id}>{location.name}{!location.is_active ? ` · ${t('admin.inactive')}` : ''}</option>)}</select></label>
           <label>{t('passport.manufacturer')}<input disabled={!canEdit} value={form.manufacturer} onChange={(event) => field('manufacturer', event.target.value)} /></label>

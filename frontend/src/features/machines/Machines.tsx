@@ -69,7 +69,7 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
               <tr key={machine.id}>
                 <td><strong>{machine.name}</strong><small>{t('machines.inventoryPrefix', { number: machine.inventory_number })}</small></td>
                 <td>{machine.brand}<small>{machine.model}</small></td>
-                {showTechnicalDetails && <td>{machine.pressure_bar} bar</td>}
+                {showTechnicalDetails && <td>{categories.find((item) => item.id === machine.category_id || item.code === machine.category)?.capabilities?.includes('HAS_PRESSURE') && machine.pressure_bar != null ? `${machine.pressure_bar} bar` : t('common.notSpecified')}</td>}
                 <td><span className="badge">{statusText(t, machine.status)}</span></td>
                 <td>{machine.location?.name || t('common.notSpecified')}</td>
                 <td><button className="link" onClick={() => onOpenPassport ? onOpenPassport(machine.id) : setPassportId(machine.id)}>{t('passport.tab.passport')}</button>{hasPermission('assets.edit') && <button className="link" onClick={() => setSelected(machine)}>{t('common.details')}</button>}</td>

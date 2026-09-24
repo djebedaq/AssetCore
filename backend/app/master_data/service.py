@@ -45,6 +45,7 @@ def list_categories(_: User, db: Session) -> list[dict]:
             "document_types": category.document_types,
             "checklists": category.checklists,
             "status_codes": category.status_codes,
+            "capabilities": category.capabilities,
             "is_active": category.is_active,
             "created_at": category.created_at,
             "fields": [
