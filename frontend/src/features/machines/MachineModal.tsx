@@ -4,7 +4,13 @@ import { api } from '../../api'
 import AuthenticatedImage from '../../AuthenticatedImage'
 import { statusText, useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
-import type { AssetCategory, Department, Location, Machine } from '../../types'
+import type { Department, Location, Machine, RegistryCategory } from '../../types'
+
+type FormCategory = Omit<RegistryCategory, 'asset_count' | 'has_pressure'> & {
+  asset_count?: number; has_pressure?: boolean; capabilities?: string[]
+}
+
+const supportsPressure = (category?: FormCategory) => category?.has_pressure ?? category?.capabilities?.includes('HAS_PRESSURE') ?? false
 
 const MACHINE_STATUS_CODES = [
   'READY',
@@ -36,11 +42,12 @@ type MachineForm = {
   is_active: boolean
 }
 
-export default function MachineModal({ machine, locations, departments, categories, onClose, onSaved }: {
+export default function MachineModal({ machine, initialCategoryId, locations, departments, categories, onClose, onSaved }: {
   machine?: Machine
+  initialCategoryId?: number
   locations: Location[]
   departments: Department[]
-  categories: AssetCategory[]
+  categories: FormCategory[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -55,7 +62,7 @@ export default function MachineModal({ machine, locations, departments, categori
     status: machine?.status || 'READY',
     location_id: machine?.location_id || locations.find((item) => item.is_active)?.id || '',
     notes: machine?.notes || '',
-    category_id: machine?.category_id || categories.find((item) => item.code === machine?.category)?.id || '',
+    category_id: machine?.category_id || categories.find((item) => item.code === machine?.category)?.id || initialCategoryId || '',
     asset_type: machine?.asset_type || '',
     subtype: machine?.subtype || '',
     manufacturer: machine?.manufacturer || '',
@@ -71,7 +78,7 @@ export default function MachineModal({ machine, locations, departments, categori
   const [error, setError] = useState('')
   const canEdit = !machine ? hasPermission('assets.create') : hasPermission('assets.edit')
   const selectedCategory = categories.find((item) => item.id === form.category_id)
-  const hasPressure = selectedCategory?.capabilities?.includes('HAS_PRESSURE') ?? false
+  const hasPressure = supportsPressure(selectedCategory)
 
   async function save(event: FormEvent) {
     event.preventDefault()
@@ -103,7 +110,7 @@ export default function MachineModal({ machine, locations, departments, categori
         <form onSubmit={save} className="form-grid">
           <label>{t('machines.inventoryNumber')}<input required disabled={Boolean(machine)} value={form.inventory_number} onChange={(event) => field('inventory_number', event.target.value)} /></label>
           <label>{t('machines.name')}<input required disabled={!canEdit} value={form.name} onChange={(event) => field('name', event.target.value)} /></label>
-          <label>{t('machines.category')}<select required disabled={!canEdit} value={form.category_id} onChange={(event) => { const categoryId = event.target.value ? Number(event.target.value) : ''; setForm((current) => ({ ...current, category_id: categoryId, pressure_bar: categories.find((item) => item.id === categoryId)?.capabilities?.includes('HAS_PRESSURE') ? current.pressure_bar : '' })) }}><option value="">{t('common.notSpecified')}</option>{categories.map((category) => <option value={category.id} key={category.id}>{category[`name_${locale}` as 'name_bg'] || category.name_bg}</option>)}</select></label>
+          <label>{t('machines.category')}<select required disabled={!canEdit} value={form.category_id} onChange={(event) => { const categoryId = event.target.value ? Number(event.target.value) : ''; setForm((current) => ({ ...current, category_id: categoryId, pressure_bar: supportsPressure(categories.find((item) => item.id === categoryId)) ? current.pressure_bar : '' })) }}><option value="">{t('machines.selectCategory')}</option>{categories.map((category) => <option value={category.id} key={category.id} disabled={!category.is_active && category.id !== form.category_id}>{category[`name_${locale}` as 'name_bg'] || category.name_bg}{!category.is_active ? ` · ${t('admin.inactive')}` : ''}</option>)}</select></label>
           <label>{t('machines.brand')}<input required disabled={!canEdit} value={form.brand} onChange={(event) => field('brand', event.target.value)} /></label>
           <label>{t('machines.model')}<input disabled={!canEdit} value={form.model} onChange={(event) => field('model', event.target.value)} /></label>
           <label>{t('machines.serialNumber')}<input disabled={!canEdit} value={form.serial_number} onChange={(event) => field('serial_number', event.target.value)} /></label>

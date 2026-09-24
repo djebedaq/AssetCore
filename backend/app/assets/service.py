@@ -6,7 +6,7 @@ import io
 
 import qrcode
 from fastapi import HTTPException, Request, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from ..audit import add_audit_log
@@ -20,13 +20,43 @@ from .queries import _active_transfer
 from .serializers import _limited_machine
 
 
-def machines(user: User, db: Session) -> list[Machine] | list[dict]:
-    items = db.scalars(
-        select(Machine)
-        .options(joinedload(Machine.location))
-        .order_by(Machine.inventory_number)
-    ).all()
+def machines(user: User, db: Session, category_id: int | None = None) -> list[Machine] | list[dict]:
+    if category_id is not None and db.get(AssetCategory, category_id) is None:
+        raise HTTPException(404, detail={"code": "category_not_found", "message": "Категорията не е намерена."})
+    statement = select(Machine).options(joinedload(Machine.location))
+    if category_id is not None:
+        statement = statement.where(Machine.category_id == category_id)
+    items = db.scalars(statement.order_by(Machine.inventory_number)).all()
     return [_limited_machine(item) for item in items] if is_observer(user) else items
+
+
+def category_navigation(user: User, db: Session) -> list[dict]:
+    """One grouped count for the same unrestricted machine population as /machines.
+
+    Inactive categories with assets remain visible; empty inactive categories do not.
+    Names are sorted in Bulgarian with code and id tie-breakers for stable navigation.
+    """
+    rows = db.execute(
+        select(AssetCategory, func.count(Machine.id))
+        .outerjoin(Machine, Machine.category_id == AssetCategory.id)
+        .group_by(AssetCategory.id)
+    ).all()
+    return [
+        {
+            "id": category.id,
+            "code": category.code,
+            "name_bg": category.name_bg,
+            "name_en": category.name_en,
+            "name_ru": category.name_ru,
+            "is_active": category.is_active,
+            "asset_count": count,
+            "has_pressure": "HAS_PRESSURE" in (category.capabilities or []),
+        }
+        for category, count in sorted(
+            rows, key=lambda row: (row[0].name_bg.casefold(), row[0].code, row[0].id)
+        )
+        if category.is_active or count > 0
+    ]
 
 
 def machine(machine_id: int, user: User, db: Session) -> Machine | dict:
@@ -163,6 +193,8 @@ def _resolve_category(
         raise HTTPException(422, detail={"code": "category_required", "message": "Изберете съществуваща категория."})
     if code is not None and code != category.code:
         raise HTTPException(409, detail={"code": "category_mismatch", "message": "Категорията не съответства на category_id."})
+    if not category.is_active and (current is None or current.id != category.id):
+        raise HTTPException(422, detail={"code": "category_inactive", "message": "Категорията е неактивна."})
     return category
 
 
