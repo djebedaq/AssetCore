@@ -183,6 +183,11 @@ export type AssetCategory = {
   is_active: boolean; created_at: string; fields: AssetCategoryField[]; capabilities?: string[]
 }
 
+export type RegistryCategory = {
+  id: number; code: string; name_bg: string; name_en?: string | null; name_ru?: string | null;
+  is_active: boolean; asset_count: number; has_pressure: boolean
+}
+
 export type StoredAttachment = {
   id: number; filename: string; media_type: string; sha256: string; created_at: string; request_line_id?: number | null;
   description?: string | null; caption?: string | null; kind?: string | null; stage?: string | null;

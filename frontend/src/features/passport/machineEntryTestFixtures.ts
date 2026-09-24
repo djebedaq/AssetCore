@@ -46,6 +46,8 @@ export function entryApi(options: {
     if (path === '/api/users/me/profile') return json({ ...user, profile_status: 'PROFILE_COMPLETE' })
     if (path === '/api/emergency-access/status') return json({ active: false })
     if (path === '/api/dashboard') return json({ total_machines: 2, ready: 2, in_use: 0, open_repairs: 0, pending_parts: 0, status_breakdown: {}, recent_repairs: [] })
+    if (path === '/api/machines/category-navigation') return json([{ id: 1, code: 'HPWJ', name_bg: 'Водоструйни машини', name_en: 'Water jets', name_ru: 'Водоструйные машины', is_active: true, asset_count: 2, has_pressure: true }])
+    if (path === '/api/machines?category_id=1') return json([machinePassport(13).machine, machinePassport(9).machine])
     if (path === '/api/machines') return json([machinePassport(13).machine, machinePassport(9).machine])
     const match = /^\/api\/machines\/(\d+)\/passport$/.exec(path)
     if (match) {

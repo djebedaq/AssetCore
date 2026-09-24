@@ -10,6 +10,8 @@ def _limited_machine(item: Machine) -> dict:
         "id": item.id,
         "inventory_number": item.inventory_number,
         "name": item.name,
+        "category": item.category,
+        "category_id": item.category_id,
         "brand": item.brand,
         "model": item.model,
         "status": item.status,

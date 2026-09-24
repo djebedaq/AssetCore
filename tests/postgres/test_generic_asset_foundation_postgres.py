@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from alembic import command
 from alembic.config import Config
-from app.assets.service import create_machine, update_machine
+from app.assets.service import category_navigation, create_machine, machines, update_machine
 from app.models import AssetCategory, Machine, User
 from app.schemas import MachineCreate, MachineUpdate
 from fastapi import HTTPException
@@ -14,6 +14,28 @@ from test_concurrency import ROOT
 from test_concurrency import pg_factory as pg_factory  # noqa: F811
 
 pytestmark = pytest.mark.postgres
+
+
+def test_pg_registry_counts_and_canonical_filter(pg_factory):
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.email == "admin@assetcore.local"))
+        assert actor is not None
+        category = AssetCategory(code="QA_PG_REGISTRY", name_bg="Тестова категория")
+        db.add(category)
+        db.flush()
+        db.add_all([
+            Machine(
+                inventory_number=f"QA-PG-REGISTRY-{index}", name=f"QA asset {index}",
+                brand="QA", category=category.code, category_id=category.id,
+            ) for index in range(3)
+        ])
+        db.commit()
+
+        navigation = {item["code"]: item for item in category_navigation(actor, db)}
+        assert navigation["HPWJ"]["asset_count"] == 19
+        assert navigation[category.code]["asset_count"] == 3
+        assert len(machines(actor, db, category_id=category.id)) == 3
+        assert len(machines(actor, db)) == 22
 
 
 def test_pg_existing_0023_asset_schema_upgrades_without_losing_hpwj(pg_factory):

@@ -23,9 +23,17 @@ require_repair_operator = require_permission(Permission.REPAIRS_EDIT)
 
 @legacy_router.get("/machines", response_model=None)
 def machines(
+    category_id: int | None = Query(default=None, ge=1),
     user: User = Depends(require_asset_viewer), db: Session = Depends(get_db)
 ) -> list[Machine] | list[dict]:
-    return service.machines(user=user, db=db)
+    return service.machines(user=user, db=db, category_id=category_id)
+
+
+@legacy_router.get("/machines/category-navigation")
+def category_navigation(
+    user: User = Depends(require_asset_viewer), db: Session = Depends(get_db)
+) -> list[dict]:
+    return service.category_navigation(user=user, db=db)
 
 
 @legacy_router.get("/machines/{machine_id}", response_model=None)

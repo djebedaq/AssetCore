@@ -85,6 +85,8 @@ def test_machine_read_and_qr_contract(
         "id",
         "inventory_number",
         "name",
+        "category",
+        "category_id",
         "brand",
         "model",
         "status",

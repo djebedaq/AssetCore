@@ -644,6 +644,30 @@
       "get": {
         "summary": "Machines",
         "operationId": "machines_api_machines_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "category_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -652,13 +676,18 @@
                 "schema": {}
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "summary": "Create Machine",

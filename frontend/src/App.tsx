@@ -37,6 +37,11 @@ type Page =
   | 'password'
   | 'settings'
 
+function landingPage(user: UserSession): Page {
+  return window.location.pathname === '/machines' && user.permissions.includes('assets.view')
+    ? 'machines' : user.permissions.includes('repairs.view') ? 'dashboard' : 'machines'
+}
+
 function App() {
   const { date, setLocale, t } = useI18n()
   const [authenticated, setAuthenticated] = useState(false)
@@ -52,18 +57,23 @@ function App() {
   const [workflowVisit, setWorkflowVisit] = useState(0)
   const signingMatch = window.location.pathname.match(/^\/sign\/([^/]+)\/?$/)
 
-  function openCatalog(machineId: number) {
+  function navigatePage(next: Page) {
     machineEntry.leave()
+    setPage(next)
+    window.history.pushState({ ...window.history.state, assetcorePage: next }, '', next === 'machines' ? '/machines' : '/')
+    window.dispatchEvent(new Event('assetcore:routechange'))
+  }
+
+  function openCatalog(machineId: number) {
     setEntryIntent(null)
     setCatalogMachineId(machineId)
-    setPage('catalog')
+    navigatePage('catalog')
   }
 
   function openWorkflow(intent: MachineEntryIntent) {
-    machineEntry.leave()
     setEntryIntent(intent)
     setWorkflowVisit((value) => value + 1)
-    setPage(intent.action === 'issue' || intent.action === 'return' ? 'transfers' : 'repairs')
+    navigatePage(intent.action === 'issue' || intent.action === 'return' ? 'transfers' : 'repairs')
   }
 
   useEffect(() => {
@@ -80,7 +90,7 @@ function App() {
         setSession(user)
         setAuthenticated(true)
         setLocale(user.preferred_language, false)
-        setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines')
+        setPage(landingPage(user))
       })
       .catch(() => {
         if (!active) return
@@ -92,6 +102,15 @@ function App() {
         if (active) setBootstrapping(false)
       })
     return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    const synchronize = () => {
+      if (window.location.pathname === '/machines') setPage('machines')
+      else if (window.location.pathname === '/') setPage(window.history.state?.assetcorePage || 'dashboard')
+    }
+    window.addEventListener('popstate', synchronize)
+    return () => window.removeEventListener('popstate', synchronize)
   }, [])
 
   useEffect(() => {
@@ -130,9 +149,9 @@ function App() {
   if (signingMatch) return <PageBoundary><SignaturePage token={decodeURIComponent(signingMatch[1])} /></PageBoundary>
 
   if (bootstrapping) return <div className="login-shell"><div className="login-panel"><p>{t('common.loading')}</p></div></div>
-  if (!authenticated || !session) return <Login onLogin={(user) => { setSessionUser(user); setSession(user); setAuthenticated(true); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
-  if (session.must_change_password) return <ChangePassword forced onChanged={(user) => { setSessionUser(user); setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
-  if (session.profile_status === 'PROFILE_INCOMPLETE') return <ProfileCompletion user={session} onCompleted={(user) => { setSessionUser(user); setSession(user); setPage(user.permissions.includes('repairs.view') ? 'dashboard' : 'machines') }} />
+  if (!authenticated || !session) return <Login onLogin={(user) => { setSessionUser(user); setSession(user); setAuthenticated(true); setPage(landingPage(user)) }} />
+  if (session.must_change_password) return <ChangePassword forced onChanged={(user) => { setSessionUser(user); setSession(user); setPage(landingPage(user)) }} />
+  if (session.profile_status === 'PROFILE_INCOMPLETE') return <ProfileCompletion user={session} onCompleted={(user) => { setSessionUser(user); setSession(user); setPage(landingPage(user)) }} />
 
   const nav = ([
     ['dashboard', 'nav.dashboard', Gauge, 'repairs.view'],
@@ -164,8 +183,7 @@ function App() {
               key={id}
               className={page === id ? 'active' : ''}
               onClick={() => {
-                setPage(id)
-                machineEntry.leave()
+                navigatePage(id)
                 setEntryIntent(null)
                 setCatalogMachineId(null)
                 setMobileMenu(false)
