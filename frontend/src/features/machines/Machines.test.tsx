@@ -121,6 +121,22 @@ describe('category-driven machine registry', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/machines?category_id=1')).toBe(true)
   })
 
+  it('keeps the compact selector usable with more than thirty dynamic categories', async () => {
+    const many = Array.from({ length: 32 }, (_, index): RegistryCategory => ({
+      id: index + 1, code: `QA_CAT_${index}`, name_bg: `Тестова категория ${index}`,
+      is_active: true, asset_count: 0, has_pressure: false,
+    }))
+    const fetchMock = mockRegistry(many)
+    const actor = userEvent.setup()
+    mount()
+    const selector = await screen.findByRole('combobox', { name: 'Категории активи' })
+    expect(within(selector).getAllByRole('option')).toHaveLength(34)
+    await actor.selectOptions(selector, 'QA_CAT_31')
+    expect(await screen.findByText('В тази категория няма активи.')).toBeVisible()
+    expect(window.location.search).toBe('?category=QA_CAT_31')
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/machines?category_id=32')).toBe(true)
+  })
+
   it('lets an asset-only observer navigate without loading administrative metadata', async () => {
     setSessionUser({ ...user, role: 'observer', permissions: ['assets.view'] })
     const fetchMock = mockRegistry()
