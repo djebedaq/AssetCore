@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .assets.custom_fields import _validated_custom_field_value as _validated_custom_field_value
+from .assets.native_fields import NativeFieldCapabilityError, validate_native_asset_fields
 from .assets.routes import add_machine_attachment as add_machine_attachment
 from .assets.routes import download_machine_attachment as download_machine_attachment
 from .assets.routes import machine_passport as machine_passport
@@ -2750,6 +2751,11 @@ def _validate_import_records(records: list[dict], db: Session) -> tuple[list[dic
             pressure = int(record["pressure_bar"]) if record.get("pressure_bar") not in (None, "") else None
         except (ValueError, TypeError):
             errors.append({"row": index + 1, "message": "Налягането трябва да бъде цяло число."})
+            continue
+        try:
+            validate_native_asset_fields(category_definition, pressure_bar=pressure)
+        except NativeFieldCapabilityError as exc:
+            errors.append({"row": index + 1, "message": str(exc)})
             continue
         record["inventory_number"] = number
         record["category_id"] = category_definition.id

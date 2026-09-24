@@ -15,6 +15,7 @@ from ..permissions import is_observer
 from ..schemas import MachineCreate, MachineUpdate
 from ..settings import settings
 from ..workflow import add_machine_event, ensure_machine_transition
+from .native_fields import NativeFieldCapabilityError, validate_native_asset_fields
 from .queries import _active_transfer
 from .serializers import _limited_machine
 
@@ -44,6 +45,7 @@ def create_machine(data: MachineCreate, user: User, db: Session) -> Machine:
     values = data.model_dump(mode="json")
     values["category_id"] = category.id
     values["category"] = category.code
+    _require_native_fields(category, pressure_bar=values["pressure_bar"])
     item = Machine(**values)
     db.add(item)
     db.flush()
@@ -76,6 +78,16 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
         )
         changes["category_id"] = category.id
         changes["category"] = category.code
+    resolved_category = category or item.category_definition
+    if resolved_category is not None:
+        _require_native_fields(
+            resolved_category,
+            pressure_bar=changes.get("pressure_bar", item.pressure_bar),
+        )
+    elif "pressure_bar" in changes:
+        raise HTTPException(
+            422, detail={"code": "category_required", "message": "Изберете съществуваща категория."},
+        )
     active = _active_transfer(db, machine_id)
     if "status" in changes:
         requested_status = changes["status"]
@@ -152,6 +164,15 @@ def _resolve_category(
     if code is not None and code != category.code:
         raise HTTPException(409, detail={"code": "category_mismatch", "message": "Категорията не съответства на category_id."})
     return category
+
+
+def _require_native_fields(category: AssetCategory, *, pressure_bar: int | None) -> None:
+    try:
+        validate_native_asset_fields(category, pressure_bar=pressure_bar)
+    except NativeFieldCapabilityError as exc:
+        raise HTTPException(
+            422, detail={"code": exc.code, "message": str(exc)},
+        ) from exc
 
 
 def qr(machine_id: int, request: Request, _: User, db: Session) -> Response:

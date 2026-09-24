@@ -135,6 +135,163 @@ def test_category_identity_rejects_conflicts_and_legacy_code_resolves(
     assert hpwj_after["capabilities"] == hpwj["capabilities"]
 
 
+def test_pressure_capability_is_enforced_on_create_update_and_category_change(
+    client, auth_headers, machine_ids, session_factory,
+):
+    assert len(machine_ids) == 19
+    with session_factory() as db:
+        verified_before = {
+            item.id: (item.category, item.category_id, item.pressure_bar)
+            for item in db.scalars(select(Machine).where(Machine.id.in_(machine_ids.values())))
+        }
+
+    generic_response = client.post(
+        "/api/categories", headers=auth_headers,
+        json={"code": "QA_NO_PRESSURE", "name_bg": "Тестов актив"},
+    )
+    assert generic_response.status_code == 201, generic_response.text
+    generic_id = generic_response.json()["id"]
+
+    def create(number: str, category_id: int, **extra):
+        return client.post(
+            "/api/machines", headers=auth_headers,
+            json={"inventory_number": number, "name": "QA asset", "brand": "QA",
+                  "category_id": category_id, **extra},
+        )
+
+    rejected = create("QA-PRESSURE-REJECT", generic_id, pressure_bar=500)
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"]["code"] == "pressure_not_applicable"
+
+    omitted = create("QA-PRESSURE-OMITTED", generic_id)
+    explicit_null = create("QA-PRESSURE-NULL", generic_id, pressure_bar=None)
+    assert omitted.status_code == explicit_null.status_code == 201
+    assert omitted.json()["pressure_bar"] is None
+    assert explicit_null.json()["pressure_bar"] is None
+
+    blocked_patch = client.patch(
+        f"/api/machines/{omitted.json()['id']}", headers=auth_headers,
+        json={"pressure_bar": 500},
+    )
+    assert blocked_patch.status_code == 422
+    assert blocked_patch.json()["detail"]["code"] == "pressure_not_applicable"
+    assert client.get(
+        f"/api/machines/{omitted.json()['id']}", headers=auth_headers,
+    ).json()["pressure_bar"] is None
+
+    hpwj = next(item for item in client.get("/api/categories", headers=auth_headers).json()
+                if item["code"] == "HPWJ")
+    hpwj_asset = create("QA-HPWJ-TRANSITION", hpwj["id"], pressure_bar=500)
+    assert hpwj_asset.status_code == 201, hpwj_asset.text
+    hpwj_asset_id = hpwj_asset.json()["id"]
+    blocked_transition = client.patch(
+        f"/api/machines/{hpwj_asset_id}", headers=auth_headers,
+        json={"category_id": generic_id},
+    )
+    assert blocked_transition.status_code == 422
+    assert blocked_transition.json()["detail"]["code"] == "pressure_not_applicable"
+    unchanged = client.get(f"/api/machines/{hpwj_asset_id}", headers=auth_headers).json()
+    assert unchanged["category_id"] == hpwj["id"]
+    assert unchanged["pressure_bar"] == 500
+    cleared = client.patch(
+        f"/api/machines/{hpwj_asset_id}", headers=auth_headers,
+        json={"category_id": generic_id, "pressure_bar": None},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["category_id"] == generic_id
+    assert cleared.json()["category"] == "QA_NO_PRESSURE"
+    assert cleared.json()["pressure_bar"] is None
+
+    capable_response = client.post(
+        "/api/categories", headers=auth_headers,
+        json={"code": "QA_PRESSURE_CAPABLE", "name_bg": "Тестово налягане",
+              "capabilities": ["HAS_PRESSURE"]},
+    )
+    assert capable_response.status_code == 201, capable_response.text
+    capable_id = capable_response.json()["id"]
+    with_pressure = create("QA-CAPABLE-500", capable_id, pressure_bar=500)
+    without_pressure = create("QA-CAPABLE-NULL", capable_id, pressure_bar=None)
+    assert with_pressure.status_code == without_pressure.status_code == 201
+    assert with_pressure.json()["pressure_bar"] == 500
+    assert without_pressure.json()["pressure_bar"] is None
+
+    with session_factory() as db:
+        transitioned = db.get(Machine, hpwj_asset_id)
+        assert transitioned.category_id == generic_id
+        assert transitioned.pressure_bar is None
+        verified_after = {
+            item.id: (item.category, item.category_id, item.pressure_bar)
+            for item in db.scalars(select(Machine).where(Machine.id.in_(machine_ids.values())))
+        }
+    assert verified_after == verified_before
+
+
+def test_import_pressure_capability_uses_category_metadata(client, auth_headers):
+    generic = client.post(
+        "/api/categories", headers=auth_headers,
+        json={"code": "QA_IMPORT_GENERIC", "name_bg": "Тестов импорт"},
+    )
+    assert generic.status_code == 201, generic.text
+    invalid = client.post(
+        "/api/admin/import-preview", headers=auth_headers,
+        json={"records": [{"inventory_number": "QA-IMPORT-REJECT", "name": "QA",
+                           "brand": "QA", "category": "QA_IMPORT_GENERIC",
+                           "pressure_bar": 500}]},
+    )
+    assert invalid.status_code == 200
+    assert invalid.json()["can_confirm"] is False
+    assert invalid.json()["valid_records"] == []
+    assert invalid.json()["errors"][0]["row"] == 1
+    assert "Налягането не е приложимо" in invalid.json()["errors"][0]["message"]
+
+    valid = client.post(
+        "/api/admin/import-preview", headers=auth_headers,
+        json={"records": [
+            {"inventory_number": "QA-IMPORT-BLANK", "name": "QA", "brand": "QA",
+             "category": "QA_IMPORT_GENERIC", "pressure_bar": ""},
+            {"inventory_number": "QA-IMPORT-OMITTED", "name": "QA", "brand": "QA",
+             "category": "QA_IMPORT_GENERIC"},
+        ]},
+    )
+    assert valid.status_code == 200 and valid.json()["can_confirm"] is True
+    assert [row["pressure_bar"] for row in valid.json()["valid_records"]] == [None, None]
+    imported = client.post(
+        "/api/admin/import-confirm", headers=auth_headers,
+        json={"preview_token": valid.json()["preview_token"]},
+    )
+    assert imported.status_code == 201, imported.text
+    assert len(imported.json()["created"]) == 2
+    for item in imported.json()["created"]:
+        assert client.get(
+            f"/api/machines/{item['id']}", headers=auth_headers,
+        ).json()["pressure_bar"] is None
+
+    capable = client.post(
+        "/api/categories", headers=auth_headers,
+        json={"code": "QA_IMPORT_PRESSURE", "name_bg": "Тестово налягане",
+              "capabilities": ["HAS_PRESSURE"]},
+    )
+    assert capable.status_code == 201, capable.text
+    capable_preview = client.post(
+        "/api/admin/import-preview", headers=auth_headers,
+        json={"records": [{"inventory_number": "QA-IMPORT-500", "name": "QA",
+                           "brand": "QA", "category": "QA_IMPORT_PRESSURE",
+                           "pressure_bar": 500}]},
+    )
+    assert capable_preview.status_code == 200
+    assert capable_preview.json()["can_confirm"] is True
+    assert capable_preview.json()["valid_records"][0]["pressure_bar"] == 500
+    capable_import = client.post(
+        "/api/admin/import-confirm", headers=auth_headers,
+        json={"preview_token": capable_preview.json()["preview_token"]},
+    )
+    assert capable_import.status_code == 201, capable_import.text
+    assert client.get(
+        f"/api/machines/{capable_import.json()['created'][0]['id']}",
+        headers=auth_headers,
+    ).json()["pressure_bar"] == 500
+
+
 def test_transfer_document_identity_uses_generic_category_without_hpwj_fallback(monkeypatch):
     machine = SimpleNamespace(
         category="QA_GENERIC_ASSET", brand="QA", manufacturer=None, model=None,
