@@ -24,7 +24,7 @@ export function IssueSelectionList({ items, selected, onToggle }: {
           />
           <span className="selection-main">
             <strong>{t('bulk.machineName', { number: item.machine_number })}</strong>
-            <small>{item.brand} · {item.pressure_bar} bar · {item.location || t('common.notSpecified')}</small>
+            <small>{[item.brand, item.pressure_bar != null ? `${item.pressure_bar} bar` : null, item.location || t('common.notSpecified')].filter(Boolean).join(' · ')}</small>
           </span>
           <span className={`availability-pill ${item.available ? 'available' : 'blocked'}`}>
             {item.available ? t('bulk.available') : t('bulk.unavailable')}
