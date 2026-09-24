@@ -4,6 +4,7 @@ import hashlib
 
 import fitz
 from app.models import (
+    AssetCategory,
     CatalogDiagram,
     CatalogPositionHotspot,
     Machine,
@@ -25,10 +26,18 @@ def future_catalog(factory, *, visuals=True):
     digest = hashlib.sha256(content).hexdigest()
     with factory() as db:
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        category = AssetCategory(
+            code="QA_FUTURE_COMPRESSOR",
+            name_bg="Тестов компресор", name_en="QA compressor", name_ru="Тестовый компрессор",
+            capabilities=["HAS_PARTS_CATALOG"],
+        )
+        db.add(category)
+        db.flush()
         machine = Machine(
             inventory_number="QA-FUTURE-9001",
             name="Synthetic QA compressor",
-            category="COMPRESSOR",
+            category=category.code,
+            category_id=category.id,
             brand="FUTURE-SYNTHETIC",
             model="X9000",
             pressure_bar=0,

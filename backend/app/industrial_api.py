@@ -16,6 +16,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from .assets.capabilities import supports as asset_supports
 from .assets.custom_fields import _validated_custom_field_value as _validated_custom_field_value
 from .assets.native_fields import NativeFieldCapabilityError, validate_native_asset_fields
 from .assets.routes import add_machine_attachment as add_machine_attachment
@@ -639,6 +640,8 @@ def create_repair_case(
     machine = db.scalar(machine_statement)
     if machine is None:
         raise HTTPException(404, "Машината не е намерена.")
+    if not asset_supports(machine, "HAS_REPAIR_WORKFLOW"):
+        raise business_conflict("workflow_not_supported", "Категорията не поддържа нов ремонт.")
     if db.scalar(select(TransferProtocol.id).where(TransferProtocol.machine_id == machine.id, TransferProtocol.is_active.is_(True))):
         raise business_conflict(
             "active_transfer_blocks_repair",
@@ -1135,6 +1138,12 @@ def create_multi_part_request(
             "За част без потвърден part number трябва да бъде избрана конкретна машина.",
         )
     catalog_ids = {line.catalog_part_id for line in payload.lines if line.catalog_part_id is not None}
+    if machine is not None and (catalog_ids or payload.repair_kit_id is not None) and not asset_supports(machine, "HAS_PARTS_CATALOG"):
+        raise business_conflict(
+            "workflow_not_supported",
+            "Категорията не поддържа заявка от структурирания каталог.",
+            machine_id=machine.id,
+        )
     catalog_parts: dict[int, PartCatalog] = {}
     if catalog_ids:
         catalog_parts = {

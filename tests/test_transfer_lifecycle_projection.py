@@ -29,7 +29,7 @@ from test_bulk_transfers import complete_signing, return_payload
 @pytest.fixture()
 def qa_machines(session_factory):
     with session_factory() as db:
-        category = AssetCategory(code="QA_LIFECYCLE", name_bg="Тестови активи")
+        category = AssetCategory(code="QA_LIFECYCLE", name_bg="Тестови активи", capabilities=["HAS_TRANSFER_WORKFLOW"])
         db.add(category)
         db.flush()
         machines = [Machine(inventory_number=f"QA-LIFECYCLE-{letter}",
@@ -92,6 +92,9 @@ def test_full_return_preserves_operations_documents_signatures_and_read_only_pro
     issued = issue(client, auth_headers, issue_payload, qa_machines[:2])
     progress(lifecycles(client, auth_headers)[0], 2, 0, 2)
     with session_factory() as db:
+        category = db.get(Machine, qa_machines[0]).category_definition
+        category.capabilities = []
+        db.commit()
         original = db.get(TransferBatch, issued["batch_id"])
         issue_manifest, issue_hash = original.issue_manifest, original.issue_manifest_sha256
         issue_document_ids = [row["official_document_id"] for row in issued["transfers"]]
@@ -100,6 +103,9 @@ def test_full_return_preserves_operations_documents_signatures_and_read_only_pro
                            for row in db.scalars(select(OfficialDocumentVersion).where(
                                OfficialDocumentVersion.document_id.in_(issue_document_ids)))]
         signatures_before = [row.id for row in db.scalars(select(DocumentSignature))]
+    state = client.get(f"/api/machines/{qa_machines[0]}/passport", headers=auth_headers).json()["current_state"]
+    assert state["allowed_actions"]["issue"] is False
+    assert state["allowed_actions"]["return"] is True
     returned = receive(client, auth_headers, issued["transfers"])
     with session_factory() as db:
         issue_batch = db.get(TransferBatch, issued["batch_id"])

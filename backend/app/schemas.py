@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .industrial_schemas import CustomFieldValueInput
 from .localization import (
     LEGACY_MACHINE_STATUS_CODES,
     LEGACY_PART_REQUEST_PRIORITY_CODES,
@@ -212,10 +213,11 @@ class MachineBase(BaseModel):
 
 
 class MachineCreate(MachineBase):
-    pass
+    custom_fields: list[CustomFieldValueInput] | None = None
 
 
 class MachineUpdate(BaseModel):
+    custom_fields: list[CustomFieldValueInput] | None = None
     category: str | None = None
     category_id: int | None = None
     name: str | None = None

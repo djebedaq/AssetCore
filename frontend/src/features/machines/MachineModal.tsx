@@ -1,10 +1,14 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import { api } from '../../api'
+import { ApiError, api } from '../../api'
 import AuthenticatedImage from '../../AuthenticatedImage'
 import { statusText, useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
-import type { Department, Location, Machine, RegistryCategory } from '../../types'
+import type { AssetCategoryField, Department, Location, Machine, RegistryCategory } from '../../types'
+import CategoryFieldControl from './CategoryFieldControl'
+
+type FormDefinition = { id: number; capabilities: string[]; fields: AssetCategoryField[] }
+type FormData = { category: FormDefinition; values: Array<{ field_id: number; value: string | null }> }
 
 type FormCategory = Omit<RegistryCategory, 'asset_count' | 'has_pressure'> & {
   asset_count?: number; has_pressure?: boolean; capabilities?: string[]
@@ -76,23 +80,62 @@ export default function MachineModal({ machine, initialCategoryId, locations, de
     is_active: machine?.is_active ?? true,
   })
   const [error, setError] = useState('')
+  const [definition, setDefinition] = useState<FormDefinition | null>(null)
+  const [customValues, setCustomValues] = useState<Record<number, string>>({})
+  const [loadingFields, setLoadingFields] = useState(false)
   const canEdit = !machine ? hasPermission('assets.create') : hasPermission('assets.edit')
   const selectedCategory = categories.find((item) => item.id === form.category_id)
-  const hasPressure = supportsPressure(selectedCategory)
+  const hasPressure = definition?.id === form.category_id
+    ? definition.capabilities.includes('HAS_PRESSURE') : supportsPressure(selectedCategory)
+
+  useEffect(() => {
+    if (!form.category_id) { setDefinition(null); setCustomValues({}); return }
+    let cancelled = false
+    setLoadingFields(true)
+    setDefinition(null)
+    const request = machine
+      ? api<FormData>(`/machines/${machine.id}/form-data?category_id=${form.category_id}`)
+      : api<FormDefinition>(`/asset-categories/${form.category_id}/form-definition`)
+    void request.then(result => {
+      if (cancelled) return
+      if ('category' in result) {
+        setDefinition(result.category)
+        setCustomValues(Object.fromEntries(result.values.map(item => [item.field_id, item.value || ''])))
+      } else {
+        setDefinition(result)
+        setCustomValues({})
+      }
+      setError('')
+    }).catch(() => { if (!cancelled) setError(t('machines.formLoadError')) })
+      .finally(() => { if (!cancelled) setLoadingFields(false) })
+    return () => { cancelled = true }
+  }, [form.category_id, machine, t])
 
   async function save(event: FormEvent) {
     event.preventDefault()
+    if (loadingFields || !definition || definition.id !== form.category_id) return
     setError('')
     try {
       const { pressure_bar, ...identity } = form
       const includePressure = !machine || hasPressure || form.category_id !== machine.category_id
       await api(machine ? `/machines/${machine.id}` : '/machines', {
         method: machine ? 'PATCH' : 'POST',
-        body: JSON.stringify({ ...identity, category_id: form.category_id || null, ...(includePressure ? { pressure_bar: hasPressure && pressure_bar !== '' ? pressure_bar : null } : {}), location_id: form.location_id || null, manufacture_year: form.manufacture_year || null, commissioning_date: form.commissioning_date || null }),
+        body: JSON.stringify({ ...identity, category_id: form.category_id || null, custom_fields: definition.fields.map(field => ({ field_id: field.id, value: customValues[field.id] || null })), ...(includePressure ? { pressure_bar: hasPressure && pressure_bar !== '' ? pressure_bar : null } : {}), location_id: form.location_id || null, manufacture_year: form.manufacture_year || null, commissioning_date: form.commissioning_date || null }),
       })
       onSaved()
-    } catch {
-      setError(t('machines.saveError'))
+    } catch (caught) {
+      if (caught instanceof ApiError && typeof caught.data.field_id === 'number') {
+        const affected = definition.fields.find(field => field.id === caught.data.field_id)
+        const label = affected?.[`label_${locale}` as 'label_bg'] || affected?.label_bg
+        const reason = caught.code === 'required_custom_field' ? t('machines.requiredField') : t('machines.invalidField')
+        setError(label ? `${label}: ${reason}` : reason)
+      } else if (caught instanceof ApiError && caught.code === 'field_category_mismatch') {
+        setError(t('machines.categoryFieldMismatch'))
+      } else if (caught instanceof ApiError && caught.code === 'inactive_custom_field') {
+        setError(t('machines.inactiveField'))
+      } else if (caught instanceof ApiError && caught.code === 'pressure_not_applicable') {
+        setError(t('machines.pressureNotApplicable'))
+      } else setError(t('machines.saveError'))
     }
   }
 
@@ -108,6 +151,7 @@ export default function MachineModal({ machine, initialCategoryId, locations, de
           <button onClick={onClose} aria-label={t('common.close')}><X /></button>
         </div>
         <form onSubmit={save} className="form-grid">
+          <h4 className="wide asset-form-heading">{t('machines.basicData')}</h4>
           <label>{t('machines.inventoryNumber')}<input required disabled={Boolean(machine)} value={form.inventory_number} onChange={(event) => field('inventory_number', event.target.value)} /></label>
           <label>{t('machines.name')}<input required disabled={!canEdit} value={form.name} onChange={(event) => field('name', event.target.value)} /></label>
           <label>{t('machines.category')}<select required disabled={!canEdit} value={form.category_id} onChange={(event) => { const categoryId = event.target.value ? Number(event.target.value) : ''; setForm((current) => ({ ...current, category_id: categoryId, pressure_bar: supportsPressure(categories.find((item) => item.id === categoryId)) ? current.pressure_bar : '' })) }}><option value="">{t('machines.selectCategory')}</option>{categories.map((category) => <option value={category.id} key={category.id} disabled={!category.is_active && category.id !== form.category_id}>{category[`name_${locale}` as 'name_bg'] || category.name_bg}{!category.is_active ? ` · ${t('admin.inactive')}` : ''}</option>)}</select></label>
@@ -115,6 +159,12 @@ export default function MachineModal({ machine, initialCategoryId, locations, de
           <label>{t('machines.model')}<input disabled={!canEdit} value={form.model} onChange={(event) => field('model', event.target.value)} /></label>
           <label>{t('machines.serialNumber')}<input disabled={!canEdit} value={form.serial_number} onChange={(event) => field('serial_number', event.target.value)} /></label>
           {hasPressure && <label>{t('machines.pressure')}<input disabled={!canEdit} type="number" min="0" value={form.pressure_bar} onChange={(event) => field('pressure_bar', event.target.value === '' ? '' : Number(event.target.value))} /></label>}
+          {form.category_id && (loadingFields || Boolean(definition?.fields.length)) && <div className="wide category-field-section"><h4>{t('passport.customFields')}</h4>
+            {loadingFields ? <p>{t('common.loading')}</p> : definition?.fields.map(item =>
+              <CategoryFieldControl key={item.id} field={item} value={customValues[item.id] || ''}
+                disabled={!canEdit} onChange={value => setCustomValues(current => ({ ...current, [item.id]: value }))} />)}
+          </div>}
+          <h4 className="wide asset-form-heading">{t('machines.organizationalData')}</h4>
           <label>{t('common.status')}<select disabled={!canEdit} value={form.status} onChange={(event) => field('status', event.target.value)}>{MACHINE_STATUS_CODES.map((status) => <option key={status} value={status}>{statusText(t, status)}</option>)}</select></label>
           <label>{t('common.location')}<select disabled={!canEdit} value={form.location_id} onChange={(event) => field('location_id', event.target.value ? Number(event.target.value) : '')}><option value="">{t('common.notSpecified')}</option>{locations.map((location) => <option disabled={!location.is_active && location.id !== form.location_id} key={location.id} value={location.id}>{location.name}{!location.is_active ? ` · ${t('admin.inactive')}` : ''}</option>)}</select></label>
           <label>{t('passport.manufacturer')}<input disabled={!canEdit} value={form.manufacturer} onChange={(event) => field('manufacturer', event.target.value)} /></label>
@@ -133,7 +183,7 @@ export default function MachineModal({ machine, initialCategoryId, locations, de
           {error && <div className="error wide" role="alert">{error}</div>}
           <div className="actions wide">
             <button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button>
-            {canEdit && <button className="primary">{t('common.save')}</button>}
+            {canEdit && <button className="primary" disabled={loadingFields || !definition}>{t('common.save')}</button>}
           </div>
         </form>
       </div>

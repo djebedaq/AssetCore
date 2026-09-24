@@ -28,7 +28,7 @@ import {
 
 function RepairCreateModal({ machines, onClose, onSaved, initialMachineId }: { machines: Machine[]; onClose: () => void; onSaved: () => void; initialMachineId?: number }) {
   const { t } = useI18n()
-  const eligible = machines.filter((machine) => machine.status === 'READY')
+  const eligible = machines.filter((machine) => machine.status === 'READY' && machine.category_capabilities?.includes('HAS_REPAIR_WORKFLOW') !== false)
   const [form, setForm] = useState({ machine_id: initialMachineId === undefined ? eligible[0]?.id || 0 : eligible.find((machine) => machine.id === initialMachineId && machine.is_active)?.id || 0, reported_problem: '', condition_before: '' })
   const [error, setError] = useState('')
   async function submit(event: FormEvent) {
@@ -180,7 +180,7 @@ export function IndustrialRepairs({ entryIntent, onEntryConsumed }: { entryInten
     if (!loaded || !entryIntent || consumed.current === entryIntent) return
     consumed.current = entryIntent
     if (!error) {
-      if (entryIntent.action === 'repair-create' && hasPermission('repairs.create') && machines.some((machine) => machine.id === entryIntent.machineId && machine.is_active && machine.status === 'READY')) {
+      if (entryIntent.action === 'repair-create' && hasPermission('repairs.create') && machines.some((machine) => machine.id === entryIntent.machineId && machine.is_active && machine.status === 'READY' && machine.category_capabilities?.includes('HAS_REPAIR_WORKFLOW') !== false)) {
         setInitialMachineId(entryIntent.machineId)
         setCreate(true)
       } else if (entryIntent.action === 'repair-open' && hasPermission('repairs.view') && items.some((repair) => repair.id === entryIntent.repairId && repair.machine_id === entryIntent.machineId && repair.status !== 'COMPLETED')) {

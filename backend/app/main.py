@@ -16,6 +16,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .application_errors import ApplicationError
+from .assets.capabilities import supports as asset_supports
 
 # Compatibility imports retain the historical Python entry points.
 from .assets.queries import _active_transfer as _active_transfer
@@ -521,6 +522,8 @@ def create_repair(
     item = db.scalar(machine_statement)
     if not item:
         raise HTTPException(404, "Машината не е намерена")
+    if not asset_supports(item, "HAS_REPAIR_WORKFLOW"):
+        raise HTTPException(409, detail={"code": "workflow_not_supported", "message": "Категорията не поддържа нов ремонт."})
     active = _active_transfer(db, item.id)
     if active:
         raise HTTPException(

@@ -6,6 +6,7 @@ import io
 
 import qrcode
 from fastapi import HTTPException, Request, Response
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -15,6 +16,7 @@ from ..permissions import is_observer
 from ..schemas import MachineCreate, MachineUpdate
 from ..settings import settings
 from ..workflow import add_machine_event, ensure_machine_transition
+from .custom_fields import apply_custom_fields
 from .native_fields import NativeFieldCapabilityError, validate_native_asset_fields
 from .queries import _active_transfer
 from .serializers import _limited_machine
@@ -23,11 +25,22 @@ from .serializers import _limited_machine
 def machines(user: User, db: Session, category_id: int | None = None) -> list[Machine] | list[dict]:
     if category_id is not None and db.get(AssetCategory, category_id) is None:
         raise HTTPException(404, detail={"code": "category_not_found", "message": "Категорията не е намерена."})
-    statement = select(Machine).options(joinedload(Machine.location))
+    statement = select(Machine).options(
+        joinedload(Machine.location), joinedload(Machine.category_definition)
+    )
     if category_id is not None:
         statement = statement.where(Machine.category_id == category_id)
     items = db.scalars(statement.order_by(Machine.inventory_number)).all()
-    return [_limited_machine(item) for item in items] if is_observer(user) else items
+    if is_observer(user):
+        return [_limited_machine(item) for item in items]
+    return [_machine_with_capabilities(item) for item in items]
+
+
+def _machine_with_capabilities(item: Machine) -> dict:
+    value = jsonable_encoder(item)
+    value.pop("category_definition", None)
+    value["category_capabilities"] = item.category_definition.capabilities if item.category_definition else []
+    return value
 
 
 def category_navigation(user: User, db: Session) -> list[dict]:
@@ -61,24 +74,33 @@ def category_navigation(user: User, db: Session) -> list[dict]:
 
 def machine(machine_id: int, user: User, db: Session) -> Machine | dict:
     item = db.scalar(
-        select(Machine).options(joinedload(Machine.location)).where(Machine.id == machine_id)
+        select(Machine).options(
+            joinedload(Machine.location), joinedload(Machine.category_definition)
+        ).where(Machine.id == machine_id)
     )
     if not item:
         raise HTTPException(404, "Машината не е намерена")
-    return _limited_machine(item) if is_observer(user) else item
+    return _limited_machine(item) if is_observer(user) else _machine_with_capabilities(item)
 
 
 def create_machine(data: MachineCreate, user: User, db: Session) -> Machine:
     if db.scalar(select(Machine).where(Machine.inventory_number == data.inventory_number)):
         raise HTTPException(409, "Дублиран инвентарен номер")
     category = _resolve_category(db, data.category_id, data.category)
-    values = data.model_dump(mode="json")
+    values = data.model_dump(mode="json", exclude={"custom_fields"})
     values["category_id"] = category.id
     values["category"] = category.code
     _require_native_fields(category, pressure_bar=values["pressure_bar"])
     item = Machine(**values)
     db.add(item)
     db.flush()
+    try:
+        _, _, field_changes = apply_custom_fields(
+            db, item, data.custom_fields or [], user, require_complete=True
+        )
+    except Exception:
+        db.rollback()
+        raise
     add_machine_event(
         db,
         item,
@@ -86,9 +108,12 @@ def create_machine(data: MachineCreate, user: User, db: Session) -> Machine:
         "MACHINE_CREATED",
         new_status=item.status,
         new_location_id=item.location_id,
-        details={"inventory_number": item.inventory_number},
+        details={"inventory_number": item.inventory_number, "custom_fields": field_changes},
     )
-    add_audit_log(db, user, "machine", item.id, "Създадена машина", values)
+    add_audit_log(
+        db, user, "machine", item.id, "Създадена машина",
+        {**values, "custom_fields": field_changes},
+    )
     db.commit()
     return db.scalar(
         select(Machine).options(joinedload(Machine.location)).where(Machine.id == item.id)
@@ -100,6 +125,8 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
     if not item:
         raise HTTPException(404, "Машината не е намерена")
     changes = data.model_dump(exclude_unset=True, mode="json")
+    custom_inputs = data.custom_fields if "custom_fields" in changes else None
+    changes.pop("custom_fields", None)
     category = None
     if "category_id" in changes or "category" in changes:
         category = _resolve_category(
@@ -118,6 +145,7 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
         raise HTTPException(
             422, detail={"code": "category_required", "message": "Изберете съществуваща категория."},
         )
+    category_changed = category is not None and category.id != item.category_id
     active = _active_transfer(db, machine_id)
     if "status" in changes:
         requested_status = changes["status"]
@@ -150,6 +178,15 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
     before = {"status": item.status, "location_id": item.location_id}
     for key, value in changes.items():
         setattr(item, key, value)
+    field_changes: dict[str, str | None] = {}
+    if category_changed or custom_inputs is not None:
+        try:
+            _, _, field_changes = apply_custom_fields(
+                db, item, custom_inputs or [], user, require_complete=True
+            )
+        except Exception:
+            db.rollback()
+            raise
     item.updated_at = utcnow()
     add_machine_event(
         db,
@@ -160,7 +197,7 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
         new_status=item.status,
         previous_location_id=before["location_id"],
         new_location_id=item.location_id,
-        details={"changed_fields": sorted(changes)},
+        details={"changed_fields": sorted(changes), "custom_fields": field_changes},
     )
     add_audit_log(
         db,
@@ -168,7 +205,7 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
         "machine",
         item.id,
         "Актуализирана машина",
-        {"преди": before, "след": changes},
+        {"преди": before, "след": changes, "custom_fields": field_changes},
     )
     db.commit()
     return db.scalar(

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..industrial_schemas import AttachmentCreate, CustomFieldValuesUpdate
-from ..models import Machine, User
-from ..permissions import Permission, require_permission
+from ..master_data.serializers import _category_field_dict
+from ..models import AssetCategory, CategoryFieldDefinition, Machine, MachineFieldValue, User
+from ..permissions import Permission, is_observer, require_permission
 from ..schemas import MachineCreate, MachineOut, MachineUpdate
 from . import attachments, custom_fields, passport, service, timeline
 from .timeline_schemas import MachineTimelinePage, TimelineCategory
@@ -34,6 +36,57 @@ def category_navigation(
     user: User = Depends(require_asset_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
     return service.category_navigation(user=user, db=db)
+
+
+def _asset_form_category(db: Session, category_id: int) -> dict:
+    category = db.get(AssetCategory, category_id)
+    if category is None:
+        raise HTTPException(404, detail={"code": "category_not_found", "message": "Категорията не е намерена."})
+    fields = db.scalars(
+        select(CategoryFieldDefinition).where(
+            CategoryFieldDefinition.category_id == category_id,
+            CategoryFieldDefinition.is_active.is_(True),
+        ).order_by(CategoryFieldDefinition.sort_order, CategoryFieldDefinition.id)
+    ).all()
+    return {
+        "id": category.id, "code": category.code,
+        "name_bg": category.name_bg, "name_en": category.name_en,
+        "name_ru": category.name_ru, "is_active": category.is_active,
+        "capabilities": category.capabilities or [],
+        "fields": [_category_field_dict(field) for field in fields],
+    }
+
+
+@legacy_router.get("/asset-categories/{category_id}/form-definition")
+def asset_form_definition(
+    category_id: int,
+    user: User = Depends(require_asset_viewer), db: Session = Depends(get_db),
+) -> dict:
+    if is_observer(user):
+        raise HTTPException(403, detail={"code": "asset_form_forbidden"})
+    return _asset_form_category(db, category_id)
+
+
+@legacy_router.get("/machines/{machine_id}/form-data")
+def machine_form_data(
+    machine_id: int,
+    category_id: int | None = Query(default=None, ge=1),
+    user: User = Depends(require_asset_viewer), db: Session = Depends(get_db),
+) -> dict:
+    if is_observer(user):
+        raise HTTPException(403, detail={"code": "asset_form_forbidden"})
+    machine = db.get(Machine, machine_id)
+    if machine is None:
+        raise HTTPException(404, "Машината не е намерена.")
+    category = _asset_form_category(db, category_id or machine.category_id)
+    ids = {field["id"] for field in category["fields"]}
+    values = db.scalars(
+        select(MachineFieldValue).where(MachineFieldValue.machine_id == machine_id)
+    ).all()
+    return {
+        "category": category,
+        "values": [{"field_id": item.field_id, "value": item.value} for item in values if item.field_id in ids],
+    }
 
 
 @legacy_router.get("/machines/{machine_id}", response_model=None)

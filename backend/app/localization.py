@@ -152,6 +152,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "One or more selected assets were not found.",
         "ru": "Одна или несколько выбранных единиц оборудования не найдены.",
     },
+    "issue.workflow_not_supported": {
+        "bg": "Категорията не поддържа ново предаване.",
+        "en": "This category does not support a new transfer.",
+        "ru": "Эта категория не поддерживает новую передачу.",
+    },
     "issue.concurrent": {
         "bg": "Издаването е отказано поради едновременна конфликтна операция.",
         "en": "The issue was rejected because of a concurrent conflicting operation.",
