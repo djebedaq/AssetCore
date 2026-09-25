@@ -98,6 +98,7 @@ export type Machine = {
   manufacturer?: string | null; manufacture_year?: number | null; commissioning_date?: string | null;
   ownership?: string | null; department?: string | null; responsible_person?: string | null;
   capacity?: string | null; dimensions?: string | null; is_active?: boolean
+  category_capabilities?: string[]
 }
 export type Repair = {
   id: number; machine_id: number; machine: Machine; reported_problem: string; diagnosis?: string | null;

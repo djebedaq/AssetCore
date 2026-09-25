@@ -26,6 +26,7 @@ from ..models import (
 )
 from ..official_documents.registry import machine_official_document_registry_items
 from ..permissions import Permission, has_permission, is_observer
+from .capabilities import supports as asset_supports
 
 
 def _passport_available(
@@ -307,6 +308,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
                 "value": values.get(field.id).value if field.id in values else None,
             }
             for field in sorted(fields, key=lambda item: (item.sort_order, item.id))
+            if field.is_active
         ],
         "attachments": [
             _attachment_dict(item, "machine")
@@ -536,10 +538,11 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             ),
             "allowed_actions": {
                 "issue": has_permission(user, Permission.TRANSFERS_CREATE)
-                and available,
+                and available and asset_supports(machine, "HAS_TRANSFER_WORKFLOW"),
                 "return": has_permission(user, Permission.TRANSFERS_RETURN)
                 and active_transfer is not None,
-                "repair": has_permission(user, Permission.REPAIRS_CREATE) and active_repair is None,
+                "repair": has_permission(user, Permission.REPAIRS_CREATE)
+                and active_repair is None and asset_supports(machine, "HAS_REPAIR_WORKFLOW"),
                 "edit": has_permission(user, Permission.ASSETS_EDIT),
             },
         },

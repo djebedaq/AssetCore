@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ..application_errors import ApplicationError
+from ..assets.capabilities import supports as asset_supports
 from ..models import CatalogDiagram, Machine, PartCatalog, RepairKit
 from . import repository
 from .sources import (
@@ -153,7 +154,7 @@ def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
         "brand": machine.brand,
         "model": machine.model,
     }
-    if family is None:
+    if family is None or not asset_supports(machine, "HAS_PARTS_CATALOG"):
         return {
             **base,
             "supported": False,
@@ -195,6 +196,12 @@ def require_compatible_source(
     db: Session, *, machine_id: int, source_id: str
 ) -> tuple[Machine, dict[str, Any]]:
     machine = require_machine(db, machine_id)
+    if not asset_supports(machine, "HAS_PARTS_CATALOG"):
+        raise ApplicationError(
+            status_code=409, code="workflow_not_supported",
+            message="Категорията не поддържа структуриран каталог.",
+            operation="catalog_read", stage="capability",
+        )
     family = machine_family(machine)
     try:
         source = source_by_id(source_id)
@@ -259,7 +266,7 @@ def search(
 ) -> list[dict[str, Any]]:
     machine = require_machine(db, machine_id)
     family = machine_family(machine)
-    if family is None:
+    if family is None or not asset_supports(machine, "HAS_PARTS_CATALOG"):
         return []
     if source_id:
         require_compatible_source(db, machine_id=machine_id, source_id=source_id)
@@ -392,7 +399,7 @@ def kits(
 ) -> list[dict[str, Any]]:
     machine = require_machine(db, machine_id)
     family = machine_family(machine)
-    if family is None:
+    if family is None or not asset_supports(machine, "HAS_PARTS_CATALOG"):
         return []
     if source_id:
         require_compatible_source(db, machine_id=machine_id, source_id=source_id)

@@ -28,7 +28,12 @@ def test_asset_routes_keep_openapi_schemas_and_permission_contract():
     for path, expected in CONTRACT["paths"].items():
         assert schema["paths"][path] == expected, path
     for name, expected in CONTRACT["schemas"].items():
-        assert schema["components"]["schemas"][name] == expected, name
+        actual_schema = schema["components"]["schemas"][name].copy()
+        if name in {"MachineCreate", "MachineUpdate"}:
+            actual_schema["properties"] = actual_schema["properties"].copy()
+            assert "custom_fields" in actual_schema["properties"]
+            actual_schema["properties"].pop("custom_fields")
+        assert actual_schema == expected, name
     actual = build_authorization_inventory(app).summary()["routes"]
     paths = set(CONTRACT["paths"])
     assert [row for row in actual if row["path"] in paths] == CONTRACT["routes"]

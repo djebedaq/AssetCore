@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .application_errors import ApplicationError, unexpected_workflow_error
+from .assets.capabilities import supports as asset_supports
 from .audit import add_audit_log
 from .document_generation import (
     DOCX_MEDIA_TYPE,
@@ -267,7 +268,7 @@ def _open_repairs_for_machines(
 def availability(db: Session, language: str = "bg") -> list[dict[str, Any]]:
     machines = db.scalars(
         select(Machine)
-        .options(joinedload(Machine.location))
+        .options(joinedload(Machine.location), joinedload(Machine.category_definition))
         .order_by(Machine.pressure_bar.desc(), Machine.inventory_number)
     ).all()
     active = _active_transfers_for_machines(db, [machine.id for machine in machines])
@@ -280,6 +281,7 @@ def availability(db: Session, language: str = "bg") -> list[dict[str, Any]]:
         repair = open_repairs.get(machine.id)
         is_available = (
             machine.is_active
+            and asset_supports(machine, "HAS_TRANSFER_WORKFLOW")
             and transfer is None
             and repair is None
             and machine.status == MachineStatus.READY.value
@@ -306,7 +308,11 @@ def availability(db: Session, language: str = "bg") -> list[dict[str, Any]]:
                 ),
                 "unavailable_reason": None
                 if is_available
-                else _availability_message(machine, transfer, language, repair),
+                else (
+                    translate("issue.workflow_not_supported", language)
+                    if not asset_supports(machine, "HAS_TRANSFER_WORKFLOW") and transfer is None
+                    else _availability_message(machine, transfer, language, repair)
+                ),
                 "active_transfer_id": transfer.id if transfer else None,
                 "protocol_number": transfer.protocol_number if transfer else None,
                 "batch_reference": transfer.batch_reference if transfer else None,
@@ -338,6 +344,12 @@ def _load_issue_machines(
             "machines_not_found",
             translate("issue.machines_not_found", language),
             {"missing_machine_ids": missing_ids},
+        )
+    unsupported = [machine.id for machine in machines if not asset_supports(machine, "HAS_TRANSFER_WORKFLOW")]
+    if unsupported:
+        raise TransferServiceError(
+            409, "workflow_not_supported", translate("issue.workflow_not_supported", language),
+            {"machine_ids": unsupported},
         )
     return machines, _active_transfers_for_machines(db, machine_ids)
 

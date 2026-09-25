@@ -5,6 +5,7 @@ import { AttachmentList, DOCUMENT_KEYS, DocumentButtons, DownloadButton, transla
 import { statusText, useI18n, type TranslationKey } from '../../i18n'
 import { hasPermission } from '../../permissions'
 import type { MachinePassport } from '../../types'
+import CategoryFieldControl from '../machines/CategoryFieldControl'
 
 export type PassportTab = 'overview' | 'history' | 'repairs' | 'protocols' | 'parts' | 'files' | 'audit'
 
@@ -58,20 +59,6 @@ export function PassportOverviewTab({ passport, customValues, setCustomValues, o
   const { date, locale, t } = useI18n()
   const machine = passport.machine
 
-  function control(field: MachinePassport['custom_fields'][number]) {
-    const value = customValues[field.field_id] || ''
-    const update = (nextValue: string) => setCustomValues((current) => ({ ...current, [field.field_id]: nextValue }))
-    const disabled = !hasPermission('assets.edit')
-    if (field.field_type === 'BOOLEAN') {
-      return <select disabled={disabled} required={field.is_required} value={value} onChange={(event) => update(event.target.value)}><option value="">{t('common.notSpecified')}</option><option value="true">{t('common.yes')}</option><option value="false">{t('common.no')}</option></select>
-    }
-    if (field.field_type === 'SELECT') {
-      return <select disabled={disabled} required={field.is_required} value={value} onChange={(event) => update(event.target.value)}><option value="">{t('common.notSpecified')}</option>{(field.options || []).map((option) => <option value={option} key={option}>{option}</option>)}</select>
-    }
-    const inputType = field.field_type === 'DATE' ? 'date' : ['INTEGER', 'DECIMAL'].includes(field.field_type) ? 'number' : 'text'
-    return <input disabled={disabled} required={field.is_required} type={inputType} step={field.field_type === 'DECIMAL' ? 'any' : undefined} value={value} onChange={(event) => update(event.target.value)} />
-  }
-
   return <div className="passport-grid">
     <section><h4>{t('passport.identification')}</h4><dl className="detail-grid">
       <Detail label={t('machines.inventoryNumber')} value={machine.inventory_number} />
@@ -95,7 +82,9 @@ export function PassportOverviewTab({ passport, customValues, setCustomValues, o
       <Detail label={t('passport.addedAt')} value={date(machine.created_at)} />
     </dl></section>
     <section><h4>{t('passport.customFields')}</h4>
-      {passport.custom_fields.map((field) => <label key={field.field_id}>{field[`label_${locale}` as 'label_bg'] || field.label_bg}{field.unit ? ` (${field.unit})` : ''}{control(field)}</label>)}
+      {passport.custom_fields.map((field) => <CategoryFieldControl key={field.field_id} field={field}
+        value={customValues[field.field_id] || ''} disabled={!hasPermission('assets.edit')}
+        onChange={value => setCustomValues(current => ({ ...current, [field.field_id]: value }))} />)}
       {!passport.custom_fields.length && <div className="empty-state">{t('passport.noCustomFields')}</div>}
       {hasPermission('assets.edit') && passport.custom_fields.length > 0 && <button className="primary" onClick={onSave}>{t('common.save')}</button>}
     </section>
@@ -139,7 +128,7 @@ export function PassportProtocolsTab({ passport }: CommonProps) {
 export function PassportPartsTab({ passport, onOpenCatalog }: CommonProps & { onOpenCatalog?: () => void }) {
   const { date, t } = useI18n()
   return <div className="passport-section-stack">
-    <section><div className="toolbar"><div><h4>{t('passport.usedParts')}</h4></div>{onOpenCatalog && <button className="primary" onClick={onOpenCatalog}><PackageCheck size={16} />{t('passport.openCatalog')}</button>}</div><div className="document-list">{passport.parts_used.map((part) => <div key={part.id}><span><b>{part.part_number || t('common.noValue')} · {part.description}</b><small>{part.repair_reference || t('common.noValue')} · {date(part.created_at)}</small><em>{part.quantity} {part.unit || ''}{part.source ? ` · ${part.source}` : ''}</em></span></div>)}{!passport.parts_used.length && <div className="empty-state">{t('passport.noParts')}</div>}</div></section>
+    <section><div className="toolbar"><div><h4>{t('passport.usedParts')}</h4></div>{onOpenCatalog && passport.machine.category_definition?.capabilities?.includes('HAS_PARTS_CATALOG') && <button className="primary" onClick={onOpenCatalog}><PackageCheck size={16} />{t('passport.openCatalog')}</button>}</div><div className="document-list">{passport.parts_used.map((part) => <div key={part.id}><span><b>{part.part_number || t('common.noValue')} · {part.description}</b><small>{part.repair_reference || t('common.noValue')} · {date(part.created_at)}</small><em>{part.quantity} {part.unit || ''}{part.source ? ` · ${part.source}` : ''}</em></span></div>)}{!passport.parts_used.length && <div className="empty-state">{t('passport.noParts')}</div>}</div></section>
     <section><h4>{t('passport.partRequests')}</h4><div className="document-list">{passport.part_requests.map((request) => <div key={request.id}><span><b>{request.request_reference || t('common.noValue')}</b><small>{statusText(t, request.status, 'part')} · {statusText(t, request.priority, 'part')} · {date(request.created_at)}</small></span></div>)}{!passport.part_requests.length && <div className="empty-state">{t('passport.noRequests')}</div>}</div></section>
   </div>
 }

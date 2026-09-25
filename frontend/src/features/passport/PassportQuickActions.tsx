@@ -21,7 +21,7 @@ export function PassportQuickActions({ passport, onWorkflow, onCatalog, onTab }:
       {onWorkflow && hasPermission('repairs.view') && (state.active_repair
         ? <button type="button" className="secondary" onClick={() => onWorkflow({ action: 'repair-open', machineId: machine.id, repairId: state.active_repair!.id })}><Wrench size={17} aria-hidden="true" />{t('entry.openRepair')}</button>
         : active && state.allowed_actions.repair && <button type="button" className="secondary" onClick={() => onWorkflow({ action: 'repair-create', machineId: machine.id })}><Wrench size={17} aria-hidden="true" />{t('entry.startRepair')}</button>)}
-      {onCatalog && hasPermission('parts.view') && <button type="button" className="secondary" onClick={onCatalog}><BookOpen size={17} aria-hidden="true" />{t('nav.catalog')}</button>}
+      {onCatalog && machine.category_definition?.capabilities?.includes('HAS_PARTS_CATALOG') && hasPermission('parts.view') && <button type="button" className="secondary" onClick={onCatalog}><BookOpen size={17} aria-hidden="true" />{t('nav.catalog')}</button>}
       {hasPermission('documents.view') && <button type="button" className="secondary" onClick={() => onTab('protocols')}><FileText size={17} aria-hidden="true" />{t('passport.tab.protocols')}</button>}
       {active && hasPermission('repairs.edit') && <button type="button" className="secondary" onClick={() => onTab('files')}><FolderOpen size={17} aria-hidden="true" />{t('passport.tab.files')}</button>}
     </div>

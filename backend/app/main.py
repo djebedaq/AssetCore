@@ -16,6 +16,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from .application_errors import ApplicationError
+from .assets.capabilities import supports as asset_supports
 
 # Compatibility imports retain the historical Python entry points.
 from .assets.queries import _active_transfer as _active_transfer
@@ -521,6 +522,8 @@ def create_repair(
     item = db.scalar(machine_statement)
     if not item:
         raise HTTPException(404, "Машината не е намерена")
+    if not asset_supports(item, "HAS_REPAIR_WORKFLOW"):
+        raise HTTPException(409, detail={"code": "workflow_not_supported", "message": "Категорията не поддържа нов ремонт."})
     active = _active_transfer(db, item.id)
     if active:
         raise HTTPException(
@@ -798,6 +801,13 @@ def catalog(
     _: User = Depends(require_parts_viewer),
     db: Session = Depends(get_db),
 ) -> list[PartCatalog]:
+    machine = None
+    if machine_id is not None:
+        machine = db.get(Machine, machine_id)
+        if machine is None:
+            raise HTTPException(404, "Машината не е намерена")
+        if not asset_supports(machine, "HAS_PARTS_CATALOG"):
+            return []
     statement = select(PartCatalog).where(PartCatalog.is_active.is_(True))
     if brand:
         statement = statement.where(PartCatalog.brand == brand)
@@ -834,10 +844,7 @@ def catalog(
             PartCatalog.brand, PartCatalog.model, PartCatalog.assembly, PartCatalog.position
         ).limit(2000)
     ).all()
-    if machine_id is not None:
-        machine = db.get(Machine, machine_id)
-        if machine is None:
-            raise HTTPException(404, "Машината не е намерена")
+    if machine is not None:
         items = [
             item for item in items
             if str(machine.inventory_number) in (item.compatible_machine_numbers or [])

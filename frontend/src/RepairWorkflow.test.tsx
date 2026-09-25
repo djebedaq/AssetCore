@@ -165,6 +165,34 @@ describe('ремонтен работен процес', () => {
     expect(await screen.findByRole('button', { name: 'Завърши ремонта и създай протокол' })).toBeInTheDocument()
   })
 
+  it('запазва историята и ремонта без каталогов селектор при празен машинен каталог', async () => {
+    const current = repair({
+      status: 'REPAIRING', machine_name: 'Test-only repair asset',
+      work_performed: 'Тестова работа', repair_minutes: 20,
+      parts_used: [{
+        id: 9, repair_id: 41, catalog_part_id: 77, part_number: 'QA-HISTORY',
+        description: 'Исторически отчетена част', quantity: 1, unit: 'pcs',
+        created_by_id: 1, created_at: '2026-08-09T10:03:00Z',
+      }],
+    })
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path.endsWith('/api/repair-cases') && !init?.method) return json([current])
+      if (path.endsWith('/api/machines')) return json([{ id: 7, status: 'REPAIR', category_capabilities: ['HAS_REPAIR_WORKFLOW'] }])
+      if (path.endsWith('/api/repair-cases/41')) return json(current)
+      if (path.includes('/api/catalog/parts?verified_only=true&machine_id=7')) return json([])
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<I18nProvider initialLocale="bg"><IndustrialRepairs /></I18nProvider>)
+    await userEvent.click(await screen.findByRole('button', { name: /Test-only repair asset/ }))
+    expect(await screen.findByText('Исторически отчетена част')).toBeVisible()
+    expect(screen.queryByLabelText('Проверена каталожна част')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Запази и продължи към Завършване' })).toBeEnabled()
+    expect(fetchMock.mock.calls.some(([path]) => String(path).includes('catalog/parts?verified_only=true&machine_id=7'))).toBe(true)
+  })
+
   it('не изпраща duplicate participant при двоен click и показва записания участник', async () => {
     let participantAdded = false
     let participantPosts = 0

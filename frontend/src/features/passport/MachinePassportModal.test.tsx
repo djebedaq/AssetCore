@@ -133,6 +133,22 @@ describe('Machine Passport V2', () => {
     expect(onOpenCatalog).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps historical parts visible after catalog capability removal without a new catalog shortcut', async () => {
+    const value: MachinePassport = {
+      ...passport,
+      machine: { ...passport.machine, category_definition: {
+        ...passport.machine.category_definition!, capabilities: [],
+      } },
+    }
+    const onOpenCatalog = vi.fn()
+    renderPassport(value, 'bg', onOpenCatalog)
+    await userEvent.click(await screen.findByRole('tab', { name: 'Резервни части' }))
+    expect(screen.getByText(/TEST-PART/)).toBeVisible()
+    expect(screen.getAllByText('TEST-REQUEST-001').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: /Отвори каталога/ })).not.toBeInTheDocument()
+    expect(onOpenCatalog).not.toHaveBeenCalled()
+  })
+
   it('keeps attachments, technical documents, revisions and the existing upload action in Files', async () => {
     const { container, fetchMock } = renderPassport()
     await userEvent.click(await screen.findByRole('tab', { name: 'Снимки и файлове' }))

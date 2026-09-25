@@ -156,7 +156,9 @@ describe('asset form capabilities', () => {
   ]
 
   it('starts unselected and submits a generic asset with null pressure', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json({ id: 99 }))
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) =>
+      String(input).includes('/form-definition')
+        ? json({ id: 2, capabilities: [], fields: [] }) : json({ id: 99 }))
     vi.stubGlobal('fetch', fetchMock)
     render(<I18nProvider initialLocale="bg"><MachineModal locations={[]} departments={[]} categories={categories} onClose={vi.fn()} onSaved={vi.fn()} /></I18nProvider>)
     const actor = userEvent.setup()
@@ -168,15 +170,74 @@ describe('asset form capabilities', () => {
     await actor.type(screen.getByLabelText('Наименование'), 'Тестов актив')
     await actor.type(screen.getByLabelText('Марка'), 'Тестов производител')
     await actor.click(screen.getByRole('button', { name: 'Запази' }))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true))
+    const body = JSON.parse(String(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')?.[1]?.body))
     expect(body.category_id).toBe(2)
     expect(body.pressure_bar).toBeNull()
+    expect(body.custom_fields).toEqual([])
     expect(body).not.toHaveProperty('category')
   })
 
   it('shows existing pressure only for a category with HAS_PRESSURE', () => {
     render(<I18nProvider initialLocale="bg"><MachineModal machine={{ id: 7, inventory_number: '7', name: 'QA HPWJ', category: 'HPWJ', category_id: 1, brand: 'QA', pressure_bar: 1000, status: 'READY', created_at: '', updated_at: '' }} locations={[]} departments={[]} categories={categories} onClose={vi.fn()} onSaved={vi.fn()} /></I18nProvider>)
     expect(screen.getByLabelText('Налягане (bar)')).toHaveValue(1000)
+  })
+
+  it('renders and submits configured technical fields in the same create request', async () => {
+    const fields = [
+      { id: 11, category_id: 2, code: 'QA_TEXT', label_bg: 'Текст', label_en: 'Text', label_ru: 'Текст', field_type: 'TEXT', is_required: true, sort_order: 1, is_active: true, validation_rules: { min_length: 2, max_length: 8 } },
+      { id: 12, category_id: 2, code: 'QA_INTEGER', label_bg: 'Брой', field_type: 'INTEGER', is_required: false, sort_order: 2, is_active: true, unit: 'бр.', validation_rules: { min: 1, max: 10 } },
+      { id: 13, category_id: 2, code: 'QA_DECIMAL', label_bg: 'Размер', field_type: 'DECIMAL', is_required: false, sort_order: 3, is_active: true },
+      { id: 14, category_id: 2, code: 'QA_BOOLEAN', label_bg: 'Флаг', field_type: 'BOOLEAN', is_required: false, sort_order: 4, is_active: true },
+      { id: 15, category_id: 2, code: 'QA_DATE', label_bg: 'Дата', field_type: 'DATE', is_required: false, sort_order: 5, is_active: true },
+      { id: 16, category_id: 2, code: 'QA_SELECT', label_bg: 'Избор', field_type: 'SELECT', is_required: false, sort_order: 6, is_active: true, options: ['A', 'B'] },
+    ]
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => String(input).includes('/form-definition')
+      ? json({ id: 2, capabilities: [], fields }) : json({ id: 100 }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<I18nProvider initialLocale="bg"><MachineModal initialCategoryId={2} locations={[]} departments={[]} categories={categories} onClose={vi.fn()} onSaved={vi.fn()} /></I18nProvider>)
+    const actor = userEvent.setup()
+    await actor.type(await screen.findByRole('textbox', { name: 'Текст' }), 'AB')
+    await actor.type(screen.getByLabelText('Брой (бр.)'), '5')
+    await actor.type(screen.getByLabelText('Размер'), '1.5')
+    await actor.selectOptions(screen.getByLabelText('Флаг'), 'true')
+    await actor.type(screen.getByLabelText('Дата'), '2026-09-24')
+    await actor.selectOptions(screen.getByLabelText('Избор'), 'B')
+    await actor.type(screen.getByLabelText('Инвентарен номер'), 'QA-DYNAMIC-UI')
+    await actor.type(screen.getByLabelText('Наименование'), 'Тестов актив')
+    await actor.type(screen.getByLabelText('Марка'), 'QA')
+    await actor.click(screen.getByRole('button', { name: 'Запази' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true))
+    const body = JSON.parse(String(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')?.[1]?.body))
+    expect(body.custom_fields).toEqual([
+      { field_id: 11, value: 'AB' }, { field_id: 12, value: '5' },
+      { field_id: 13, value: '1.5' }, { field_id: 14, value: 'true' },
+      { field_id: 15, value: '2026-09-24' }, { field_id: 16, value: 'B' },
+    ])
+  })
+
+  it('loads target-category values and submits category transition with its fields together', async () => {
+    const field = { id: 21, category_id: 2, code: 'QA_TARGET', label_bg: 'Параметър',
+      field_type: 'TEXT', is_required: true, sort_order: 1, is_active: true }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const path = String(input)
+      if (path.includes('form-data?category_id=1')) return json({ category: { id: 1, capabilities: ['HAS_PRESSURE'], fields: [] }, values: [] })
+      if (path.includes('form-data?category_id=2')) return json({ category: { id: 2, capabilities: [], fields: [field] }, values: [{ field_id: 21, value: 'Earlier' }] })
+      return json({ id: 7 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<I18nProvider initialLocale="bg"><MachineModal machine={{ id: 7, inventory_number: '7', name: 'QA HPWJ', category: 'HPWJ', category_id: 1, brand: 'QA', pressure_bar: 1000, status: 'READY', created_at: '', updated_at: '' }} locations={[]} departments={[]} categories={categories} onClose={vi.fn()} onSaved={vi.fn()} /></I18nProvider>)
+    const actor = userEvent.setup()
+    await actor.selectOptions(screen.getByLabelText('Категория'), '2')
+    const target = await screen.findByRole('textbox', { name: 'Параметър' })
+    expect(target).toHaveValue('Earlier')
+    await actor.clear(target)
+    await actor.type(target, 'Updated')
+    await actor.click(screen.getByRole('button', { name: 'Запази' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(true))
+    const body = JSON.parse(String(fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')?.[1]?.body))
+    expect(body.category_id).toBe(2)
+    expect(body.pressure_bar).toBeNull()
+    expect(body.custom_fields).toEqual([{ field_id: 21, value: 'Updated' }])
   })
 })

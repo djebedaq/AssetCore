@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..audit import add_audit_log
-from ..industrial_schemas import CustomFieldValuesUpdate
+from ..industrial_schemas import CustomFieldValueInput, CustomFieldValuesUpdate
 from ..models import CategoryFieldDefinition, FieldType, Machine, MachineFieldValue, User
 from ..persistence import _commit
 from ..workflow import add_machine_event, business_conflict
@@ -86,63 +86,10 @@ def update_custom_fields(
     machine = db.get(Machine, machine_id)
     if machine is None:
         raise HTTPException(404, "Машината не е намерена.")
-    field_ids = [item.field_id for item in payload.values]
-    fields = (
-        db.scalars(
-            select(CategoryFieldDefinition).where(CategoryFieldDefinition.id.in_(field_ids))
-        ).all()
-        if field_ids
-        else []
+    normalized, previous, changed = apply_custom_fields(
+        db, machine, payload.values, user, require_complete=True
     )
-    by_id = {field.id: field for field in fields}
-    if len(by_id) != len(field_ids):
-        raise HTTPException(404, "Едно или повече потребителски полета не са намерени.")
-    current_values = {
-        item.field_id: item
-        for item in db.scalars(
-            select(MachineFieldValue).where(MachineFieldValue.machine_id == machine.id)
-        ).all()
-    }
-    previous = {
-        by_id[field_id].code: current_values.get(field_id).value
-        if field_id in current_values
-        else None
-        for field_id in field_ids
-    }
-    normalized: dict[int, str | None] = {}
-    for item in payload.values:
-        field = by_id[item.field_id]
-        if machine.category_id != field.category_id:
-            raise business_conflict(
-                "field_category_mismatch",
-                f"Полето „{field.label_bg}“ не принадлежи към категорията на машината.",
-            )
-        normalized[field.id] = _validated_custom_field_value(field, item.value)
-        value = current_values.get(field.id)
-        if value is None:
-            value = MachineFieldValue(machine_id=machine.id, field_id=field.id)
-            db.add(value)
-            current_values[field.id] = value
-        value.value = normalized[field.id]
-        value.updated_by_id = user.id
-    required_fields = db.scalars(
-        select(CategoryFieldDefinition).where(
-            CategoryFieldDefinition.category_id == machine.category_id,
-            CategoryFieldDefinition.is_active.is_(True),
-            CategoryFieldDefinition.is_required.is_(True),
-        )
-    ).all()
-    for field in required_fields:
-        candidate = normalized.get(
-            field.id,
-            current_values.get(field.id).value if field.id in current_values else None,
-        )
-        _validated_custom_field_value(field, candidate)
-    changed = {
-        by_id[field_id].code: normalized[field_id]
-        for field_id in field_ids
-        if previous[by_id[field_id].code] != normalized[field_id]
-    }
+    field_ids = list(normalized)
     add_machine_event(
         db,
         machine,
@@ -164,3 +111,58 @@ def update_custom_fields(
         "machine_id": machine.id,
         "values": [{"field_id": field_id, "value": normalized[field_id]} for field_id in field_ids],
     }
+
+
+def apply_custom_fields(
+    db: Session,
+    machine: Machine,
+    inputs: list[CustomFieldValueInput],
+    user: User,
+    *,
+    require_complete: bool,
+) -> tuple[dict[int, str | None], dict[str, str | None], dict[str, str | None]]:
+    """Validate all category values before changing ORM state; caller owns the transaction."""
+    field_ids = [item.field_id for item in inputs]
+    if len(field_ids) != len(set(field_ids)):
+        raise HTTPException(422, detail={"code": "duplicate_custom_field", "message": "Полето е подадено повече от веднъж."})
+    fields = db.scalars(
+        select(CategoryFieldDefinition).where(CategoryFieldDefinition.category_id == machine.category_id)
+    ).all()
+    by_id = {field.id: field for field in fields}
+    if any(field_id not in by_id for field_id in field_ids):
+        raise business_conflict("field_category_mismatch", "Полето не принадлежи към категорията на машината.")
+    current_values = {
+        item.field_id: item for item in db.scalars(
+            select(MachineFieldValue).where(MachineFieldValue.machine_id == machine.id)
+        ).all()
+    }
+    previous = {
+        by_id[field_id].code: current_values[field_id].value if field_id in current_values else None
+        for field_id in field_ids
+    }
+    normalized: dict[int, str | None] = {}
+    for item in inputs:
+        field = by_id[item.field_id]
+        if not field.is_active:
+            raise HTTPException(422, detail={"code": "inactive_custom_field", "message": "Полето е неактивно.", "field_id": field.id})
+        normalized[field.id] = _validated_custom_field_value(field, item.value)
+    if require_complete:
+        for field in fields:
+            if field.is_active and field.is_required:
+                candidate = normalized.get(
+                    field.id,
+                    current_values[field.id].value if field.id in current_values else None,
+                )
+                _validated_custom_field_value(field, candidate)
+    changed = {
+        by_id[field_id].code: value for field_id, value in normalized.items()
+        if previous[by_id[field_id].code] != value
+    }
+    for field_id, value in normalized.items():
+        stored = current_values.get(field_id)
+        if stored is None:
+            stored = MachineFieldValue(machine_id=machine.id, field_id=field_id)
+            db.add(stored)
+        stored.value = value
+        stored.updated_by_id = user.id
+    return normalized, previous, changed
