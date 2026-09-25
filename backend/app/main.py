@@ -801,6 +801,13 @@ def catalog(
     _: User = Depends(require_parts_viewer),
     db: Session = Depends(get_db),
 ) -> list[PartCatalog]:
+    machine = None
+    if machine_id is not None:
+        machine = db.get(Machine, machine_id)
+        if machine is None:
+            raise HTTPException(404, "Машината не е намерена")
+        if not asset_supports(machine, "HAS_PARTS_CATALOG"):
+            return []
     statement = select(PartCatalog).where(PartCatalog.is_active.is_(True))
     if brand:
         statement = statement.where(PartCatalog.brand == brand)
@@ -837,10 +844,7 @@ def catalog(
             PartCatalog.brand, PartCatalog.model, PartCatalog.assembly, PartCatalog.position
         ).limit(2000)
     ).all()
-    if machine_id is not None:
-        machine = db.get(Machine, machine_id)
-        if machine is None:
-            raise HTTPException(404, "Машината не е намерена")
+    if machine is not None:
         items = [
             item for item in items
             if str(machine.inventory_number) in (item.compatible_machine_numbers or [])

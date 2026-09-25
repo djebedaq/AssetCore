@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import base64
+
 from app.models import (
     AssetCategory,
     CategoryFieldDefinition,
     Machine,
     MachineFieldValue,
     PartCatalog,
+    RepairPart,
 )
 from sqlalchemy import select
 
@@ -262,3 +265,133 @@ def test_hpwj_catalog_capability_can_be_removed_without_changing_fleet(
             for row in db.scalars(select(Machine).where(Machine.id.in_(machine_ids.values())))
         }
     assert inventory_after == inventory_before
+
+
+def test_repair_only_catalog_boundaries_preserve_manual_parts_and_history(
+    client, auth_headers, session_factory, machine_ids,
+):
+    repair_only = _category(client, auth_headers, "QA_REPAIR_ONLY", ["HAS_REPAIR_WORKFLOW"])
+    repair_catalog = _category(
+        client, auth_headers, "QA_REPAIR_CATALOG",
+        ["HAS_REPAIR_WORKFLOW", "HAS_PARTS_CATALOG"],
+    )
+    ids = {}
+    for key, category_id in (("ONLY", repair_only), ("CATALOG", repair_catalog)):
+        created = _asset(client, auth_headers, f"QA-REPAIR-{key}", category_id)
+        assert created.status_code == 201, created.text
+        ids[key] = created.json()["id"]
+    with session_factory() as db:
+        part = PartCatalog(
+            source_record_key="QA-REPAIR-CAPABILITY-PART", source_id="QA-REPAIR-CAPABILITY",
+            brand="QA", part_number="QA-REPAIR-PART", description="Тестова каталожна част",
+            unit="pcs", compatible_machine_numbers=["QA-REPAIR-ONLY", "QA-REPAIR-CATALOG"],
+            is_verified=True, verification_status="VERIFIED_QA", is_active=True,
+        )
+        db.add(part)
+        db.commit()
+        part_id = part.id
+
+    def start_repair(machine_id):
+        response = client.post("/api/repair-cases", headers=auth_headers, json={
+            "machine_id": machine_id, "reported_problem": "Тестов проблем",
+            "condition_before": "Тестово състояние",
+        })
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    only_repair_id = start_repair(ids["ONLY"])
+    catalog_repair_id = start_repair(ids["CATALOG"])
+    legacy_only = client.get(
+        f"/api/catalog/parts?verified_only=true&machine_id={ids['ONLY']}", headers=auth_headers,
+    )
+    assert legacy_only.status_code == 200 and legacy_only.json() == []
+    legacy_catalog = client.get(
+        f"/api/catalog/parts?verified_only=true&machine_id={ids['CATALOG']}", headers=auth_headers,
+    )
+    assert part_id in {item["id"] for item in legacy_catalog.json()}
+    assert part_id in {item["id"] for item in client.get(
+        "/api/catalog/parts?verified_only=true", headers=auth_headers,
+    ).json()}
+    hpwj_catalog = client.get(
+        f"/api/catalog/parts?verified_only=true&machine_id={machine_ids['9']}",
+        headers=auth_headers,
+    )
+    assert hpwj_catalog.status_code == 200 and hpwj_catalog.json()
+
+    catalog_payload = {"catalog_part_id": part_id, "description": "Тестова каталожна част", "quantity": 1}
+    denied = client.post(
+        f"/api/repair-cases/{only_repair_id}/parts", headers=auth_headers,
+        json=catalog_payload,
+    )
+    assert denied.status_code == 409 and denied.json()["detail"]["code"] == "workflow_not_supported"
+    with session_factory() as db:
+        assert db.scalar(select(RepairPart.id).where(RepairPart.repair_id == only_repair_id)) is None
+    manual = client.post(
+        f"/api/repair-cases/{only_repair_id}/parts", headers=auth_headers,
+        json={"part_number": "QA-MANUAL", "description": "Ръчно отчетена част", "quantity": 1},
+    )
+    assert manual.status_code == 201 and manual.json()["catalog_part_id"] is None
+    catalog_used = client.post(
+        f"/api/repair-cases/{catalog_repair_id}/parts", headers=auth_headers,
+        json=catalog_payload,
+    )
+    assert catalog_used.status_code == 201 and catalog_used.json()["catalog_part_id"] == part_id
+
+    unknown = client.post("/api/part-requests/unknown", headers=auth_headers, json={
+        "machine_id": ids["ONLY"], "assembly": "Тестов възел",
+        "description": "Непозната тестова част", "quantity": 1,
+        "photo": {"filename": "qa-only.png", "media_type": "image/png",
+                  "content_base64": base64.b64encode(b"\x89PNG\r\n\x1a\nQA-only").decode()},
+    })
+    assert unknown.status_code == 201, unknown.text
+    line_id = unknown.json()["lines"][0]["id"]
+    denied_link = client.post(
+        f"/api/part-requests/{unknown.json()['id']}/lines/{line_id}/link-catalog-part",
+        headers=auth_headers, json={"catalog_part_id": part_id},
+    )
+    assert denied_link.status_code == 409
+    assert denied_link.json()["detail"]["code"] == "workflow_not_supported"
+
+    with session_factory() as db:
+        db.get(AssetCategory, repair_catalog).capabilities = ["HAS_REPAIR_WORKFLOW"]
+        db.commit()
+    assert client.get(f"/api/catalog/parts?machine_id={ids['CATALOG']}", headers=auth_headers).json() == []
+    previous = client.get(f"/api/repair-cases/{catalog_repair_id}", headers=auth_headers).json()
+    assert {item["catalog_part_id"] for item in previous["parts_used"]} == {part_id}
+    passport = client.get(f"/api/machines/{ids['CATALOG']}/passport", headers=auth_headers).json()
+    assert part_id in {item["catalog_part_id"] for item in passport["parts_used"]}
+    denied_after_removal = client.post(
+        f"/api/repair-cases/{catalog_repair_id}/parts", headers=auth_headers,
+        json=catalog_payload,
+    )
+    assert denied_after_removal.status_code == 409
+    assert denied_after_removal.json()["detail"]["code"] == "workflow_not_supported"
+    manual_after_removal = client.post(
+        f"/api/repair-cases/{catalog_repair_id}/parts", headers=auth_headers,
+        json={"part_number": "QA-MANUAL-LATER", "description": "Ръчна част след промяна", "quantity": 1},
+    )
+    assert manual_after_removal.status_code == 201
+
+    def complete_repair(repair_id):
+        for payload in (
+            {"status": "DIAGNOSIS", "condition_before": "Тестово състояние",
+             "inspection_complete": True, "diagnosis": "Тестова диагноза",
+             "required_work": "Тестова работа", "diagnosis_minutes": 10},
+            {"status": "REPAIRING", "work_performed": "Тестова работа", "repair_minutes": 20,
+             "result": "Изпълнено"},
+            {"test_passed": True, "test_method": "Тест", "test_details": "Успешен",
+             "functional_test_result": "Успешен", "condition_after": "Добро", "testing_minutes": 10},
+            {"status": "COMPLETED", "test_passed": True, "test_method": "Тест",
+             "testing_minutes": 10, "work_performed": "Тестова работа", "result": "Изпълнено",
+             "test_details": "Успешен", "condition_after": "Добро"},
+        ):
+            response = client.patch(f"/api/repair-cases/{repair_id}", headers=auth_headers, json=payload)
+            assert response.status_code == 200, response.text
+
+    complete_repair(only_repair_id)
+    with session_factory() as db:
+        db.get(AssetCategory, repair_catalog).capabilities = []
+        db.commit()
+    complete_repair(catalog_repair_id)
+    assert client.get(f"/api/repair-cases/{catalog_repair_id}", headers=auth_headers).json()["status"] == "COMPLETED"
+    assert len(machine_ids) == 19

@@ -1008,6 +1008,12 @@ def add_repair_part(
         raise business_conflict("repair_is_closed", "Към завършен ремонт не могат да се добавят части.")
     values = payload.model_dump()
     if payload.catalog_part_id is not None:
+        if not asset_supports(repair.machine, "HAS_PARTS_CATALOG"):
+            raise business_conflict(
+                "workflow_not_supported",
+                "Категорията не поддържа отчет на части от структурирания каталог.",
+                machine_id=repair.machine_id,
+            )
         catalog_part = db.get(PartCatalog, payload.catalog_part_id)
         if catalog_part is None:
             raise HTTPException(404, "Частта от каталога не е намерена.")
@@ -1379,6 +1385,16 @@ def link_unknown_part_to_catalog(
             "part_request_line_is_not_unknown",
             "Само част без потвърден part number може да бъде свързана по този начин.",
             line_id=line.id,
+        )
+    if (
+        request_item.machine is not None
+        and line.linked_catalog_part_id != payload.catalog_part_id
+        and not asset_supports(request_item.machine, "HAS_PARTS_CATALOG")
+    ):
+        raise business_conflict(
+            "workflow_not_supported",
+            "Категорията не поддържа ново свързване със структурирания каталог.",
+            machine_id=request_item.machine.id,
         )
     part = db.scalar(
         select(PartCatalog).where(PartCatalog.id == payload.catalog_part_id)
