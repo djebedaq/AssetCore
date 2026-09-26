@@ -175,6 +175,26 @@ def test_field_administration_preserves_values_and_rejects_unsafe_changes(
     assert any(item["field_id"] == field_id and item["value"] == "A" for item in passport["custom_fields"])
     form = client.get(f"/api/asset-categories/{first['id']}/form-definition", headers=auth_headers).json()
     assert any(item["id"] == field_id and item["label_bg"] == "Нов избор" for item in form["fields"])
+    number = client.post(path, headers=auth_headers, json={
+        "code": "QA_NUMBER", "label_bg": "Тестово число", "field_type": "INTEGER",
+    })
+    assert number.status_code == 201
+    number_id = number.json()["id"]
+    assert client.patch(f"/api/machines/{asset.json()['id']}", headers=auth_headers, json={
+        "custom_fields": [{"field_id": number_id, "value": "1"}],
+    }).status_code == 200
+    # BOOLEAN accepts '1' during writes, but its UI/storage representation is
+    # 'true'. A definition edit cannot silently convert or hide a stored value.
+    conversion = client.patch(f"{path}/{number_id}", headers=auth_headers,
+                              json={"field_type": "BOOLEAN"})
+    assert conversion.status_code == 409
+    assert conversion.json()["detail"]["code"] == "category_field_values_incompatible"
+    assert client.patch(f"{path}/{number_id}", headers=auth_headers,
+                        json={"field_type": "DECIMAL"}).status_code == 200
+    with session_factory() as db:
+        assert db.scalar(select(MachineFieldValue.value).where(
+            MachineFieldValue.field_id == number_id,
+        )) == "1"
     with session_factory() as db:
         audits = db.scalars(select(AuditLog).where(AuditLog.entity_type == "category_field", AuditLog.entity_id == field_id)).all()
         assert any(row.action == "Обновено конфигурируемо поле" and row.user_id for row in audits)

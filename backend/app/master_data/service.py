@@ -193,7 +193,12 @@ def update_category_field(
         )).all()
         for value in values:
             try:
-                _validated_custom_field_value(validation_field, value)
+                normalized = _validated_custom_field_value(validation_field, value)
+                if changes.get("field_type", previous["field_type"]) != previous["field_type"] and normalized != value:
+                    # A type change must work with the stored representation.
+                    # Boolean/date controls require canonical values; changing
+                    # only the definition must never hide or reinterpret them.
+                    raise HTTPException(422, detail={"code": "field_value_requires_conversion"})
             except HTTPException as exc:
                 raise business_conflict(
                     "category_field_values_incompatible",
