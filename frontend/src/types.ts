@@ -181,7 +181,7 @@ export type AssetCategory = {
   id: number; code: string; name_bg: string; name_en?: string | null; name_ru?: string | null;
   description?: string | null; icon?: string | null; validation_rules?: Record<string, unknown> | null;
   document_types?: string[] | null; checklists?: Array<Record<string, unknown>> | null; status_codes?: string[] | null;
-  is_active: boolean; created_at: string; fields: AssetCategoryField[]; capabilities?: string[]
+  is_active: boolean; created_at: string; fields: AssetCategoryField[]; capabilities?: string[]; asset_count?: number
 }
 
 export type RegistryCategory = {

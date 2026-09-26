@@ -33,10 +33,21 @@ def test_asset_routes_keep_openapi_schemas_and_permission_contract():
             actual_schema["properties"] = actual_schema["properties"].copy()
             assert "custom_fields" in actual_schema["properties"]
             actual_schema["properties"].pop("custom_fields")
+        if name in {"CategoryFieldCreate", "CategoryFieldOut"}:
+            # ASSET-01D validates non-negative administrator-defined ordering.
+            actual_schema["properties"] = actual_schema["properties"].copy()
+            sort_order = actual_schema["properties"]["sort_order"].copy()
+            assert sort_order.pop("minimum") == 0
+            actual_schema["properties"]["sort_order"] = sort_order
         assert actual_schema == expected, name
     actual = build_authorization_inventory(app).summary()["routes"]
     paths = set(CONTRACT["paths"])
-    assert [row for row in actual if row["path"] in paths] == CONTRACT["routes"]
+    expected_routes = [row.copy() for row in CONTRACT["routes"]]
+    for row in expected_routes:
+        if row["name"] in {"create_category", "create_category_field"}:
+            # Category configuration is global settings, not an asset edit.
+            row["permission"] = "settings.manage"
+    assert [row for row in actual if row["path"] in paths] == expected_routes
 
 
 def test_historical_route_imports_still_resolve_to_registered_asset_handlers():

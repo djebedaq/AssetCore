@@ -19,6 +19,7 @@ CATEGORY_KEYS = {
     "capabilities",
     "is_active",
     "created_at",
+    "asset_count",
     "fields",
 }
 
