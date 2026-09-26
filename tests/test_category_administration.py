@@ -2,7 +2,14 @@
 
 import json
 
-from app.models import AssetCategory, AuditLog, Machine, MachineFieldValue, ProtocolDocument
+from app.models import (
+    AssetCategory,
+    AuditLog,
+    Machine,
+    MachineFieldValue,
+    PartCatalog,
+    ProtocolDocument,
+)
 from sqlalchemy import select
 
 
@@ -274,7 +281,7 @@ def test_generic_category_end_to_end(client, auth_headers, issue_payload):
     assert _create_asset(client, auth_headers, category_id, "QA-E2E-DENIED").status_code == 422
 
 
-def test_disposable_cross_category_capability_matrix(client, auth_headers):
+def test_disposable_cross_category_capability_matrix(client, auth_headers, session_factory):
     matrix = {
         "BASIC": [],
         "PRESSURE_ONLY": ["HAS_PRESSURE"],
@@ -298,8 +305,22 @@ def test_disposable_cross_category_capability_matrix(client, auth_headers):
     transfer = {row["machine_id"]: row for row in client.get(
         "/api/transfers/availability", headers=auth_headers,
     ).json()}
+    with session_factory() as db:
+        part = PartCatalog(
+            source_record_key="QA-MATRIX-CAPABILITY-PART", source_id="QA-MATRIX-CAPABILITY",
+            brand="QA", part_number="QA-MATRIX-PART", description="Тестова каталожна част",
+            unit="pcs", compatible_machine_numbers=[f"QA-MATRIX-{name}" for name in matrix],
+            is_verified=True, verification_status="VERIFIED_QA", is_active=True,
+        )
+        db.add(part)
+        db.commit()
+        part_id = part.id
     for name, asset_id in assets.items():
         assert transfer[asset_id]["available"] == (name in {"TRANSFER_ONLY", "FULL"})
         repair = client.post("/api/repairs", headers=auth_headers,
                              json={"machine_id": asset_id, "reported_problem": "QA"})
         assert repair.status_code == (201 if name in {"REPAIR_ONLY", "FULL"} else 409)
+        catalog = client.get(f"/api/catalog/parts?verified_only=true&machine_id={asset_id}",
+                             headers=auth_headers)
+        assert catalog.status_code == 200
+        assert (part_id in {item["id"] for item in catalog.json()}) == (name in {"CATALOG_ONLY", "FULL"})
