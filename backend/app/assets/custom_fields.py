@@ -126,7 +126,7 @@ def apply_custom_fields(
     if len(field_ids) != len(set(field_ids)):
         raise HTTPException(422, detail={"code": "duplicate_custom_field", "message": "Полето е подадено повече от веднъж."})
     fields = db.scalars(
-        select(CategoryFieldDefinition).where(CategoryFieldDefinition.category_id == machine.category_id)
+        select(CategoryFieldDefinition).where(CategoryFieldDefinition.category_id == machine.category_id).with_for_update().execution_options(populate_existing=True)
     ).all()
     by_id = {field.id: field for field in fields}
     if any(field_id not in by_id for field_id in field_ids):

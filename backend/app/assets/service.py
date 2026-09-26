@@ -135,7 +135,9 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
         )
         changes["category_id"] = category.id
         changes["category"] = category.code
-    resolved_category = category or item.category_definition
+    resolved_category = category or _resolve_category(
+        db, item.category_id, None, current=item.category_definition,
+    )
     if resolved_category is not None:
         _require_native_fields(
             resolved_category,
@@ -219,13 +221,13 @@ def _resolve_category(
 ) -> AssetCategory:
     """Resolve legacy code writes and reject contradictory category identities."""
     if category_id is not None:
-        category = db.get(AssetCategory, category_id)
+        category = db.scalar(select(AssetCategory).where(AssetCategory.id == category_id).with_for_update().execution_options(populate_existing=True))
         if category is None:
             raise HTTPException(404, "Категорията не е намерена")
     elif code:
-        category = db.scalar(select(AssetCategory).where(AssetCategory.code == code))
+        category = db.scalar(select(AssetCategory).where(AssetCategory.code == code).with_for_update().execution_options(populate_existing=True))
     else:
-        category = current
+        category = db.scalar(select(AssetCategory).where(AssetCategory.id == current.id).with_for_update().execution_options(populate_existing=True)) if current else None
     if category is None:
         raise HTTPException(422, detail={"code": "category_required", "message": "Изберете съществуваща категория."})
     if code is not None and code != category.code:

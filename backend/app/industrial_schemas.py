@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .master_data.capabilities import CAPABILITY_CODES
 from .models import (
     ApprovalDecision,
     FieldType,
@@ -32,12 +33,42 @@ class CategoryCreate(BaseModel):
     @field_validator("capabilities")
     @classmethod
     def validate_capabilities(cls, value: list[str]) -> list[str]:
-        if len(value) != len(set(value)) or any(
-            not code or len(code) > 80 or not all(c.isupper() or c.isdigit() or c == "_" for c in code)
-            for code in value
-        ):
+        if len(value) != len(set(value)) or any(code not in CAPABILITY_CODES for code in value):
             raise ValueError("Невалиден списък с възможности на категорията.")
         return value
+
+
+class CategoryUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name_bg: str | None = Field(default=None, min_length=2, max_length=255)
+    name_en: str | None = Field(default=None, max_length=255)
+    name_ru: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    icon: str | None = Field(default=None, max_length=120)
+    validation_rules: dict | None = None
+    document_types: list[str] | None = None
+    checklists: list[dict] | None = None
+    status_codes: list[str] | None = None
+    capabilities: list[str] | None = None
+    is_active: bool | None = None
+
+    @field_validator("capabilities")
+    @classmethod
+    def validate_capabilities(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None:
+            CategoryCreate.validate_capabilities(value)
+        return value
+
+    @model_validator(mode="after")
+    def require_change(self) -> CategoryUpdate:
+        if not self.model_fields_set or self.name_bg is None and "name_bg" in self.model_fields_set:
+            raise ValueError("Не е подадена валидна промяна за категорията.")
+        if "is_active" in self.model_fields_set and self.is_active is None:
+            raise ValueError("Невалиден статус на категорията.")
+        if "capabilities" in self.model_fields_set and self.capabilities is None:
+            raise ValueError("Невалиден списък с възможности на категорията.")
+        return self
 
 
 class CategoryOut(CategoryCreate):
@@ -58,14 +89,62 @@ class CategoryFieldCreate(BaseModel):
     options: list[str] | None = None
     unit: str | None = Field(default=None, max_length=40)
     validation_rules: dict | None = None
-    sort_order: int = 0
+    sort_order: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def validate_options(self) -> CategoryFieldCreate:
         if self.field_type == FieldType.SELECT and not self.options:
             raise ValueError("За поле от тип избор са необходими допустими стойности.")
-        if self.field_type != FieldType.SELECT and self.options:
+        if self.field_type != FieldType.SELECT and self.options is not None:
             raise ValueError("Допустими стойности се задават само за поле от тип избор.")
+        if self.options and (len(self.options) != len(set(self.options)) or any(not item.strip() for item in self.options)):
+            raise ValueError("Допустимите стойности трябва да са уникални и непразни.")
+        rules = self.validation_rules or {}
+        # Preserve older provenance/metadata keys; validate every rule consumed by
+        # the current machine-value validator before it can reach runtime writes.
+        try:
+            import re
+            from decimal import Decimal, InvalidOperation
+            for key in ("min", "max"):
+                if key in rules and not Decimal(str(rules[key])).is_finite():
+                    raise ValueError
+            for key in ("min_length", "max_length"):
+                if key in rules and (not isinstance(rules[key], int) or isinstance(rules[key], bool) or rules[key] < 0):
+                    raise ValueError
+            if "pattern" in rules:
+                if not isinstance(rules["pattern"], str):
+                    raise ValueError
+                re.compile(rules["pattern"])
+            if "min" in rules and "max" in rules and Decimal(str(rules["min"])) > Decimal(str(rules["max"])):
+                raise ValueError
+            if "min_length" in rules and "max_length" in rules and rules["min_length"] > rules["max_length"]:
+                raise ValueError
+        except (InvalidOperation, ValueError, TypeError, re.error):
+            raise ValueError("Невалидни правила за проверка на поле.") from None
+        return self
+
+
+class CategoryFieldUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label_bg: str | None = Field(default=None, min_length=2, max_length=255)
+    label_en: str | None = Field(default=None, max_length=255)
+    label_ru: str | None = Field(default=None, max_length=255)
+    field_type: FieldType | None = None
+    is_required: bool | None = None
+    options: list[str] | None = None
+    unit: str | None = Field(default=None, max_length=40)
+    validation_rules: dict | None = None
+    sort_order: int | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def require_change(self) -> CategoryFieldUpdate:
+        if not self.model_fields_set:
+            raise ValueError("Не е подадена промяна за полето.")
+        for key in ("label_bg", "field_type", "is_required", "sort_order", "is_active"):
+            if key in self.model_fields_set and getattr(self, key) is None:
+                raise ValueError("Невалидна конфигурация на полето.")
         return self
 
 

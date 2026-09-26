@@ -186,9 +186,8 @@ def test_capabilities_are_independent_at_new_workflow_and_catalog_boundaries(
                          json={"machine_id": ids["REPAIR"], "reported_problem": "QA"})
     assert opened.status_code == 201, opened.text
     repair_id = opened.json()["id"]
-    with session_factory() as db:
-        db.get(AssetCategory, repair).capabilities = []
-        db.commit()
+    assert client.patch(f"/api/categories/{repair}", headers=auth_headers,
+                        json={"capabilities": []}).status_code == 200
     assert client.get(f"/api/repair-cases/{repair_id}", headers=auth_headers).status_code == 200
     continued = client.patch(f"/api/repairs/{repair_id}", headers=auth_headers,
                              json={"diagnosis": "Тестова диагноза"})
@@ -246,17 +245,17 @@ def test_hpwj_catalog_capability_can_be_removed_without_changing_fleet(
             row.id: (row.inventory_number, row.category_id, row.pressure_bar)
             for row in db.scalars(select(Machine).where(Machine.id.in_(machine_ids.values())))
         }
-        hpwj.capabilities = [code for code in expected if code != "HAS_PARTS_CATALOG"]
-        db.commit()
+        hpwj_id = hpwj.id
+    assert client.patch(f"/api/categories/{hpwj_id}", headers=auth_headers, json={
+        "capabilities": [code for code in expected if code != "HAS_PARTS_CATALOG"],
+    }).status_code == 200
     disabled = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers)
     assert disabled.status_code == 200 and disabled.json()["supported"] is False
     source_id = before.json()["assemblies"][0]["source_id"]
     direct = client.get(f"/api/catalog/v2/assemblies/{source_id}?machine_id={machine_id}", headers=auth_headers)
     assert direct.status_code == 409 and direct.json()["detail"]["code"] == "workflow_not_supported"
-    with session_factory() as db:
-        hpwj = db.scalar(select(AssetCategory).where(AssetCategory.code == "HPWJ"))
-        hpwj.capabilities = expected
-        db.commit()
+    assert client.patch(f"/api/categories/{hpwj_id}", headers=auth_headers,
+                        json={"capabilities": expected}).status_code == 200
     restored = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers)
     assert restored.status_code == 200 and restored.json()["supported"] is True
     with session_factory() as db:
@@ -352,9 +351,8 @@ def test_repair_only_catalog_boundaries_preserve_manual_parts_and_history(
     assert denied_link.status_code == 409
     assert denied_link.json()["detail"]["code"] == "workflow_not_supported"
 
-    with session_factory() as db:
-        db.get(AssetCategory, repair_catalog).capabilities = ["HAS_REPAIR_WORKFLOW"]
-        db.commit()
+    assert client.patch(f"/api/categories/{repair_catalog}", headers=auth_headers,
+                        json={"capabilities": ["HAS_REPAIR_WORKFLOW"]}).status_code == 200
     assert client.get(f"/api/catalog/parts?machine_id={ids['CATALOG']}", headers=auth_headers).json() == []
     previous = client.get(f"/api/repair-cases/{catalog_repair_id}", headers=auth_headers).json()
     assert {item["catalog_part_id"] for item in previous["parts_used"]} == {part_id}
@@ -389,9 +387,8 @@ def test_repair_only_catalog_boundaries_preserve_manual_parts_and_history(
             assert response.status_code == 200, response.text
 
     complete_repair(only_repair_id)
-    with session_factory() as db:
-        db.get(AssetCategory, repair_catalog).capabilities = []
-        db.commit()
+    assert client.patch(f"/api/categories/{repair_catalog}", headers=auth_headers,
+                        json={"capabilities": []}).status_code == 200
     complete_repair(catalog_repair_id)
     assert client.get(f"/api/repair-cases/{catalog_repair_id}", headers=auth_headers).json()["status"] == "COMPLETED"
     assert len(machine_ids) == 19

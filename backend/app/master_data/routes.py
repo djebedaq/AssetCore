@@ -1,4 +1,4 @@
-"""Reference-data HTTP adapters with the original route grouping and permissions."""
+"""Reference-data HTTP adapters and settings-authorized category administration."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from ..database import get_db
 from ..industrial_schemas import (
     CategoryCreate,
     CategoryFieldCreate,
+    CategoryFieldUpdate,
+    CategoryUpdate,
     DepartmentCreate,
     DepartmentUpdate,
     LocationAdminCreate,
@@ -43,7 +45,7 @@ def list_categories(
 @category_router.post("/categories", status_code=201, response_model=None)
 def create_category(
     payload: CategoryCreate,
-    user: User = Depends(require_permission(Permission.ASSETS_CREATE)),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> AssetCategory:
     return service.create_category(payload=payload, user=user, db=db)
@@ -53,10 +55,31 @@ def create_category(
 def create_category_field(
     category_id: int,
     payload: CategoryFieldCreate,
-    user: User = Depends(require_permission(Permission.ASSETS_EDIT)),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> CategoryFieldDefinition:
     return service.create_category_field(category_id=category_id, payload=payload, user=user, db=db)
+
+
+@category_router.get("/admin/asset-capabilities")
+def asset_capabilities(_: User = Depends(require_admin)) -> list[dict]:
+    return service.asset_capabilities()
+
+
+@category_router.patch("/categories/{category_id}")
+def update_category(
+    category_id: int, payload: CategoryUpdate,
+    user: User = Depends(require_admin), db: Session = Depends(get_db),
+) -> dict:
+    return service.update_category(category_id, payload, user, db)
+
+
+@category_router.patch("/categories/{category_id}/fields/{field_id}")
+def update_category_field(
+    category_id: int, field_id: int, payload: CategoryFieldUpdate,
+    user: User = Depends(require_admin), db: Session = Depends(get_db),
+) -> dict:
+    return service.update_category_field(category_id, field_id, payload, user, db)
 
 
 @router.get("/departments")
