@@ -43,7 +43,10 @@ def test_owner_promotion_revokes_bearer_and_browser_sessions_and_audits_roles(
 ):
     target_id = _add_user(session_factory, email="promotion@qa.invalid", role=initial_role)
     bearer, _ = _login(client, "promotion@qa.invalid")
-    with TestClient(app, raise_server_exceptions=False) as browser:
+    # Match the isolated API fixtures: entering the application's lifespan
+    # would bootstrap the configured runtime database instead of this fixture.
+    browser = TestClient(app, raise_server_exceptions=False)
+    try:
         _browser_login(browser, "promotion@qa.invalid", "StrongPass123!")
         with session_factory() as db:
             previous_version = db.get(User, target_id).token_version
@@ -54,6 +57,8 @@ def test_owner_promotion_revokes_bearer_and_browser_sessions_and_audits_roles(
         assert promoted.json()["is_system_owner"] is False
         assert client.get("/api/auth/me", headers=bearer).status_code == 401
         assert browser.get("/api/auth/me").status_code == 401
+    finally:
+        browser.close()
     with session_factory() as db:
         assert db.get(User, target_id).token_version == previous_version + 1
         assert db.scalar(select(AuthSession).where(AuthSession.user_id == target_id)).revoked_at
