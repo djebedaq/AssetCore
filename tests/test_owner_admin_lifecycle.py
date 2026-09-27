@@ -145,11 +145,15 @@ def test_client_cannot_mutate_owner_flag(client, auth_headers):
                         json={"is_system_owner": True}).status_code == 422
 
 
-def test_administrator_creation_keeps_license_user_limit(client, auth_headers, monkeypatch):
+def test_administrator_creation_keeps_license_user_limit(
+    client, auth_headers, session_factory, monkeypatch
+):
     # Exercise the existing capacity check after passing administrator assignment.
-    from app import user_api
+    from app import main, user_api
 
     monkeypatch.setattr(settings, "license_enforcement_enabled", True)
+    monkeypatch.setattr(main, "SessionLocal", session_factory)
+    monkeypatch.setattr(main, "evaluate_license", lambda db: SimpleNamespace(read_only=False))
     monkeypatch.setattr(user_api, "active_license", lambda db: SimpleNamespace(payload={"max_users": 1}))
     response = client.post("/api/users", headers=auth_headers,
                            json=_create_payload("capacity@qa.invalid", "administrator"))
