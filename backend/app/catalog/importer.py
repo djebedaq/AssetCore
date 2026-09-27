@@ -45,12 +45,10 @@ def _verified_machine_numbers(db: Session, family: str) -> list[str]:
     machines = list(
         db.scalars(select(Machine).where(Machine.inventory_number.in_(expected)))
     )
-    found = {str(machine.inventory_number) for machine in machines}
-    if found != expected:
-        raise CatalogImportError(
-            f"Липсва проверена машина за каталожно семейство {family}: "
-            f"{sorted(expected - found)}"
-        )
+    # Compatibility is provenance from the verified catalog manifest, not an
+    # instruction to recreate current inventory. Owner-deleted machines may be
+    # absent. Retain the source's numbers and validate any records still present;
+    # do not rewrite document/catalog snapshots to make deletion possible.
     invalid = [
         machine.inventory_number
         for machine in machines

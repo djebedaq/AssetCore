@@ -6,6 +6,8 @@ import { useI18n, type TranslationKey } from '../../i18n'
 import type { AssetCategory, AssetCategoryField } from '../../types'
 import { CategoryDialog, type CapabilityDefinition } from './CategoryDialog'
 
+import { OwnerDeleteButton } from './OwnerDeleteButton'
+
 type FieldForm = {
   code: string; label_bg: string; label_en: string; label_ru: string; field_type: string
   is_required: boolean; options: string[]; unit: string; sort_order: number
@@ -122,13 +124,13 @@ export function CategoryAdministration() {
       <div className="category-admin-heading"><div><h4>{category[`name_${locale}`] || category.name_bg}</h4><small>{category.code}</small></div><span className="badge">{category.is_active ? t('admin.active') : t('admin.inactive')}</span></div>
       <p className="muted">{t('admin.assetCount', { count: category.asset_count || 0 })} · {t('admin.fieldsCount', { count: category.fields.length })}</p>
       <div className="category-chips">{(category.capabilities || []).map(code => <span className="badge" key={code} title={code}>{capabilities.find(item => item.code === code)?.[`name_${locale}`] || code}</span>)}{!category.capabilities?.length && <span className="muted">{t('admin.noCapabilities')}</span>}</div>
-      <div className="category-actions"><button className="secondary compact" onClick={() => setEditingCategory(category)}>{t('common.edit')}</button><button className="secondary compact" onClick={() => void toggleCategory(category)}>{t(category.is_active ? 'admin.deactivate' : 'admin.activate')}</button></div>
+      <div className="category-actions"><button className="secondary compact" onClick={() => setEditingCategory(category)}>{t('common.edit')}</button><button className="secondary compact" onClick={() => void toggleCategory(category)}>{t(category.is_active ? 'admin.deactivate' : 'admin.activate')}</button><OwnerDeleteButton resource="asset_category" resourceId={category.id} identity={category.code} onDeleted={load} /></div>
       <div className="category-field-list"><div className="category-field-title"><h5>{t('admin.categoryFields')}</h5><button className="link" onClick={() => openField(category)}><Plus size={14} />{t('admin.addField')}</button></div>
         {[...category.fields].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id).map(field => <div className="category-field-row" key={field.id}>
           <span><b>{field[`label_${locale}`] || field.label_bg}</b><small>{field.code} · {t(`fieldType.${field.field_type.toLowerCase()}` as TranslationKey)} · {field.is_required ? t('admin.requiredField') : t('admin.optionalField')}{field.unit ? ` · ${field.unit}` : ''} · {t('admin.sortOrder')}: {field.sort_order}</small></span>
           <span className="badge">{field.is_active ? t('admin.active') : t('admin.inactive')}</span>
           <button className="link" onClick={() => openField(category, field)}>{t('common.edit')}</button>
-          <button className="link" onClick={() => void toggleField(category, field)}>{t(field.is_active ? 'admin.deactivate' : 'admin.activate')}</button>
+          <button className="link" onClick={() => void toggleField(category, field)}>{t(field.is_active ? 'admin.deactivate' : 'admin.activate')}</button><OwnerDeleteButton resource="category_field" resourceId={field.id} categoryId={category.id} identity={field.code} onDeleted={load} />
         </div>)}
       </div>
     </article>)}</div>

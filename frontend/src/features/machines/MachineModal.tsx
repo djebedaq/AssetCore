@@ -1,9 +1,10 @@
+import { OwnerDeleteButton } from '../administration/OwnerDeleteButton'
 import { type FormEvent, useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { ApiError, api } from '../../api'
 import AuthenticatedImage from '../../AuthenticatedImage'
 import { statusText, useI18n } from '../../i18n'
-import { hasPermission } from '../../permissions'
+import { hasPermission, storedUser } from '../../permissions'
 import type { AssetCategory, AssetCategoryField, Department, Location, Machine, RegistryCategory } from '../../types'
 import { CategoryDialog } from '../administration/CategoryDialog'
 import CategoryFieldControl from './CategoryFieldControl'
@@ -193,6 +194,7 @@ export default function MachineModal({ machine, initialCategoryId, locations, de
             {canEdit && <button className="primary" disabled={loadingFields || !definition}>{t('common.save')}</button>}
           </div>
         </form>
+        {machine && storedUser()?.is_system_owner && <section className="owner-deletion-section"><OwnerDeleteButton resource="machine" resourceId={machine.id} identity={machine.inventory_number} onDeleted={onSaved} /></section>}
       </div>
       {categoryDialogOpen && <CategoryDialog onClose={() => setCategoryDialogOpen(false)} onSaved={category => {
         setCreatedCategory(category)

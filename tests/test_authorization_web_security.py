@@ -87,11 +87,11 @@ def test_complete_runtime_route_inventory_is_classified_and_deterministic():
     # The backend-only CI job intentionally has no compiled frontend/dist;
     # production/Docker has the mount plus SPA route. Both graphs are explicit.
     assert static_count in {0, 3}
-    assert summary["route_count"] == 175 + static_count
-    assert summary["mutating_route_count"] == 82
+    assert summary["route_count"] == 177 + static_count
+    assert summary["mutating_route_count"] == 83
     assert summary["by_kind"] == {
-        "authenticated": 6,
-        "authenticated_special": 8,
+        "authenticated": 7,
+        "authenticated_special": 9,
         "permission": 146,
         "public_exempt": 15,
         **({"static_public": 3} if static_count else {}),

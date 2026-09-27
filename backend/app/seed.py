@@ -144,13 +144,19 @@ def _seed_verified_registry(db: Session) -> None:
             )
         )
 
+    if users or ownership is not None:
+        db.flush()
+        return
+
+    # Verified registry and signature configuration are installation bootstrap,
+    # never a repair/repopulation operation on an existing installation.
     existing_locations = {x.name: x for x in db.scalars(select(Location)).all()}
     for name in LOCATIONS:
         if name not in existing_locations:
             db.add(Location(name=name))
         elif name == "Цех" and not existing_locations[name].is_active:
             existing_locations[name].is_active = True
-    db.commit()
+    db.flush()
 
     default_signature_slots = (
         (DocumentType.TRANSFER_ISSUE.value, "ACCEPTANCE", "Приел", "Accepted by", "Принял", 1),
@@ -171,7 +177,7 @@ def _seed_verified_registry(db: Session) -> None:
     ):
         slot.required = False
         slot.is_active = False
-    db.commit()
+    db.flush()
 
     locations = {x.name: x for x in db.scalars(select(Location)).all()}
     hpwj_category = db.scalar(
@@ -211,14 +217,14 @@ def _seed_verified_registry(db: Session) -> None:
         machine.serial_number = item["serial_number"]
         if machine.location_id is None:
             machine.location_id = locations["Цех"].id
-    db.commit()
+    db.flush()
 
 # --- Director Preview: technical library and verified catalog records ---
 def _seed_documents_and_catalog(db: Session) -> None:
     admin = db.scalar(select(User).where(User.is_system_owner.is_(True)))
     if admin:
         import_authoritative_catalog(db, admin)
-        db.commit()
+        db.flush()
 
 
 def _seed_document_templates(db: Session) -> None:
@@ -376,9 +382,16 @@ def _seed_document_templates(db: Session) -> None:
             existing.is_published = True
             existing.published_by_id = admin.id
             existing.published_at = existing.published_at or utcnow()
-    db.commit()
+    db.flush()
 
 def seed_database(db: Session) -> None:
-    _seed_verified_registry(db)
-    _seed_documents_and_catalog(db)
-    _seed_document_templates(db)
+    try:
+        _seed_verified_registry(db)
+        _seed_documents_and_catalog(db)
+        _seed_document_templates(db)
+        # The existing ownership designation is also the durable bootstrap marker.
+        # Commit it together with all initial data, so failed bootstrap can retry.
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise

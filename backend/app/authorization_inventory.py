@@ -145,6 +145,10 @@ PUBLIC_ALLOWLIST = (
 # Keeping the exact method/path/name here makes each exception reviewable.
 AUTHENTICATED_SPECIAL_MUTATIONS = (
     AllowlistEntry(
+        _key("POST", "/api/owner/data-deletion/{resource}/{resource_id}/execute", "owner_deletion_execute"),
+        "Explicit current installation-owner guard, reauthentication, confirmation and locked dependency checks.",
+    ),
+    AllowlistEntry(
         _key("POST", "/api/auth/logout", "logout_session"),
         "Authenticated browser-session logout with CSRF and server-side revocation.",
     ),

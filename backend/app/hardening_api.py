@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from .audit import add_audit_log
 from .database import get_db
-from .governance import emergency_routes, license_routes, owner_routes
+from .governance import emergency_routes, license_routes, owner_data_routes, owner_routes
 from .governance.audit_context import _correlation_id as _correlation_id
 from .governance.emergency_routes import emergency_access_status as emergency_access_status
 from .governance.emergency_routes import end_emergency_access as end_emergency_access
@@ -337,6 +337,7 @@ router.include_router(emergency_routes.router)
 
 
 router.include_router(owner_routes.transfer_router)
+router.include_router(owner_data_routes.router)
 
 
 router.include_router(license_routes.router)
