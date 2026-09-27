@@ -243,6 +243,36 @@ def test_unused_nonowner_administrator_physically_deleted_sessions_and_audit(
     )
 
 
+@pytest.mark.parametrize("initial_role", ["administrator", "mechanic"])
+@pytest.mark.parametrize("has_dependency", [False, True])
+def test_api_created_or_promoted_administrator_preserves_deletion_dependencies(
+    deletion_client, deletion_factory, initial_role, has_dependency
+):
+    client, headers = deletion_client
+    created = client.post("/api/users", headers=headers, json={
+        "email": "api-admin@qa.invalid", "first_name": "QA", "middle_name": "API",
+        "last_name": "Administrator", "job_title": "QA administrator", "role": initial_role,
+        "temporary_password": QA_PASSWORD, "confirm_password": QA_PASSWORD,
+    })
+    assert created.status_code == 201
+    identifier = created.json()["id"]
+    if initial_role != "administrator":
+        assert client.patch(f"/api/users/{identifier}", headers=headers,
+                            json={"role": "administrator"}).status_code == 200
+    if has_dependency:
+        with deletion_factory() as db:
+            db.add(AuditLog(entity_type="user", entity_id=identifier,
+                            user_id=identifier, action="QA_PROTECTED_HISTORY"))
+            db.commit()
+    before = preview(deletion_client, "user", identifier).json()
+    assert before["can_delete"] is not has_dependency
+    deleted = execute(deletion_client, "user", identifier, before["confirmation_text"])
+    assert deleted.status_code == (409 if has_dependency else 200)
+    with deletion_factory() as db:
+        assert (db.get(User, identifier) is not None) is has_dependency
+        assert db.get(User, 1).is_system_owner is True
+
+
 @pytest.mark.parametrize(
     "change,code,status",
     [

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from './i18n'
 import UserAdministration from './UserAdministration'
+import GovernancePanel from './GovernancePanel'
 import { setSessionUser } from './permissions'
 import type { ManagedUser, PermissionCode, UserRole } from './types'
 
@@ -49,14 +50,58 @@ describe('управление на потребителски акаунти', 
     expect(screen.getByRole('option', { name: 'Администратор' })).toBeInTheDocument()
   })
 
-  it('не предлага administrator в стандартната owner форма за нов акаунт', async () => {
+  it('предлага всички четири роли в owner формата за нов акаунт', async () => {
     const owner = account(1, 'administrator', true)
     renderPage(owner, [owner])
     await screen.findByText('Основен администратор')
     await userEvent.click(screen.getByRole('button', { name: 'Добави потребител' }))
     const roleSelect = within(screen.getByRole('dialog')).getByLabelText('Роля')
-    expect(within(roleSelect).queryByRole('option', { name: 'Администратор' })).not.toBeInTheDocument()
-    expect(within(roleSelect).getByRole('option', { name: 'Директор' })).toBeInTheDocument()
+    expect(within(roleSelect).getAllByRole('option').map((option) => option.getAttribute('value'))).toEqual(['administrator', 'director', 'mechanic', 'observer'])
+  })
+
+  it('owner може да редактира administrator, включително да го понижи', async () => {
+    const owner = account(1, 'administrator', true)
+    const target = account(2, 'administrator')
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PATCH') return response({ ...target, role: 'director' })
+      return response(String(input).includes('/departments') ? [] : [owner, target])
+    })
+    renderPage(owner, [owner, target], fetchMock)
+    const row = (await screen.findByText('Test user 2')).closest('tr')!
+    await userEvent.click(within(row).getByRole('button', { name: 'Редактиране' }))
+    const dialog = within(screen.getByRole('dialog'))
+    const roles = dialog.getByLabelText('Роля')
+    expect(roles).toHaveValue('administrator')
+    expect(within(roles).getAllByRole('option').map((option) => option.getAttribute('value'))).toEqual(['administrator', 'director', 'mechanic', 'observer'])
+    await userEvent.selectOptions(roles, 'director')
+    // Test fixtures supply complete structured names, as required by the API.
+    await userEvent.type(dialog.getByLabelText('Собствено име'), 'QA')
+    await userEvent.type(dialog.getByLabelText('Бащино име'), 'Lifecycle')
+    await userEvent.type(dialog.getByLabelText('Фамилия'), 'Administrator')
+    await userEvent.type(dialog.getByLabelText('Длъжност'), 'QA administrator')
+    await userEvent.click(dialog.getByRole('button', { name: 'Запази' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Потребителят е актуализиран.')
+    expect(fetchMock).toHaveBeenCalledWith('/api/users/2', expect.objectContaining({
+      method: 'PATCH', body: expect.stringContaining('"role":"director"'),
+    }))
+  })
+
+  it('administrator без ownership не може да задава administrator или да управлява director и administrator', async () => {
+    const actor = account(2, 'administrator')
+    renderPage(actor, [account(1, 'administrator', true), actor, account(3, 'administrator'), account(4, 'director'), account(5, 'mechanic')])
+    await screen.findByText('Test user 5')
+    for (const id of [1, 2, 3, 4]) {
+      const row = screen.getByText(`Test user ${id}`).closest('tr')!
+      expect(within(row).queryByRole('button')).not.toBeInTheDocument()
+    }
+    const mechanic = screen.getByText('Test user 5').closest('tr')!
+    await userEvent.click(within(mechanic).getByRole('button', { name: 'Редактиране' }))
+    let roles = within(screen.getByRole('dialog')).getByLabelText('Роля')
+    expect(within(roles).getAllByRole('option').map((option) => option.getAttribute('value'))).toEqual(['mechanic', 'observer'])
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Отказ' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Добави потребител' }))
+    roles = within(screen.getByRole('dialog')).getByLabelText('Роля')
+    expect(within(roles).getAllByRole('option').map((option) => option.getAttribute('value'))).toEqual(['mechanic', 'observer'])
   })
 
   it('ограничава директора до роли механик и наблюдател', async () => {
@@ -87,13 +132,26 @@ describe('управление на потребителски акаунти', 
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('изчиства временната парола след успешно създаване', async () => {
+  it('създаденият administrator става кандидат за ownership и временната парола се изчиства', async () => {
     const owner = account(1, 'administrator', true)
+    let created: ManagedUser | null = null
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === 'POST') return response(account(5, 'mechanic'), 201)
-      return response(String(input).includes('/departments') ? [] : [owner])
+      const path = String(input)
+      if (init?.method === 'POST') {
+        const payload = JSON.parse(String(init.body))
+        created = {
+          ...account(5, payload.role), email: payload.email, first_name: payload.first_name,
+          middle_name: payload.middle_name, last_name: payload.last_name, job_title: payload.job_title,
+          full_name: 'Temporary Automation Test', profile_status: 'PROFILE_COMPLETE',
+        }
+        return response(created, 201)
+      }
+      if (path === '/api/owner') return response({ owner_user_id: 1, owner_name: owner.full_name, owner_email: owner.email, role: owner.role, designated_at: owner.created_at, designation_version: 1 })
+      if (path === '/api/license/status') return response({ state: 'NOT_INSTALLED', message: '', modules: [], checked_at: owner.created_at })
+      if (path === '/api/emergency-access/status') return response({ active: false })
+      return response(path.includes('/departments') ? [] : [owner, ...(created ? [created] : [])])
     })
-    renderPage(owner, [owner], fetchMock)
+    const page = renderPage(owner, [owner], fetchMock)
     await screen.findByText('Основен администратор')
     await userEvent.click(screen.getByRole('button', { name: 'Добави потребител' }))
     const dialog = within(screen.getByRole('dialog', { name: 'Добави потребител' }))
@@ -102,7 +160,7 @@ describe('управление на потребителски акаунти', 
     await userEvent.type(dialog.getByLabelText('Фамилия'), 'Test')
     await userEvent.type(dialog.getByLabelText('Длъжност'), 'Test mechanic')
     await userEvent.type(dialog.getByLabelText('Служебен имейл'), 'temporary@example.invalid')
-    await userEvent.selectOptions(dialog.getByLabelText('Роля'), 'mechanic')
+    await userEvent.selectOptions(dialog.getByLabelText('Роля'), 'administrator')
     await userEvent.type(dialog.getByLabelText('Временна парола'), 'Strong-Test9!')
     await userEvent.type(dialog.getByLabelText('Потвърди паролата'), 'Strong-Test9!')
     await userEvent.click(dialog.getByRole('button', { name: 'Запази' }))
@@ -111,5 +169,9 @@ describe('управление на потребителски акаунти', 
     const reopened = within(screen.getByRole('dialog', { name: 'Добави потребител' }))
     expect(reopened.getByLabelText('Временна парола')).toHaveValue('')
     expect(reopened.getByLabelText('Потвърди паролата')).toHaveValue('')
+    page.unmount()
+    render(<I18nProvider initialLocale="bg"><GovernancePanel session={owner} /></I18nProvider>)
+    expect(await screen.findByRole('option', { name: 'Temporary Automation Test · temporary@example.invalid' })).toHaveValue('5')
+    expect(screen.getByRole('button', { name: 'Прехвърли собствеността' })).toBeEnabled()
   })
 })
