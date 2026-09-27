@@ -88,8 +88,45 @@ def _assert_one_owner(db, expected_owner_id: int) -> InstallationOwnership:
     return ownership
 
 
-def test_owner_transfer_round_trip_a_to_b_to_a(client, auth_headers, session_factory):
-    target_id, target_password = _create_target(session_factory)
+@pytest.mark.parametrize("initial_role", ["administrator", "director", "mechanic", "observer"])
+def test_owner_transfer_round_trip_a_to_b_to_a(
+    client, auth_headers, session_factory, initial_role
+):
+    # The candidate must be obtainable on a fresh installation through public
+    # workflows, without inserting an administrator directly into the database.
+    created = client.post(
+        "/api/users", headers=auth_headers,
+        json={
+            "email": "f03-owner-b@example.invalid",
+            "first_name": "QA", "middle_name": "F03", "last_name": "Owner B",
+            "job_title": "Test administrator", "role": initial_role,
+            "temporary_password": "Temporary123!", "confirm_password": "Temporary123!",
+        },
+    )
+    assert created.status_code == 201
+    target_id = created.json()["id"]
+    assert created.json()["is_system_owner"] is False
+    if initial_role != "administrator":
+        promoted = client.patch(
+            f"/api/users/{target_id}", headers=auth_headers, json={"role": "administrator"}
+        )
+        assert promoted.status_code == 200
+    temporary_headers = _login(client, "f03-owner-b@example.invalid", "Temporary123!")
+    target_password = "StrongPass123!"
+    changed = client.post(
+        "/api/auth/change-password", headers=temporary_headers,
+        json={
+            "current_password": "Temporary123!",
+            "new_password": target_password, "confirm_password": target_password,
+        },
+    )
+    assert changed.status_code == 200
+    candidates = client.get("/api/users", headers=auth_headers).json()
+    assert any(
+        user["id"] == target_id and user["role"] == "administrator"
+        and user["is_active"] and user["profile_status"] == "PROFILE_COMPLETE"
+        and not user["is_system_owner"] for user in candidates
+    )
     with session_factory() as db:
         ownership = db.scalar(select(InstallationOwnership))
         original_owner_id = ownership.owner_user_id
@@ -141,6 +178,46 @@ def test_owner_transfer_round_trip_a_to_b_to_a(client, auth_headers, session_fac
         )
         assert client.get("/api/owner/audit", headers=former_owner_headers).status_code == 403
         assert client.get("/api/owner/audit", headers=current_owner_headers).status_code == 200
+        from test_governance_api_contracts import _payloads
+
+        for path, payload in _payloads().items():
+            denied = client.post(path, headers=former_owner_headers, json=payload)
+            assert denied.status_code == 403
+            assert denied.json()["detail"]["code"] == "owner_only"
+        assert client.get(
+            f"/api/owner/data-deletion/user/{original_owner_id}/preview",
+            headers=former_owner_headers,
+        ).status_code == 403
+        assert client.post(
+            "/api/owner/transfer", headers=former_owner_headers,
+            json={
+                "target_user_id": original_owner_id, "current_password": "AssetCore123!",
+                "reason": REVERSE_REASON,
+            },
+        ).status_code == 403
+        assert client.post(
+            "/api/users", headers=former_owner_headers,
+            json={
+                "email": "blocked-admin@example.invalid",
+                "first_name": "QA", "middle_name": "F03", "last_name": "Blocked",
+                "job_title": "Test administrator", "role": "administrator",
+                "temporary_password": "Temporary123!", "confirm_password": "Temporary123!",
+            },
+        ).status_code == 403
+        # The new owner can manage the former owner as an ordinary administrator.
+        managed = client.patch(
+            f"/api/users/{original_owner_id}", headers=current_owner_headers,
+            json={"job_title": "Test former owner administrator"},
+        )
+        assert managed.status_code == 200
+        assert managed.json()["role"] == "administrator"
+        assert managed.json()["is_system_owner"] is False
+        historical = client.get(
+            f"/api/owner/data-deletion/user/{original_owner_id}/preview",
+            headers=current_owner_headers,
+        )
+        assert historical.status_code == 200
+        assert historical.json()["can_delete"] is False
         with session_factory() as db:
             item = _assert_one_owner(db, target_id)
             assert item.version == original_version + 1

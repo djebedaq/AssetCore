@@ -117,18 +117,25 @@ def _get_target(db: Session, user_id: int) -> User:
 
 
 def _can_manage(actor: User, target: User) -> bool:
-    if target.is_system_owner:
+    if target.is_system_owner or actor.id == target.id:
         return False
     if actor.is_system_owner and actor.role == UserRole.ADMINISTRATOR.value:
-        return target.role in {
-            UserRole.DIRECTOR.value,
-            UserRole.MECHANIC.value,
-            UserRole.OBSERVER.value,
-        }
-    return actor.role == UserRole.DIRECTOR.value and target.role in {
+        return target.role in {role.value for role in UserRole}
+    return actor.role in {UserRole.ADMINISTRATOR.value, UserRole.DIRECTOR.value} and target.role in {
         UserRole.MECHANIC.value,
         UserRole.OBSERVER.value,
     }
+
+
+def _assignable_roles(actor: User) -> set[UserRole]:
+    """ALL_PERMISSIONS alone never authorizes installation-owner assignments."""
+    roles = {UserRole.MECHANIC, UserRole.OBSERVER}
+    if actor.is_system_owner and actor.role == UserRole.ADMINISTRATOR.value:
+        if has_permission(actor, Permission.USERS_ASSIGN_DIRECTOR):
+            roles.add(UserRole.DIRECTOR)
+        if has_permission(actor, Permission.USERS_ASSIGN_ADMINISTRATOR):
+            roles.add(UserRole.ADMINISTRATOR)
+    return roles
 
 
 def _ensure_manageable(
@@ -192,12 +199,7 @@ def create_user(
     actor: User = Depends(require_permission(Permission.USERS_CREATE)),
     db: Session = Depends(get_db),
 ) -> dict:
-    allowed = {UserRole.MECHANIC, UserRole.OBSERVER}
-    if actor.is_system_owner and has_permission(
-        actor, Permission.USERS_ASSIGN_DIRECTOR
-    ):
-        allowed.add(UserRole.DIRECTOR)
-    if data.role not in allowed:
+    if data.role not in _assignable_roles(actor):
         _reject(
             db,
             actor,
@@ -318,12 +320,7 @@ def update_user(
             "self_deactivation_denied", "Не можете да деактивирате собствения си акаунт."
         )
     if data.role is not None:
-        allowed_roles = {UserRole.MECHANIC, UserRole.OBSERVER}
-        if actor.is_system_owner and has_permission(
-            actor, Permission.USERS_ASSIGN_DIRECTOR
-        ):
-            allowed_roles.add(UserRole.DIRECTOR)
-        if data.role not in allowed_roles:
+        if data.role not in _assignable_roles(actor):
             _reject(
                 db, actor, request, target, "Отказан опит за повишаване на роля",
                 "role_escalation_denied", "Нямате права да зададете избраната роля."

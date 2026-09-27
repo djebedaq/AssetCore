@@ -96,7 +96,7 @@ from .transfer_service import (
     TransferServiceError,
     finalize_signed_transfer_workflow,
 )
-from .user_api import serialize_user
+from .user_api import _can_manage, serialize_user
 
 router = APIRouter(prefix="/api", tags=["production-hardening"])
 
@@ -229,19 +229,7 @@ def update_profile_by_id(
         raise HTTPException(404, detail={"code": "user_not_found", "message": "Потребителят не е намерен."})
     if target.is_system_owner and actor.id != target.id:
         raise HTTPException(403, detail={"code": "owner_profile_protected", "message": "Профилът на собственика се променя само от самия собственик."})
-    may_manage = (
-        actor.id == target.id
-        or (
-            actor.is_system_owner
-            and actor.role == UserRole.ADMINISTRATOR.value
-            and target.role
-            in {UserRole.DIRECTOR.value, UserRole.MECHANIC.value, UserRole.OBSERVER.value}
-        )
-        or (
-            actor.role == UserRole.DIRECTOR.value
-            and target.role in {UserRole.MECHANIC.value, UserRole.OBSERVER.value}
-        )
-    )
+    may_manage = actor.id == target.id or _can_manage(actor, target)
     if not may_manage:
         raise HTTPException(
             403,
@@ -256,7 +244,9 @@ def update_profile_by_id(
         actor,
         request,
         db,
-        may_approve_exception=actor.role == UserRole.ADMINISTRATOR.value,
+        may_approve_exception=(
+            actor.role == UserRole.ADMINISTRATOR.value and actor.id != target.id
+        ),
     )
 
 

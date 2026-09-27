@@ -96,7 +96,7 @@ def test_bootstrap_has_exactly_one_protected_administrator_and_safe_profile(
     }
 
 
-@pytest.mark.parametrize("role", ["director", "mechanic", "observer"])
+@pytest.mark.parametrize("role", ["administrator", "director", "mechanic", "observer"])
 def test_administrator_can_create_each_standard_role(
     client, auth_headers, session_factory, role
 ):
@@ -108,6 +108,7 @@ def test_administrator_can_create_each_standard_role(
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["role"] == role
+    assert body["is_system_owner"] is False
     assert body["must_change_password"] is True
     assert "password_hash" not in body
     with session_factory() as session:
