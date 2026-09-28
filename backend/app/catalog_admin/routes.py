@@ -8,13 +8,18 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import User
 from ..permissions import Permission, require_permission
-from . import repository, service, visual_sources
+from . import parts, repository, service, visual_sources
 from .schemas import (
     ArtifactUpload,
     AssemblyCreate,
     AssemblyUpdate,
     CatalogCreate,
     CatalogUpdate,
+    PartCreate,
+    PartImportConfirm,
+    PartImportPreview,
+    PartPageMapCreate,
+    PartUpdate,
     RevisionCreate,
     RevisionUpdate,
     VisualPageCreate,
@@ -164,3 +169,65 @@ def remove_visual_page(assignment_id: int, actor: User = Depends(manager),
                        db: Session = Depends(get_db)) -> Response:
     visual_sources.remove_visual_page(db, actor, assignment_id)
     return Response(status_code=204)
+
+
+@router.get("/assemblies/{assembly_id}/parts")
+def list_parts(assembly_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> list[dict]:
+    return parts.list_parts(db, assembly_id)
+
+
+@router.post("/assemblies/{assembly_id}/parts", status_code=201)
+def create_part(assembly_id: int, data: PartCreate, actor: User = Depends(manager),
+                db: Session = Depends(get_db)) -> dict:
+    return parts.create_part(db, actor, assembly_id, data)
+
+
+@router.get("/parts/{part_id}")
+def get_part(part_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    return parts.get_part(db, part_id)
+
+
+@router.patch("/parts/{part_id}")
+def update_part(part_id: int, data: PartUpdate, actor: User = Depends(manager),
+                db: Session = Depends(get_db)) -> dict:
+    return parts.update_part(db, actor, part_id, data)
+
+
+@router.delete("/parts/{part_id}", status_code=204)
+def delete_part(part_id: int, actor: User = Depends(manager), db: Session = Depends(get_db)) -> Response:
+    parts.delete_part(db, actor, part_id)
+    return Response(status_code=204)
+
+
+@router.get("/assemblies/{assembly_id}/spare-list-pages")
+def spare_list_pages(assembly_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> list[dict]:
+    return parts.spare_list_pages(db, assembly_id)
+
+
+@router.get("/parts/{part_id}/source-pages")
+def list_part_pages(part_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> list[dict]:
+    return parts.list_mappings(db, part_id)
+
+
+@router.post("/parts/{part_id}/source-pages", status_code=201)
+def map_part_pages(part_id: int, data: PartPageMapCreate, actor: User = Depends(manager),
+                   db: Session = Depends(get_db)) -> list[dict]:
+    return parts.map_pages(db, actor, part_id, data)
+
+
+@router.delete("/part-page-maps/{mapping_id}", status_code=204)
+def unmap_part_page(mapping_id: int, actor: User = Depends(manager), db: Session = Depends(get_db)) -> Response:
+    parts.unmap_page(db, actor, mapping_id)
+    return Response(status_code=204)
+
+
+@router.post("/assemblies/{assembly_id}/parts/import-preview")
+def import_parts_preview(assembly_id: int, data: PartImportPreview, actor: User = Depends(manager),
+                         db: Session = Depends(get_db)) -> dict:
+    return parts.import_preview(db, actor, assembly_id, data)
+
+
+@router.post("/assemblies/{assembly_id}/parts/import-confirm")
+def import_parts_confirm(assembly_id: int, data: PartImportConfirm, actor: User = Depends(manager),
+                         db: Session = Depends(get_db)) -> dict:
+    return parts.import_confirm(db, actor, assembly_id, data.token, data.confirm_warnings)

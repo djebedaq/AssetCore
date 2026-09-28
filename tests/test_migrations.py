@@ -11,12 +11,16 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from app.models import (
+    AssetCategory,
     AuthenticationThrottle,
     AuthSession,
     CatalogAssetBinding,
     CatalogDefinition,
     CatalogRevision,
+    CatalogRevisionArtifact,
     CatalogRevisionAssembly,
+    CatalogRevisionPart,
+    CatalogRevisionVisualPage,
     Machine,
     Repair,
     RepairParticipant,
@@ -25,12 +29,101 @@ from app.models import (
 from app.official_documents.integrity import validate_official_document_integrity
 from app.seed import seed_database
 from app.settings import Settings, settings
-from sqlalchemy import Integer, create_engine, inspect, text
+from sqlalchemy import Integer, create_engine, inspect, select, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_catalog_builder_0027_preserves_0026_and_fails_closed(tmp_path: Path):
+    database_path = tmp_path / "catalog-0026-to-0027.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0026")
+    with sqlite3.connect(database_path) as connection:
+        # Revision 0001 creates current metadata on a fresh install. Recreate
+        # the actual pre-01C shape before exercising the 0027 upgrade.
+        connection.execute("DROP TABLE IF EXISTS catalog_revision_part_page_maps")
+        connection.execute("DROP TABLE IF EXISTS catalog_revision_parts")
+        connection.commit()
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with Session(engine) as db:
+        seed_database(db)
+        owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        machine = db.scalar(select(Machine))
+        catalog = CatalogDefinition(code="QA_0026_PRESERVE", asset_category_id=machine.category_id,
+                                    name_bg="QA", name_en="QA", name_ru="QA", created_by_id=owner.id)
+        db.add(catalog)
+        db.flush()
+        revision = CatalogRevision(catalog_id=catalog.id, revision_code="A", created_by_id=owner.id)
+        db.add(revision)
+        db.flush()
+        db.add(CatalogAssetBinding(catalog_id=catalog.id, machine_id=machine.id, created_by_id=owner.id))
+        assembly = CatalogRevisionAssembly(revision_id=revision.id, code="PUMP", name_bg="QA",
+                                           name_en="QA", name_ru="QA", created_by_id=owner.id)
+        db.add(assembly)
+        db.flush()
+        artifact = CatalogRevisionArtifact(assembly_id=assembly.id, title="QA", filename="qa.pdf",
+                                           media_type="application/pdf", content=b"%PDF-test",
+                                           sha256="a" * 64, page_count=1, created_by_id=owner.id)
+        db.add(artifact)
+        db.flush()
+        db.add(CatalogRevisionVisualPage(artifact_id=artifact.id, page_number=1,
+                                          role="SPARE_PARTS_LIST", created_by_id=owner.id))
+        db.commit()
+        catalog_id, revision_id, assembly_id, artifact_id = catalog.id, revision.id, assembly.id, artifact.id
+    engine.dispose()
+    with sqlite3.connect(database_path) as connection:
+        before = tuple(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                       for table in ("catalog_definitions", "catalog_revisions", "catalog_asset_bindings",
+                                     "catalog_revision_assemblies",
+                                     "catalog_revision_artifacts", "catalog_revision_visual_pages",
+                                     "part_catalog", "repair_kits"))
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0027")
+    with sqlite3.connect(database_path) as connection:
+        after = tuple(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                      for table in ("catalog_definitions", "catalog_revisions", "catalog_asset_bindings",
+                                    "catalog_revision_assemblies",
+                                    "catalog_revision_artifacts", "catalog_revision_visual_pages",
+                                    "part_catalog", "repair_kits"))
+        assert before == after
+        assert all(value == 1 for value in before[:6])
+        assert connection.execute("SELECT id FROM catalog_definitions WHERE id = ?", (catalog_id,)).fetchone()
+        assert connection.execute("SELECT id FROM catalog_revisions WHERE id = ?", (revision_id,)).fetchone()
+        assert connection.execute("SELECT id FROM catalog_revision_assemblies WHERE id = ?", (assembly_id,)).fetchone()
+        assert connection.execute("SELECT id FROM catalog_revision_artifacts WHERE id = ?", (artifact_id,)).fetchone()
+        assert connection.execute("SELECT count(*) FROM catalog_revision_parts").fetchone()[0] == 0
+        assert connection.execute("SELECT count(*) FROM catalog_revision_part_page_maps").fetchone()[0] == 0
+    _run_sqlite_revision(database_path, command.downgrade, "20260928_0026")
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("SELECT name FROM sqlite_master WHERE name = 'catalog_revision_parts'").fetchone() is None
+
+
+def test_catalog_builder_0027_rejects_downgrade_with_staged_part(tmp_path: Path):
+    database_path = tmp_path / "catalog-0027-with-part.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0027")
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with Session(engine) as db:
+        seed_database(db)
+        owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        category = db.scalar(select(AssetCategory).where(AssetCategory.code == "HPWJ"))
+        catalog = CatalogDefinition(code="QA_0027", asset_category_id=category.id,
+                                    name_bg="QA", name_en="QA", name_ru="QA", created_by_id=owner.id)
+        db.add(catalog)
+        db.flush()
+        revision = CatalogRevision(catalog_id=catalog.id, revision_code="A", created_by_id=owner.id)
+        db.add(revision)
+        db.flush()
+        assembly = CatalogRevisionAssembly(revision_id=revision.id, code="PUMP",
+                                           name_bg="QA", name_en="QA", name_ru="QA", created_by_id=owner.id)
+        db.add(assembly)
+        db.flush()
+        db.add(CatalogRevisionPart(assembly_id=assembly.id, position="1", part_number="QA",
+                                   name_en="QA", created_by_id=owner.id))
+        db.commit()
+    engine.dispose()
+    with pytest.raises(RuntimeError, match="part staging contains data"):
+        _run_sqlite_revision(database_path, command.downgrade, "20260928_0026")
 
 
 def test_catalog_builder_0026_fresh_schema_is_empty(tmp_path: Path):

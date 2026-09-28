@@ -171,3 +171,7 @@
 .builder-thumbnail img { max-width: 100%; max-height: 100%; object-fit: contain; }
 @media (max-width: 1000px) { .builder-list-item { grid-template-columns: repeat(2, minmax(0, 1fr)); } .builder-list-item .actions { justify-content: flex-start; grid-column: 1 / -1; } }
 @media (max-width: 600px) { .builder-list-item { grid-template-columns: 1fr; } .builder-list-item .actions { grid-column: auto; } .builder-row { align-items: flex-start; flex-direction: column; } }
+.builder-parts-table { width: 100%; overflow-x: auto; }
+.builder-parts-table table { width: 100%; min-width: 760px; border-collapse: collapse; }
+.builder-parts-table th, .builder-parts-table td { padding: .55rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border, #d6dce3); }
+.builder-parts-table td .actions { flex-wrap: wrap; }
