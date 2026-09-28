@@ -5,7 +5,7 @@ import { api, ApiError } from '../../api'
 import { useI18n, type TranslationKey } from '../../i18n'
 import { storedUser } from '../../permissions'
 
-export type DeleteResource = 'user' | 'department' | 'location' | 'asset_category' | 'category_field' | 'machine' | 'external_signer' | 'signature_slot'
+export type DeleteResource = 'user' | 'department' | 'location' | 'asset_category' | 'category_field' | 'machine' | 'external_signer' | 'signature_slot' | 'catalog_definition'
 type Dependency = { code: string; count: number; label_key: string }
 export type DeletionPreview = {
   identity: string; can_delete: boolean; blockers: Dependency[]

@@ -11,7 +11,16 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from ..audit import add_audit_log
-from ..models import AssetCategory, Machine, MachineStatus, Repair, RepairStatus, User, utcnow
+from ..models import (
+    AssetCategory,
+    CatalogAssetBinding,
+    Machine,
+    MachineStatus,
+    Repair,
+    RepairStatus,
+    User,
+    utcnow,
+)
 from ..permissions import is_observer
 from ..schemas import MachineCreate, MachineUpdate
 from ..settings import settings
@@ -121,7 +130,8 @@ def create_machine(data: MachineCreate, user: User, db: Session) -> Machine:
 
 
 def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session) -> Machine:
-    item = db.get(Machine, machine_id)
+    item = db.scalar(select(Machine).where(Machine.id == machine_id)
+                     .with_for_update().execution_options(populate_existing=True))
     if not item:
         raise HTTPException(404, "Машината не е намерена")
     changes = data.model_dump(exclude_unset=True, mode="json")
@@ -148,6 +158,10 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
             422, detail={"code": "category_required", "message": "Изберете съществуваща категория."},
         )
     category_changed = category is not None and category.id != item.category_id
+    if category_changed and db.scalar(select(CatalogAssetBinding.id).where(
+        CatalogAssetBinding.machine_id == machine_id
+    )) is not None:
+        raise HTTPException(409, detail={"code": "catalog_asset_category_in_use"})
     active = _active_transfer(db, machine_id)
     if "status" in changes:
         requested_status = changes["status"]

@@ -15,7 +15,7 @@ import { useMachineEntryRoute } from './features/passport/useMachineEntryRoute'
 import type { MachineEntryIntent } from './features/passport/machineEntryIntent'
 import { LanguageSwitcher } from './shell/LanguageSwitcher'
 import { PageBoundary } from './shell/PageBoundary'
-import { Dashboard, Machines, Transfers, IndustrialRepairs, IndustrialCatalog, IndustrialPartRequests, TechnicalLibrary, OfficialDocuments, Reports, Audit, QrCodes, UserAdministration, SettingsPage, SignaturePage } from './shell/lazyPages'
+import { Dashboard, Machines, Transfers, IndustrialRepairs, IndustrialCatalog, CatalogBuilder, IndustrialPartRequests, TechnicalLibrary, OfficialDocuments, Reports, Audit, QrCodes, UserAdministration, SettingsPage, SignaturePage } from './shell/lazyPages'
 
 // Retained public imports; page implementations live in feature modules.
 export { LanguageSwitcher } from './shell/LanguageSwitcher'
@@ -27,6 +27,7 @@ type Page =
   | 'transfers'
   | 'repairs'
   | 'catalog'
+  | 'catalogBuilder'
   | 'parts'
   | 'documents'
   | 'official'
@@ -159,6 +160,7 @@ function App() {
     ['transfers', 'nav.transfers', ClipboardSignature, 'transfers.view'],
     ['repairs', 'nav.repairs', Wrench, 'repairs.view'],
     ['catalog', 'nav.catalog', BookOpen, 'parts.view'],
+    ['catalogBuilder', 'builder.title', BookOpen, 'parts.manage'],
     ['parts', 'nav.parts', PackageSearch, 'requests.view'],
     ['documents', 'nav.documents', FileText, 'documents.view'],
     ['official', 'nav.officialDocuments', FileCheck2, 'documents.view'],
@@ -236,6 +238,7 @@ function App() {
           {page === 'transfers' && <Transfers key={workflowVisit} entryIntent={entryIntent?.action === 'issue' || entryIntent?.action === 'return' ? entryIntent : undefined} onEntryConsumed={() => setEntryIntent(null)} />}
           {page === 'repairs' && <IndustrialRepairs key={workflowVisit} entryIntent={entryIntent?.action === 'repair-create' || entryIntent?.action === 'repair-open' ? entryIntent : undefined} onEntryConsumed={() => setEntryIntent(null)} />}
           {page === 'catalog' && <IndustrialCatalog defaultMachineId={catalogMachineId || undefined} />}
+          {page === 'catalogBuilder' && <CatalogBuilder />}
           {page === 'parts' && <IndustrialPartRequests />}
           {page === 'documents' && <TechnicalLibrary />}
           {page === 'official' && <OfficialDocuments />}

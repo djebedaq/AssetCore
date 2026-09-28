@@ -12,6 +12,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from app.models import AuthenticationThrottle, AuthSession, Repair, RepairParticipant, User
 from app.official_documents.integrity import validate_official_document_integrity
+from app.seed import seed_database
 from app.settings import Settings, settings
 from sqlalchemy import Integer, create_engine, inspect, text
 from sqlalchemy.dialects import postgresql
@@ -19,6 +20,56 @@ from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_catalog_builder_0025_is_empty_and_downgrade_is_scoped(tmp_path: Path):
+    database_path = tmp_path / "catalog-0024.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260924_0024")
+    with sqlite3.connect(database_path) as connection:
+        # Migration 0001 uses current Base.metadata.create_all. Remove the
+        # prematurely created empty tables to emulate a deployed 0024 schema.
+        for table in ("catalog_asset_bindings", "catalog_revisions", "catalog_definitions"):
+            connection.execute(f"DROP TABLE IF EXISTS {table}")
+        connection.execute(
+            "INSERT INTO asset_categories (id, code, name_bg, capabilities, is_active, created_at) "
+            "VALUES (100, 'QA_MIGRATION', 'QA', '[]', 1, CURRENT_TIMESTAMP)"
+        )
+        connection.commit()
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0025")
+    with sqlite3.connect(database_path) as connection:
+        for table in ("catalog_definitions", "catalog_revisions", "catalog_asset_bindings"):
+            assert connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+        assert connection.execute("SELECT code FROM asset_categories WHERE id = 100").fetchone()[0] == "QA_MIGRATION"
+        indexes = connection.execute("PRAGMA index_list(catalog_asset_bindings)").fetchall()
+        assert any(row[2] for row in indexes)
+    _run_sqlite_revision(database_path, command.downgrade, "20260924_0024")
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("SELECT code FROM asset_categories WHERE id = 100").fetchone()[0] == "QA_MIGRATION"
+        assert connection.execute("SELECT name FROM sqlite_master WHERE name = 'catalog_definitions'").fetchone() is None
+
+
+def test_catalog_builder_0025_preserves_seeded_0024_dataset(tmp_path: Path):
+    database_path = tmp_path / "catalog-seeded-0024.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260924_0024")
+    with sqlite3.connect(database_path) as connection:
+        for table in ("catalog_asset_bindings", "catalog_revisions", "catalog_definitions"):
+            connection.execute(f"DROP TABLE IF EXISTS {table}")
+        connection.commit()
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with Session(engine) as db:
+        seed_database(db)
+    with sqlite3.connect(database_path) as connection:
+        before = tuple(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                       for table in ("machines", "part_catalog", "catalog_visual_sources", "catalog_diagrams"))
+    assert before[0] == 19 and before[1] == 611
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0025")
+    with sqlite3.connect(database_path) as connection:
+        after = tuple(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                      for table in ("machines", "part_catalog", "catalog_visual_sources", "catalog_diagrams"))
+        assert after == before
+        assert all(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+                   for table in ("catalog_definitions", "catalog_revisions", "catalog_asset_bindings"))
+    engine.dispose()
 
 
 def test_generic_asset_migration_upgrades_existing_0023_shape(tmp_path: Path):

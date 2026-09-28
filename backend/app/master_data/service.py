@@ -24,6 +24,7 @@ from ..industrial_schemas import (
 )
 from ..models import (
     AssetCategory,
+    CatalogDefinition,
     CategoryFieldDefinition,
     Department,
     Location,
@@ -147,6 +148,11 @@ def update_category(category_id: int, payload: CategoryUpdate, user: User, db: S
     if category is None:
         raise HTTPException(404, detail={"code": "category_not_found"})
     changes = payload.model_dump(exclude_unset=True)
+    if "capabilities" in changes and "HAS_PARTS_CATALOG" not in (changes["capabilities"] or []):
+        if db.scalar(select(CatalogDefinition.id).where(
+            CatalogDefinition.asset_category_id == category_id
+        ).limit(1)) is not None:
+            raise business_conflict("category_capability_in_use", "Категорията се използва от каталожен конструктор.", capability="HAS_PARTS_CATALOG")
     if "capabilities" in changes and "HAS_PRESSURE" in (category.capabilities or []) and "HAS_PRESSURE" not in (changes["capabilities"] or []):
         affected = db.scalar(select(func.count(Machine.id)).where(
             Machine.category_id == category_id, Machine.pressure_bar.is_not(None),

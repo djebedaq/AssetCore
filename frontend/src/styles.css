@@ -155,3 +155,14 @@
 .owner-deletion-dialog .actions { flex-wrap: wrap; }
 .admin-list>div>.owner-delete-button { grid-column: 1/-1; justify-self: start; }
 @media (max-width: 600px) { .owner-deletion-dialog { padding: 16px; } .owner-deletion-dialog .actions > button { flex: 1 1 100%; } }
+.builder-page { display: grid; gap: 1rem; }
+.builder-list { display: grid; gap: .65rem; }
+.builder-list-item { display: grid; grid-template-columns: minmax(12rem, 2fr) repeat(4, minmax(5rem, 1fr)) auto; align-items: center; gap: .7rem; padding: .8rem; border: 1px solid var(--border, #d9dfe5); border-radius: .65rem; }
+.builder-list-item small, .builder-row small { display: block; color: var(--muted, #657080); }
+.builder-list-item .actions { flex-wrap: wrap; justify-content: flex-end; }
+.builder-tabs { margin: .8rem 0; flex-wrap: wrap; }
+.builder-workspace { display: grid; gap: .6rem; }
+.builder-workspace h4 { margin: .8rem 0 0; }
+.builder-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .6rem 0; border-bottom: 1px solid var(--border, #d9dfe5); }
+@media (max-width: 1000px) { .builder-list-item { grid-template-columns: repeat(2, minmax(0, 1fr)); } .builder-list-item .actions { justify-content: flex-start; grid-column: 1 / -1; } }
+@media (max-width: 600px) { .builder-list-item { grid-template-columns: 1fr; } .builder-list-item .actions { grid-column: auto; } .builder-row { align-items: flex-start; flex-direction: column; } }

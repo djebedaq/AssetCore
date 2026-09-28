@@ -888,6 +888,55 @@ class AssetCategory(Base):
     )
 
 
+class CatalogDefinition(Base):
+    """Logical Builder catalog; no 01A runtime relationship to PartCatalog."""
+
+    __tablename__ = "catalog_definitions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    asset_category_id: Mapped[int] = mapped_column(ForeignKey("asset_categories.id"), nullable=False, index=True)
+    name_bg: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_en: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_ru: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    manufacturer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    model_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class CatalogRevision(Base):
+    __tablename__ = "catalog_revisions"
+    __table_args__ = (
+        UniqueConstraint("catalog_id", "revision_code", name="uq_catalog_revision_code"),
+        CheckConstraint("status IN ('DRAFT', 'PUBLISHED', 'RETIRED')", name="ck_catalog_revision_status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    catalog_id: Mapped[int] = mapped_column(ForeignKey("catalog_definitions.id"), nullable=False, index=True)
+    revision_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="DRAFT", server_default=text("'DRAFT'"), nullable=False)
+    change_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+    published_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class CatalogAssetBinding(Base):
+    __tablename__ = "catalog_asset_bindings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    catalog_id: Mapped[int] = mapped_column(ForeignKey("catalog_definitions.id"), nullable=False, index=True)
+    machine_id: Mapped[int] = mapped_column(ForeignKey("machines.id"), unique=True, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
 class CategoryFieldDefinition(Base):
     __tablename__ = "category_field_definitions"
     __table_args__ = (
