@@ -59,3 +59,32 @@ it('creates a catalog only from dynamic capable categories and opens its draft w
   expect(await screen.findByText(/Източници, части, визуално съпоставяне/)).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Публикувай' })).not.toBeInTheDocument()
 })
+
+it('opens a draft revision workspace with assemblies and no publish action', async () => {
+  setSessionUser(user)
+  const catalog = { id: 10, code: 'QA_CATALOG', asset_category_id: 1, asset_category: category,
+    name_bg: 'Каталог', name_en: 'Catalog', name_ru: 'Каталог', description: null,
+    manufacturer: null, model_reference: null, is_active: true, bound_asset_count: 0,
+    draft_revision_count: 1, latest_revision: { id: 11, revision_code: 'A' }, published_revision: null }
+  const requests: string[] = []
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input)
+    requests.push(path)
+    if (path === '/api/categories') return json([category])
+    if (path === '/api/admin/catalog-builder/catalogs') return json([catalog])
+    if (path === '/api/admin/catalog-builder/catalogs/10/assets') return json([])
+    if (path === '/api/admin/catalog-builder/catalogs/10/revisions') return json([
+      { id: 11, revision_code: 'A', status: 'DRAFT', change_note: null, created_at: '2026-09-28T00:00:00' },
+    ])
+    if (path === '/api/admin/catalog-builder/revisions/11/assemblies') return json([])
+    throw Error(path)
+  }))
+  render(<I18nProvider initialLocale="bg"><CatalogBuilder /></I18nProvider>)
+  await userEvent.click(await screen.findByRole('button', { name: 'Отвори работното пространство' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Ревизии' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Отвори ревизия' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Възли и източници' }))
+  expect(await screen.findByRole('button', { name: 'Добави възел' })).toBeVisible()
+  expect(requests).toContain('/api/admin/catalog-builder/revisions/11/assemblies')
+  expect(screen.queryByRole('button', { name: /Публикувай/ })).not.toBeInTheDocument()
+})

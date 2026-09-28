@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import Enum
 
 from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -933,6 +934,58 @@ class CatalogAssetBinding(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     catalog_id: Mapped[int] = mapped_column(ForeignKey("catalog_definitions.id"), nullable=False, index=True)
     machine_id: Mapped[int] = mapped_column(ForeignKey("machines.id"), unique=True, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
+class CatalogRevisionAssembly(Base):
+    __tablename__ = "catalog_revision_assemblies"
+    __table_args__ = (UniqueConstraint("revision_id", "code", name="uq_catalog_revision_assembly_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    revision_id: Mapped[int] = mapped_column(ForeignKey("catalog_revisions.id"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(80), nullable=False)
+    name_bg: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_en: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_ru: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class CatalogRevisionArtifact(Base):
+    __tablename__ = "catalog_revision_artifacts"
+    __table_args__ = (UniqueConstraint("assembly_id", "sha256", name="uq_catalog_revision_artifact_sha"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_assemblies.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    document_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    document_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
+class CatalogRevisionVisualPage(Base):
+    __tablename__ = "catalog_revision_visual_pages"
+    __table_args__ = (
+        UniqueConstraint("artifact_id", "page_number", "role", name="uq_catalog_revision_visual_page_role"),
+        CheckConstraint("page_number >= 1", name="ck_catalog_revision_visual_page_positive"),
+        CheckConstraint("role IN ('EXPLODED_SCHEME', 'SPARE_PARTS_LIST')", name="ck_catalog_revision_visual_page_role"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    artifact_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_artifacts.id"), nullable=False, index=True)
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 

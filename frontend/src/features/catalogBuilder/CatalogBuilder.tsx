@@ -4,6 +4,7 @@ import { Modal } from '../../industrialUi'
 import { useI18n, type TranslationKey } from '../../i18n'
 import { hasPermission } from '../../permissions'
 import { OwnerDeleteButton } from '../administration/OwnerDeleteButton'
+import RevisionVisualSources from './RevisionVisualSources'
 
 type Category = { id: number; code: string; name_bg: string; name_en: string; name_ru: string; is_active: boolean; capabilities: string[] }
 type RevisionSummary = { id: number; revision_code: string }
@@ -42,6 +43,8 @@ export default function CatalogBuilder() {
   const [assets, setAssets] = useState<Asset[]>([])
   const [eligible, setEligible] = useState<Asset[]>([])
   const [revisions, setRevisions] = useState<Revision[]>([])
+  const [openRevisionId, setOpenRevisionId] = useState<number | null>(null)
+  const [revisionTab, setRevisionTab] = useState<'overview' | 'sources'>('overview')
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'overview' | 'assets' | 'revisions'>('overview')
   const [editing, setEditing] = useState<Catalog | 'new' | null>(null)
@@ -52,6 +55,7 @@ export default function CatalogBuilder() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const selected = catalogs.find(item => item.id === selectedId)
+  const openRevision = revisions.find(item => item.id === openRevisionId)
 
   function message(caught: unknown): string {
     return t(caught instanceof ApiError && caught.code && errorKeys[caught.code] ? errorKeys[caught.code] : 'builder.error.generic')
@@ -181,7 +185,7 @@ export default function CatalogBuilder() {
         <span>{t('builder.boundCount', { count: item.bound_asset_count })}</span>
         <span>{t('builder.draftCount', { count: item.draft_revision_count })}</span>
         <span>{item.latest_revision ? `${t('builder.latest')}: ${item.latest_revision.revision_code}` : t('builder.noRevision')}</span>
-        <div className="actions"><button className="secondary compact" onClick={() => { setSelectedId(item.id); setTab('overview') }}>{t('builder.open')}</button>
+        <div className="actions"><button className="secondary compact" onClick={() => { setSelectedId(item.id); setOpenRevisionId(null); setTab('overview') }}>{t('builder.open')}</button>
           <button className="secondary compact" onClick={() => openForm(item)}>{t('common.edit')}</button>
           <button className="secondary compact" onClick={() => void toggle(item)}>{t(item.is_active ? 'admin.deactivate' : 'admin.activate')}</button>
           <OwnerDeleteButton resource="catalog_definition" resourceId={item.id} identity={item.code} onDeleted={async () => { if (selectedId === item.id) setSelectedId(null); await load() }} />
@@ -210,8 +214,13 @@ export default function CatalogBuilder() {
         {selected.is_active && <button className="primary compact" onClick={() => { setRevisionEdit('new'); setRevisionCode(''); setNote('') }}>{t('builder.createRevision')}</button>}
         {!revisions.length && <p>{t('builder.noRevision')}</p>}
         {revisions.map(revision => <div className="builder-row" key={revision.id}><span><b>{revision.revision_code}</b> · {t(`builder.status.${revision.status}`)} · {date(revision.created_at)}<small>{revision.change_note || t('common.noValue')}</small></span>
-          {revision.status === 'DRAFT' && selected.is_active && <button className="secondary compact" onClick={() => { setRevisionEdit(revision); setRevisionCode(revision.revision_code); setNote(revision.change_note || '') }}>{t('common.edit')}</button>}</div>)}
-        <p className="muted">{t('builder.nextSteps')}</p>
+          <div className="actions"><button className="secondary compact" onClick={() => { setOpenRevisionId(revision.id); setRevisionTab('overview') }}>{t('builder.openRevision')}</button>
+          {revision.status === 'DRAFT' && selected.is_active && <button className="secondary compact" onClick={() => { setRevisionEdit(revision); setRevisionCode(revision.revision_code); setNote(revision.change_note || '') }}>{t('common.edit')}</button>}</div></div>)}
+        {openRevision && <section className="panel"><div className="panel-title"><h4>{t('builder.revisionWorkspace')} · {openRevision.revision_code}</h4><button className="secondary compact" onClick={() => setOpenRevisionId(null)}>{t('common.close')}</button></div>
+          <div className="actions builder-tabs"><button className={revisionTab === 'overview' ? 'primary compact' : 'secondary compact'} onClick={() => setRevisionTab('overview')}>{t('builder.overview')}</button>
+            <button className={revisionTab === 'sources' ? 'primary compact' : 'secondary compact'} onClick={() => setRevisionTab('sources')}>{t('builder.assembliesSources')}</button></div>
+          {revisionTab === 'overview' ? <p>{openRevision.change_note || t('common.noValue')}</p> :
+            <RevisionVisualSources revisionId={openRevision.id} editable={openRevision.status === 'DRAFT' && selected.is_active} />}</section>}
       </div>}
     </section>}
     {editing && <Modal title={t(editing === 'new' ? 'builder.create' : 'builder.edit')} onClose={() => setEditing(null)} wide><form className="form-grid" onSubmit={event => void saveCatalog(event)}>

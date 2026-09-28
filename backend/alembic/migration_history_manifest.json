@@ -26,6 +26,7 @@
     "20260920_0022_part_visual_snapshots.py": "b70669dfd484eda1394b063cdb78c0baafeffc678e4ebf837981956840a26d0b",
     "20260923_0023_catalog_visual_roles.py": "ae41c06f6e64920ee6c23b6b0b6e1c24ea069ec43cb9366a43c8d61ab53b4955",
     "20260924_0024_generic_asset_foundation.py": "901996cc1537ec0418a65ba804d83b56530fd6c120ef30c18a87a39a25d35443",
-    "20260928_0025_catalog_builder_foundation.py": "a163a9551141e724bdd3a548269df8d61f6bcb8459ccf0a4c68c0d7436b1a93b"
+    "20260928_0025_catalog_builder_foundation.py": "a163a9551141e724bdd3a548269df8d61f6bcb8459ccf0a4c68c0d7436b1a93b",
+    "20260928_0026_catalog_builder_visual_sources.py": "6580ef8c49ceb5a5bdc09619b273d814fe33b973e7d79d91cc8b7c0c7ccbd938"
   }
 }

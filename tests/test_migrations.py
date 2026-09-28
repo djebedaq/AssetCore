@@ -10,7 +10,18 @@ from alembic import command
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from app.models import AuthenticationThrottle, AuthSession, Repair, RepairParticipant, User
+from app.models import (
+    AuthenticationThrottle,
+    AuthSession,
+    CatalogAssetBinding,
+    CatalogDefinition,
+    CatalogRevision,
+    CatalogRevisionAssembly,
+    Machine,
+    Repair,
+    RepairParticipant,
+    User,
+)
 from app.official_documents.integrity import validate_official_document_integrity
 from app.seed import seed_database
 from app.settings import Settings, settings
@@ -20,6 +31,16 @@ from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_catalog_builder_0026_fresh_schema_is_empty(tmp_path: Path):
+    database_path = tmp_path / "catalog-fresh-0026.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0026")
+    with sqlite3.connect(database_path) as connection:
+        for table in ("catalog_revision_assemblies", "catalog_revision_artifacts",
+                      "catalog_revision_visual_pages"):
+            assert connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+            assert connection.execute(f"PRAGMA index_list({table})").fetchall()
 
 
 def test_catalog_builder_0025_is_empty_and_downgrade_is_scoped(tmp_path: Path):
@@ -70,6 +91,54 @@ def test_catalog_builder_0025_preserves_seeded_0024_dataset(tmp_path: Path):
         assert all(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
                    for table in ("catalog_definitions", "catalog_revisions", "catalog_asset_bindings"))
     engine.dispose()
+
+
+def test_catalog_builder_0026_preserves_0025_workspaces_and_fails_closed_on_downgrade(tmp_path: Path):
+    database_path = tmp_path / "catalog-0025.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0025")
+    with sqlite3.connect(database_path) as connection:
+        for table in ("catalog_revision_visual_pages", "catalog_revision_artifacts",
+                      "catalog_revision_assemblies"):
+            connection.execute(f"DROP TABLE IF EXISTS {table}")
+        connection.commit()
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with Session(engine) as db:
+        seed_database(db)
+        owner = db.query(User).filter(User.is_system_owner.is_(True)).one()
+        machine = db.query(Machine).first()
+        catalog = CatalogDefinition(code="QA_MIGRATION_01B", asset_category_id=machine.category_id,
+                                    name_bg="QA", name_en="QA", name_ru="QA", created_by_id=owner.id)
+        db.add(catalog)
+        db.flush()
+        revision = CatalogRevision(catalog_id=catalog.id, revision_code="A", created_by_id=owner.id)
+        db.add_all([revision, CatalogAssetBinding(catalog_id=catalog.id, machine_id=machine.id,
+                                                  created_by_id=owner.id)])
+        db.commit()
+        catalog_id, revision_id = catalog.id, revision.id
+    engine.dispose()
+    with sqlite3.connect(database_path) as connection:
+        before = tuple(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                       for table in ("machines", "part_catalog", "repair_kits", "catalog_visual_sources"))
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0026")
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute("SELECT id FROM catalog_definitions WHERE id = ?", (catalog_id,)).fetchone()
+        assert connection.execute("SELECT id FROM catalog_revisions WHERE id = ?", (revision_id,)).fetchone()
+        assert connection.execute("SELECT catalog_id FROM catalog_asset_bindings WHERE catalog_id = ?",
+                                  (catalog_id,)).fetchone()
+        assert all(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+                   for table in ("catalog_revision_assemblies", "catalog_revision_artifacts",
+                                 "catalog_revision_visual_pages"))
+        assert before == tuple(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                               for table in ("machines", "part_catalog", "repair_kits", "catalog_visual_sources"))
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with Session(engine) as db:
+        owner = db.query(User).filter(User.is_system_owner.is_(True)).one()
+        db.add(CatalogRevisionAssembly(revision_id=revision_id, code="QA", name_bg="QA",
+                                       name_en="QA", name_ru="QA", created_by_id=owner.id))
+        db.commit()
+    engine.dispose()
+    with pytest.raises(RuntimeError, match="staging contains data"):
+        _run_sqlite_revision(database_path, command.downgrade, "20260928_0025")
 
 
 def test_generic_asset_migration_upgrades_existing_0023_shape(tmp_path: Path):
