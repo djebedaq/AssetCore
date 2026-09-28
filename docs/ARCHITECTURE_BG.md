@@ -55,6 +55,8 @@ repair/parts източници; `timeline_details.py` има изрични б�
 
 ## Authoritative каталог за резервни части
 
+Catalog Builder 01B добавя изолирана чернова структура `CatalogDefinition → CatalogRevision → CatalogRevisionAssembly → CatalogRevisionArtifact → CatalogRevisionVisualPage`. Тя пази точните PDF байтове и изрични роли на страници и не участва в runtime каталога или PARTS-DOC. Договорът е описан в [CATALOG_ADMIN_01B_VISUAL_SOURCES_BG.md](CATALOG_ADMIN_01B_VISUAL_SOURCES_BG.md).
+
 Активният dataset е само `PARTS_CATALOG_V2`: 611 source реда от FALCH_500, FALCH_1000 и HYDWIN_FUSSEN_500. Семейството се определя чрез exact brand/model плюс проверен inventory number от manifest-а; няма fuzzy matching. CombiJet, машина №19 и всеки неподдържан модел получават празен каталог, не чужди части.
 
 `PartCatalog.source_record_key` е уникалната identity на source реда. Тя пази repeated positions/applicability variants, които старият ключ `brand + model + assembly + position + part_number` не можеше да представи без overwrite. Оригиналният номер, `Replaced by`, `quantity_raw`, `Valid for`, repair-kit code, source page/version/hash и anomaly codes остават отделни полета.

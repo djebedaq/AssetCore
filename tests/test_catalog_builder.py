@@ -1,5 +1,7 @@
 """Disposable Builder records; verified V2 catalog and seed inventory are read-only anchors."""
 
+import base64
+import io
 import os
 
 import pytest
@@ -17,6 +19,7 @@ from app.models import (
 )
 from app.security import create_access_token
 from fastapi import HTTPException
+from reportlab.pdfgen import canvas
 from sqlalchemy import func, select
 
 BASE = "/api/admin/catalog-builder"
@@ -41,7 +44,7 @@ def test_builder_routes_are_permission_classified():
     report = build_authorization_inventory(app)
     assert report.valid, report.errors
     builder = [route for route in report.routes if route.path.startswith(BASE)]
-    assert len(builder) == 11
+    assert len(builder) == 24
     assert all(route.permission == "parts.manage" for route in builder)
 
 
@@ -165,11 +168,26 @@ def test_owner_deletes_only_builder_children(client, auth_headers, session_facto
     machine_id = _machine(session_factory, category_id, "QA_BUILDER_DELETE_ASSET", "QA")
     catalog_id = _create(client, auth_headers, "QA_DELETE_CATALOG", category_id).json()["id"]
     client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers)
-    client.post(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers,
-                json={"revision_code": "A"})
+    revision_id = client.post(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers,
+                              json={"revision_code": "A"}).json()["id"]
+    assembly_id = client.post(f"{BASE}/revisions/{revision_id}/assemblies", headers=auth_headers,
+                              json={"code": "PUMP", "name_bg": "QA", "name_en": "QA",
+                                    "name_ru": "QA"}).json()["id"]
+    stream = io.BytesIO()
+    pdf = canvas.Canvas(stream)
+    pdf.drawString(40, 700, "QA")
+    pdf.showPage()
+    pdf.save()
+    artifact_id = client.post(f"{BASE}/assemblies/{assembly_id}/artifacts", headers=auth_headers,
+                              json={"title": "QA", "filename": "qa.pdf", "media_type": "application/pdf",
+                                    "content_base64": base64.b64encode(stream.getvalue()).decode()}).json()["id"]
+    assert client.post(f"{BASE}/artifacts/{artifact_id}/visual-pages", headers=auth_headers,
+                       json={"role": "EXPLODED_SCHEME", "page_numbers": [1]}).status_code == 201
     before = client.get(f"/api/owner/data-deletion/catalog_definition/{catalog_id}/preview",
                         headers=auth_headers)
     assert before.status_code == 200 and before.json()["can_delete"]
+    assert {item["code"] for item in before.json()["owned_records_to_delete"]} >= {
+        "catalog_revision_assemblies", "catalog_revision_artifacts", "catalog_revision_visual_pages"}
     with session_factory() as db:
         controlled_count = db.scalar(select(func.count(PartCatalog.id)).where(
             PartCatalog.source_version == "PARTS_CATALOG_V2"))
