@@ -23,6 +23,9 @@ from ..database import Base
 from ..models import (
     AssetCategory,
     AuthSession,
+    CatalogAssetBinding,
+    CatalogDefinition,
+    CatalogRevision,
     CategoryFieldDefinition,
     Department,
     DocumentParticipant,
@@ -52,6 +55,7 @@ class ResourceType(str, Enum):
     MACHINE = "machine"
     EXTERNAL_SIGNER = "external_signer"
     SIGNATURE_SLOT = "signature_slot"
+    CATALOG_DEFINITION = "catalog_definition"
 
 
 # There is no client-supplied table/model/SQL lookup.
@@ -64,6 +68,7 @@ RESOURCE_MODELS = {
     ResourceType.MACHINE: Machine,
     ResourceType.EXTERNAL_SIGNER: ExternalSigner,
     ResourceType.SIGNATURE_SLOT: SignatureSlot,
+    ResourceType.CATALOG_DEFINITION: CatalogDefinition,
 }
 
 # Every incoming FK is counted once per referencing row, including multiple
@@ -106,6 +111,9 @@ REFERENCE_LABELS = {
     "official_document_versions": "officialDocuments",
     "document_participants": "participants",
     "signature_sessions": "signatures",
+    "catalog_definitions": "builderCatalogs",
+    "catalog_revisions": "builderRevisions",
+    "catalog_asset_bindings": "builderBindings",
 }
 
 # Only local events are owned data. Unknown or operational events fail closed.
@@ -308,6 +316,13 @@ def _analyze(db, actor, kind, target) -> dict:
         count = _count(db, OfficialDocument, OfficialDocument.document_type == target.document_type)
         if count:
             blockers.append(_dependency("official_documents", count))
+    elif kind == ResourceType.CATALOG_DEFINITION:
+        owned = {CatalogRevision.__tablename__, CatalogAssetBinding.__tablename__}
+        published = _count(db, CatalogRevision, (
+            CatalogRevision.catalog_id == target.id
+        ) & (CatalogRevision.status != "DRAFT"))
+        if published:
+            blockers.append(_dependency("catalog_revisions", published))
 
     for table, columns in incoming_references(RESOURCE_MODELS[kind]):
         if kind == ResourceType.ASSET_CATEGORY and table.name == "machines":
@@ -357,6 +372,8 @@ def _lock_dependencies(db: Session, kind: ResourceType) -> None:
         )
     if kind == ResourceType.SIGNATURE_SLOT:
         tables.update({"document_participants", "official_documents", "official_document_versions"})
+    if kind == ResourceType.CATALOG_DEFINITION:
+        tables.update({"catalog_revisions", "catalog_asset_bindings"})
     # Rare destructive operations serialize writers to their reference tables.
     # This covers string/configuration references and child-insert phantoms as
     # well as FKs, without requiring every existing writer to use a new service.
@@ -448,6 +465,9 @@ def execute(
                     CategoryFieldDefinition.category_id == identifier
                 )
             )
+        elif kind == ResourceType.CATALOG_DEFINITION:
+            db.execute(delete(CatalogAssetBinding).where(CatalogAssetBinding.catalog_id == identifier))
+            db.execute(delete(CatalogRevision).where(CatalogRevision.catalog_id == identifier))
         # Core deletion intentionally bypasses legacy ORM delete-orphan cascades
         # on Machine.repairs/transfers and CategoryFieldDefinition.values.
         db.execute(delete(RESOURCE_MODELS[kind]).where(RESOURCE_MODELS[kind].id == identifier))

@@ -42,6 +42,7 @@ from .auth_throttle import (
     throttled_error,
 )
 from .catalog import router as catalog_router
+from .catalog_admin.routes import router as catalog_builder_router
 from .database import SessionLocal, engine, get_db
 from .document_generation import (
     build_daily_report_pdf,
@@ -183,6 +184,7 @@ app.include_router(industrial_router)
 app.include_router(user_router)
 app.include_router(hardening_router)
 app.include_router(catalog_router)
+app.include_router(catalog_builder_router)
 
 
 @app.middleware("http")
