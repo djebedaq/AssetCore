@@ -19,6 +19,8 @@ from ..models import (
     CatalogRevision,
     CatalogRevisionArtifact,
     CatalogRevisionAssembly,
+    CatalogRevisionPart,
+    CatalogRevisionPartPageMap,
     CatalogRevisionVisualPage,
     User,
     utcnow,
@@ -110,7 +112,9 @@ def _assembly_dict(db: Session, item: CatalogRevisionAssembly) -> dict:
             "name_bg": item.name_bg, "name_en": item.name_en, "name_ru": item.name_ru,
             "description": item.description, "sort_order": item.sort_order,
             "artifact_count": len(artifacts), "exploded_page_count": counts["EXPLODED_SCHEME"],
-            "spare_list_page_count": counts["SPARE_PARTS_LIST"]}
+            "spare_list_page_count": counts["SPARE_PARTS_LIST"],
+            "part_count": db.scalar(select(func.count(CatalogRevisionPart.id)).where(
+                CatalogRevisionPart.assembly_id == item.id))}
 
 
 def list_assemblies(db: Session, revision_id: int) -> list[dict]:
@@ -162,8 +166,17 @@ def delete_assembly(db: Session, actor: User, assembly_id: int) -> None:
                        "sha256": artifact.sha256, "visual_pages": _role_pages(db, artifact.id)}
                       for artifact in artifacts]
     artifact_ids = select(CatalogRevisionArtifact.id).where(CatalogRevisionArtifact.assembly_id == item.id)
+    part_ids = select(CatalogRevisionPart.id).where(CatalogRevisionPart.assembly_id == item.id)
+    page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id.in_(artifact_ids))
+    part_count = db.scalar(select(func.count(CatalogRevisionPart.id)).where(CatalogRevisionPart.assembly_id == item.id))
+    mapping_count = db.scalar(select(func.count(CatalogRevisionPartPageMap.id)).where(
+        CatalogRevisionPartPageMap.part_id.in_(part_ids)))
     add_audit_log(db, actor, "catalog_revision_assembly", item.id, "ASSEMBLY_DELETED",
-                  _meta(catalog, revision, item, artifacts=artifact_audit))
+                  _meta(catalog, revision, item, artifacts=artifact_audit,
+                        part_count=part_count, removed_part_page_maps=mapping_count))
+    db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.part_id.in_(part_ids)))
+    db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids)))
+    db.execute(delete(CatalogRevisionPart).where(CatalogRevisionPart.assembly_id == item.id))
     db.execute(delete(CatalogRevisionVisualPage).where(CatalogRevisionVisualPage.artifact_id.in_(artifact_ids)))
     db.execute(delete(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == item.id))
     db.delete(item)
@@ -233,6 +246,10 @@ def upload_artifact(db: Session, actor: User, assembly_id: int, data: ArtifactUp
         db.flush()
     except IntegrityError as exc:
         db.rollback()
+        existing = db.scalar(select(CatalogRevisionArtifact).where(
+            CatalogRevisionArtifact.assembly_id == assembly_id, CatalogRevisionArtifact.sha256 == digest))
+        if existing:
+            raise HTTPException(409, detail={"code": "catalog_source_duplicate", "artifact_id": existing.id}) from exc
         raise fail("catalog_source_duplicate") from exc
     add_audit_log(db, actor, "catalog_revision_artifact", item.id, "CATALOG_SOURCE_UPLOADED",
                   _meta(catalog, revision, assembly, item, page_count=page_count))
@@ -242,8 +259,14 @@ def upload_artifact(db: Session, actor: User, assembly_id: int, data: ArtifactUp
 
 def delete_artifact(db: Session, actor: User, artifact_id: int) -> None:
     item, assembly, revision, catalog = _artifact(db, artifact_id, mutate=True)
+    page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id == item.id)
+    mapped = db.execute(select(CatalogRevisionPartPageMap.part_id, CatalogRevisionPartPageMap.visual_page_id)
+                        .where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids))).all()
     add_audit_log(db, actor, "catalog_revision_artifact", item.id, "CATALOG_SOURCE_DELETED",
-                  _meta(catalog, revision, assembly, item, visual_pages=_role_pages(db, item.id)))
+                  _meta(catalog, revision, assembly, item, visual_pages=_role_pages(db, item.id),
+                        removed_part_page_maps=[{"part_id": part_id, "visual_page_id": page_id}
+                                                for part_id, page_id in mapped]))
+    db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids)))
     db.execute(delete(CatalogRevisionVisualPage).where(CatalogRevisionVisualPage.artifact_id == item.id))
     db.delete(item)
     db.commit()
@@ -293,8 +316,12 @@ def remove_visual_page(db: Session, actor: User, assignment_id: int) -> None:
     if page is None:
         raise fail("catalog_visual_page_invalid", 404)
     item, assembly, revision, catalog = _artifact(db, page.artifact_id, mutate=True)
+    mapped_parts = db.scalars(select(CatalogRevisionPartPageMap.part_id).where(
+        CatalogRevisionPartPageMap.visual_page_id == page.id)).all()
     add_audit_log(db, actor, "catalog_revision_artifact", item.id, "VISUAL_PAGE_ROLE_REMOVED",
-                  _meta(catalog, revision, assembly, item, page_numbers=[page.page_number], role=page.role))
+                  _meta(catalog, revision, assembly, item, page_numbers=[page.page_number],
+                        role=page.role, unmapped_part_ids=mapped_parts))
+    db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.visual_page_id == page.id))
     db.delete(page)
     db.commit()
 

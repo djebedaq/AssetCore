@@ -112,3 +112,7 @@ Document слоят получава canonical SQLAlchemy snapshot и връща
 ## Разгръщане
 
 Локалната среда и тестовете използват SQLite; Render и Docker production използват PostgreSQL. Приложението изпълнява Alembic upgrade преди seed. Secrets се подават само през средата и никога не влизат в API отговор, frontend bundle или Git.
+
+## CATALOG-ADMIN-01C
+
+Черновите части на Catalog Builder се съхраняват отделно в `CatalogRevisionPart` и `CatalogRevisionPartPageMap`. Връзката към списък на резервни части използва точния `CatalogRevisionVisualPage` от същия възел. CSV импортът минава през подписан преглед и атомично потвърждение; тези данни не участват в текущия PARTS_CATALOG_V2 runtime. Подробности: [CATALOG_ADMIN_01C_PARTS_EDITOR_BG.md](CATALOG_ADMIN_01C_PARTS_EDITOR_BG.md).

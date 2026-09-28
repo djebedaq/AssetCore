@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from enum import Enum
 
 from sqlalchemy import (
@@ -15,6 +16,7 @@ from sqlalchemy import (
     Index,
     Integer,
     LargeBinary,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -986,6 +988,50 @@ class CatalogRevisionVisualPage(Base):
     artifact_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_artifacts.id"), nullable=False, index=True)
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
+class CatalogRevisionPart(Base):
+    __tablename__ = "catalog_revision_parts"
+    __table_args__ = (
+        UniqueConstraint("assembly_id", "position", "part_number", name="uq_catalog_revision_part_identity"),
+        CheckConstraint("quantity IS NULL OR quantity >= 0", name="ck_catalog_revision_part_quantity"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_assemblies.id"), nullable=False, index=True)
+    position: Mapped[str] = mapped_column(String(80), nullable=False)
+    part_number: Mapped[str] = mapped_column(String(120), nullable=False)
+    name_bg: Mapped[str | None] = mapped_column(String(255))
+    name_en: Mapped[str | None] = mapped_column(String(255))
+    name_ru: Mapped[str | None] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text)
+    description_2: Mapped[str | None] = mapped_column(Text)
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    quantity_raw: Mapped[str | None] = mapped_column(String(120))
+    unit: Mapped[str | None] = mapped_column(String(80))
+    manufacturer: Mapped[str | None] = mapped_column(String(255))
+    category: Mapped[str | None] = mapped_column(String(255))
+    replaced_by_part_number: Mapped[str | None] = mapped_column(String(120))
+    alternative_part_number: Mapped[str | None] = mapped_column(String(120))
+    technical_specification: Mapped[str | None] = mapped_column(Text)
+    technical_notes: Mapped[str | None] = mapped_column(Text)
+    supplier: Mapped[str | None] = mapped_column(String(255))
+    supplier_code: Mapped[str | None] = mapped_column(String(120))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class CatalogRevisionPartPageMap(Base):
+    __tablename__ = "catalog_revision_part_page_maps"
+    __table_args__ = (UniqueConstraint("part_id", "visual_page_id", name="uq_catalog_revision_part_page_map"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    part_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_parts.id"), nullable=False, index=True)
+    visual_page_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_visual_pages.id"), nullable=False, index=True)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 

@@ -36,7 +36,7 @@ def _race(factory, operation):
                 return 201, operation(db, actor)
             except HTTPException as exc:
                 db.rollback()
-                return exc.status_code, exc.detail["code"]
+                return exc.status_code, exc.detail
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(worker) for _ in range(2)]
@@ -62,7 +62,7 @@ def test_assembly_artifact_and_page_role_races(pg_factory):
     assembly_data = AssemblyCreate(code="PUMP", name_bg="Помпа", name_en="Pump", name_ru="Насос")
     assembly_results = _race(pg_factory, lambda db, actor: create_assembly(db, actor, revision_id, assembly_data))
     assert sorted(status for status, _ in assembly_results) == [201, 409]
-    assert next(value for status, value in assembly_results if status == 409) == "catalog_assembly_duplicate"
+    assert next(value for status, value in assembly_results if status == 409)["code"] == "catalog_assembly_duplicate"
     with pg_factory() as db:
         assert db.scalar(select(func.count(CatalogRevisionAssembly.id)).where(
             CatalogRevisionAssembly.revision_id == revision_id)) == 1
@@ -77,16 +77,18 @@ def test_assembly_artifact_and_page_role_races(pg_factory):
                             content_base64=base64.b64encode(stream.getvalue()).decode())
     upload_results = _race(pg_factory, lambda db, actor: upload_artifact(db, actor, assembly_id, upload))
     assert sorted(status for status, _ in upload_results) == [201, 409]
-    assert next(value for status, value in upload_results if status == 409) == "catalog_source_duplicate"
+    duplicate_detail = next(value for status, value in upload_results if status == 409)
+    assert duplicate_detail["code"] == "catalog_source_duplicate"
     with pg_factory() as db:
         assert db.scalar(select(func.count(CatalogRevisionArtifact.id)).where(
             CatalogRevisionArtifact.assembly_id == assembly_id)) == 1
         artifact_id = db.scalar(select(CatalogRevisionArtifact.id).where(
             CatalogRevisionArtifact.assembly_id == assembly_id))
+    assert duplicate_detail["artifact_id"] == artifact_id
     assignment = VisualPageCreate(role="EXPLODED_SCHEME", page_numbers=[1])
     page_results = _race(pg_factory, lambda db, actor: assign_visual_pages(db, actor, artifact_id, assignment))
     assert sorted(status for status, _ in page_results) == [201, 409]
-    assert next(value for status, value in page_results if status == 409) == "catalog_visual_page_duplicate"
+    assert next(value for status, value in page_results if status == 409)["code"] == "catalog_visual_page_duplicate"
     with pg_factory() as db:
         assert db.scalar(select(func.count(CatalogRevisionVisualPage.id)).where(
             CatalogRevisionVisualPage.artifact_id == artifact_id)) == 1
