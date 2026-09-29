@@ -75,6 +75,9 @@ def test_position_hotspots_geometry_verification_and_variants(client, auth_heade
     verified = client.post(f"{BASE}/hotspots/{hotspot_id}/verify", headers=auth_headers,
                            json={"expected_version": first.json()["version"]})
     assert verified.status_code == 200 and verified.json()["is_verified"]
+    partial = client.get(f"{BASE}/assemblies/{pump}/hotspot-coverage", headers=auth_headers).json()
+    position = next(row for row in partial if row["position"] == "12")
+    assert position["verified_hotspot_count"] == 1 and position["state"] == "UNVERIFIED"
     stale = client.patch(f"{BASE}/hotspots/{hotspot_id}", headers=auth_headers,
                          json={"expected_version": first.json()["version"], "x": 0.4})
     assert stale.status_code == 409 and stale.json()["detail"]["code"] == "catalog_hotspot_stale"

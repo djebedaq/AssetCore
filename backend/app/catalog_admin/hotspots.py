@@ -126,8 +126,8 @@ def coverage(db: Session, assembly_id: int) -> list[dict]:
             result[position]["hotspot_count"] += 1
             result[position]["verified_hotspot_count"] += int(verified)
     for row in result.values():
-        row["state"] = ("VERIFIED" if row["verified_hotspot_count"] else
-                        "UNVERIFIED" if row["hotspot_count"] else "NO_HOTSPOT")
+        row["state"] = ("NO_HOTSPOT" if not row["hotspot_count"] else
+                        "VERIFIED" if row["verified_hotspot_count"] == row["hotspot_count"] else "UNVERIFIED")
     return list(result.values())
 
 
