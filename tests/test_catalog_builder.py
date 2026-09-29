@@ -38,13 +38,32 @@ def test_builder_requires_parts_manage(client, session_factory, role):
     assert client.post(f"{BASE}/catalogs/1/revisions", headers=headers,
                        json={"revision_code": "A"}).status_code == 403
     assert client.post(f"{BASE}/catalogs/1/assets/1", headers=headers).status_code == 403
+    assert client.post(f"{BASE}/visual-pages/1/hotspots", headers=headers,
+                       json={"position": "1", "x": .1, "y": .1, "width": .1, "height": .1}).status_code == 403
+    assert client.patch(f"{BASE}/hotspots/1", headers=headers,
+                        json={"expected_version": 1, "x": .2}).status_code == 403
+    assert client.post(f"{BASE}/hotspots/1/verify", headers=headers,
+                       json={"expected_version": 1}).status_code == 403
+    assert client.post(f"{BASE}/hotspots/1/unverify", headers=headers,
+                       json={"expected_version": 1}).status_code == 403
+    assert client.delete(f"{BASE}/hotspots/1?expected_version=1", headers=headers).status_code == 403
+    assert client.post(f"{BASE}/assemblies/1/repair-kits", headers=headers,
+                       json={"code": "QA", "name_en": "QA"}).status_code == 403
+    assert client.patch(f"{BASE}/repair-kits/1", headers=headers,
+                        json={"expected_version": 1, "name_en": "QA"}).status_code == 403
+    assert client.delete(f"{BASE}/repair-kits/1?expected_version=1", headers=headers).status_code == 403
+    assert client.post(f"{BASE}/repair-kits/1/components", headers=headers,
+                       json={"part_id": 1, "quantity": 1}).status_code == 403
+    assert client.patch(f"{BASE}/repair-kit-components/1", headers=headers,
+                        json={"expected_version": 1, "quantity": 2}).status_code == 403
+    assert client.delete(f"{BASE}/repair-kit-components/1?expected_version=1", headers=headers).status_code == 403
 
 
 def test_builder_routes_are_permission_classified():
     report = build_authorization_inventory(app)
     assert report.valid, report.errors
     builder = [route for route in report.routes if route.path.startswith(BASE)]
-    assert len(builder) == 35
+    assert len(builder) == 51
     assert all(route.permission == "parts.manage" for route in builder)
 
 

@@ -20,6 +20,8 @@ from ..models import (
     CatalogRevisionArtifact,
     CatalogRevisionPart,
     CatalogRevisionPartPageMap,
+    CatalogRevisionPositionHotspot,
+    CatalogRevisionRepairKitComponent,
     CatalogRevisionVisualPage,
     User,
     utcnow,
@@ -116,6 +118,21 @@ def _dict(db: Session, item: CatalogRevisionPart) -> dict:
             "created_at": item.created_at, "updated_at": item.updated_at}
 
 
+def _last_position_in_use(db: Session, item: CatalogRevisionPart) -> bool:
+    other = db.scalar(select(CatalogRevisionPart.id).where(
+        CatalogRevisionPart.assembly_id == item.assembly_id,
+        CatalogRevisionPart.position == item.position,
+        CatalogRevisionPart.id != item.id).limit(1))
+    if other is not None:
+        return False
+    page_ids = select(CatalogRevisionVisualPage.id).join(
+        CatalogRevisionArtifact, CatalogRevisionVisualPage.artifact_id == CatalogRevisionArtifact.id).where(
+            CatalogRevisionArtifact.assembly_id == item.assembly_id)
+    return db.scalar(select(CatalogRevisionPositionHotspot.id).where(
+        CatalogRevisionPositionHotspot.visual_page_id.in_(page_ids),
+        CatalogRevisionPositionHotspot.position == item.position).limit(1)) is not None
+
+
 def list_parts(db: Session, assembly_id: int) -> list[dict]:
     _assembly(db, assembly_id)
     items = db.scalars(select(CatalogRevisionPart).where(CatalogRevisionPart.assembly_id == assembly_id)
@@ -147,6 +164,8 @@ def update_part(db: Session, actor: User, part_id: int, data: PartUpdate) -> dic
     item, assembly, revision, catalog = _part(db, part_id, mutate=True)
     changes = data.model_dump(exclude_unset=True)
     values = _clean({**{key: getattr(item, key) for key in PartCreate.model_fields}, **changes})
+    if values["position"] != item.position and _last_position_in_use(db, item):
+        raise fail("catalog_part_position_in_use")
     before = {key: getattr(item, key) for key in changes}
     for key in changes:
         setattr(item, key, values[key])
@@ -167,6 +186,11 @@ def update_part(db: Session, actor: User, part_id: int, data: PartUpdate) -> dic
 
 def delete_part(db: Session, actor: User, part_id: int) -> None:
     item, assembly, revision, catalog = _part(db, part_id, mutate=True)
+    if db.scalar(select(CatalogRevisionRepairKitComponent.id).where(
+        CatalogRevisionRepairKitComponent.part_id == item.id).limit(1)) is not None:
+        raise fail("catalog_part_in_repair_kit")
+    if _last_position_in_use(db, item):
+        raise fail("catalog_part_position_in_use")
     removed = [row["visual_page_id"] for row in _maps(db, item.id)]
     db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.part_id == item.id))
     add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_DELETED",

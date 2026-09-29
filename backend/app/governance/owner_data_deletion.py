@@ -30,6 +30,9 @@ from ..models import (
     CatalogRevisionAssembly,
     CatalogRevisionPart,
     CatalogRevisionPartPageMap,
+    CatalogRevisionPositionHotspot,
+    CatalogRevisionRepairKit,
+    CatalogRevisionRepairKitComponent,
     CatalogRevisionVisualPage,
     CategoryFieldDefinition,
     Department,
@@ -124,6 +127,9 @@ REFERENCE_LABELS = {
     "catalog_revision_visual_pages": "builderVisualPages",
     "catalog_revision_parts": "builderParts",
     "catalog_revision_part_page_maps": "builderPartPageMaps",
+    "catalog_revision_position_hotspots": "builderHotspots",
+    "catalog_revision_repair_kits": "builderRepairKits",
+    "catalog_revision_repair_kit_components": "builderRepairKitComponents",
 }
 
 # Only local events are owned data. Unknown or operational events fail closed.
@@ -330,7 +336,8 @@ def _analyze(db, actor, kind, target) -> dict:
         owned = {CatalogRevision.__tablename__, CatalogAssetBinding.__tablename__,
                  CatalogRevisionAssembly.__tablename__, CatalogRevisionArtifact.__tablename__,
                  CatalogRevisionVisualPage.__tablename__, CatalogRevisionPart.__tablename__,
-                 CatalogRevisionPartPageMap.__tablename__}
+                 CatalogRevisionPartPageMap.__tablename__, CatalogRevisionPositionHotspot.__tablename__,
+                 CatalogRevisionRepairKit.__tablename__, CatalogRevisionRepairKitComponent.__tablename__}
         published = _count(db, CatalogRevision, (
             CatalogRevision.catalog_id == target.id
         ) & (CatalogRevision.status != "DRAFT"))
@@ -340,12 +347,17 @@ def _analyze(db, actor, kind, target) -> dict:
         assembly_ids = select(CatalogRevisionAssembly.id).where(CatalogRevisionAssembly.revision_id.in_(revision_ids))
         artifact_ids = select(CatalogRevisionArtifact.id).where(CatalogRevisionArtifact.assembly_id.in_(assembly_ids))
         part_ids = select(CatalogRevisionPart.id).where(CatalogRevisionPart.assembly_id.in_(assembly_ids))
+        page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id.in_(artifact_ids))
+        kit_ids = select(CatalogRevisionRepairKit.id).where(CatalogRevisionRepairKit.assembly_id.in_(assembly_ids))
         for model, condition in (
             (CatalogRevisionAssembly, CatalogRevisionAssembly.revision_id.in_(revision_ids)),
             (CatalogRevisionArtifact, CatalogRevisionArtifact.assembly_id.in_(assembly_ids)),
             (CatalogRevisionVisualPage, CatalogRevisionVisualPage.artifact_id.in_(artifact_ids)),
             (CatalogRevisionPart, CatalogRevisionPart.assembly_id.in_(assembly_ids)),
             (CatalogRevisionPartPageMap, CatalogRevisionPartPageMap.part_id.in_(part_ids)),
+            (CatalogRevisionPositionHotspot, CatalogRevisionPositionHotspot.visual_page_id.in_(page_ids)),
+            (CatalogRevisionRepairKit, CatalogRevisionRepairKit.assembly_id.in_(assembly_ids)),
+            (CatalogRevisionRepairKitComponent, CatalogRevisionRepairKitComponent.kit_id.in_(kit_ids)),
         ):
             count = _count(db, model, condition)
             if count:
@@ -402,7 +414,9 @@ def _lock_dependencies(db: Session, kind: ResourceType) -> None:
     if kind == ResourceType.CATALOG_DEFINITION:
         tables.update({"catalog_revisions", "catalog_asset_bindings", "catalog_revision_assemblies",
                        "catalog_revision_artifacts", "catalog_revision_visual_pages",
-                       "catalog_revision_parts", "catalog_revision_part_page_maps"})
+                       "catalog_revision_parts", "catalog_revision_part_page_maps",
+                       "catalog_revision_position_hotspots", "catalog_revision_repair_kits",
+                       "catalog_revision_repair_kit_components"})
     # Rare destructive operations serialize writers to their reference tables.
     # This covers string/configuration references and child-insert phantoms as
     # well as FKs, without requiring every existing writer to use a new service.
@@ -499,6 +513,13 @@ def execute(
             assembly_ids = select(CatalogRevisionAssembly.id).where(CatalogRevisionAssembly.revision_id.in_(revision_ids))
             artifact_ids = select(CatalogRevisionArtifact.id).where(CatalogRevisionArtifact.assembly_id.in_(assembly_ids))
             part_ids = select(CatalogRevisionPart.id).where(CatalogRevisionPart.assembly_id.in_(assembly_ids))
+            page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id.in_(artifact_ids))
+            kit_ids = select(CatalogRevisionRepairKit.id).where(CatalogRevisionRepairKit.assembly_id.in_(assembly_ids))
+            db.execute(delete(CatalogRevisionRepairKitComponent).where(
+                CatalogRevisionRepairKitComponent.kit_id.in_(kit_ids)))
+            db.execute(delete(CatalogRevisionRepairKit).where(CatalogRevisionRepairKit.assembly_id.in_(assembly_ids)))
+            db.execute(delete(CatalogRevisionPositionHotspot).where(
+                CatalogRevisionPositionHotspot.visual_page_id.in_(page_ids)))
             db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.part_id.in_(part_ids)))
             db.execute(delete(CatalogRevisionPart).where(CatalogRevisionPart.assembly_id.in_(assembly_ids)))
             db.execute(delete(CatalogRevisionVisualPage).where(CatalogRevisionVisualPage.artifact_id.in_(artifact_ids)))

@@ -21,6 +21,9 @@ from ..models import (
     CatalogRevisionAssembly,
     CatalogRevisionPart,
     CatalogRevisionPartPageMap,
+    CatalogRevisionPositionHotspot,
+    CatalogRevisionRepairKit,
+    CatalogRevisionRepairKitComponent,
     CatalogRevisionVisualPage,
     User,
     utcnow,
@@ -114,7 +117,16 @@ def _assembly_dict(db: Session, item: CatalogRevisionAssembly) -> dict:
             "artifact_count": len(artifacts), "exploded_page_count": counts["EXPLODED_SCHEME"],
             "spare_list_page_count": counts["SPARE_PARTS_LIST"],
             "part_count": db.scalar(select(func.count(CatalogRevisionPart.id)).where(
-                CatalogRevisionPart.assembly_id == item.id))}
+                CatalogRevisionPart.assembly_id == item.id)),
+            "hotspot_count": db.scalar(select(func.count(CatalogRevisionPositionHotspot.id)).where(
+                CatalogRevisionPositionHotspot.visual_page_id.in_(select(CatalogRevisionVisualPage.id).where(
+                    CatalogRevisionVisualPage.artifact_id.in_(select(CatalogRevisionArtifact.id).where(
+                        CatalogRevisionArtifact.assembly_id == item.id)))))),
+            "repair_kit_count": db.scalar(select(func.count(CatalogRevisionRepairKit.id)).where(
+                CatalogRevisionRepairKit.assembly_id == item.id)),
+            "repair_kit_component_count": db.scalar(select(func.count(CatalogRevisionRepairKitComponent.id)).where(
+                CatalogRevisionRepairKitComponent.kit_id.in_(select(CatalogRevisionRepairKit.id).where(
+                    CatalogRevisionRepairKit.assembly_id == item.id))))}
 
 
 def list_assemblies(db: Session, revision_id: int) -> list[dict]:
@@ -160,6 +172,9 @@ def update_assembly(db: Session, actor: User, assembly_id: int, data: AssemblyUp
 
 
 def delete_assembly(db: Session, actor: User, assembly_id: int) -> None:
+    from .hotspots import remove_page_hotspots
+    from .repair_kits import remove_assembly_kits
+
     item, revision, catalog = _assembly(db, assembly_id, mutate=True)
     artifacts = db.scalars(select(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == item.id)).all()
     artifact_audit = [{"artifact_id": artifact.id, "filename": artifact.filename,
@@ -171,9 +186,12 @@ def delete_assembly(db: Session, actor: User, assembly_id: int) -> None:
     part_count = db.scalar(select(func.count(CatalogRevisionPart.id)).where(CatalogRevisionPart.assembly_id == item.id))
     mapping_count = db.scalar(select(func.count(CatalogRevisionPartPageMap.id)).where(
         CatalogRevisionPartPageMap.part_id.in_(part_ids)))
+    kit_counts = remove_assembly_kits(db, item.id)
+    hotspot_counts = remove_page_hotspots(db, actor, page_ids, catalog, revision, item)
     add_audit_log(db, actor, "catalog_revision_assembly", item.id, "ASSEMBLY_DELETED",
                   _meta(catalog, revision, item, artifacts=artifact_audit,
-                        part_count=part_count, removed_part_page_maps=mapping_count))
+                        part_count=part_count, removed_part_page_maps=mapping_count,
+                        **kit_counts, **hotspot_counts))
     db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.part_id.in_(part_ids)))
     db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids)))
     db.execute(delete(CatalogRevisionPart).where(CatalogRevisionPart.assembly_id == item.id))
@@ -258,14 +276,20 @@ def upload_artifact(db: Session, actor: User, assembly_id: int, data: ArtifactUp
 
 
 def delete_artifact(db: Session, actor: User, artifact_id: int) -> None:
+    from .hotspots import remove_page_hotspots
+    from .repair_kits import source_page_reference_count
+
     item, assembly, revision, catalog = _artifact(db, artifact_id, mutate=True)
     page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id == item.id)
+    if source_page_reference_count(db, page_ids):
+        raise fail("catalog_repair_kit_source_page_in_use")
     mapped = db.execute(select(CatalogRevisionPartPageMap.part_id, CatalogRevisionPartPageMap.visual_page_id)
                         .where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids))).all()
+    hotspot_counts = remove_page_hotspots(db, actor, page_ids, catalog, revision, assembly)
     add_audit_log(db, actor, "catalog_revision_artifact", item.id, "CATALOG_SOURCE_DELETED",
                   _meta(catalog, revision, assembly, item, visual_pages=_role_pages(db, item.id),
                         removed_part_page_maps=[{"part_id": part_id, "visual_page_id": page_id}
-                                                for part_id, page_id in mapped]))
+                                                for part_id, page_id in mapped], **hotspot_counts))
     db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids)))
     db.execute(delete(CatalogRevisionVisualPage).where(CatalogRevisionVisualPage.artifact_id == item.id))
     db.delete(item)
@@ -312,15 +336,21 @@ def assign_visual_pages(db: Session, actor: User, artifact_id: int, data: Visual
 
 
 def remove_visual_page(db: Session, actor: User, assignment_id: int) -> None:
+    from .hotspots import remove_page_hotspots
+    from .repair_kits import source_page_reference_count
+
     page = db.get(CatalogRevisionVisualPage, assignment_id)
     if page is None:
         raise fail("catalog_visual_page_invalid", 404)
     item, assembly, revision, catalog = _artifact(db, page.artifact_id, mutate=True)
+    if source_page_reference_count(db, [page.id]):
+        raise fail("catalog_repair_kit_source_page_in_use")
     mapped_parts = db.scalars(select(CatalogRevisionPartPageMap.part_id).where(
         CatalogRevisionPartPageMap.visual_page_id == page.id)).all()
+    hotspot_counts = remove_page_hotspots(db, actor, [page.id], catalog, revision, assembly)
     add_audit_log(db, actor, "catalog_revision_artifact", item.id, "VISUAL_PAGE_ROLE_REMOVED",
                   _meta(catalog, revision, assembly, item, page_numbers=[page.page_number],
-                        role=page.role, unmapped_part_ids=mapped_parts))
+                        role=page.role, unmapped_part_ids=mapped_parts, **hotspot_counts))
     db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.visual_page_id == page.id))
     db.delete(page)
     db.commit()
