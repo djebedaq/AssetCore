@@ -20,6 +20,8 @@ from app.models import (
     CatalogRevisionArtifact,
     CatalogRevisionAssembly,
     CatalogRevisionPart,
+    CatalogRevisionPartPageMap,
+    CatalogRevisionPositionHotspot,
     CatalogRevisionVisualPage,
     Machine,
     Repair,
@@ -35,6 +37,102 @@ from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_catalog_builder_0028_preserves_0027_and_empty_downgrade(tmp_path: Path):
+    database_path = tmp_path / "catalog-0027-to-0028.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0027")
+    with sqlite3.connect(database_path) as connection:
+        for table in ("catalog_revision_repair_kit_components", "catalog_revision_repair_kits",
+                      "catalog_revision_position_hotspots"):
+            connection.execute(f"DROP TABLE IF EXISTS {table}")
+        connection.commit()
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with Session(engine) as db:
+        seed_database(db)
+        owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        category = db.scalar(select(AssetCategory).where(AssetCategory.code == "HPWJ"))
+        catalog = CatalogDefinition(code="QA_0028_PRESERVE", asset_category_id=category.id,
+                                    name_bg="QA", name_en="QA", name_ru="QA", created_by_id=owner.id)
+        db.add(catalog)
+        db.flush()
+        revision = CatalogRevision(catalog_id=catalog.id, revision_code="A", created_by_id=owner.id)
+        db.add(revision)
+        db.flush()
+        assembly = CatalogRevisionAssembly(revision_id=revision.id, code="PUMP", name_bg="QA",
+                                           name_en="QA", name_ru="QA", created_by_id=owner.id)
+        db.add(assembly)
+        db.flush()
+        artifact = CatalogRevisionArtifact(assembly_id=assembly.id, title="QA", filename="qa.pdf",
+                                           media_type="application/pdf", content=b"%PDF-test",
+                                           sha256="a" * 64, page_count=1, created_by_id=owner.id)
+        db.add(artifact)
+        db.flush()
+        page = CatalogRevisionVisualPage(artifact_id=artifact.id, page_number=1,
+                                         role="SPARE_PARTS_LIST", created_by_id=owner.id)
+        db.add(page)
+        db.flush()
+        part = CatalogRevisionPart(assembly_id=assembly.id, position="1", part_number="QA",
+                                   name_en="QA", created_by_id=owner.id)
+        db.add(part)
+        db.flush()
+        db.add(CatalogRevisionPartPageMap(part_id=part.id, visual_page_id=page.id, created_by_id=owner.id))
+        db.commit()
+    engine.dispose()
+    tables = ("catalog_definitions", "catalog_revisions", "catalog_revision_assemblies",
+              "catalog_revision_artifacts", "catalog_revision_visual_pages", "catalog_revision_parts",
+              "catalog_revision_part_page_maps", "part_catalog", "repair_kits", "catalog_diagrams")
+    with sqlite3.connect(database_path) as connection:
+        before = tuple(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] for table in tables)
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0028")
+    with sqlite3.connect(database_path) as connection:
+        after = tuple(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] for table in tables)
+        assert before == after
+        for table in ("catalog_revision_position_hotspots", "catalog_revision_repair_kits",
+                      "catalog_revision_repair_kit_components"):
+            assert connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+            assert connection.execute(f"PRAGMA index_list({table})").fetchall()
+    _run_sqlite_revision(database_path, command.downgrade, "20260928_0027")
+    with sqlite3.connect(database_path) as connection:
+        assert tuple(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                     for table in tables) == before
+        assert connection.execute("SELECT name FROM sqlite_master WHERE name = 'catalog_revision_position_hotspots'").fetchone() is None
+
+
+def test_catalog_builder_0028_rejects_downgrade_with_staging(tmp_path: Path):
+    database_path = tmp_path / "catalog-0028-with-data.db"
+    _run_sqlite_revision(database_path, command.upgrade, "20260928_0028")
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with Session(engine) as db:
+        seed_database(db)
+        owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        category = db.scalar(select(AssetCategory).where(AssetCategory.code == "HPWJ"))
+        catalog = CatalogDefinition(code="QA_0028_STAGED", asset_category_id=category.id,
+                                    name_bg="QA", name_en="QA", name_ru="QA", created_by_id=owner.id)
+        db.add(catalog)
+        db.flush()
+        revision = CatalogRevision(catalog_id=catalog.id, revision_code="A", created_by_id=owner.id)
+        db.add(revision)
+        db.flush()
+        assembly = CatalogRevisionAssembly(revision_id=revision.id, code="PUMP", name_bg="QA",
+                                           name_en="QA", name_ru="QA", created_by_id=owner.id)
+        db.add(assembly)
+        db.flush()
+        artifact = CatalogRevisionArtifact(assembly_id=assembly.id, title="QA", filename="qa.pdf",
+                                           media_type="application/pdf", content=b"%PDF-test",
+                                           sha256="a" * 64, page_count=1, created_by_id=owner.id)
+        db.add(artifact)
+        db.flush()
+        page = CatalogRevisionVisualPage(artifact_id=artifact.id, page_number=1,
+                                         role="EXPLODED_SCHEME", created_by_id=owner.id)
+        db.add(page)
+        db.flush()
+        db.add(CatalogRevisionPositionHotspot(visual_page_id=page.id, position="1", x=.1, y=.1,
+                                              width=.1, height=.1, created_by_id=owner.id))
+        db.commit()
+    engine.dispose()
+    with pytest.raises(RuntimeError, match="01D staging contains data"):
+        _run_sqlite_revision(database_path, command.downgrade, "20260928_0027")
 
 
 def test_catalog_builder_0027_preserves_0026_and_fails_closed(tmp_path: Path):

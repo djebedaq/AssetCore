@@ -116,3 +116,7 @@ Document слоят получава canonical SQLAlchemy snapshot и връща
 ## CATALOG-ADMIN-01C
 
 Черновите части на Catalog Builder се съхраняват отделно в `CatalogRevisionPart` и `CatalogRevisionPartPageMap`. Връзката към списък на резервни части използва точния `CatalogRevisionVisualPage` от същия възел. CSV импортът минава през подписан преглед и атомично потвърждение; тези данни не участват в текущия PARTS_CATALOG_V2 runtime. Подробности: [CATALOG_ADMIN_01C_PARTS_EDITOR_BG.md](CATALOG_ADMIN_01C_PARTS_EDITOR_BG.md).
+
+## CATALOG-ADMIN-01D
+
+Черновите зони върху изрични разглобени схеми сочат точна позиция в Builder, която може да има няколко варианта на част. Черновите ремонтни комплекти сочат точни Builder части и по избор една изходна страница от списъка. Геометрията и проверката са защитени при конкурентни записи; live каталогът и PARTS-DOC не четат тези таблици. Подробности: [CATALOG_ADMIN_01D_HOTSPOTS_REPAIR_KITS_BG.md](CATALOG_ADMIN_01D_HOTSPOTS_REPAIR_KITS_BG.md).

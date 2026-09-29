@@ -115,3 +115,63 @@ class PartImportPreview(Payload):
 class PartImportConfirm(Payload):
     token: str = Field(min_length=1, max_length=2_000_000)
     confirm_warnings: bool = False
+
+
+class HotspotCreate(Payload):
+    position: str = Field(min_length=1, max_length=80)
+    x: float = Field(allow_inf_nan=False)
+    y: float = Field(allow_inf_nan=False)
+    width: float = Field(allow_inf_nan=False)
+    height: float = Field(allow_inf_nan=False)
+
+
+class HotspotUpdate(Payload):
+    expected_version: int = Field(ge=1)
+    position: str | None = Field(default=None, min_length=1, max_length=80)
+    x: float | None = Field(default=None, allow_inf_nan=False)
+    y: float | None = Field(default=None, allow_inf_nan=False)
+    width: float | None = Field(default=None, allow_inf_nan=False)
+    height: float | None = Field(default=None, allow_inf_nan=False)
+
+
+class VersionPrecondition(Payload):
+    expected_version: int = Field(ge=1)
+
+
+class RepairKitCreate(Payload):
+    code: str = Field(min_length=1, max_length=120, pattern=r"^[A-Z][A-Z0-9_]*$")
+    name_bg: str | None = Field(default=None, max_length=255)
+    name_en: str | None = Field(default=None, max_length=255)
+    name_ru: str | None = Field(default=None, max_length=255)
+    description: str | None = Field(default=None, max_length=4000)
+    source_visual_page_id: int | None = Field(default=None, gt=0)
+    sort_order: int = 0
+
+
+class RepairKitUpdate(Payload):
+    expected_version: int = Field(ge=1)
+    code: str | None = Field(default=None, min_length=1, max_length=120, pattern=r"^[A-Z][A-Z0-9_]*$")
+    name_bg: str | None = Field(default=None, max_length=255)
+    name_en: str | None = Field(default=None, max_length=255)
+    name_ru: str | None = Field(default=None, max_length=255)
+    description: str | None = Field(default=None, max_length=4000)
+    source_visual_page_id: int | None = Field(default=None, gt=0)
+    sort_order: int | None = None
+
+
+class RepairKitComponentCreate(Payload):
+    part_id: int = Field(gt=0)
+    quantity: Decimal = Field(gt=0, max_digits=14, decimal_places=4)
+    quantity_raw: str | None = Field(default=None, max_length=120)
+    is_optional: bool = False
+    note: str | None = Field(default=None, max_length=4000)
+    sort_order: int = 0
+
+
+class RepairKitComponentUpdate(Payload):
+    expected_version: int = Field(ge=1)
+    quantity: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=4)
+    quantity_raw: str | None = Field(default=None, max_length=120)
+    is_optional: bool | None = None
+    note: str | None = Field(default=None, max_length=4000)
+    sort_order: int | None = None

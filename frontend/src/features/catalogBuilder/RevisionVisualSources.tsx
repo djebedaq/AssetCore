@@ -3,11 +3,14 @@ import { api, ApiError, createApiObjectUrl, downloadApiFile } from '../../api'
 import { filePayload, Modal } from '../../industrialUi'
 import { useI18n, type TranslationKey } from '../../i18n'
 import RevisionParts from './RevisionParts'
+import RevisionHotspotEditor from './RevisionHotspotEditor'
+import RevisionRepairKits from './RevisionRepairKits'
 
 type Role = 'EXPLODED_SCHEME' | 'SPARE_PARTS_LIST'
 type Assembly = { id: number; code: string; name_bg: string; name_en: string; name_ru: string;
   description: string | null; sort_order: number; artifact_count: number;
-  exploded_page_count: number; spare_list_page_count: number; part_count: number }
+  exploded_page_count: number; spare_list_page_count: number; part_count: number;
+  hotspot_count: number; repair_kit_count: number; repair_kit_component_count: number }
 type Artifact = { id: number; title: string; filename: string; sha256: string; page_count: number;
   document_reference: string | null; document_date: string | null; language: string | null }
 type Assignment = { id: number; artifact_id: number; page_number: number; role: Role }
@@ -25,6 +28,7 @@ const errorKeys: Record<string, TranslationKey> = {
   catalog_visual_page_invalid: 'builder.error.pageInvalid',
   catalog_visual_role_invalid: 'builder.error.roleInvalid',
   catalog_visual_page_duplicate: 'builder.error.pageDuplicate',
+  catalog_repair_kit_source_page_in_use: 'builder.kit.error.sourceInUse',
   catalog_revision_not_draft: 'builder.error.revisionImmutable',
   catalog_inactive: 'builder.error.inactive', validation_error: 'builder.error.invalid',
 }
@@ -57,7 +61,7 @@ export default function RevisionVisualSources({ revisionId, editable }: { revisi
   const { locale, t } = useI18n()
   const [assemblies, setAssemblies] = useState<Assembly[]>([])
   const [assemblyId, setAssemblyId] = useState<number | null>(null)
-  const [assemblyTab, setAssemblyTab] = useState<'sources' | 'parts'>('sources')
+  const [assemblyTab, setAssemblyTab] = useState<'sources' | 'parts' | 'mapping' | 'kits'>('sources')
   const [artifacts, setArtifacts] = useState<Artifact[]>([])
   const [artifactId, setArtifactId] = useState<number | null>(null)
   const [assignments, setAssignments] = useState<Assignment[]>([])
@@ -113,7 +117,9 @@ export default function RevisionVisualSources({ revisionId, editable }: { revisi
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
   }
   async function removeAssembly(item: Assembly) {
-    if (!window.confirm(t('builder.deleteAssemblyPartsConfirm', { count: item.part_count }))) return
+    if (!window.confirm(t('builder.deleteAssembly01DConfirm', {
+      parts: item.part_count, hotspots: item.hotspot_count, kits: item.repair_kit_count,
+      components: item.repair_kit_component_count }))) return
     try {
       await api(`/admin/catalog-builder/assemblies/${item.id}`, { method: 'DELETE' })
       if (assemblyId === item.id) setAssemblyId(null)
@@ -178,8 +184,12 @@ export default function RevisionVisualSources({ revisionId, editable }: { revisi
     {assembly && <section className="panel"><div className="panel-title"><h4>{assembly.code} · {label(assembly)}</h4>
       <button className="secondary compact" onClick={() => setAssemblyId(null)}>{t('common.close')}</button></div>
       <div className="actions builder-tabs"><button className={assemblyTab === 'sources' ? 'primary compact' : 'secondary compact'} onClick={() => setAssemblyTab('sources')}>{t('builder.part.sourcesTab')}</button>
-        <button className={assemblyTab === 'parts' ? 'primary compact' : 'secondary compact'} onClick={() => setAssemblyTab('parts')}>{t('builder.part.partsTab')}</button></div>
-      {assemblyTab === 'parts' ? <RevisionParts assemblyId={assembly.id} editable={editable} /> : <>
+        <button className={assemblyTab === 'parts' ? 'primary compact' : 'secondary compact'} onClick={() => setAssemblyTab('parts')}>{t('builder.part.partsTab')}</button>
+        <button className={assemblyTab === 'mapping' ? 'primary compact' : 'secondary compact'} onClick={() => setAssemblyTab('mapping')}>{t('builder.mapping.title')}</button>
+        <button className={assemblyTab === 'kits' ? 'primary compact' : 'secondary compact'} onClick={() => setAssemblyTab('kits')}>{t('builder.kit.title')}</button></div>
+      {assemblyTab === 'parts' ? <RevisionParts assemblyId={assembly.id} editable={editable} /> :
+        assemblyTab === 'mapping' ? <RevisionHotspotEditor assemblyId={assembly.id} editable={editable} /> :
+        assemblyTab === 'kits' ? <RevisionRepairKits assemblyId={assembly.id} editable={editable} /> : <>
       {editable && <div className="actions"><button className="primary compact" onClick={() => { setIntent('EXPLODED_SCHEME'); setArtifactId(null) }}>{t('builder.addExploded')}</button>
         <button className="primary compact" onClick={() => { setIntent('SPARE_PARTS_LIST'); setArtifactId(null) }}>{t('builder.addSpare')}</button>
         <button className="secondary compact" onClick={() => { setUploadFile(null); setUploadTitle(''); setUpload(true) }}>{t('builder.uploadSource')}</button></div>}

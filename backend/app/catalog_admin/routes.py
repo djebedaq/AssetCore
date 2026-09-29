@@ -8,20 +8,27 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import User
 from ..permissions import Permission, require_permission
-from . import parts, repository, service, visual_sources
+from . import hotspots, parts, repair_kits, repository, service, visual_sources
 from .schemas import (
     ArtifactUpload,
     AssemblyCreate,
     AssemblyUpdate,
     CatalogCreate,
     CatalogUpdate,
+    HotspotCreate,
+    HotspotUpdate,
     PartCreate,
     PartImportConfirm,
     PartImportPreview,
     PartPageMapCreate,
     PartUpdate,
+    RepairKitComponentCreate,
+    RepairKitComponentUpdate,
+    RepairKitCreate,
+    RepairKitUpdate,
     RevisionCreate,
     RevisionUpdate,
+    VersionPrecondition,
     VisualPageCreate,
 )
 
@@ -231,3 +238,97 @@ def import_parts_preview(assembly_id: int, data: PartImportPreview, actor: User 
 def import_parts_confirm(assembly_id: int, data: PartImportConfirm, actor: User = Depends(manager),
                          db: Session = Depends(get_db)) -> dict:
     return parts.import_confirm(db, actor, assembly_id, data.token, data.confirm_warnings)
+
+
+@router.get("/assemblies/{assembly_id}/exploded-pages")
+def exploded_pages(assembly_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> list[dict]:
+    return hotspots.exploded_pages(db, assembly_id)
+
+
+@router.get("/assemblies/{assembly_id}/hotspot-coverage")
+def hotspot_coverage(assembly_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> list[dict]:
+    return hotspots.coverage(db, assembly_id)
+
+
+@router.get("/visual-pages/{visual_page_id}/hotspots")
+def list_hotspots(visual_page_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> list[dict]:
+    return hotspots.list_hotspots(db, visual_page_id)
+
+
+@router.post("/visual-pages/{visual_page_id}/hotspots", status_code=201)
+def create_hotspot(visual_page_id: int, data: HotspotCreate, actor: User = Depends(manager),
+                   db: Session = Depends(get_db)) -> dict:
+    return hotspots.create_hotspot(db, actor, visual_page_id, data)
+
+
+@router.patch("/hotspots/{hotspot_id}")
+def update_hotspot(hotspot_id: int, data: HotspotUpdate, actor: User = Depends(manager),
+                   db: Session = Depends(get_db)) -> dict:
+    return hotspots.update_hotspot(db, actor, hotspot_id, data)
+
+
+@router.post("/hotspots/{hotspot_id}/verify")
+def verify_hotspot(hotspot_id: int, data: VersionPrecondition, actor: User = Depends(manager),
+                   db: Session = Depends(get_db)) -> dict:
+    return hotspots.set_verified(db, actor, hotspot_id, data.expected_version, True)
+
+
+@router.post("/hotspots/{hotspot_id}/unverify")
+def unverify_hotspot(hotspot_id: int, data: VersionPrecondition, actor: User = Depends(manager),
+                     db: Session = Depends(get_db)) -> dict:
+    return hotspots.set_verified(db, actor, hotspot_id, data.expected_version, False)
+
+
+@router.delete("/hotspots/{hotspot_id}", status_code=204)
+def delete_hotspot(hotspot_id: int, expected_version: int = Query(ge=1),
+                   actor: User = Depends(manager), db: Session = Depends(get_db)) -> Response:
+    hotspots.delete_hotspot(db, actor, hotspot_id, expected_version)
+    return Response(status_code=204)
+
+
+@router.get("/assemblies/{assembly_id}/repair-kits")
+def list_repair_kits(assembly_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> list[dict]:
+    return repair_kits.list_kits(db, assembly_id)
+
+
+@router.post("/assemblies/{assembly_id}/repair-kits", status_code=201)
+def create_repair_kit(assembly_id: int, data: RepairKitCreate, actor: User = Depends(manager),
+                      db: Session = Depends(get_db)) -> dict:
+    return repair_kits.create_kit(db, actor, assembly_id, data)
+
+
+@router.get("/repair-kits/{kit_id}")
+def get_repair_kit(kit_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    return repair_kits.get_kit(db, kit_id)
+
+
+@router.patch("/repair-kits/{kit_id}")
+def update_repair_kit(kit_id: int, data: RepairKitUpdate, actor: User = Depends(manager),
+                      db: Session = Depends(get_db)) -> dict:
+    return repair_kits.update_kit(db, actor, kit_id, data)
+
+
+@router.delete("/repair-kits/{kit_id}", status_code=204)
+def delete_repair_kit(kit_id: int, expected_version: int = Query(ge=1),
+                      actor: User = Depends(manager), db: Session = Depends(get_db)) -> Response:
+    repair_kits.delete_kit(db, actor, kit_id, expected_version)
+    return Response(status_code=204)
+
+
+@router.post("/repair-kits/{kit_id}/components", status_code=201)
+def add_repair_kit_component(kit_id: int, data: RepairKitComponentCreate, actor: User = Depends(manager),
+                             db: Session = Depends(get_db)) -> dict:
+    return repair_kits.add_component(db, actor, kit_id, data)
+
+
+@router.patch("/repair-kit-components/{component_id}")
+def update_repair_kit_component(component_id: int, data: RepairKitComponentUpdate,
+                                actor: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    return repair_kits.update_component(db, actor, component_id, data)
+
+
+@router.delete("/repair-kit-components/{component_id}", status_code=204)
+def remove_repair_kit_component(component_id: int, expected_version: int = Query(ge=1),
+                                actor: User = Depends(manager), db: Session = Depends(get_db)) -> Response:
+    repair_kits.remove_component(db, actor, component_id, expected_version)
+    return Response(status_code=204)

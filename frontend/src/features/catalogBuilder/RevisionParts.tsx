@@ -35,6 +35,8 @@ const problemKeys: Record<string, TranslationKey> = {
   catalog_part_import_conflict: 'builder.part.error.conflict',
   catalog_part_import_warning_confirmation: 'builder.part.error.warningConfirm',
   catalog_part_import_token_invalid: 'builder.part.error.token',
+  catalog_part_position_in_use: 'builder.mapping.error.positionInUse',
+  catalog_part_in_repair_kit: 'builder.kit.error.partInKit',
 }
 
 function PagePreview({ page }: { page: Page }) {

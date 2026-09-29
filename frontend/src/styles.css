@@ -175,3 +175,25 @@
 .builder-parts-table table { width: 100%; min-width: 760px; border-collapse: collapse; }
 .builder-parts-table th, .builder-parts-table td { padding: .55rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border, #d6dce3); }
 .builder-parts-table td .actions { flex-wrap: wrap; }
+.builder-scheme-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr); gap: 1rem; align-items: start; }
+.builder-scheme-viewport { overflow: auto; max-height: 70vh; min-height: 300px; border: 1px solid var(--border, #d6dce3); background: #eef2f5; }
+.builder-scheme-canvas { position: relative; min-width: 100%; margin: auto; background: white; }
+.builder-scheme-canvas.mode-draw { cursor: crosshair; touch-action: none; }
+.builder-scheme-canvas.mode-select { touch-action: none; }
+.builder-scheme-canvas.mode-pan { touch-action: auto; }
+.builder-scheme-canvas.mode-pan .builder-hotspot { pointer-events: none; }
+.builder-scheme-canvas img { display: block; width: 100%; height: auto; user-select: none; pointer-events: none; }
+.builder-scheme-loading { display: grid; place-items: center; min-height: 400px; }
+.builder-hotspot { position: absolute; z-index: 1; display: grid; place-items: center; padding: 0; min-width: 8px; min-height: 8px; border: 2px solid #b56500; border-radius: 2px; background: #d97b0028; color: #3c2700; font-weight: 800; cursor: grab; touch-action: none; }
+.builder-hotspot.verified { border-color: #16733c; background: #20995033; }
+.builder-hotspot.highlight { z-index: 3; border: 3px solid #165ac4; background: #1f6fdb55; }
+.builder-hotspot.draft { z-index: 4; border-color: #1559ba; background: #2377df44; }
+.builder-hotspot span:first-child { min-width: 1.4rem; padding: 1px 3px; border-radius: 3px; background: white; font-size: .75rem; }
+.builder-hotspot-handle { position: absolute; right: -6px; bottom: -6px; width: 16px; height: 16px; border: 2px solid white; border-radius: 3px; background: #1559ba; cursor: nwse-resize; touch-action: none; }
+.builder-scheme-details { display: grid; gap: .6rem; min-width: 0; }
+.builder-scheme-details select { width: 100%; }
+.builder-scheme-details ul { margin: 0; padding-left: 1.25rem; }
+.builder-geometry-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.builder-geometry-fields input { width: 100%; }
+.builder-hotspot-list { display: flex; flex-wrap: wrap; gap: .4rem; }
+@media (max-width: 800px) { .builder-scheme-layout { grid-template-columns: 1fr; } .builder-scheme-viewport { max-height: 55vh; } }

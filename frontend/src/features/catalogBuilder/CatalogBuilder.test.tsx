@@ -56,7 +56,7 @@ it('creates a catalog only from dynamic capable categories and opens its draft w
   await waitFor(() => expect(requests.some(item => item.method === 'POST' &&
     item.path.endsWith('/catalogs') && (item.body as { asset_category_id: number }).asset_category_id === 1)).toBe(true))
   await userEvent.click(await screen.findByRole('button', { name: 'Отвори работното пространство' }))
-  expect(await screen.findByText(/Източници, части, визуално съпоставяне/)).toBeVisible()
+  expect(await screen.findByText(/Публикуването ще бъде добавено/)).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Публикувай' })).not.toBeInTheDocument()
 })
 

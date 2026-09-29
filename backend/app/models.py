@@ -1036,6 +1036,75 @@ class CatalogRevisionPartPageMap(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
+class CatalogRevisionPositionHotspot(Base):
+    """A draft diagram occurrence resolves to all parts at its exact position."""
+
+    __tablename__ = "catalog_revision_position_hotspots"
+    __table_args__ = (
+        CheckConstraint("x >= 0 AND x <= 1 AND y >= 0 AND y <= 1", name="ck_builder_hotspot_origin"),
+        CheckConstraint("width >= 0.002 AND height >= 0.002", name="ck_builder_hotspot_size"),
+        CheckConstraint("x + width <= 1 AND y + height <= 1", name="ck_builder_hotspot_bounds"),
+        CheckConstraint("version >= 1", name="ck_builder_hotspot_version"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    visual_page_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_visual_pages.id"), nullable=False, index=True)
+    position: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    x: Mapped[float] = mapped_column(Float, nullable=False)
+    y: Mapped[float] = mapped_column(Float, nullable=False)
+    width: Mapped[float] = mapped_column(Float, nullable=False)
+    height: Mapped[float] = mapped_column(Float, nullable=False)
+    provenance: Mapped[str] = mapped_column(String(32), default="MANUAL_BUILDER", nullable=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    verified_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class CatalogRevisionRepairKit(Base):
+    __tablename__ = "catalog_revision_repair_kits"
+    __table_args__ = (UniqueConstraint("assembly_id", "code", name="uq_builder_repair_kit_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_assemblies.id"), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(String(120), nullable=False)
+    name_bg: Mapped[str | None] = mapped_column(String(255))
+    name_en: Mapped[str | None] = mapped_column(String(255))
+    name_ru: Mapped[str | None] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text)
+    source_visual_page_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_visual_pages.id"), index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    code_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class CatalogRevisionRepairKitComponent(Base):
+    __tablename__ = "catalog_revision_repair_kit_components"
+    __table_args__ = (
+        UniqueConstraint("kit_id", "part_id", name="uq_builder_repair_kit_part"),
+        CheckConstraint("quantity > 0", name="ck_builder_repair_kit_quantity"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kit_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_repair_kits.id"), nullable=False, index=True)
+    part_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_parts.id"), nullable=False, index=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
+    quantity_raw: Mapped[str | None] = mapped_column(String(120))
+    is_optional: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
 class CategoryFieldDefinition(Base):
     __tablename__ = "category_field_definitions"
     __table_args__ = (
