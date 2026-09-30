@@ -60,7 +60,7 @@ def migrate(engine, target, downgrade=False):
         (command.downgrade if downgrade else command.upgrade)(config, target)
 
 
-def capture(engine, columns=None):
+def capture(engine, columns=None, *, audit_limit=None):
     inspector = inspect(engine)
     columns = columns or {table: [c["name"] for c in inspector.get_columns(table)]
                           for table in inspector.get_table_names() if table != "alembic_version"}
@@ -68,7 +68,10 @@ def capture(engine, columns=None):
     with engine.connect() as connection:
         for table, names in columns.items():
             quoted = ",".join('"' + name + '"' for name in names)
-            rows = [tuple(row) for row in connection.execute(text(f'SELECT {quoted} FROM "{table}"'))]
+            query = f'SELECT {quoted} FROM "{table}"'
+            if table == "audit_logs" and audit_limit is not None:
+                query += " WHERE id <= :audit_limit"
+            rows = [tuple(row) for row in connection.execute(text(query), {"audit_limit": audit_limit})]
             encoded = sorted(json.dumps(row, default=str, sort_keys=True, ensure_ascii=False) for row in rows)
             state[table] = (len(rows), hashlib.sha256(json.dumps(encoded).encode()).hexdigest())
     return columns, state
@@ -118,15 +121,17 @@ def main():
             user=actor, db=db)
         assert db.query(Machine).count() == 19
     migrate(engine, "20260924_0024", downgrade=True)
-    columns, before = capture(engine)
     environment = dict(os.environ, DATABASE_URL=SOURCE,
-                       BACKUP_ENCRYPTION_KEY=base64.urlsafe_b64encode(os.urandom(32)).decode(),
+                       BACKUP_ENCRYPTION_KEY=base64.b64encode(os.urandom(32)).decode(),
                        PG_DUMP="/usr/lib/postgresql/16/bin/pg_dump",
                        PG_RESTORE="/usr/lib/postgresql/16/bin/pg_restore", PSQL="/usr/lib/postgresql/16/bin/psql")
     with TemporaryDirectory(prefix="builder-upgrade-backup-") as temporary:
         pre = Path(temporary) / "pre"
         pre.mkdir()
         backup(pre, environment, actor_id)
+        # Backup adds an audited operation. Compare the migration against the
+        # state after that legitimate operation, not against the earlier state.
+        columns, before = capture(engine)
         migrate(engine, "head")
         assert capture(engine, columns)[1] == before
         with factory() as db:
@@ -178,6 +183,8 @@ def main():
             for machine_id in machine_ids:
                 assert runtime.machine_catalog(db, machine_id)["dataset_version"] == f"CATALOG_BUILDER_R{next_id}"
         all_columns, expected = capture(engine)
+        with engine.connect() as connection:
+            audit_limit = connection.scalar(text("SELECT coalesce(max(id), 0) FROM audit_logs"))
         post = Path(temporary) / "post"
         post.mkdir()
         archive = backup(post, environment, actor_id)
@@ -185,9 +192,10 @@ def main():
         migrate(restored, "head")
         operation(["scripts/restore_database.py", str(archive), "--confirm", "RESTORE_ASSETCORE",
                    "--actor-user-id", str(actor_id)], dict(environment, DATABASE_URL=RESTORE))
-        actual = capture(restored, all_columns)[1]
-        # Restore legitimately appends a new audit event; all other evidence is exact.
-        assert {k: v for k, v in expected.items() if k != "audit_logs"} == {k: v for k, v in actual.items() if k != "audit_logs"}
+        actual = capture(restored, all_columns, audit_limit=audit_limit)[1]
+        # Restore legitimately appends an event. Every preceding audit row,
+        # and every row/column of the other tables, must remain exact.
+        assert actual == expected
         with sessionmaker(restored)() as db:
             for machine_id in machine_ids:
                 assert runtime.machine_catalog(db, machine_id)["dataset_version"] == f"CATALOG_BUILDER_R{next_id}"
