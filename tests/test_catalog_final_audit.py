@@ -271,6 +271,12 @@ def test_multiple_exact_pages_variants_and_foreign_machine_ids(client, auth_head
     variant = part(client, auth_headers, assembly_id, position="P" * 80, number="QA_VARIANT").json()
     assert client.post(f"{BASE}/parts/{variant['id']}/source-pages", headers=auth_headers,
                        json={"visual_page_ids": [extra.json()[0]["id"]]}).status_code == 201
+    kit = client.post(f"{BASE}/assemblies/{assembly_id}/repair-kits", headers=auth_headers,
+                      json={"code": "QA_SCOPE_KIT", "name_bg": "QA scope kit",
+                            "source_visual_page_id": extra.json()[0]["id"]})
+    assert kit.status_code == 201, kit.text
+    assert client.post(f"{BASE}/repair-kits/{kit.json()['id']}/components", headers=auth_headers,
+                       json={"part_id": part_id, "quantity": 1}).status_code == 201
     for x in (.1, .4):
         hotspot = client.post(f"{BASE}/visual-pages/{scheme_id}/hotspots", headers=auth_headers,
                               json={"position": "P" * 80, "x": x, "y": .2, "width": .1, "height": .1})
@@ -311,6 +317,14 @@ def test_multiple_exact_pages_variants_and_foreign_machine_ids(client, auth_head
     assert client.post(f"{BASE}/parts/{foreign_part}/source-pages", headers=auth_headers,
                        json={"visual_page_ids": [foreign_spare]}).status_code == 201
     _publish(client, auth_headers, foreign_revision)
+    runtime_kits = client.get(f"/api/catalog/v2/repair-kits?machine_id={machine_id}",
+                              headers=auth_headers)
+    assert runtime_kits.status_code == 200 and len(runtime_kits.json()) == 1, runtime_kits.text
+    foreign_kit_request = client.post("/api/part-requests/multi", headers=auth_headers, json={
+        "machine_id": foreign_machine, "repair_kit_id": runtime_kits.json()[0]["id"],
+        "repair_kit_mode": "KIT", "lines": [{"description": "QA", "quantity": 1}],
+    })
+    assert foreign_kit_request.status_code == 409, foreign_kit_request.text
     assert client.get(f"/api/catalog/v2/assemblies/{source_id}?machine_id={foreign_machine}",
                       headers=auth_headers).status_code in (404, 409)
     assert client.get(f"/api/catalog/v2/diagrams/{diagram_id}/hotspots?machine_id={foreign_machine}",
@@ -327,4 +341,8 @@ def test_multiple_exact_pages_variants_and_foreign_machine_ids(client, auth_head
         appendix = prepare_appendix(db, load_request(db, request.json()["id"]))
         assert [page.role for page in appendix.pages] == ["EXPLODED_SCHEME", "SPARE_PARTS_LIST", "SPARE_PARTS_LIST"]
         assert {page.page_number for page in appendix.pages[1:]} == {1, 2}
-        assert len(appendix.pages[0].contributions) == 2
+        # Each of the two requested variants contributes both occurrences.
+        assert len(appendix.pages[0].contributions) == 4
+        assert {item["marker"] for item in appendix.pages[0].contributions} == {1, 2}
+        assert len({(item["line_id"], item["occurrence_ordinal"])
+                    for item in appendix.pages[0].contributions}) == 4

@@ -123,6 +123,10 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
                                     "repair_kit_mode": "KIT", "lines": [
                                         {"description": "QA kit", "quantity": 1}]})
     assert kit_request.status_code == 201, kit_request.text
+    assert client.post("/api/part-requests/multi", headers=auth_headers, json={
+        "machine_id": other_id, "repair_kit_id": runtime_kit["id"], "repair_kit_mode": "KIT",
+        "lines": [{"description": "QA kit", "quantity": 1}],
+    }).status_code == 409
     request_payload = {"machine_id": machine_id, "submit_for_approval": True,
                        "lines": [{"catalog_part_id": runtime_part["id"],
                         "position": position, "description": "Test part", "quantity": 1}]}
@@ -170,6 +174,10 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
                                json={"machine_id": machine_id, "lines": [{"catalog_part_id": runtime_part["id"],
                                      "description": "Test part", "quantity": 1}]})
     assert old_rejected.status_code == 409
+    assert client.post("/api/part-requests/multi", headers=auth_headers, json={
+        "machine_id": machine_id, "repair_kit_id": runtime_kit["id"], "repair_kit_mode": "KIT",
+        "lines": [{"description": "QA retired kit", "quantity": 1}],
+    }).status_code == 409
     with session_factory() as db:
         assert db.get(CatalogRevision, revision_id).status == "RETIRED"
         assert db.get(CatalogRevision, clone_id).status == "PUBLISHED"
