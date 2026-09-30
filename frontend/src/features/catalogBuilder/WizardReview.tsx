@@ -12,10 +12,13 @@ export default function WizardReview({ workflow, editable, busy, onFix, onPublis
     <p>{t('wizard.progress', workflow.progress)}</p>
     {editable && <>
       <p role="status"><b>{t(workflow.ready ? 'builder.publication.ready' : 'builder.publication.notReady')}</b></p>
-      <ul className="wizard-readiness">{[...workflow.errors, ...workflow.warnings].map((issue, index) => <li key={index}>
-        <span>{t(problemKeys[issue.code] || 'builder.error.generic', { count: issue.missing_positions || 0 })}</span>
-        <button className="secondary" disabled={busy} onClick={() => onFix(issue)}>{t('wizard.fix')}</button>
-      </li>)}</ul>
+      {(['errors', 'warnings'] as const).map(severity => workflow[severity].length > 0 && <section key={severity}>
+        <h4>{t(`wizard.${severity}`)} ({workflow[severity].length})</h4>
+        <ul className="wizard-readiness">{workflow[severity].map((issue, index) => <li key={index}>
+          <span>{t(problemKeys[issue.code] || 'builder.error.generic', { count: issue.missing_positions || 0 })}</span>
+          <button className="secondary" disabled={busy} onClick={() => onFix(issue)}>{t('wizard.fix')}</button>
+        </li>)}</ul>
+      </section>)}
       <button className="primary" disabled={busy || !workflow.ready || workflow.summary.part_count === 0} onClick={onPublish}>
         {t(workflow.current_published_revision_id ? 'wizard.publishUpdate' : 'wizard.publish')}
       </button>

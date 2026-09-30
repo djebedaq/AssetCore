@@ -97,7 +97,7 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
     </form>
     {!groups.length && <p>{t('wizard.noGroups')}</p>}
     <div className="wizard-groups">{groups.map(group => <article key={group.id}>
-      <strong>{label(group)}</strong><small>{t('wizard.groupCode', { code: group.code })}</small>
+      <strong>{label(group)}</strong>
     </article>)}</div>
     <div className="wizard-upload">
       <label>{t('wizard.uploadGroup')}{groupSelect(targetId, setGroupId)}</label>

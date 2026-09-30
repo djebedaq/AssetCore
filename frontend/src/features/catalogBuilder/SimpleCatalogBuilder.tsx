@@ -152,7 +152,8 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
       </button>)}</nav>
       {dirty && <p className="muted" role="status">{t('wizard.unsavedNotice')}</p>}
       {!workflow && <p>{t('wizard.loading')}</p>}
-      {workflow && <p>{t('wizard.progress', workflow.progress)}</p>}
+      {workflow && <div><p>{t('wizard.progress', workflow.progress)}</p>
+        <progress aria-label={t('wizard.hotspots')} value={workflow.progress.completed_positions} max={Math.max(1, workflow.progress.position_count)} /></div>}
       <div hidden={step !== 'catalog'}><p><b>{t('builder.category')}:</b> {label(selected.asset_category)}</p>
         <p><b>{t('builder.manufacturer')}:</b> {selected.manufacturer || t('common.noValue')}</p>
         <p><b>{t('builder.modelReference')}:</b> {selected.model_reference || t('common.noValue')}</p>
