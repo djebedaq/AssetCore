@@ -59,3 +59,21 @@ def test_generated_catalog_codes_concurrent_same_name(pg_factory):
     assert all(isinstance(result, dict) for result in results)
     assert results[0]["code"] != results[1]["code"]
     assert all(result["draft_revision_count"] == 1 for result in results)
+
+
+def test_group_codes_concurrent_same_name_are_deterministic(pg_factory):
+    assembly_id, _ = setup(pg_factory)
+    with pg_factory() as db:
+        revision_id = db.get(CatalogRevisionAssembly, assembly_id).revision_id
+    barrier = Barrier(2, timeout=15)
+    def create():
+        with pg_factory() as db:
+            actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            barrier.wait()
+            return wizard.create_group(db, actor, revision_id, "Blasting Head")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: create(), range(2)))
+    assert {result["code"] for result in results} == {"BLASTING_HEAD", "BLASTING_HEAD_2"}
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        assert wizard.create_group(db, actor, revision_id, "Blasting Head")["code"] == "BLASTING_HEAD_3"

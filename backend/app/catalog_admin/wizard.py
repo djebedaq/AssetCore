@@ -48,13 +48,36 @@ def create_catalog(db: Session, actor: User, data: SimpleCatalogCreate) -> dict:
     ), initial_draft=True)
 
 
+def group_code(db: Session, revision_id: int, name: str) -> str:
+    """Caller holds the established catalog/revision lock until insertion."""
+    cyrillic = dict(zip(
+        "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЬЮЯЁЫЭ",
+        ("A", "B", "V", "G", "D", "E", "ZH", "Z", "I", "Y", "K", "L", "M", "N", "O",
+         "P", "R", "S", "T", "U", "F", "H", "TS", "CH", "SH", "SHT", "A", "", "YU", "YA",
+         "YO", "Y", "E"), strict=True))
+    romanized = name.upper().translate(str.maketrans(cyrillic))
+    stem = unicodedata.normalize("NFKD", romanized).encode("ascii", "ignore").decode()
+    stem = re.sub(r"[^A-Z0-9]+", "_", stem).strip("_")
+    if not stem or not stem[0].isalpha() or len(stem) < 2:
+        stem = f"GROUP_{stem}".rstrip("_")
+    used = set(db.scalars(select(CatalogRevisionAssembly.code).where(
+        CatalogRevisionAssembly.revision_id == revision_id)).all())
+    number = 1
+    while True:
+        suffix = "" if number == 1 else f"_{number}"
+        candidate = stem[:80 - len(suffix)] + suffix
+        if candidate not in used:
+            return candidate
+        number += 1
+
+
 def create_group(db: Session, actor: User, revision_id: int, name: str) -> dict:
     visual_sources._revision(db, revision_id, mutate=True)
     name = display_name(name)
     order = db.scalar(select(func.max(CatalogRevisionAssembly.sort_order)).where(
         CatalogRevisionAssembly.revision_id == revision_id))
     return visual_sources.create_assembly(db, actor, revision_id, AssemblyCreate(
-        code=generated_code(name, "GROUP"), name_bg=name, name_en=name, name_ru=name,
+        code=group_code(db, revision_id, name), name_bg=name, name_en=name, name_ru=name,
         sort_order=(order or 0) + 1,
     ))
 
@@ -152,6 +175,11 @@ def _preview(db: Session, revision_id: int, rows: list[dict]) -> dict:
                            "normalized": raw, "status": "ERROR", "errors": ["catalog_import_group_missing"],
                            "warnings": [], "resolved_visual_page_ids": []})
         else:
+            if not any(value for key, value in raw.items() if key not in {"assembly_code", "assembly_name"}):
+                output.append({"row_number": index + 2, "assembly_code": code, "assembly_id": groups[code].id,
+                               "normalized": raw, "status": "ERROR", "errors": ["catalog_import_template_row"],
+                               "warnings": [], "resolved_visual_page_ids": []})
+                continue
             normalized = dict(raw)
             name = raw.get("name") or next((raw.get(key) for key in ("name_bg", "name_en", "name_ru") if raw.get(key)), None)
             if name:
@@ -233,33 +261,17 @@ def import_confirm(db: Session, actor: User, revision_id: int, token: str, confi
 
 
 def csv_template(db: Session, revision_id: int) -> bytes:
-    """Examples come only from verified user-authored draft rows; otherwise header only."""
+    """Blank rows expose real stable group codes without inventing industrial parts."""
     import csv
     import io
 
-    from ..models import CatalogRevisionPart
-
     visual_sources._revision(db, revision_id)
-    columns = ["assembly_code", "position", "part_number", "name", "quantity", "source_page",
-               "source_artifact_sha256", "name_bg", "name_en", "name_ru", "description"]
+    columns = ["assembly_code", "position", "part_number", "name", "quantity", "source_page"]
     stream = io.StringIO(newline="")
     writer = csv.DictWriter(stream, fieldnames=columns)
     writer.writeheader()
-    samples = db.execute(select(CatalogRevisionPart, CatalogRevisionAssembly)
-                         .join(CatalogRevisionAssembly, CatalogRevisionPart.assembly_id == CatalogRevisionAssembly.id)
-                         .where(CatalogRevisionAssembly.revision_id == revision_id)
-                         .order_by(CatalogRevisionPart.id).limit(2)).all()
-    if not samples:
-        writer.writerow({"assembly_code": "<assembly_code>", "position": "<position>",
-                         "part_number": "<part_number>", "name": "<verified_name>",
-                         "source_page": "<physical_pdf_page>"})
-    for part, assembly in samples:
-        maps = parts._maps(db, part.id)
-        if not maps:
-            continue
-        writer.writerow({"assembly_code": assembly.code, "position": part.position, "part_number": part.part_number,
-                         "name": part.name_bg or part.name_en or part.name_ru or "",
-                         "quantity": part.quantity if part.quantity is not None else "",
-                         "source_page": maps[0]["page_number"], "source_artifact_sha256": maps[0]["sha256"],
-                         **{key: getattr(part, key) or "" for key in ("name_bg", "name_en", "name_ru", "description")}})
+    for assembly in db.scalars(select(CatalogRevisionAssembly).where(
+            CatalogRevisionAssembly.revision_id == revision_id).order_by(
+                CatalogRevisionAssembly.sort_order, CatalogRevisionAssembly.id)).all():
+        writer.writerow({"assembly_code": assembly.code})
     return stream.getvalue().encode("utf-8-sig")

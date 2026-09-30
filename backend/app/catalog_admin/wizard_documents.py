@@ -19,7 +19,27 @@ from ..models import (
     User,
 )
 from . import service, visual_sources
-from .schemas import ClassifyDocumentPages
+from .schemas import ArtifactUpload, AssemblyCreate, ClassifyDocumentPages
+
+
+def upload(db: Session, actor: User, revision_id: int, data: ArtifactUpload) -> dict:
+    """An ordinary initial group and exact original PDF share one transaction."""
+    revision, _ = visual_sources._revision(db, revision_id, mutate=True)
+    group = db.scalar(select(CatalogRevisionAssembly).where(
+        CatalogRevisionAssembly.revision_id == revision.id).order_by(
+            CatalogRevisionAssembly.sort_order, CatalogRevisionAssembly.id).limit(1))
+    try:
+        if group is None:
+            from .wizard import group_code
+            created = visual_sources.create_assembly(db, actor, revision.id, AssemblyCreate(
+                code=group_code(db, revision.id, "INITIAL_GROUP"),
+                name_bg="Първоначална група", name_en="Initial group", name_ru="Начальная группа",
+                sort_order=1), commit=False)
+            group = db.get(CatalogRevisionAssembly, created["id"])
+        return visual_sources.upload_artifact(db, actor, group.id, data)
+    except Exception:
+        db.rollback()
+        raise
 
 
 def documents(db: Session, revision_id: int) -> list[dict]:

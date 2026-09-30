@@ -42,7 +42,7 @@ def _persisted_columns(row):
 
 
 def test_publish_binding_request_and_clone(client, auth_headers, session_factory, monkeypatch):
-    catalog_id, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory)
+    catalog_id, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory, include_empty_group=False)
     _, spare_page_id, scheme_page_id, _ = source(client, auth_headers, assembly_id)
     position = "P" * 80
     created = client.post(f"{BASE}/assemblies/{assembly_id}/parts", headers=auth_headers, json={
@@ -239,7 +239,7 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
 
 def test_clone_preserves_repair_kit_code_lock_after_component_removal(
         client, auth_headers, session_factory):
-    _, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory)
+    _, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory, include_empty_group=False)
     _, spare_page_id, _, _ = source(client, auth_headers, assembly_id)
     created_part = part(client, auth_headers, assembly_id, position="QA-CLONE-LOCK")
     assert created_part.status_code == 201, created_part.text
@@ -304,7 +304,7 @@ def test_clone_preserves_repair_kit_code_lock_after_component_removal(
 
 
 def test_separate_pdf_pages_group_two_requested_positions(client, auth_headers, session_factory):
-    catalog_id, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory)
+    catalog_id, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory, include_empty_group=False)
 
     def visual(role, marker):
         stream = io.BytesIO()
@@ -376,7 +376,7 @@ def test_separate_pdf_pages_group_two_requested_positions(client, auth_headers, 
 
 
 def test_publish_failure_rolls_back_all_live_materialization(client, auth_headers, session_factory, monkeypatch):
-    _, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory)
+    _, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory, include_empty_group=False)
     _, spare_page_id, _, _ = source(client, auth_headers, assembly_id)
     part = client.post(f"{BASE}/assemblies/{assembly_id}/parts", headers=auth_headers,
                        json={"position": "QA-ROLLBACK", "part_number": "QA-ROLLBACK",
@@ -409,7 +409,7 @@ def test_publish_failure_rolls_back_all_live_materialization(client, auth_header
 
 
 def test_readiness_blocks_incomplete_graph_and_corrupt_source(client, auth_headers, session_factory):
-    _, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory)
+    _, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory, include_empty_group=False)
     artifact_id, spare_page_id, scheme_page_id, _ = source(client, auth_headers, assembly_id)
     part = client.post(f"{BASE}/assemblies/{assembly_id}/parts", headers=auth_headers,
                        json={"position": "QA-READINESS", "part_number": "QA-READINESS",

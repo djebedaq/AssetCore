@@ -29,7 +29,7 @@ from sqlalchemy import func, select
 BASE = "/api/admin/catalog-builder"
 
 
-def workspace(client, headers, factory):
+def workspace(client, headers, factory, *, include_empty_group=True):
     with factory() as db:
         category = AssetCategory(code="QA_PARTS_CATEGORY", name_bg="QA", name_en="QA", name_ru="QA",
                                  capabilities=["HAS_PARTS_CATALOG"])
@@ -48,7 +48,7 @@ def workspace(client, headers, factory):
         })
         assert response.status_code == 201, response.text
         return response.json()["id"]
-    return catalog["id"], revision["id"], assembly("PUMP"), assembly("VALVE")
+    return catalog["id"], revision["id"], assembly("PUMP"), assembly("VALVE") if include_empty_group else None
 
 
 def source(client, headers, assembly_id, marker="QA"):

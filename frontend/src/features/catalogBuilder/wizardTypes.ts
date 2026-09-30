@@ -9,7 +9,8 @@ export type Catalog = Names & { id: number; code: string; asset_category_id: num
   manufacturer: string | null; model_reference: string | null; is_active: boolean;
   published_revision: { id: number; revision_code: string } | null; draft_revision_count: number }
 export type Revision = { id: number; revision_code: string; status: 'DRAFT' | 'PUBLISHED' | 'RETIRED'; created_at: string }
-export type Group = Names & { id: number; code: string; part_count: number; exploded_page_count: number; spare_list_page_count: number }
+export type Group = Names & { id: number; code: string; part_count: number; exploded_page_count: number; spare_list_page_count: number;
+  artifact_count?: number; hotspot_count?: number; repair_kit_count?: number; repair_kit_component_count?: number }
 export type Document = { id: number; filename: string; title: string; sha256: string; page_count: number;
   artifact_ids?: number[];
   assignments: Array<{ id: number; artifact_id: number; page_number: number; assembly_id: number; role: Role }> }
@@ -28,6 +29,9 @@ export const problemKeys: Record<string, TranslationKey> = {
   catalog_visual_page_invalid: 'builder.error.pageInvalid', catalog_visual_page_duplicate: 'builder.error.pageDuplicate',
   catalog_revision_not_draft: 'builder.error.revisionImmutable', catalog_inactive: 'builder.error.inactive',
   catalog_import_group_missing: 'wizard.csvGroupMissing', catalog_part_invalid: 'builder.part.error.invalid',
+  catalog_import_template_row: 'wizard.csvTemplateRow',
+  catalog_category_in_use: 'wizard.categoryLocked',
+  catalog_publication_empty_assembly: 'wizard.emptyGroup',
   catalog_part_import_duplicate_row: 'builder.part.error.duplicate', catalog_part_duplicate: 'builder.part.error.duplicate',
   catalog_part_import_page_required: 'builder.part.error.page', catalog_part_import_page_invalid: 'builder.part.error.page',
   catalog_part_import_page_missing: 'builder.part.error.page', catalog_part_import_page_ambiguous: 'builder.part.error.ambiguous',

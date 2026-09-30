@@ -1,6 +1,7 @@
 """UX-02 uses ephemeral QA records and the unchanged publication/document contract."""
 
 import base64
+import csv as csv_module
 import io
 
 import pytest
@@ -12,6 +13,7 @@ from app.models import (
     CatalogDefinition,
     CatalogRevision,
     CatalogRevisionArtifact,
+    CatalogRevisionAssembly,
     CatalogRevisionPart,
     GeneratedDocument,
     Machine,
@@ -48,18 +50,28 @@ def simple_workspace(client, headers, factory):
     assert len(revisions) == 1 and revisions[0]["status"] == "DRAFT"
     assert revisions[0]["revision_code"] == "REV-1"
     assert catalog["name_bg"] == catalog["name_en"] == catalog["name_ru"] == "QA проверка"
-    groups = [checked(client.post(f"{BASE}/revisions/{revisions[0]['id']}/groups", headers=headers,
-                                 json={"name": name}), 201) for name in ["QA group A", "QA group B"]]
+    assert checked(client.get(f"{BASE}/revisions/{revisions[0]['id']}/assemblies", headers=headers)) == []
     pdf = io.BytesIO()
     doc = canvas.Canvas(pdf)
     for text in ["No. Part No. Item Qty", "Exploded view - QA assembly", "Part number Quantity", "Exploded view"]:
         doc.drawString(50, 700, text)
         doc.showPage()
     doc.save()
-    artifact = checked(client.post(f"{BASE}/assemblies/{groups[0]['id']}/artifacts", headers=headers, json={
+    artifact = checked(client.post(f"{BASE}/revisions/{revisions[0]['id']}/documents", headers=headers, json={
         "title": "QA original", "filename": "qa-original.pdf", "media_type": "application/pdf",
         "content_base64": base64.b64encode(pdf.getvalue()).decode(),
     }), 201)
+    initial = checked(client.get(f"{BASE}/revisions/{revisions[0]['id']}/assemblies", headers=headers))[0]
+    assert initial["code"] == "INITIAL_GROUP"
+    hint = checked(client.get(f"{BASE}/artifacts/{artifact['id']}/suggestions", headers=headers))
+    assert hint["requires_confirmation"] and hint["pages"]
+    renamed = checked(client.patch(f"{BASE}/assemblies/{initial['id']}", headers=headers,
+                                   json={key: "QA group A" for key in ("name_bg", "name_en", "name_ru")}))
+    assert renamed["code"] == initial["code"]
+    additional = checked(client.post(f"{BASE}/revisions/{revisions[0]['id']}/groups", headers=headers,
+                                     json={"name": "QA group B"}), 201)
+    assert additional["code"] == "QA_GROUP_B"
+    groups = [renamed, additional]
     return catalog, revisions[0], groups, artifact
 
 
@@ -103,6 +115,19 @@ def test_simple_flow_late_binding_update_and_immutable_official_evidence(
         artifacts = db.scalars(select(CatalogRevisionArtifact)).all()
         assert len(artifacts) == 2
         assert all(item.content == artifacts[0].content and item.sha256 == artifact["sha256"] for item in artifacts)
+    template = client.get(f"{BASE}/revisions/{revision['id']}/parts/template", headers=auth_headers)
+    assert template.content.startswith(b"\xef\xbb\xbf")
+    placeholders = list(csv_module.DictReader(io.StringIO(template.content.decode("utf-8-sig"))))
+    assert [row["assembly_code"] for row in placeholders] == [group["code"] for group in groups]
+    assert all(not row["part_number"] and not row["position"] for row in placeholders)
+    unfilled = checked(preview(client, auth_headers, revision, template.content.decode("utf-8-sig")))
+    assert all(row["errors"] == ["catalog_import_template_row"] for row in unfilled["rows"])
+    assert confirm(client, auth_headers, revision, unfilled).status_code == 409
+    corrected = checked(client.patch(f"{BASE}/catalogs/{catalog['id']}", headers=auth_headers, json={
+        "name_bg": "QA corrected", "name_en": "QA corrected", "name_ru": "QA corrected",
+        "manufacturer": "QA corrected", "model_reference": "QA corrected",
+    }))
+    assert corrected["code"] == catalog["code"] and corrected["asset_category_id"] == catalog["asset_category_id"]
     csv = ("assembly_code,position,part_number,name,quantity,source_page\n"
            f"{groups[0]['code']},1,QA-A,QA name A,2,1\n{groups[1]['code']},2,QA-B,QA name B,1,3\n")
     result = checked(preview(client, auth_headers, revision, csv))
@@ -118,7 +143,19 @@ def test_simple_flow_late_binding_update_and_immutable_official_evidence(
                             json={"expected_version": hotspot["version"]}))
     summary = checked(client.get(f"{BASE}/revisions/{revision['id']}/workflow", headers=auth_headers))
     assert summary["resume_step"] == "review" and summary["progress"]["completed_positions"] == 2
+    unused = checked(client.post(f"{BASE}/revisions/{revision['id']}/groups", headers=auth_headers,
+                                 json={"name": "QA unused"}), 201)
+    blocked = checked(client.get(f"{BASE}/revisions/{revision['id']}/workflow", headers=auth_headers))
+    assert not blocked["ready"]
+    assert {"code": "catalog_publication_empty_assembly", "assembly_id": unused["id"], "step": "documents"} in blocked["errors"]
+    rejected = client.post(f"{BASE}/revisions/{revision['id']}/publish", headers=auth_headers, json={
+        "expected_publication_digest": blocked["publication_digest"],
+        "expected_current_published_revision_id": None, "confirmed": True,
+    })
+    assert rejected.status_code == 409 and rejected.json()["detail"]["code"] == "catalog_publication_not_ready"
+    assert client.delete(f"{BASE}/assemblies/{unused['id']}", headers=auth_headers).status_code == 204
     publish(client, auth_headers, revision["id"])
+    assert client.delete(f"{BASE}/assemblies/{groups[0]['id']}", headers=auth_headers).status_code == 409
     assert classify(client, auth_headers, artifact, groups[0], [1], ["SPARE_PARTS_LIST"]).status_code == 409
     assert preview(client, auth_headers, revision, csv).status_code == 409
     assert client.post(f"{BASE}/revisions/{revision['id']}/groups", headers=auth_headers,
@@ -139,6 +176,7 @@ def test_simple_flow_late_binding_update_and_immutable_official_evidence(
                     for row in db.scalars(select(PartCatalog).where(PartCatalog.builder_revision_id == revision["id"])).all()]
     checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{a}", headers=auth_headers), 201)
     assert runtime(a)["supported"] and not runtime(c)["supported"]
+    assert len(runtime(a)["assemblies"]) == 2
     rows_before = published_rows()
     assert checked(client.get(f"{BASE}/catalogs/{catalog['id']}/eligible-assets?search=QA-SERIAL-B", headers=auth_headers))[0]["id"] == b
     checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{b}", headers=auth_headers), 201)
@@ -278,3 +316,55 @@ def test_whole_import_duplicate_ambiguity_and_rollback_across_groups(
     with session_factory() as db:
         assert db.scalar(select(func.count(CatalogRevisionPart.id))) == 0
     assert other_sha != artifact["sha256"]
+
+
+def test_document_first_failure_rolls_back_initial_group_and_unused_source_can_be_removed(
+    client, auth_headers, viewer_headers, session_factory,
+):
+    catalog, revision, groups, artifact = simple_workspace(client, auth_headers, session_factory)
+    # Move every assigned page to the additional group. Its exact full-file alias
+    # must survive removal of the now unused initial owner.
+    checked(classify(client, auth_headers, artifact, groups[1], [1, 3], ["SPARE_PARTS_LIST"]))
+    checked(classify(client, auth_headers, artifact, groups[1], [2, 4], ["EXPLODED_SCHEME"]))
+    assert client.delete(f"{BASE}/assemblies/{groups[0]['id']}", headers=auth_headers).status_code == 204
+    docs = checked(client.get(f"{BASE}/revisions/{revision['id']}/documents", headers=auth_headers))
+    assert len(docs) == 1 and docs[0]["sha256"] == artifact["sha256"]
+    with session_factory() as db:
+        original_bytes = db.scalar(select(CatalogRevisionArtifact.content).where(
+            CatalogRevisionArtifact.id == docs[0]["id"]))
+    assert original_bytes.startswith(b"%PDF-")
+    assert client.delete(f"{BASE}/assemblies/{groups[1]['id']}", headers=auth_headers).status_code == 204
+    assert checked(client.get(f"{BASE}/revisions/{revision['id']}/assemblies", headers=auth_headers)) == []
+    invalid = {"title": "QA invalid", "filename": "qa.pdf", "media_type": "application/pdf",
+               "content_base64": base64.b64encode(b"not a PDF").decode()}
+    assert client.post(f"{BASE}/revisions/{revision['id']}/documents",
+                       headers=auth_headers, json=invalid).status_code == 422
+    with session_factory() as db:
+        assert db.scalar(select(func.count(CatalogRevisionAssembly.id)).where(
+            CatalogRevisionAssembly.revision_id == revision["id"])) == 0
+    assert client.post(f"{BASE}/revisions/{revision['id']}/documents",
+                       headers=viewer_headers, json=invalid).status_code == 403
+    assert client.patch(f"{BASE}/catalogs/{catalog['id']}", headers=auth_headers,
+                        json={"asset_category_id": 999999}).status_code == 409
+
+
+def test_short_group_codes_are_stable_unique_and_bounded(client, auth_headers, session_factory):
+    _, revision, _, _ = simple_workspace(client, auth_headers, session_factory)
+    def create(name):
+        return checked(client.post(f"{BASE}/revisions/{revision['id']}/groups", headers=auth_headers,
+                                   json={"name": name}), 201)
+    assert [create("Blasting Head")["code"] for _ in range(3)] == [
+        "BLASTING_HEAD", "BLASTING_HEAD_2", "BLASTING_HEAD_3"]
+    long_name = "A" * 255
+    first, second = create(long_name), create(long_name)
+    assert first["code"] == "A" * 80 and second["code"] == "A" * 78 + "_2"
+    assert create("123")["code"] == "GROUP_123"
+    assert create("Ж")["code"] == "ZH"
+    assert create("Шаси")["code"] == "SHASI"
+    assert create("部")["code"] == "GROUP"
+    assert create("X")["code"] == "GROUP_X"
+    renamed = checked(client.patch(f"{BASE}/assemblies/{first['id']}", headers=auth_headers,
+                                   json={"name_bg": "QA corrected name"}))
+    assert renamed["code"] == first["code"]
+    assert client.patch(f"{BASE}/assemblies/{first['id']}", headers=auth_headers,
+                        json={"code": "CHANGED"}).status_code == 409

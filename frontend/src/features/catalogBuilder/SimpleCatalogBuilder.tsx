@@ -25,6 +25,8 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   const [step, setStep] = useState<Step>('catalog')
   const [visited, setVisited] = useState<Step[]>([])
   const [creating, setCreating] = useState(false)
+  const [editingMetadata, setEditingMetadata] = useState(false)
+  const [metadata, setMetadata] = useState({ name: '', manufacturer: '', model_reference: '' })
   const [form, setForm] = useState({ name: '', asset_category_id: '', manufacturer: '', model_reference: '' })
   const [dirtyChildren, setDirtyChildren] = useState<Record<string, boolean>>({})
   const [fix, setFix] = useState<Issue | null>(null)
@@ -34,7 +36,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   const selected = catalogs.find(catalog => catalog.id === selectedId)
   const revision = revisions.find(item => item.id === revisionId)
   const editable = revision?.status === 'DRAFT'
-  const dirty = busy || creating && !!form.name || Object.values(dirtyChildren).some(Boolean)
+  const dirty = busy || editingMetadata || creating && !!form.name || Object.values(dirtyChildren).some(Boolean)
   useDraftGuard(dirty, onDirtyChange)
   const documentsDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, documents: value })), [])
   const importDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, import: value })), [])
@@ -52,6 +54,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
     if (!selectedId) return
     let active = true
     setRevisions([]); setRevisionId(null); setWorkflow(null); setGroups([])
+    setEditingMetadata(false)
     void api<Revision[]>(`${builderBase}/catalogs/${selectedId}/revisions`).then(rows => {
       if (!active) return
       setRevisions(rows); setRevisionId((rows.find(row => row.status === 'DRAFT') || rows.find(row => row.status === 'PUBLISHED') || rows[0])?.id || null)
@@ -61,7 +64,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   useEffect(() => {
     if (!revisionId) return
     let active = true
-    setWorkflow(null); setGroups([]); setVisited([]); setFix(null); setKits(false)
+    setWorkflow(null); setGroups([]); setVisited([]); setFix(null); setKits(false); setEditingMetadata(false)
     void Promise.all([api<Group[]>(`${builderBase}/revisions/${revisionId}/assemblies`),
       api<Workflow>(`${builderBase}/revisions/${revisionId}/workflow`)]).then(([rows, summary]) => {
       if (!active) return
@@ -88,7 +91,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   }
   function close() {
     if (dirty && !window.confirm(t('wizard.unsaved'))) return
-    setSelectedId(null); setRevisionId(null); setVisited([]); setDirtyChildren({}); setError('')
+    setSelectedId(null); setRevisionId(null); setVisited([]); setDirtyChildren({}); setError(''); setEditingMetadata(false)
   }
   async function create(event: FormEvent) {
     event.preventDefault()
@@ -110,8 +113,23 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
       setRevisionId(draft.id); await load()
     } catch (caught) { report(caught) } finally { setBusy(false) }
   }
+  async function saveMetadata(event: FormEvent) {
+    event.preventDefault()
+    if (!selected || !editable || busy) return
+    setBusy(true); setError('')
+    try {
+      const names: Record<string, string> = { [`name_${locale}`]: metadata.name.trim() }
+      for (const language of ['bg', 'en', 'ru'] as const) {
+        if (!selected[`name_${language}`] || selected[`name_${language}`] === label(selected)) names[`name_${language}`] = metadata.name.trim()
+      }
+      await api(`${builderBase}/catalogs/${selected.id}`, { method: 'PATCH', body: JSON.stringify({
+        ...names, manufacturer: metadata.manufacturer || null, model_reference: metadata.model_reference || null,
+      }) })
+      await load(); await refresh(); setEditingMetadata(false)
+    } catch (caught) { report(caught) } finally { setBusy(false) }
+  }
   async function publish() {
-    if (!revision || !workflow?.ready || busy || Object.values(dirtyChildren).some(Boolean) ||
+    if (!revision || !workflow?.ready || busy || editingMetadata || Object.values(dirtyChildren).some(Boolean) ||
         !window.confirm(t(workflow.current_published_revision_id ? 'wizard.publishUpdate' : 'wizard.publish'))) return
     setBusy(true); setError('')
     try {
@@ -155,12 +173,24 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
       {workflow && <div><p>{t('wizard.progress', workflow.progress)}</p>
         <progress aria-label={t('wizard.hotspots')} value={workflow.progress.completed_positions} max={Math.max(1, workflow.progress.position_count)} /></div>}
       <div hidden={step !== 'catalog'}><p><b>{t('builder.category')}:</b> {label(selected.asset_category)}</p>
+        <p className="muted">{t('wizard.categoryLocked')}</p>
         <p><b>{t('builder.manufacturer')}:</b> {selected.manufacturer || t('common.noValue')}</p>
         <p><b>{t('builder.modelReference')}:</b> {selected.model_reference || t('common.noValue')}</p>
+        {editable && !editingMetadata && <button className="secondary" disabled={busy} onClick={() => {
+          setMetadata({ name: label(selected), manufacturer: selected.manufacturer || '', model_reference: selected.model_reference || '' }); setEditingMetadata(true)
+        }}>{t('wizard.editMetadata')}</button>}
+        {editable && editingMetadata && <form className="form-grid" onSubmit={event => void saveMetadata(event)}>
+          <label>{t('wizard.name')}<input required maxLength={255} disabled={busy} value={metadata.name} onChange={event => setMetadata({ ...metadata, name: event.target.value })} /></label>
+          <label>{t('builder.manufacturer')}<input maxLength={255} disabled={busy} value={metadata.manufacturer} onChange={event => setMetadata({ ...metadata, manufacturer: event.target.value })} /></label>
+          <label>{t('builder.modelReference')}<input maxLength={255} disabled={busy} value={metadata.model_reference} onChange={event => setMetadata({ ...metadata, model_reference: event.target.value })} /></label>
+          <button className="primary" disabled={busy || !metadata.name.trim()}>{t('common.save')}</button>
+          <button type="button" className="secondary" disabled={busy} onClick={() => setEditingMetadata(false)}>{t('common.cancel')}</button>
+        </form>}
         {!revision && <button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>}
       </div>
       {editable && revision && <>
         {visited.includes('documents') && <div hidden={step !== 'documents'}><WizardDocuments revisionId={revision.id} groups={groups} onChanged={refresh} onDirtyChange={documentsDirty}
+          beforeDelete={() => !(dirtyChildren.parts || dirtyChildren.hotspots || dirtyChildren.kits) || window.confirm(t('wizard.unsaved'))}
           targetPage={fix?.step === 'documents' && fix.code === '' ? fix.visual_page_id : undefined}
           targetArtifactId={fix?.step === 'documents' ? fix.artifact_id : undefined} /></div>}
         {visited.includes('parts') && <div hidden={step !== 'parts'}><WizardParts revisionId={revision.id} groups={groups} groupId={groupId} setGroupId={changeGroup}
@@ -175,7 +205,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
           {kits && groupId && <RevisionRepairKits key={groupId} assemblyId={groupId} editable onDirtyChange={kitsDirty} />}
         </div>}
       </>}
-      <div hidden={step !== 'review'}><WizardReview workflow={workflow} editable={!!editable} busy={busy || Object.values(dirtyChildren).some(Boolean)} onFix={fixIssue} onPublish={() => void publish()} /></div>
+      <div hidden={step !== 'review'}><WizardReview workflow={workflow} editable={!!editable} busy={busy || editingMetadata || Object.values(dirtyChildren).some(Boolean)} onFix={fixIssue} onPublish={() => void publish()} /></div>
       {editable && <div className="actions wizard-navigation"><button className="secondary" disabled={steps.indexOf(step) === 0} onClick={() => navigate(steps[steps.indexOf(step) - 1])}>{t('wizard.back')}</button>
         <button className="primary" disabled={step === 'review'} onClick={() => { setFix(null); navigate(steps[steps.indexOf(step) + 1]) }}>{t('wizard.continue')}</button></div>}
       {revision?.status === 'PUBLISHED' && <><p role="status">{t('wizard.published')}</p><button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>

@@ -75,6 +75,12 @@ def list_wizard_documents(revision_id: int, _: User = Depends(manager),
     return wizard_documents.documents(db, revision_id)
 
 
+@router.post("/revisions/{revision_id}/documents", status_code=201)
+def upload_wizard_document(revision_id: int, data: ArtifactUpload, actor: User = Depends(manager),
+                           db: Session = Depends(get_db)) -> dict:
+    return wizard_documents.upload(db, actor, revision_id, data)
+
+
 @router.get("/revisions/{revision_id}/workflow")
 def simple_workflow_summary(revision_id: int, _: User = Depends(manager),
                             db: Session = Depends(get_db)) -> dict:

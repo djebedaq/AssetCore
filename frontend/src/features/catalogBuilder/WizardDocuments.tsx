@@ -23,16 +23,19 @@ export function parsePageRange(value: string, pageCount: number): number[] {
   return [...selected]
 }
 
-export default function WizardDocuments({ revisionId, groups, onChanged, onDirtyChange, targetPage, targetArtifactId }: {
+export default function WizardDocuments({ revisionId, groups, onChanged, onDirtyChange, targetPage, targetArtifactId, beforeDelete }: {
   revisionId: number; groups: Group[]; onChanged: () => Promise<void>; onDirtyChange: (dirty: boolean) => void
   targetPage?: number
   targetArtifactId?: number
+  beforeDelete: () => boolean
 }) {
   const { locale, t } = useI18n()
   const [documents, setDocuments] = useState<Document[]>([])
   const [documentId, setDocumentId] = useState<number | null>(null)
   const [groupId, setGroupId] = useState<number | null>(null)
   const [name, setName] = useState('')
+  const [editingGroup, setEditingGroup] = useState<number | null>(null)
+  const [groupName, setGroupName] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [selected, setSelected] = useState<number[]>([])
   const [range, setRange] = useState('')
@@ -45,7 +48,7 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
   const source = documents.find(item => item.id === documentId) || documents[0]
   const targetId = groupId && groups.some(group => group.id === groupId) ? groupId : groups[0]?.id
   const label = (group: Group) => group[`name_${locale}`] || group.name_bg
-  useDraftGuard(!!name.trim() || !!file || busy, onDirtyChange)
+  useDraftGuard(!!name.trim() || !!file || busy || editingGroup !== null, onDirtyChange)
   async function load() { setDocuments(await api<Document[]>(`${builderBase}/revisions/${revisionId}/documents`)) }
   useEffect(() => { void load().catch(report) }, [revisionId])
   useEffect(() => { if (targetPage && source && targetPage <= source.page_count) {
@@ -67,6 +70,24 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
       const group = await api<Group>(`${builderBase}/revisions/${revisionId}/groups`, { method: 'POST', body: JSON.stringify({ name: groupName }) })
       setGroupId(group.id); setName('')
       if (suggestionIndex !== undefined) { setSelectedSuggestions([]); setSuggestions(current => current ? { ...current, group_names: current.group_names.filter((_, index) => index !== suggestionIndex) } : null) }
+    })
+  }
+  async function renameGroup(group: Group, nextName: string) {
+    await run(async () => {
+      const changes = { name_bg: nextName.trim(), name_en: nextName.trim(), name_ru: nextName.trim() }
+      await api(`${builderBase}/assemblies/${group.id}`, { method: 'PATCH', body: JSON.stringify(changes) })
+      setEditingGroup(null)
+    })
+  }
+  async function deleteGroup(group: Group) {
+    if (!beforeDelete() || !window.confirm(t('wizard.deleteGroupConfirm', {
+      name: label(group), documents: group.artifact_count || 0, pages: group.exploded_page_count + group.spare_list_page_count,
+      parts: group.part_count, hotspots: group.hotspot_count || 0, kits: group.repair_kit_count || 0,
+    }))) return
+    await run(async () => {
+      await api(`${builderBase}/assemblies/${group.id}`, { method: 'DELETE' })
+      if (editingGroup === group.id) setEditingGroup(null)
+      setSelected([]); setSuggestions(null); await load()
     })
   }
   async function classify(numbers: number[], nextChoice: Choice, assemblyId = targetId) {
@@ -91,6 +112,16 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
   return <div className="builder-workspace">
     <p>{t('wizard.documentHelp')}</p>
     {error && <p className="error" role="alert">{error}</p>}
+    <div className="wizard-upload">
+      <label>{t('wizard.upload')}<input type="file" accept=".pdf,application/pdf" disabled={busy} onChange={event => setFile(event.target.files?.[0] || null)} /></label>
+      <button className="primary" disabled={busy || !file} onClick={() => void run(async () => {
+        const payload = await filePayload(file!)
+        const created = await api<Document>(`${builderBase}/revisions/${revisionId}/documents`, {
+          method: 'POST', body: JSON.stringify({ ...payload, title: file!.name }),
+        })
+        setFile(null); await load(); setDocumentId(created.id); setOffset(0)
+      })}>{t('wizard.upload')}</button>
+    </div>
     <form className="actions" onSubmit={event => { event.preventDefault(); void addGroup(name) }}>
       <label>{t('wizard.groupName')}<input value={name} maxLength={255} required onChange={event => setName(event.target.value)} /></label>
       <button className="secondary" disabled={busy || !name.trim()}>{t('wizard.addGroup')}</button>
@@ -98,18 +129,18 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
     {!groups.length && <p>{t('wizard.noGroups')}</p>}
     <div className="wizard-groups">{groups.map(group => <article key={group.id}>
       <strong>{label(group)}</strong>
+      {group.part_count === 0 && <small>{t('wizard.emptyGroupHelp')}</small>}
+      <div className="actions">
+        <button className="secondary" disabled={busy} aria-label={t('wizard.renameGroupNamed', { name: label(group) })}
+          onClick={() => { if (editingGroup !== null && !window.confirm(t('wizard.unsaved'))) return; setEditingGroup(group.id); setGroupName(label(group)) }}>{t('wizard.renameGroup')}</button>
+        <button className="secondary" disabled={busy} onClick={() => void deleteGroup(group)}>{t('wizard.deleteGroup', { name: label(group) })}</button>
+      </div>
+      {editingGroup === group.id && <form className="actions" onSubmit={event => { event.preventDefault(); void renameGroup(group, groupName) }}>
+        <label>{t('wizard.groupName')}<input required maxLength={255} value={groupName} disabled={busy} onChange={event => setGroupName(event.target.value)} /></label>
+        <button className="primary" disabled={busy || !groupName.trim()}>{t('common.save')}</button>
+        <button type="button" className="secondary" disabled={busy} onClick={() => setEditingGroup(null)}>{t('common.cancel')}</button>
+      </form>}
     </article>)}</div>
-    <div className="wizard-upload">
-      <label>{t('wizard.uploadGroup')}{groupSelect(targetId, setGroupId)}</label>
-      <label>{t('wizard.upload')}<input type="file" accept=".pdf,application/pdf" disabled={busy} onChange={event => setFile(event.target.files?.[0] || null)} /></label>
-      <button className="primary" disabled={busy || !file || !targetId} onClick={() => void run(async () => {
-        const payload = await filePayload(file!)
-        const created = await api<Document>(`${builderBase}/assemblies/${targetId}/artifacts`, {
-          method: 'POST', body: JSON.stringify({ ...payload, title: file!.name }),
-        })
-        setFile(null); await load(); setDocumentId(created.id); setOffset(0)
-      })}>{t('wizard.upload')}</button>
-    </div>
     {!source && <p>{t('wizard.noDocuments')}</p>}
     {source && <>
       <label>{t('wizard.documents')}<select value={source.id} disabled={busy} onChange={event => {
@@ -126,6 +157,7 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
             ...suggestions, group_names: suggestions.group_names.map((value, i) => i === index ? event.target.value : value),
           })} /></label>
           <button className="secondary" disabled={busy || !heading.trim()} onClick={() => void addGroup(heading, index)}>{t('wizard.addGroup')}</button>
+          {targetId && <button className="secondary" disabled={busy || !heading.trim()} onClick={() => void renameGroup(groups.find(group => group.id === targetId)!, heading)}>{t('wizard.useSuggestedName')}</button>}
           <button className="secondary" onClick={() => { setSelectedSuggestions([]); setSuggestions({ ...suggestions, group_names: suggestions.group_names.filter((_, i) => i !== index) }) }}>{t('common.remove')}</button>
         </div>)}
         {suggestions.group_names.length > 1 && <button className="secondary" disabled={selectedSuggestions.length < 2} onClick={() => {

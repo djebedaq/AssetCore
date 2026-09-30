@@ -47,6 +47,7 @@ const errorKeys: Record<string, TranslationKey> = {
 
 const readinessKeys: Record<string, TranslationKey> = {
   catalog_publication_no_assemblies: 'builder.publication.noAssemblies',
+  catalog_publication_empty_assembly: 'wizard.emptyGroup',
   catalog_publication_source_invalid: 'builder.publication.sourceInvalid',
   catalog_publication_visual_page_invalid: 'builder.publication.pageInvalid',
   catalog_publication_part_mapping_invalid: 'builder.publication.mappingInvalid',
