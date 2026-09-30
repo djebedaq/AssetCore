@@ -107,13 +107,13 @@ export function CatalogPartDetails({
   onKit: (code: string) => void
   onClose: () => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const title = `${t('catalog.position')} ${part.position} · ${part.part_number || t('common.noValue')}`
   return <CatalogDialog title={title} onClose={onClose} contentClassName="catalog-v2-part-details-scroll">
     <article className="catalog-v2-part-details" aria-live="polite">
     <header>
       <span className="badge batch-complete">{t('catalog.verified')}</span>
-      <p>{catalogDisplayName(part)}</p>
+      <p>{catalogDisplayName(part, locale)}</p>
     </header>
     {part.replaced_by_part_number && <div className="catalog-v2-replacement" role="status">
       <b>{t('catalog.oldNumber')}: {part.part_number}</b>
@@ -121,7 +121,7 @@ export function CatalogPartDetails({
       <small>{t('catalog.replacementRequestNotice', { number: part.replaced_by_part_number })}</small>
     </div>}
     <dl className="detail-grid">
-      <div><dt>{t('catalog.displayName')}</dt><dd>{catalogDisplayName(part)}</dd></div>
+      <div><dt>{t('catalog.displayName')}</dt><dd>{catalogDisplayName(part, locale)}</dd></div>
       <div><dt>{t('catalog.originalDescription')}</dt><dd>{catalogSourceDescription(part)}</dd></div>
       <div><dt>{t('catalog.specification')}</dt><dd>{part.description_2 || t('common.noValue')}</dd></div>
       <div><dt>{t('catalog.sourceQuantity')}</dt><dd>{formatCatalogSourceQuantity(part.quantity, part.quantity_raw) || t('common.noValue')}</dd></div>
@@ -154,11 +154,11 @@ export function CatalogVariantDialog({
   onSelect: (part: CatalogPart) => void
   onClose: () => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   return <CatalogDialog title={t('catalog.variantChoice', { position })} onClose={onClose} contentClassName="catalog-v2-variants-dialog">
     <div className="catalog-v2-variants-list">
       {variants.map((part) => <button key={part.source_record_key} onClick={() => onSelect(part)}>
-        <span><b>{part.part_number || t('common.noValue')}</b><small>{catalogDisplayName(part)}</small><em>{part.valid_for_raw || t('common.noValue')}</em></span>
+        <span><b>{part.part_number || t('common.noValue')}</b><small>{catalogDisplayName(part, locale)}</small><em>{part.valid_for_raw || t('common.noValue')}</em></span>
         <ChevronRight size={17} />
       </button>)}
     </div>
@@ -183,7 +183,7 @@ export function CatalogRepairKitPreview({
     <div className="catalog-v2-kit-preview">
     <div className="toolbar"><div><span className="badge batch-complete">{t('catalog.verified')}</span><h3>{t('catalog.repairKit')} {kit.code}</h3><p>{kit[`name_${locale}`] || kit.name}</p><p>{t('catalog.kitContains', { count: kit.components.length })}</p></div></div>
     <button className={`secondary ${positionsVisible ? 'active' : ''}`} aria-pressed={positionsVisible} onClick={onTogglePositions}><Layers3 size={17} />{positionsVisible ? t('catalog.hideKitPositions') : t('catalog.showKitPositions')}</button>
-    <div className="catalog-v2-kit-components">{kit.components.map((component) => <div key={component.id}><b>{t('catalog.position')} {component.position} · {component.part_number || t('common.noValue')}</b><span>{catalogDisplayName(component)}</span><em>{t('catalog.sourceQuantity')}: {formatCatalogSourceQuantity(component.quantity, component.quantity_raw)}</em></div>)}</div>
+    <div className="catalog-v2-kit-components">{kit.components.map((component) => <div key={component.id}><b>{t('catalog.position')} {component.position} · {component.part_number || t('common.noValue')}</b><span>{catalogDisplayName(component, locale)}</span><em>{t('catalog.sourceQuantity')}: {formatCatalogSourceQuantity(component.quantity, component.quantity_raw)}</em></div>)}</div>
     <div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" onClick={onConfirm}><PackagePlus size={17} />{t('catalog.addWholeKit')}</button></div>
     </div>
   </CatalogDialog>

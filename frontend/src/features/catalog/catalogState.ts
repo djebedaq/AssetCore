@@ -6,7 +6,7 @@ import type {
 import { catalogDisplayName } from './catalogNames'
 import { isRequestedPartQuantity } from '../partRequests/partRequestQuantities'
 
-export function partToCartLine(part: CatalogPart, quantity = 1): CatalogCartLine {
+export function partToCartLine(part: CatalogPart, quantity = 1, locale: 'bg' | 'en' | 'ru' = 'bg'): CatalogCartLine {
   if (!isRequestedPartQuantity(quantity)) {
     throw new RangeError('Part-request quantities must be positive whole numbers.')
   }
@@ -16,7 +16,7 @@ export function partToCartLine(part: CatalogPart, quantity = 1): CatalogCartLine
     position: part.position,
     part_number: part.order_part_number,
     source_part_number: part.part_number,
-    description: catalogDisplayName(part),
+    description: catalogDisplayName(part, locale),
     quantity,
     source_quantity_raw: part.quantity_raw,
     assembly: part.assembly,
@@ -44,19 +44,20 @@ export function mergeCartLine(
   ))
 }
 
-export function addPart(current: CatalogCartLine[], part: CatalogPart): CatalogCartLine[] {
-  return mergeCartLine(current, partToCartLine(part, 1))
+export function addPart(current: CatalogCartLine[], part: CatalogPart, locale: 'bg' | 'en' | 'ru' = 'bg'): CatalogCartLine[] {
+  return mergeCartLine(current, partToCartLine(part, 1, locale))
 }
 
 export function addRepairKit(
   current: CatalogCartLine[],
   kit: CatalogRepairKit,
   parts: CatalogPart[],
+  locale: 'bg' | 'en' | 'ru' = 'bg',
 ): CatalogCartLine[] {
   return kit.components.reduce((cart, component) => {
     const part = parts.find((candidate) => candidate.id === component.part_id)
     if (!part) return cart
-    return mergeCartLine(cart, partToCartLine(part, component.quantity))
+    return mergeCartLine(cart, partToCartLine(part, component.quantity, locale))
   }, current)
 }
 

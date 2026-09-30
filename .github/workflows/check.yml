@@ -130,6 +130,11 @@ jobs:
         run: psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_restore;'
       - name: PostgreSQL migration and encrypted backup/restore round trip
         run: python scripts/postgres_smoke_test.py
+      - name: Catalog Builder pre-0025 upgrade and encrypted history restore
+        run: |
+          psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_upgrade_source;'
+          psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_upgrade_restore;'
+          python tests/postgres/catalog_builder_backup_rehearsal.py
       - name: Create isolated concurrency database
         run: psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_concurrency;'
       - name: Real PostgreSQL overlapping domain transactions
@@ -257,6 +262,12 @@ jobs:
           docker run --rm --read-only --network none
           --tmpfs /tmp:rw,nosuid,noexec,size=512m
           assetcore:ci python backend/scripts/part_visual_appendix_smoke.py
+      # Builder uses the same official renderer; verify its actual graph too.
+      - name: Verify late-bound Builder official documents through LibreOffice
+        run: |
+          docker run --rm --read-only --network none \
+            --tmpfs /tmp:rw,nosuid,noexec,size=512m \
+            assetcore:ci python backend/scripts/catalog_builder_document_smoke.py
       - name: Run liveness and readiness smoke in the production image
         shell: bash
         run: |

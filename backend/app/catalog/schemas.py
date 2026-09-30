@@ -18,10 +18,14 @@ class CatalogPartOut(BaseModel):
     part_number: str
     order_part_number: str
     replaced_by_part_number: str | None = None
+    alternative_part_number: str | None = None
+    supplier: str | None = None
+    supplier_code: str | None = None
     description: str
     source_description: str
     description_en: str
     description_bg: str
+    description_ru: str | None = None
     original_name: str | None = None
     description_2: str | None = None
     quantity: float | None = None
@@ -121,6 +125,7 @@ class RepairKitComponentOut(BaseModel):
     source_description: str
     description_en: str
     description_bg: str
+    description_ru: str | None = None
     quantity: float
     quantity_raw: str
     source_document: str

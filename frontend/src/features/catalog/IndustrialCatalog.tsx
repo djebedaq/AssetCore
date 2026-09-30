@@ -94,8 +94,8 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
   const filteredParts = useMemo(() => {
     const query = partsQuery.trim().toLocaleLowerCase()
     if (!query) return details?.parts || []
-    return (details?.parts || []).filter((part) => [part.position, part.part_number, part.replaced_by_part_number, catalogDisplayName(part), catalogSourceDescription(part), part.description, part.description_2, part.repair_kit_code, part.valid_for_raw].some((value) => value?.toLocaleLowerCase().includes(query)))
-  }, [details, partsQuery])
+    return (details?.parts || []).filter((part) => [part.position, part.part_number, part.replaced_by_part_number, part.alternative_part_number, part.supplier, part.supplier_code, part.assembly, part.description_bg, part.description_en, part.description_ru, catalogDisplayName(part, locale), catalogSourceDescription(part), part.description, part.description_2, part.repair_kit_code, part.valid_for_raw].some((value) => value?.toLocaleLowerCase().includes(query)))
+  }, [details, partsQuery, locale])
 
   function focusPartOnDiagram(part: CatalogPart) {
     const here = currentHotspots.find((item) => item.position === part.position)
@@ -117,7 +117,7 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
   function addSelectedPart(part: CatalogPart) {
     if (!machineId) return
     if (cart.lines.length > 0 && cart.machineId !== machineId) { setError(t('catalog.cartMachineMismatch')); return }
-    setCart((current) => ({ machineId, lines: addPart(current.lines, part) })); setUndoCart(null)
+    setCart((current) => ({ machineId, lines: addPart(current.lines, part, locale) })); setUndoCart(null)
     setToast(t('catalog.positionAdded', { position: part.position }))
   }
   function openKit(code: string) {
@@ -135,7 +135,7 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
   function confirmKit(kit: CatalogRepairKit) {
     if (!details || !machineId) return
     if (cart.lines.length > 0 && cart.machineId !== machineId) { setError(t('catalog.cartMachineMismatch')); return }
-    setUndoCart(cart); setCart({ machineId, lines: addRepairKit(cart.lines, kit, details.parts) })
+    setUndoCart(cart); setCart({ machineId, lines: addRepairKit(cart.lines, kit, details.parts, locale) })
     setKitPreview(null); setKitPositions(new Set()); setToast(t('catalog.kitAdded', { code: kit.code }))
   }
   function changeCart(lines: CatalogCartLine[]) {

@@ -162,6 +162,10 @@ def test_unexpected_repair_document_error_is_traceable_and_rolls_back(
         repair_service, "make_repair_documents", fail_document_generation
     )
     caplog.set_level(logging.ERROR, logger="uvicorn.error")
+    # Other runtime tests configure Uvicorn's non-propagating parent logger.
+    # Capture this actual emitted record directly, independent of suite order.
+    monkeypatch.setattr(repair_service.logger, "handlers", [*repair_service.logger.handlers, caplog.handler])
+    monkeypatch.setattr(repair_service.logger, "disabled", False)
     completed = client.patch(
         f"/api/repair-cases/{repair_id}",
         headers=auth_headers,

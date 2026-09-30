@@ -2281,6 +2281,11 @@ def upload_technical_revision(
     document = db.scalar(select(TechnicalDocument).options(selectinload(TechnicalDocument.revisions)).where(TechnicalDocument.id == document_id))
     if document is None:
         raise HTTPException(404, "Техническият документ не е намерен.")
+    if document.builder_artifact_id is not None:
+        raise business_conflict(
+            "catalog_published_content_immutable",
+            "Публикуваният каталожен документ се променя чрез нова Builder ревизия.",
+        )
     _validate_document_machine_links(db, payload.linked_machine_numbers)
     filename, content = _decode_file(payload)
     digest = hashlib.sha256(content).hexdigest()

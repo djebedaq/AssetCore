@@ -69,6 +69,21 @@ it('draws normalized draft geometry, verifies explicitly, invalidates on edit an
   const canvas = document.querySelector('.builder-scheme-canvas') as HTMLElement
   vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 100, height: 100 } as DOMRect)
   await actor.click(screen.getByRole('button', { name: 'Рисуване' }))
+  // A second touch changes this to a navigation gesture. Neither finger may
+  // leave a savable draft, even when it moves after the other one lifts.
+  fireEvent.pointerDown(canvas, { pointerId: 20, pointerType: 'touch', clientX: 10, clientY: 20 })
+  fireEvent.pointerMove(canvas, { pointerId: 20, pointerType: 'touch', clientX: 40, clientY: 60 })
+  fireEvent.pointerDown(canvas, { pointerId: 21, pointerType: 'touch', clientX: 50, clientY: 60 })
+  fireEvent.pointerMove(canvas, { pointerId: 21, pointerType: 'touch', clientX: 80, clientY: 90 })
+  fireEvent.pointerUp(canvas, { pointerId: 20, pointerType: 'touch' })
+  fireEvent.pointerMove(canvas, { pointerId: 21, pointerType: 'touch', clientX: 90, clientY: 95 })
+  fireEvent.pointerUp(canvas, { pointerId: 21, pointerType: 'touch' })
+  expect(screen.queryByRole('button', { name: 'Запази' })).not.toBeInTheDocument()
+  expect(writes).toHaveLength(0)
+  fireEvent.pointerDown(canvas, { pointerId: 22, pointerType: 'touch', clientX: 10, clientY: 20 })
+  fireEvent.pointerMove(canvas, { pointerId: 22, pointerType: 'touch', clientX: 40, clientY: 60 })
+  fireEvent.pointerCancel(canvas, { pointerId: 22, pointerType: 'touch' })
+  expect(screen.queryByRole('button', { name: 'Запази' })).not.toBeInTheDocument()
   fireEvent.pointerDown(canvas, { pointerId: 1, pointerType: 'touch', clientX: 10, clientY: 20 })
   fireEvent.pointerMove(canvas, { pointerId: 1, pointerType: 'touch', clientX: 40, clientY: 60 })
   fireEvent.pointerUp(canvas, { pointerId: 1, pointerType: 'touch', clientX: 40, clientY: 60 })

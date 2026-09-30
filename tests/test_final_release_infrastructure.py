@@ -22,7 +22,7 @@ def _load_postgres_smoke_module():
 
 def test_postgres_smoke_uses_current_alembic_head() -> None:
     module = _load_postgres_smoke_module()
-    assert module._expected_head() == "20260929_0029"
+    assert module._expected_head() == "20260930_0030"
 
 
 def test_ci_covers_frontend_backend_postgres_and_docker() -> None:

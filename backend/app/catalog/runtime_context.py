@@ -17,6 +17,8 @@ from ..models import (
 )
 from ..workflow import business_conflict
 
+_UNSELECTED = object()
+
 
 @dataclass(frozen=True)
 class PublishedBinding:
@@ -25,6 +27,11 @@ class PublishedBinding:
 
 
 def published_binding(db: Session, machine: Machine, *, lock: bool = False) -> PublishedBinding | None:
+    if lock and db.get_bind().dialect.name == "postgresql":
+        # Binding changes lock the machine before the catalog. Hold a shared
+        # lock in the same order, including the currently unbound case.
+        db.scalar(select(Machine).where(Machine.id == machine.id)
+                  .with_for_update(read=True).execution_options(populate_existing=True))
     binding = db.scalar(select(CatalogAssetBinding).where(CatalogAssetBinding.machine_id == machine.id))
     if binding is None:
         return None
@@ -40,9 +47,9 @@ def published_binding(db: Session, machine: Machine, *, lock: bool = False) -> P
 
 
 def require_compatible_part(db: Session, machine: Machine | None, part: PartCatalog,
-                            *, selected: PublishedBinding | None = None,
+                            *, selected: PublishedBinding | None | object = _UNSELECTED,
                             incompatible_code: str = "catalog_parts_not_compatible_with_machine") -> None:
-    binding = selected if selected is not None else published_binding(db, machine, lock=True) if machine else None
+    binding = (published_binding(db, machine, lock=True) if machine else None) if selected is _UNSELECTED else selected
     if part.builder_revision_id is not None:
         if binding is None or binding.revision_id != part.builder_revision_id:
             raise business_conflict("catalog_runtime_binding_mismatch",
@@ -57,8 +64,8 @@ def require_compatible_part(db: Session, machine: Machine | None, part: PartCata
 
 
 def require_compatible_kit(db: Session, machine: Machine | None, kit: RepairKit,
-                           *, selected: PublishedBinding | None = None) -> None:
-    binding = selected if selected is not None else published_binding(db, machine, lock=True) if machine else None
+                           *, selected: PublishedBinding | None | object = _UNSELECTED) -> None:
+    binding = (published_binding(db, machine, lock=True) if machine else None) if selected is _UNSELECTED else selected
     if kit.builder_revision_id is not None:
         if binding is None or binding.revision_id != kit.builder_revision_id:
             raise business_conflict("catalog_runtime_binding_mismatch",
@@ -66,3 +73,8 @@ def require_compatible_kit(db: Session, machine: Machine | None, kit: RepairKit,
     elif binding is not None:
         raise business_conflict("catalog_runtime_binding_mismatch",
                                 "Комплектът не принадлежи към текущия каталог на машината.")
+    elif machine is not None:
+        # KIT mode has no selected catalog lines. Its components still carry
+        # the verified legacy compatibility, which must be checked here too.
+        for component in kit.components:
+            require_compatible_part(db, machine, component.part, selected=None)

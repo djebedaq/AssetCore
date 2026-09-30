@@ -11,7 +11,7 @@ type Hotspot = Geometry & { id: number; visual_page_id: number; position: string
   is_verified: boolean; provenance: string }
 type Draft = Geometry & { id: number | null; position: string; version: number }
 type Gesture = { kind: 'draw' | 'move' | 'resize'; pointerId: number; startX: number; startY: number;
-  base: Draft }
+  base: Draft; previousDraft: Draft | null }
 
 const minimum = 0.002
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
@@ -42,6 +42,8 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   const canvas = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
   const gesture = useRef<Gesture | null>(null)
+  const touchPointers = useRef(new Set<number>())
+  const navigationGesture = useRef(false)
   const panGesture = useRef<{ pointerId: number; startX: number; startY: number;
     scrollLeft: number; scrollTop: number } | null>(null)
   const page = pages.find(item => item.visual_page_id === pageId)
@@ -88,12 +90,27 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       y: clamp((event.clientY - rect.top) / rect.height, 0, 1) }
   }
   function begin(event: PointerEvent, kind: Gesture['kind'], base: Draft) {
-    if (!editable || mode === 'pan') return
+    if (!editable || mode === 'pan' || navigationGesture.current || event.button !== 0) return
     event.preventDefault(); event.stopPropagation()
     const start = point(event)
-    gesture.current = { kind, pointerId: event.pointerId, startX: start.x, startY: start.y, base }
+    gesture.current = { kind, pointerId: event.pointerId, startX: start.x, startY: start.y, base, previousDraft: draft }
     canvas.current?.setPointerCapture(event.pointerId)
     setDraft(base)
+  }
+  function cancelGesture() {
+    const active = gesture.current
+    if (!active) return
+    if (canvas.current?.hasPointerCapture(active.pointerId)) canvas.current.releasePointerCapture(active.pointerId)
+    gesture.current = null
+    setDraft(active.previousDraft)
+  }
+  function trackPointer(event: PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== 'touch') return
+    touchPointers.current.add(event.pointerId)
+    if (touchPointers.current.size > 1) {
+      navigationGesture.current = true
+      cancelGesture()
+    }
   }
   function beginDraw(event: PointerEvent<HTMLDivElement>) {
     if (mode === 'pan' && event.pointerType === 'mouse' && event.button === 0 && viewport.current) {
@@ -130,6 +147,9 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     }
   }
   function finish(event: PointerEvent<HTMLDivElement>) {
+    touchPointers.current.delete(event.pointerId)
+    if (!touchPointers.current.size) navigationGesture.current = false
+    if (event.type === 'pointercancel') cancelGesture()
     if (panGesture.current?.pointerId === event.pointerId) {
       panGesture.current = null
       if (canvas.current?.hasPointerCapture(event.pointerId)) canvas.current.releasePointerCapture(event.pointerId)
@@ -203,7 +223,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       <div className="builder-scheme-layout">
         <div ref={viewport} className="builder-scheme-viewport">
           <div ref={canvas} className={`builder-scheme-canvas mode-${mode}`} style={{ width: `${zoom}%` }}
-            onPointerDown={beginDraw} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
+            onPointerDownCapture={trackPointer} onPointerDown={beginDraw} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
             {url ? <img src={url} draggable={false} alt={t('builder.mapping.page')} /> : <div className="builder-scheme-loading">{t('builder.previewPending')}</div>}
             {shown.map(item => <button key={item.id} type="button"
               className={`builder-hotspot ${item.is_verified ? 'verified' : 'unverified'} ${highlightPositions.includes(item.position) ? 'highlight' : ''}`}
