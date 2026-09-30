@@ -14,7 +14,7 @@ it('keeps the existing authenticated per-machine QR image and print-label path',
   render(<I18nProvider initialLocale="bg"><App /></I18nProvider>)
   await userEvent.click(await screen.findByRole('button', { name: bg['nav.qr'] }))
   await waitFor(() => expect(screen.getAllByRole('img', { name: /QR/ })).toHaveLength(2))
-  expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/qr')).map(([url]) => url).sort()).toEqual(['/api/machines/13/qr', '/api/machines/9/qr'])
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/qr')).map(([url]) => url).sort()).toEqual(['/api/machines/13/qr', '/api/machines/9/qr']))
   await waitFor(() => { for (const image of screen.getAllByRole('img', { name: /QR/ })) expect(image.getAttribute('src')).toBe('blob:test-only') })
   await userEvent.click(screen.getByRole('button', { name: bg['qr.printLabels'] }))
   expect(print).toHaveBeenCalledTimes(1)

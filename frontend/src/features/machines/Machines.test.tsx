@@ -104,7 +104,7 @@ describe('category-driven machine registry', () => {
     const actor = userEvent.setup()
     mount()
     expect((await screen.findAllByText('Изберете категория')).length).toBeGreaterThan(0)
-    expect(window.location.search).toBe('')
+    await waitFor(() => expect(window.location.search).toBe(''))
     await actor.click(screen.getByRole('button', { name: /Роботи.*0/ }))
     expect(await screen.findByText('В тази категория няма активи.')).toBeVisible()
     await actor.click(screen.getByRole('button', { name: /Стара категория.*1/ }))
