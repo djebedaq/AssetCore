@@ -8,13 +8,24 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import User
 from ..permissions import Permission, require_permission
-from . import hotspots, parts, publication, repair_kits, repository, service, visual_sources
+from . import (
+    hotspots,
+    parts,
+    publication,
+    repair_kits,
+    repository,
+    service,
+    visual_sources,
+    wizard,
+    wizard_documents,
+)
 from .schemas import (
     ArtifactUpload,
     AssemblyCreate,
     AssemblyUpdate,
     CatalogCreate,
     CatalogUpdate,
+    ClassifyDocumentPages,
     CloneRevision,
     HotspotCreate,
     HotspotUpdate,
@@ -30,12 +41,74 @@ from .schemas import (
     RepairKitUpdate,
     RevisionCreate,
     RevisionUpdate,
+    SimpleCatalogCreate,
+    SimpleGroupCreate,
     VersionPrecondition,
     VisualPageCreate,
 )
 
 router = APIRouter(prefix="/api/admin/catalog-builder", tags=["catalog-builder"])
 manager = require_permission(Permission.PARTS_MANAGE)
+
+
+@router.post("/simple/catalogs", status_code=201)
+def create_simple_catalog(data: SimpleCatalogCreate, actor: User = Depends(manager),
+                          db: Session = Depends(get_db)) -> dict:
+    return wizard.create_catalog(db, actor, data)
+
+
+@router.post("/catalogs/{catalog_id}/edit", status_code=201)
+def edit_simple_catalog(catalog_id: int, actor: User = Depends(manager),
+                        db: Session = Depends(get_db)) -> dict:
+    return wizard.edit_catalog(db, actor, catalog_id)
+
+
+@router.post("/revisions/{revision_id}/groups", status_code=201)
+def create_simple_group(revision_id: int, data: SimpleGroupCreate, actor: User = Depends(manager),
+                        db: Session = Depends(get_db)) -> dict:
+    return wizard.create_group(db, actor, revision_id, data.name)
+
+
+@router.get("/revisions/{revision_id}/documents")
+def list_wizard_documents(revision_id: int, _: User = Depends(manager),
+                          db: Session = Depends(get_db)) -> list[dict]:
+    return wizard_documents.documents(db, revision_id)
+
+
+@router.get("/revisions/{revision_id}/workflow")
+def simple_workflow_summary(revision_id: int, _: User = Depends(manager),
+                            db: Session = Depends(get_db)) -> dict:
+    return wizard.workflow(db, revision_id)
+
+
+@router.get("/artifacts/{artifact_id}/suggestions")
+def suggest_document_pages(artifact_id: int, _: User = Depends(manager),
+                           db: Session = Depends(get_db)) -> dict:
+    return wizard_documents.suggestions(db, artifact_id)
+
+
+@router.post("/artifacts/{artifact_id}/classify")
+def classify_document_pages(artifact_id: int, data: ClassifyDocumentPages, actor: User = Depends(manager),
+                            db: Session = Depends(get_db)) -> list[dict]:
+    return wizard_documents.classify(db, actor, artifact_id, data)
+
+
+@router.get("/revisions/{revision_id}/parts/template")
+def catalog_csv_template(revision_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> Response:
+    return Response(wizard.csv_template(db, revision_id), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="catalog-parts.csv"'})
+
+
+@router.post("/revisions/{revision_id}/parts/import-preview")
+def catalog_import_preview(revision_id: int, data: PartImportPreview, actor: User = Depends(manager),
+                           db: Session = Depends(get_db)) -> dict:
+    return wizard.import_preview(db, actor, revision_id, data)
+
+
+@router.post("/revisions/{revision_id}/parts/import-confirm")
+def catalog_import_confirm(revision_id: int, data: PartImportConfirm, actor: User = Depends(manager),
+                           db: Session = Depends(get_db)) -> dict:
+    return wizard.import_confirm(db, actor, revision_id, data.token, data.confirm_warnings)
 
 
 @router.get("/catalogs")
@@ -175,9 +248,9 @@ def download_artifact(artifact_id: int, _: User = Depends(manager), db: Session 
 
 
 @router.get("/artifacts/{artifact_id}/pages/{page_number}/preview")
-def preview_artifact_page(artifact_id: int, page_number: int, _: User = Depends(manager),
+def preview_artifact_page(artifact_id: int, page_number: int, thumbnail: bool = False, _: User = Depends(manager),
                           db: Session = Depends(get_db)) -> Response:
-    return Response(visual_sources.preview_page(db, artifact_id, page_number), media_type="image/png",
+    return Response(visual_sources.preview_page(db, artifact_id, page_number, thumbnail=thumbnail), media_type="image/png",
                     headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 

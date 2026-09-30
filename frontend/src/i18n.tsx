@@ -1,3 +1,4 @@
+import { wizardBg, wizardEn, wizardRu } from './features/catalogBuilder/wizardTranslations'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from './api'
@@ -11,6 +12,7 @@ import {
 } from './locale'
 
 export const bg = {
+  ...wizardBg,
   "ownerDeletion.action": "Изтрий окончателно",
   "ownerDeletion.actionFor": "Изтрий окончателно: {{identity}}",
   "ownerDeletion.title": "Окончателно изтриване",
@@ -1298,6 +1300,7 @@ export const en: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(en, {
+  ...wizardEn,
   "ownerDeletion.action": "Delete permanently",
   "ownerDeletion.actionFor": "Delete permanently: {{identity}}",
   "ownerDeletion.title": "Permanent deletion",
@@ -1956,6 +1959,7 @@ export const ru: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(ru, {
+  ...wizardRu,
   "ownerDeletion.action": "Удалить навсегда",
   "ownerDeletion.actionFor": "Удалить навсегда: {{identity}}",
   "ownerDeletion.title": "Окончательное удаление",

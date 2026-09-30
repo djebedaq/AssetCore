@@ -309,8 +309,8 @@ def _signature(payload: bytes) -> str:
     return hmac.new(settings.secret_key.encode(), payload, hashlib.sha256).hexdigest()
 
 
-def import_preview(db: Session, actor: User, assembly_id: int, data: PartImportPreview) -> dict:
-    _assembly(db, assembly_id, mutate=True)
+def read_csv(data: PartImportPreview, *, whole_catalog: bool = False) -> tuple[bytes, list[dict]]:
+    """One bounded UTF-8 parser for both import scopes."""
     if (not data.filename.lower().endswith(".csv")
             or any(char in data.filename for char in "/\\")
             or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in data.filename)
@@ -327,7 +327,12 @@ def import_preview(db: Session, actor: User, assembly_id: int, data: PartImportP
         reader = csv.DictReader(io.StringIO(decoded, newline=""), strict=True)
         if not reader.fieldnames or len(set(reader.fieldnames)) != len(reader.fieldnames):
             raise ValueError("headers")
-        if not {"position", "part_number"}.issubset(reader.fieldnames) or set(reader.fieldnames) - CSV_COLUMNS:
+        required = {"position", "part_number"}
+        columns = CSV_COLUMNS
+        if whole_catalog:
+            required |= {"assembly_code", "source_page"}
+            columns = columns | {"assembly_code", "name"}
+        if not required.issubset(reader.fieldnames) or set(reader.fieldnames) - columns:
             raise ValueError("headers")
         rows = []
         for row in reader:
@@ -338,6 +343,12 @@ def import_preview(db: Session, actor: User, assembly_id: int, data: PartImportP
             raise ValueError("empty")
     except (binascii.Error, UnicodeError, csv.Error, ValueError) as exc:
         raise fail("catalog_part_import_invalid_file", 422) from exc
+    return content, rows
+
+
+def import_preview(db: Session, actor: User, assembly_id: int, data: PartImportPreview) -> dict:
+    _assembly(db, assembly_id, mutate=True)
+    content, rows = read_csv(data)
     result = _preview_rows(db, assembly_id, rows)
     source_digest = hashlib.sha256(content).hexdigest()
     payload = json.dumps({"assembly_id": assembly_id, "actor_id": actor.id, "created": int(time.time()),
@@ -371,22 +382,7 @@ def import_confirm(db: Session, actor: User, assembly_id: int, token: str,
         raise fail("catalog_part_import_warning_confirmation", 422)
     created = []
     try:
-        for preview_row in result["rows"]:
-            values = preview_row["normalized"]
-            item = CatalogRevisionPart(assembly_id=assembly.id, created_by_id=actor.id, **values)
-            db.add(item)
-            db.flush()
-            for page_id in preview_row["resolved_visual_page_ids"]:
-                db.add(CatalogRevisionPartPageMap(part_id=item.id, visual_page_id=page_id,
-                                                   created_by_id=actor.id))
-            add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_CREATED",
-                          _meta(catalog, revision, assembly, position=item.position,
-                                part_number=item.part_number, source="CSV_IMPORT"))
-            if preview_row["resolved_visual_page_ids"]:
-                add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_SOURCE_MAPPED",
-                              _meta(catalog, revision, assembly,
-                                    visual_page_ids=preview_row["resolved_visual_page_ids"], source="CSV_IMPORT"))
-            created.append(item.id)
+        created = insert_preview_rows(db, actor, assembly, revision, catalog, result["rows"])
         db.flush()
     except IntegrityError as exc:
         db.rollback()
@@ -396,3 +392,24 @@ def import_confirm(db: Session, actor: User, assembly_id: int, token: str,
                         source_digest=claim["source_digest"]))
     db.commit()
     return {"created_count": len(created), "part_ids": created}
+
+
+def insert_preview_rows(db: Session, actor: User, assembly, revision, catalog, rows: list[dict]) -> list[int]:
+    created = []
+    for preview_row in rows:
+        values = preview_row["normalized"]
+        item = CatalogRevisionPart(assembly_id=assembly.id, created_by_id=actor.id, **values)
+        db.add(item)
+        db.flush()
+        for page_id in preview_row["resolved_visual_page_ids"]:
+            db.add(CatalogRevisionPartPageMap(part_id=item.id, visual_page_id=page_id,
+                                               created_by_id=actor.id))
+        add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_CREATED",
+                      _meta(catalog, revision, assembly, position=item.position,
+                            part_number=item.part_number, source="CSV_IMPORT"))
+        if preview_row["resolved_visual_page_ids"]:
+            add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_SOURCE_MAPPED",
+                          _meta(catalog, revision, assembly,
+                                visual_page_ids=preview_row["resolved_visual_page_ids"], source="CSV_IMPORT"))
+        created.append(item.id)
+    return created

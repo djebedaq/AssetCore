@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n'
 import { setSessionUser } from '../../permissions'
 import type { UserSession } from '../../types'
-import CatalogBuilder from './CatalogBuilder'
+import CatalogBuilder from './AdvancedCatalogBuilder'
 
 const user = {
   id: 100, email: 'qa-builder@example.invalid', full_name: 'QA Builder', role: 'administrator',

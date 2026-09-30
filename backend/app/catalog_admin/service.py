@@ -49,7 +49,7 @@ def catalog_dict(db: Session, item: CatalogDefinition) -> dict:
     return next(row for row in repository.catalogs(db) if row["id"] == item.id)
 
 
-def create_catalog(db: Session, actor: User, data: CatalogCreate) -> dict:
+def create_catalog(db: Session, actor: User, data: CatalogCreate, *, initial_draft: bool = False) -> dict:
     category_for_builder(db, data.asset_category_id)
     item = CatalogDefinition(**data.model_dump(), created_by_id=actor.id)
     db.add(item)
@@ -60,6 +60,13 @@ def create_catalog(db: Session, actor: User, data: CatalogCreate) -> dict:
         raise fail("catalog_code_duplicate") from exc
     add_audit_log(db, actor, "catalog_definition", item.id, "CATALOG_CREATED",
                   {"code": item.code, "asset_category_id": item.asset_category_id})
+    if initial_draft:
+        revision = CatalogRevision(catalog_id=item.id, revision_code="REV-1",
+                                   status="DRAFT", created_by_id=actor.id)
+        db.add(revision)
+        db.flush()
+        add_audit_log(db, actor, "catalog_revision", revision.id, "CATALOG_REVISION_CREATED",
+                      {"catalog_code": item.code, "revision_code": revision.revision_code})
     db.commit()
     return catalog_dict(db, item)
 
@@ -165,6 +172,7 @@ def eligible_assets(db: Session, catalog_id: int, search: str | None = None) -> 
     if search:
         term = f"%{search.strip()}%"
         query = query.where(or_(Machine.inventory_number.ilike(term), Machine.name.ilike(term),
+                                Machine.serial_number.ilike(term),
                                 Machine.brand.ilike(term), Machine.model.ilike(term)))
     return [repository.asset_dict(machine) for machine in db.scalars(
         query.order_by(Machine.inventory_number).limit(100)).all()]

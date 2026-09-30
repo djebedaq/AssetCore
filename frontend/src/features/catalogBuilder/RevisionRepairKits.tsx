@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api'
 import { Modal } from '../../industrialUi'
 import { useI18n, type TranslationKey } from '../../i18n'
 import RevisionHotspotEditor from './RevisionHotspotEditor'
+import useDraftGuard from './useDraftGuard'
 
 type Part = { id: number; position: string; part_number: string; name_bg: string | null; name_en: string | null;
   name_ru: string | null; description: string | null; validation_status: 'READY' | 'INCOMPLETE' }
@@ -29,7 +30,7 @@ const errorKeys: Record<string, TranslationKey> = {
   catalog_inactive: 'builder.error.inactive',
 }
 
-export default function RevisionRepairKits({ assemblyId, editable }: { assemblyId: number; editable: boolean }) {
+export default function RevisionRepairKits({ assemblyId, editable, onDirtyChange }: { assemblyId: number; editable: boolean; onDirtyChange?: (dirty: boolean) => void }) {
   const { locale, t } = useI18n()
   const [kits, setKits] = useState<Kit[]>([])
   const [parts, setParts] = useState<Part[]>([])
@@ -44,6 +45,7 @@ export default function RevisionRepairKits({ assemblyId, editable }: { assemblyI
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  useDraftGuard(!!editing || !!addPartId || !!note || busy, onDirtyChange)
   const selected = kits.find(item => item.id === selectedId)
   const name = (item: { name_bg: string | null; name_en: string | null; name_ru: string | null; description?: string | null }) =>
     item[`name_${locale}`] || item.name_bg || item.name_en || item.name_ru || item.description || ''
