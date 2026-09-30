@@ -8,13 +8,14 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import User
 from ..permissions import Permission, require_permission
-from . import hotspots, parts, repair_kits, repository, service, visual_sources
+from . import hotspots, parts, publication, repair_kits, repository, service, visual_sources
 from .schemas import (
     ArtifactUpload,
     AssemblyCreate,
     AssemblyUpdate,
     CatalogCreate,
     CatalogUpdate,
+    CloneRevision,
     HotspotCreate,
     HotspotUpdate,
     PartCreate,
@@ -22,6 +23,7 @@ from .schemas import (
     PartImportPreview,
     PartPageMapCreate,
     PartUpdate,
+    PublishRevision,
     RepairKitComponentCreate,
     RepairKitComponentUpdate,
     RepairKitCreate,
@@ -72,6 +74,25 @@ def create_revision(catalog_id: int, data: RevisionCreate, actor: User = Depends
 def update_revision(revision_id: int, data: RevisionUpdate, actor: User = Depends(manager),
                     db: Session = Depends(get_db)) -> dict:
     return service.update_revision(db, actor, revision_id, data)
+
+
+@router.get("/revisions/{revision_id}/publication-readiness")
+def publication_readiness(revision_id: int, _: User = Depends(manager),
+                          db: Session = Depends(get_db)) -> dict:
+    return publication.readiness(db, revision_id)
+
+
+@router.post("/revisions/{revision_id}/publish")
+def publish_revision(revision_id: int, data: PublishRevision,
+                     actor: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    return publication.publish(db, actor, revision_id, data.expected_publication_digest,
+                               data.expected_current_published_revision_id, data.confirmed)
+
+
+@router.post("/revisions/{revision_id}/clone", status_code=201)
+def clone_revision(revision_id: int, data: CloneRevision,
+                   actor: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    return publication.clone(db, actor, revision_id, data.revision_code, data.change_note)
 
 
 @router.get("/catalogs/{catalog_id}/assets")

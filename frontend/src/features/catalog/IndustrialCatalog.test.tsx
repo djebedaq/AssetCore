@@ -92,6 +92,7 @@ function diagram(id = 991): CatalogDiagram {
 }
 
 function setupFetch(options: {
+  builder?: boolean
   falchDiagrams?: CatalogDiagram[]
   falchParts?: CatalogPart[]
   hotspots?: PositionHotspot[]
@@ -101,6 +102,7 @@ function setupFetch(options: {
   const falchParts = options.falchParts || [falchPart]
   const hotspots = options.hotspots || []
   const repairKits = options.repairKits || []
+  const datasetVersion = options.builder ? 'CATALOG_BUILDER_R11' : 'PARTS_CATALOG_V2'
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
     if (path.endsWith('/api/machines')) return jsonResponse([
@@ -108,9 +110,12 @@ function setupFetch(options: {
       { id: HYDWIN_MACHINE_ID, inventory_number: '20', name: 'Test fixture HYDWIN', brand: 'HYDWIN/Fussen', model: 'Test fixture', pressure_bar: 500, status: 'READY', created_at: '2026-01-01T00:00:00', updated_at: '2026-01-01T00:00:00' },
     ])
     if (path.endsWith(`/api/catalog/v2/machines/${FALCH_MACHINE_ID}`)) return jsonResponse({
-      dataset_version: 'PARTS_CATALOG_V2', supported: true, message: '', machine_id: FALCH_MACHINE_ID,
+      dataset_version: datasetVersion, supported: true, message: '', machine_id: FALCH_MACHINE_ID,
       machine_number: '9', brand: 'Falch', model: 'Test fixture', family: 'FALCH_500',
-      assemblies: [{ source_id: FALCH_SOURCE_ID, family: 'FALCH_500', assembly: 'TEST_ASSEMBLY', title: 'Test-only Falch assembly', part_count: falchParts.length, diagram_count: falchDiagrams.length, verified_hotspot_count: hotspots.length, diagrams: falchDiagrams }],
+      assemblies: [{ source_id: FALCH_SOURCE_ID, family: 'FALCH_500', assembly: 'TEST_ASSEMBLY', title: 'Test-only Falch assembly',
+        name_bg: options.builder ? 'Тестов възел' : null, name_en: options.builder ? 'Test assembly' : null,
+        name_ru: options.builder ? 'Тестовый узел' : null,
+        part_count: falchParts.length, diagram_count: falchDiagrams.length, verified_hotspot_count: hotspots.length, diagrams: falchDiagrams }],
     })
     if (path.endsWith(`/api/catalog/v2/machines/${HYDWIN_MACHINE_ID}`)) return jsonResponse({
       dataset_version: 'PARTS_CATALOG_V2', supported: true, message: '', machine_id: HYDWIN_MACHINE_ID,
@@ -118,7 +123,7 @@ function setupFetch(options: {
       assemblies: [{ source_id: HYDWIN_SOURCE_ID, family: 'HYDWIN_FUSSEN_500', assembly: 'TEST_ASSEMBLY', title: 'Test-only HYDWIN assembly', part_count: 1, diagram_count: 0, verified_hotspot_count: 0, diagrams: [] }],
     })
     if (path.includes(`/api/catalog/v2/assemblies/${FALCH_SOURCE_ID}?machine_id=${FALCH_MACHINE_ID}`)) return jsonResponse({
-      dataset_version: 'PARTS_CATALOG_V2', machine_id: FALCH_MACHINE_ID, machine_number: '9', family: 'FALCH_500',
+      dataset_version: datasetVersion, machine_id: FALCH_MACHINE_ID, machine_number: '9', family: 'FALCH_500',
       source_id: FALCH_SOURCE_ID, assembly: 'TEST_ASSEMBLY', title: 'Test-only Falch assembly', diagrams: falchDiagrams, parts: falchParts,
     })
     if (path.includes(`/api/catalog/v2/assemblies/${HYDWIN_SOURCE_ID}?machine_id=${HYDWIN_MACHINE_ID}`)) return jsonResponse({
@@ -184,6 +189,29 @@ describe('machine-bound catalog request cart', () => {
       static revokeObjectURL = vi.fn()
     }
     vi.stubGlobal('URL', MockURL)
+  })
+
+  it('uses a published Builder catalog through the normal machine catalog UI', async () => {
+    const builderPart = part({ id: 1901, source_record_key: 'CBP1901', source_version: 'CATALOG_BUILDER_R11',
+      position: 'QA-BUILDER', part_number: 'QA-BUILDER-1', description: 'Builder test part',
+      description_en: 'Builder test part', description_bg: 'Тестова част от Builder',
+      translation_version: 'BUILDER', translation_qa_status: 'BUILDER_SOURCE' })
+    setupFetch({ builder: true, falchParts: [builderPart] })
+    const user = userEvent.setup()
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+    expect(await screen.findByRole('option', { name: /Тестов възел/ })).toBeInTheDocument()
+    await user.click(await screen.findByText(catalogDisplayName(builderPart)))
+    await user.click(await screen.findByRole('button', { name: 'Добави към заявка' }))
+    expect(screen.getByText('Избрани части: 1')).toBeInTheDocument()
+  })
+
+  it('keeps published Builder diagram QA editing in the revision workspace', async () => {
+    setSessionUser({ role: 'administrator', permissions: ['assets.view', 'parts.view', 'parts.manage',
+      'requests.create'] } as UserSession)
+    setupFetch({ builder: true, falchDiagrams: [diagram()] })
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+    await screen.findByText('Test-only diagram')
+    expect(screen.queryByRole('button', { name: 'QA на областите' })).not.toBeInTheDocument()
   })
 
   it('preserves machine, quantities and cart on cancel, then clears all request state on confirmation', async () => {

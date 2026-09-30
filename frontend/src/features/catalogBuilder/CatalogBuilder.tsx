@@ -16,7 +16,12 @@ type Catalog = {
   latest_revision: RevisionSummary | null; published_revision: RevisionSummary | null
 }
 type Asset = { id: number; inventory_number: string; name: string; brand: string; model: string | null }
-type Revision = { id: number; revision_code: string; status: 'DRAFT' | 'PUBLISHED' | 'RETIRED'; change_note: string | null; created_at: string }
+type Revision = { id: number; revision_code: string; status: 'DRAFT' | 'PUBLISHED' | 'RETIRED'; change_note: string | null; created_at: string; published_at: string | null }
+type Readiness = { ready: boolean; publication_digest: string; current_published_revision_id: number | null;
+  errors: Array<{ code: string }>; warnings: Array<{ code: string; missing_positions?: number }>;
+  summary: { assembly_count: number; artifact_count: number; part_count: number; mapped_part_count: number;
+    exploded_page_count: number; spare_list_page_count: number; hotspot_count: number;
+    verified_hotspot_count: number; repair_kit_count: number; repair_kit_component_count: number } }
 type Form = { code: string; asset_category_id: string; name_bg: string; name_en: string; name_ru: string; description: string; manufacturer: string; model_reference: string }
 
 const emptyForm: Form = { code: '', asset_category_id: '', name_bg: '', name_en: '', name_ru: '', description: '', manufacturer: '', model_reference: '' }
@@ -33,6 +38,25 @@ const errorKeys: Record<string, TranslationKey> = {
   catalog_asset_category_mismatch: 'builder.error.assetCategory', catalog_asset_already_bound: 'builder.error.assetBound',
   catalog_asset_inactive: 'builder.error.assetInactive', catalog_asset_binding_protected: 'builder.error.assetProtected',
   category_capability_in_use: 'builder.error.capabilityInUse',
+  catalog_publication_stale: 'builder.publication.stale',
+  catalog_publication_not_ready: 'builder.publication.notReady',
+  catalog_publication_conflict: 'builder.publication.conflict',
+  catalog_clone_invalid: 'builder.publication.cloneInvalid',
+}
+
+const readinessKeys: Record<string, TranslationKey> = {
+  catalog_publication_no_assemblies: 'builder.publication.noAssemblies',
+  catalog_publication_source_invalid: 'builder.publication.sourceInvalid',
+  catalog_publication_visual_page_invalid: 'builder.publication.pageInvalid',
+  catalog_publication_part_mapping_invalid: 'builder.publication.mappingInvalid',
+  catalog_publication_part_incomplete: 'builder.publication.partIncomplete',
+  catalog_publication_hotspot_invalid: 'builder.publication.hotspotInvalid',
+  catalog_publication_hotspot_unverified: 'builder.publication.hotspotUnverified',
+  catalog_publication_hotspot_coverage: 'builder.publication.hotspotCoverage',
+  catalog_publication_kit_incomplete: 'builder.publication.kitIncomplete',
+  catalog_inactive: 'builder.error.inactive',
+  catalog_category_not_supported: 'builder.error.capability',
+  catalog_revision_not_draft: 'builder.error.revisionImmutable',
 }
 
 export default function CatalogBuilder() {
@@ -52,6 +76,9 @@ export default function CatalogBuilder() {
   const [revisionEdit, setRevisionEdit] = useState<Revision | 'new' | null>(null)
   const [revisionCode, setRevisionCode] = useState('')
   const [note, setNote] = useState('')
+  const [cloneSource, setCloneSource] = useState<Revision | null>(null)
+  const [readiness, setReadiness] = useState<Readiness | null>(null)
+  const [readinessLoading, setReadinessLoading] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const selected = catalogs.find(item => item.id === selectedId)
@@ -84,6 +111,16 @@ export default function CatalogBuilder() {
 
   useEffect(() => { if (hasPermission('parts.manage')) void load() }, [])
   useEffect(() => { if (selectedId !== null) void loadWorkspace(selectedId) }, [selectedId])
+  useEffect(() => {
+    if (openRevisionId === null || revisionTab !== 'overview') { setReadiness(null); return }
+    let active = true
+    setReadinessLoading(true)
+    void api<Readiness>(`/admin/catalog-builder/revisions/${openRevisionId}/publication-readiness`)
+      .then(result => { if (active) setReadiness(result) })
+      .catch(caught => { if (active) setError(message(caught)) })
+      .finally(() => { if (active) setReadinessLoading(false) })
+    return () => { active = false }
+  }, [openRevisionId, revisionTab])
   useEffect(() => {
     if (selectedId === null || tab !== 'assets') return
     let active = true
@@ -172,6 +209,48 @@ export default function CatalogBuilder() {
     finally { setBusy(false) }
   }
 
+  async function refreshReadiness() {
+    if (!openRevisionId) return
+    setReadinessLoading(true)
+    try { setReadiness(await api<Readiness>(`/admin/catalog-builder/revisions/${openRevisionId}/publication-readiness`)) }
+    catch (caught) { setError(message(caught)) }
+    finally { setReadinessLoading(false) }
+  }
+
+  async function publishRevision() {
+    if (!openRevision || !readiness?.ready || busy ||
+        !window.confirm(t('builder.publication.confirm', { code: openRevision.revision_code }))) return
+    setBusy(true)
+    try {
+      await api(`/admin/catalog-builder/revisions/${openRevision.id}/publish`, {
+        method: 'POST', body: JSON.stringify({ expected_publication_digest: readiness.publication_digest,
+          expected_current_published_revision_id: readiness.current_published_revision_id, confirmed: true }),
+      })
+      setReadiness(null)
+      await Promise.all([load(), loadWorkspace(selected!.id)])
+    } catch (caught) {
+      await refreshReadiness()
+      if (selected) await loadWorkspace(selected.id)
+      setError(message(caught))
+    } finally { setBusy(false) }
+  }
+
+  async function cloneRevision(event: FormEvent) {
+    event.preventDefault()
+    if (!cloneSource || !selected || busy) return
+    setBusy(true)
+    try {
+      const created = await api<Revision>(`/admin/catalog-builder/revisions/${cloneSource.id}/clone`, {
+        method: 'POST', body: JSON.stringify({ revision_code: revisionCode, change_note: note || null }),
+      })
+      setCloneSource(null)
+      await Promise.all([load(), loadWorkspace(selected.id)])
+      setOpenRevisionId(created.id)
+      setRevisionTab('overview')
+    } catch (caught) { setError(message(caught)) }
+    finally { setBusy(false) }
+  }
+
   const label = (item: { name_bg: string; name_en: string | null; name_ru: string | null }) => item[`name_${locale}`] || item.name_bg
   return <div className="builder-page">
     {error && <p className="error" role="alert">{error}</p>}
@@ -200,6 +279,7 @@ export default function CatalogBuilder() {
         <p><b>{t('builder.manufacturer')}:</b> {selected.manufacturer || t('common.noValue')}</p>
         <p><b>{t('builder.modelReference')}:</b> {selected.model_reference || t('common.noValue')}</p>
         <p><b>{t('builder.description')}:</b> {selected.description || t('common.noValue')}</p>
+        <p><b>{t('builder.publication.current')}:</b> {selected.published_revision?.revision_code || t('common.noValue')}</p>
         <p>{t('builder.nextSteps')}</p>
       </div>}
       {tab === 'assets' && <div className="builder-workspace">
@@ -215,11 +295,28 @@ export default function CatalogBuilder() {
         {!revisions.length && <p>{t('builder.noRevision')}</p>}
         {revisions.map(revision => <div className="builder-row" key={revision.id}><span><b>{revision.revision_code}</b> · {t(`builder.status.${revision.status}`)} · {date(revision.created_at)}<small>{revision.change_note || t('common.noValue')}</small></span>
           <div className="actions"><button className="secondary compact" onClick={() => { setOpenRevisionId(revision.id); setRevisionTab('overview') }}>{t('builder.openRevision')}</button>
-          {revision.status === 'DRAFT' && selected.is_active && <button className="secondary compact" onClick={() => { setRevisionEdit(revision); setRevisionCode(revision.revision_code); setNote(revision.change_note || '') }}>{t('common.edit')}</button>}</div></div>)}
+          {revision.status === 'DRAFT' && selected.is_active && <button className="secondary compact" onClick={() => { setRevisionEdit(revision); setRevisionCode(revision.revision_code); setNote(revision.change_note || '') }}>{t('common.edit')}</button>}
+          {revision.status === 'PUBLISHED' && <button className="secondary compact" onClick={() => { setCloneSource(revision); setRevisionCode(''); setNote('') }}>{t('builder.publication.clone')}</button>}</div></div>)}
         {openRevision && <section className="panel"><div className="panel-title"><h4>{t('builder.revisionWorkspace')} · {openRevision.revision_code}</h4><button className="secondary compact" onClick={() => setOpenRevisionId(null)}>{t('common.close')}</button></div>
           <div className="actions builder-tabs"><button className={revisionTab === 'overview' ? 'primary compact' : 'secondary compact'} onClick={() => setRevisionTab('overview')}>{t('builder.overview')}</button>
             <button className={revisionTab === 'sources' ? 'primary compact' : 'secondary compact'} onClick={() => setRevisionTab('sources')}>{t('builder.assembliesSources')}</button></div>
-          {revisionTab === 'overview' ? <p>{openRevision.change_note || t('common.noValue')}</p> :
+          {revisionTab === 'overview' ? <div>
+            <p>{openRevision.change_note || t('common.noValue')}</p>
+            {openRevision.published_at && <p>{t('builder.publication.publishedAt')}: {date(openRevision.published_at)}</p>}
+            {readinessLoading && <p>{t('builder.publication.loading')}</p>}
+            {readiness && <div className="builder-publication-readiness">
+              <p><b>{t(readiness.ready ? 'builder.publication.ready' : 'builder.publication.notReady')}</b> · SHA-256 {readiness.publication_digest.slice(0, 12)}</p>
+              <p>{t('builder.publication.summary', { assemblies: readiness.summary.assembly_count,
+                parts: readiness.summary.part_count, mapped: readiness.summary.mapped_part_count,
+                schemes: readiness.summary.exploded_page_count, lists: readiness.summary.spare_list_page_count,
+                hotspots: readiness.summary.verified_hotspot_count, kits: readiness.summary.repair_kit_count })}</p>
+              {readiness.errors.map((item, index) => <p className="error" key={`error-${index}`}>{t(readinessKeys[item.code] || 'builder.error.generic')}</p>)}
+              {readiness.warnings.map((item, index) => <p className="muted" key={`warning-${index}`}>{t(readinessKeys[item.code] || 'builder.error.generic', { count: item.missing_positions || 0 })}</p>)}
+            </div>}
+            <div className="actions"><button className="secondary compact" disabled={readinessLoading} onClick={() => void refreshReadiness()}>{t('builder.publication.refresh')}</button>
+              {openRevision.status === 'DRAFT' && <button className="primary compact" disabled={!readiness?.ready || busy || readinessLoading} onClick={() => void publishRevision()}>{t('builder.publication.publish')}</button>}
+            </div>
+          </div> :
             <RevisionVisualSources revisionId={openRevision.id} editable={openRevision.status === 'DRAFT' && selected.is_active} />}</section>}
       </div>}
     </section>}
@@ -236,6 +333,11 @@ export default function CatalogBuilder() {
       <label>{t('builder.revisionCode')}<input required readOnly={revisionEdit !== 'new'} value={revisionCode} onChange={event => setRevisionCode(event.target.value)} /></label>
       <label className="wide">{t('builder.changeNote')}<textarea value={note} onChange={event => setNote(event.target.value)} /></label>
       <div className="actions wide"><button type="button" className="secondary" onClick={() => setRevisionEdit(null)}>{t('common.cancel')}</button><button className="primary" disabled={busy}>{t('common.save')}</button></div>
+    </form></Modal>}
+    {cloneSource && <Modal title={t('builder.publication.clone')} onClose={() => setCloneSource(null)}><form className="form-grid" onSubmit={event => void cloneRevision(event)}>
+      <label>{t('builder.revisionCode')}<input required value={revisionCode} onChange={event => setRevisionCode(event.target.value)} /></label>
+      <label className="wide">{t('builder.changeNote')}<textarea value={note} onChange={event => setNote(event.target.value)} /></label>
+      <div className="actions wide"><button type="button" className="secondary" onClick={() => setCloneSource(null)}>{t('common.cancel')}</button><button className="primary" disabled={busy}>{t('builder.publication.clone')}</button></div>
     </form></Modal>}
   </div>
 }

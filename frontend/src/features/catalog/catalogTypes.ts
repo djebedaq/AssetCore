@@ -30,7 +30,7 @@ export type CatalogPart = {
   source_anomaly_codes: string[]
   is_verified: boolean
   translation_version: string
-  translation_qa_status: 'VERIFIED' | 'NEEDS_REVIEW'
+  translation_qa_status: 'VERIFIED' | 'NEEDS_REVIEW' | 'BUILDER_SOURCE'
 }
 
 export type CatalogDiagram = {
@@ -50,6 +50,9 @@ export type CatalogAssembly = {
   family: string
   assembly: string
   title: string
+  name_bg?: string | null
+  name_en?: string | null
+  name_ru?: string | null
   document_reference?: string | null
   part_count: number
   diagram_count: number
@@ -77,11 +80,14 @@ export type AssemblyDetails = {
   source_id: string
   assembly: string
   title: string
+  name_bg?: string | null
+  name_en?: string | null
+  name_ru?: string | null
   diagrams: CatalogDiagram[]
   parts: CatalogPart[]
 }
 
-export type PositionProvenance = 'AUTO_MATCHED' | 'MANUALLY_CONFIRMED'
+export type PositionProvenance = 'AUTO_MATCHED' | 'MANUALLY_CONFIRMED' | 'MANUAL_VERIFIED' | 'INHERITED_VERIFICATION'
 
 export type PositionHotspot = {
   id: number
@@ -132,21 +138,24 @@ export type RepairKitComponent = {
   source_document: string
   source_page: number
   translation_version: string
-  translation_qa_status: 'VERIFIED' | 'NEEDS_REVIEW'
+  translation_qa_status: 'VERIFIED' | 'NEEDS_REVIEW' | 'BUILDER_SOURCE'
 }
 
 export type CatalogRepairKit = {
   id: number
   code: string
   name: string
+  name_bg?: string | null
+  name_en?: string | null
+  name_ru?: string | null
   family: string
   source_id: string
   brand: string
   model: string
   assembly: string
-  source_document: string
-  source_page: number
-  source_document_sha256: string
+  source_document: string | null
+  source_page: number | null
+  source_document_sha256: string | null
   source_version: string
   is_approved: boolean
   is_active: boolean

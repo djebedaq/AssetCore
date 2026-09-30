@@ -411,9 +411,9 @@ class RepairCaseOut(BaseModel):
 
 class PartRequestLineCreate(BaseModel):
     catalog_part_id: int | None = None
-    position: str | None = Field(default=None, max_length=40)
+    position: str | None = Field(default=None, max_length=80)
     part_number: str | None = Field(default=None, max_length=120)
-    description: str = Field(min_length=1, max_length=500)
+    description: str = Field(min_length=1, max_length=4000)
     quantity: int = Field(ge=1)
     unit: str | None = Field(default=None, max_length=40)
     reason: str | None = None
@@ -593,17 +593,17 @@ class CatalogPartCreate(BaseModel):
     brand: str = Field(min_length=1, max_length=120)
     model: str | None = Field(default=None, max_length=120)
     manufacturer: str | None = Field(default=None, max_length=255)
-    category: str | None = Field(default=None, max_length=120)
+    category: str | None = Field(default=None, max_length=255)
     name_bg: str | None = Field(default=None, max_length=255)
     name_en: str | None = Field(default=None, max_length=255)
     name_ru: str | None = Field(default=None, max_length=255)
     original_name: str | None = Field(default=None, max_length=500)
     assembly: str | None = Field(default=None, max_length=255)
-    position: str | None = Field(default=None, max_length=40)
+    position: str | None = Field(default=None, max_length=80)
     part_number: str = Field(min_length=1, max_length=120)
-    description: str = Field(min_length=1, max_length=500)
+    description: str = Field(min_length=1, max_length=4000)
     quantity: int | None = Field(default=None, ge=0)
-    unit: str | None = Field(default=None, max_length=40)
+    unit: str | None = Field(default=None, max_length=80)
     technical_specification: str | None = None
     compatible_models: str | None = None
     compatible_machine_numbers: list[str] | None = None

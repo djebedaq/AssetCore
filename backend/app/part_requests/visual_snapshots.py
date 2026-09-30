@@ -316,6 +316,8 @@ def _occurrences(db: Session, part: PartCatalog) -> list[dict]:
         for hotspot in positions:
             diagram = hotspot.diagram
             if (
+                part.builder_revision_id is None
+                and
                 part.source_document_sha256
                 and diagram.source_pdf_sha256 != part.source_document_sha256
             ):

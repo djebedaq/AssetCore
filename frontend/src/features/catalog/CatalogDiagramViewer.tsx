@@ -37,6 +37,7 @@ type PointerTrace = {
 
 type Props = {
   machineId: number
+  editableQa?: boolean
   diagram: CatalogDiagram
   hotspots: PositionHotspot[]
   selectedPosition: string | null
@@ -57,6 +58,7 @@ function clamp(value: number, minimum: number, maximum: number) {
 
 export function CatalogDiagramViewer({
   machineId,
+  editableQa = true,
   diagram,
   hotspots,
   selectedPosition,
@@ -82,10 +84,11 @@ export function CatalogDiagramViewer({
   const pinchDistance = useRef<number | null>(null)
   const viewport = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLDivElement>(null)
-  const canManage = hasPermission('parts.manage')
+  const canManage = editableQa && hasPermission('parts.manage')
   const visibleHotspots = qaMode ? qaHotspots : hotspots
 
   useEffect(() => setQaHotspots(hotspots), [hotspots])
+  useEffect(() => { if (!editableQa) { setQaMode(false); setEditingId(null) } }, [editableQa])
 
   useEffect(() => {
     let active = true

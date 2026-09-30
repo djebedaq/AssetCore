@@ -13,18 +13,19 @@ from ..models import (
 from .sources import CATALOG_VERSION
 
 
-def active_parts_statement():
+def active_parts_statement(builder_revision_id: int | None = None):
     return select(PartCatalog).where(
         PartCatalog.is_active.is_(True),
         PartCatalog.is_verified.is_(True),
-        PartCatalog.source_version == CATALOG_VERSION,
+        (PartCatalog.builder_revision_id == builder_revision_id) if builder_revision_id is not None
+        else (PartCatalog.source_version == CATALOG_VERSION),
     )
 
 
-def parts_for_source(db: Session, source_id: str) -> list[PartCatalog]:
+def parts_for_source(db: Session, source_id: str, *, builder_revision_id: int | None = None) -> list[PartCatalog]:
     return list(
         db.scalars(
-            active_parts_statement()
+            active_parts_statement(builder_revision_id)
             .where(PartCatalog.source_id == source_id)
             .order_by(
                 PartCatalog.source_page,
@@ -43,8 +44,9 @@ def search_parts(
     source_id: str | None = None,
     translated_source_record_keys: set[str] | None = None,
     limit: int = 100,
+    builder_revision_id: int | None = None,
 ) -> list[PartCatalog]:
-    statement = active_parts_statement().where(PartCatalog.family == family)
+    statement = active_parts_statement(builder_revision_id).where(PartCatalog.family == family)
     if source_id:
         statement = statement.where(PartCatalog.source_id == source_id)
     if query.strip():
@@ -57,6 +59,11 @@ def search_parts(
             PartCatalog.description_de.ilike(term),
             PartCatalog.description_en.ilike(term),
             PartCatalog.description_2.ilike(term),
+            PartCatalog.name_bg.ilike(term),
+            PartCatalog.name_en.ilike(term),
+            PartCatalog.name_ru.ilike(term),
+            PartCatalog.supplier.ilike(term),
+            PartCatalog.supplier_code.ilike(term),
             PartCatalog.assembly.ilike(term),
             PartCatalog.model.ilike(term),
             PartCatalog.repair_kit_code.ilike(term),
@@ -118,14 +125,16 @@ def hotspots_for_diagram(
 
 
 def repair_kits(
-    db: Session, *, family: str, source_id: str | None = None
+    db: Session, *, family: str, source_id: str | None = None,
+    builder_revision_id: int | None = None,
 ) -> list[RepairKit]:
     statement = (
         select(RepairKit)
         .options(selectinload(RepairKit.components).joinedload(RepairKitComponent.part))
         .where(
             RepairKit.family == family,
-            RepairKit.source_version == CATALOG_VERSION,
+            (RepairKit.builder_revision_id == builder_revision_id) if builder_revision_id is not None
+            else (RepairKit.source_version == CATALOG_VERSION),
             RepairKit.is_active.is_(True),
             RepairKit.is_approved.is_(True),
         )

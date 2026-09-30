@@ -169,7 +169,7 @@ def _upsert_parts(
     db: Session, verifier: User, counters: dict[str, int]
 ) -> dict[str, PartCatalog]:
     for part in db.scalars(select(PartCatalog).where(PartCatalog.is_active.is_(True))):
-        if part.source_version != CATALOG_VERSION:
+        if part.source_version != CATALOG_VERSION and part.builder_revision_id is None:
             part.is_active = False
             counters["archived_parts"] += 1
 
@@ -401,7 +401,9 @@ def _upsert_repair_kits(
     parts: dict[str, PartCatalog],
     counters: dict[str, int],
 ) -> None:
-    for kit in db.scalars(select(RepairKit).where(RepairKit.is_active.is_(True))):
+    for kit in db.scalars(select(RepairKit).where(
+            RepairKit.is_active.is_(True), RepairKit.builder_revision_id.is_(None),
+            RepairKit.builder_kit_id.is_(None))):
         if kit.source_version != CATALOG_VERSION:
             kit.is_active = False
             kit.is_approved = False
@@ -420,7 +422,9 @@ def _upsert_repair_kits(
         if len(source_ids) != 1 or len(families) != 1 or len(assemblies) != 1:
             raise CatalogImportError(f"Cross-source repair kit is not allowed: {code}")
         source = next(item for item in dataset_sources() if item["source_id"] in source_ids)
-        kit = db.scalar(select(RepairKit).where(RepairKit.code == code))
+        kit = db.scalar(select(RepairKit).where(
+            RepairKit.code == code, RepairKit.builder_revision_id.is_(None),
+            RepairKit.builder_kit_id.is_(None)))
         if kit is None:
             kit = RepairKit(
                 code=code,

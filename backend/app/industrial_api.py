@@ -31,6 +31,11 @@ from .attachment_io import _attachment_dict as _attachment_dict
 # Compatibility imports retain the historical Python entry points.
 from .attachment_io import _decode_file as _decode_file
 from .audit import add_audit_log
+from .catalog.runtime_context import (
+    published_binding,
+    require_compatible_kit,
+    require_compatible_part,
+)
 from .database import get_db
 from .document_generation import (
     ConfirmedTemplateUnavailableError,
@@ -1014,6 +1019,7 @@ def add_repair_part(
                 "Категорията не поддържа отчет на части от структурирания каталог.",
                 machine_id=repair.machine_id,
             )
+        selected_catalog = published_binding(db, repair.machine, lock=True)
         catalog_part = db.get(PartCatalog, payload.catalog_part_id)
         if catalog_part is None:
             raise HTTPException(404, "Частта от каталога не е намерена.")
@@ -1023,17 +1029,8 @@ def add_repair_part(
                 "Непотвърдена каталожна част не може да бъде отчетена като използвана.",
                 part_number=catalog_part.part_number,
             )
-        compatible_numbers = {
-            str(value) for value in (catalog_part.compatible_machine_numbers or [])
-        }
-        if str(repair.machine.inventory_number) not in compatible_numbers:
-            raise business_conflict(
-                "catalog_part_not_compatible_with_machine",
-                "Избраната каталожна част не е потвърдена като съвместима с машината от ремонта.",
-                machine_number=repair.machine.inventory_number,
-                catalog_part_id=catalog_part.id,
-                part_number=catalog_part.part_number,
-            )
+        require_compatible_part(db, repair.machine, catalog_part, selected=selected_catalog,
+                                incompatible_code="catalog_part_not_compatible_with_machine")
         values.update(
             {
                 "part_number": catalog_part.part_number,
@@ -1144,6 +1141,7 @@ def create_multi_part_request(
             "За част без потвърден part number трябва да бъде избрана конкретна машина.",
         )
     catalog_ids = {line.catalog_part_id for line in payload.lines if line.catalog_part_id is not None}
+    selected_catalog = published_binding(db, machine, lock=True) if machine is not None else None
     if machine is not None and (catalog_ids or payload.repair_kit_id is not None) and not asset_supports(machine, "HAS_PARTS_CATALOG"):
         raise business_conflict(
             "workflow_not_supported",
@@ -1173,19 +1171,11 @@ def create_multi_part_request(
                 part_numbers=sorted(unverified),
             )
         if machine is not None:
-            incompatible = [
-                item.part_number
-                for item in catalog_parts.values()
-                if str(machine.inventory_number)
-                not in {str(value) for value in (item.compatible_machine_numbers or [])}
-            ]
-            if incompatible:
-                raise business_conflict(
-                    "catalog_parts_not_compatible_with_machine",
-                    "Една или повече каталожни части не са потвърдени за избраната машина.",
-                    machine_number=machine.inventory_number,
-                    part_numbers=sorted(incompatible),
-                )
+            for item in catalog_parts.values():
+                require_compatible_part(db, machine, item, selected=selected_catalog)
+        elif any(item.builder_revision_id is not None for item in catalog_parts.values()):
+            raise business_conflict("catalog_runtime_binding_mismatch",
+                                    "За публикувана каталожна част е необходима обвързана машина.")
     kit: RepairKit | None = None
     if payload.repair_kit_id is not None:
         kit = db.scalar(
@@ -1201,6 +1191,7 @@ def create_multi_part_request(
                 "Непотвърден ремонтен комплект не може да бъде използван в официална заявка.",
                 repair_kit_id=kit.id,
             )
+        require_compatible_kit(db, machine, kit, selected=selected_catalog)
         if payload.repair_kit_mode == "KIT":
             if len(payload.lines) != 1 or catalog_ids:
                 raise business_conflict(
@@ -1396,6 +1387,7 @@ def link_unknown_part_to_catalog(
             "Категорията не поддържа ново свързване със структурирания каталог.",
             machine_id=request_item.machine.id,
         )
+    selected_catalog = published_binding(db, request_item.machine, lock=True) if request_item.machine else None
     part = db.scalar(
         select(PartCatalog).where(PartCatalog.id == payload.catalog_part_id)
         .with_for_update(read=True).execution_options(populate_existing=True)
@@ -1410,14 +1402,11 @@ def link_unknown_part_to_catalog(
             part_number=part.part_number,
         )
     if request_item.machine is not None:
-        compatible_numbers = {str(value) for value in (part.compatible_machine_numbers or [])}
-        if str(request_item.machine.inventory_number) not in compatible_numbers:
-            raise business_conflict(
-                "catalog_part_not_compatible_with_machine",
-                "Избраната каталожна част не е потвърдена като съвместима с машината от заявката.",
-                machine_number=request_item.machine.inventory_number,
-                catalog_part_id=part.id,
-            )
+        require_compatible_part(db, request_item.machine, part, selected=selected_catalog,
+                                incompatible_code="catalog_part_not_compatible_with_machine")
+    elif part.builder_revision_id is not None:
+        raise business_conflict("catalog_runtime_binding_mismatch",
+                                "За публикувана каталожна част е необходима обвързана машина.")
     if line.linked_catalog_part_id == part.id:
         return _part_request_dict(request_item, [])
     if line.linked_catalog_part_id is not None:
@@ -1873,6 +1862,8 @@ def update_catalog_part(
     item = db.get(PartCatalog, part_id)
     if item is None:
         raise HTTPException(404, "Частта не е намерена.")
+    if item.builder_revision_id is not None:
+        raise business_conflict("catalog_published_content_immutable", "Публикуваната част се променя чрез нова ревизия.")
     _validate_catalog_part_payload(db, payload, current_part_id=item.id)
     duplicate_id = _matching_catalog_part_id(db, payload)
     if duplicate_id is not None and duplicate_id != item.id:
@@ -1900,6 +1891,8 @@ def verify_catalog_part(
     item = db.get(PartCatalog, part_id)
     if item is None:
         raise HTTPException(404, "Частта не е намерена.")
+    if item.builder_revision_id is not None:
+        raise business_conflict("catalog_published_content_immutable", "Публикуваната част се променя чрез нова ревизия.")
     if not item.source_document or item.source_page is None:
         raise business_conflict("part_provenance_missing", "Частта не може да бъде потвърдена без източник и страница.")
     item.is_verified = True
@@ -1917,8 +1910,11 @@ def create_part_hotspot(
     user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> PartHotspot:
-    if db.get(PartCatalog, part_id) is None:
+    part = db.get(PartCatalog, part_id)
+    if part is None:
         raise HTTPException(404, "Частта не е намерена.")
+    if part.builder_revision_id is not None:
+        raise business_conflict("catalog_published_content_immutable", "Публикуваната част се променя чрез нова ревизия.")
     if payload.technical_document_id is not None and db.get(TechnicalDocument, payload.technical_document_id) is None:
         raise HTTPException(404, "Техническият документ не е намерен.")
     item = PartHotspot(part_id=part_id, created_by_id=user.id, **payload.model_dump())
@@ -1967,6 +1963,8 @@ def add_catalog_part_image(
     part = db.get(PartCatalog, part_id)
     if part is None:
         raise HTTPException(404, "Частта не е намерена.")
+    if part.builder_revision_id is not None:
+        raise business_conflict("catalog_published_content_immutable", "Публикуваната част се променя чрез нова ревизия.")
     filename, content = _decode_file(payload)
     if payload.media_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(
@@ -2095,7 +2093,8 @@ def verify_part_hotspot(
 def list_repair_kits(
     _: User = Depends(require_parts_viewer), db: Session = Depends(get_db)
 ) -> list[dict]:
-    kits = db.scalars(select(RepairKit).options(selectinload(RepairKit.components).joinedload(RepairKitComponent.part)).where(RepairKit.is_active.is_(True)).order_by(RepairKit.name)).all()
+    kits = db.scalars(select(RepairKit).options(selectinload(RepairKit.components).joinedload(RepairKitComponent.part)).where(
+        RepairKit.is_active.is_(True), RepairKit.builder_revision_id.is_(None)).order_by(RepairKit.name)).all()
     return [{"id": kit.id, "code": kit.code, "name": kit.name, "brand": kit.brand, "model": kit.model, "compatible_models": kit.compatible_models, "revision": kit.revision, "assembly": kit.assembly, "source_document": kit.source_document, "source_page": kit.source_page, "provenance": kit.provenance, "confidence": kit.confidence, "is_approved": kit.is_approved, "approved_by_id": kit.approved_by_id, "approved_at": kit.approved_at, "created_at": kit.created_at, "components": [{"id": component.id, "part_id": component.part_id, "part_number": component.part.part_number, "description": component.part.description, "quantity": component.quantity, "is_optional": component.is_optional, "note": component.note, "alternative_part_numbers": component.part.alternative_part_numbers, "replacement_part_ids": component.part.replacement_part_ids} for component in kit.components]} for kit in kits]
 
 
@@ -2105,7 +2104,8 @@ def create_repair_kit(
     user: User = Depends(require_parts_manager),
     db: Session = Depends(get_db),
 ) -> dict:
-    if db.scalar(select(RepairKit.id).where(RepairKit.code == payload.code)) is not None:
+    if db.scalar(select(RepairKit.id).where(RepairKit.code == payload.code,
+                                            RepairKit.builder_revision_id.is_(None))) is not None:
         raise business_conflict(
             "repair_kit_code_exists",
             "Вече съществува ремонтен комплект с този код.",
@@ -2114,6 +2114,10 @@ def create_repair_kit(
     part_ids = {component.part_id for component in payload.components}
     if set(db.scalars(select(PartCatalog.id).where(PartCatalog.id.in_(part_ids))).all()) != part_ids:
         raise HTTPException(404, "Една или повече части не са намерени.")
+    if db.scalar(select(PartCatalog.id).where(PartCatalog.id.in_(part_ids),
+                                              PartCatalog.builder_revision_id.is_not(None)).limit(1)) is not None:
+        raise business_conflict("catalog_published_content_immutable",
+                                "Публикувана част може да участва само в комплекта на своята ревизия.")
     kit = RepairKit(code=payload.code, name=payload.name, brand=payload.brand, model=payload.model, compatible_models=payload.compatible_models, revision=payload.revision, assembly=payload.assembly, source_document=payload.source_document, source_page=payload.source_page, provenance=payload.provenance, confidence=payload.confidence, created_by_id=user.id)
     db.add(kit)
     db.flush()
@@ -2133,6 +2137,8 @@ def approve_repair_kit(
     kit = db.scalar(select(RepairKit).options(selectinload(RepairKit.components).joinedload(RepairKitComponent.part)).where(RepairKit.id == kit_id))
     if kit is None:
         raise HTTPException(404, "Ремонтният комплект не е намерен.")
+    if kit.builder_revision_id is not None:
+        raise business_conflict("catalog_published_content_immutable", "Публикуваният комплект се променя чрез нова ревизия.")
     if not kit.source_document or kit.source_page is None or not kit.provenance or kit.confidence is None or not kit.components:
         raise business_conflict("repair_kit_provenance_missing", "Комплектът не може да бъде одобрен без пълен източник, произход, увереност и състав.")
     unverified = sorted(
