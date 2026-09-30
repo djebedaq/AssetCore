@@ -130,6 +130,11 @@ jobs:
         run: psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_restore;'
       - name: PostgreSQL migration and encrypted backup/restore round trip
         run: python scripts/postgres_smoke_test.py
+      - name: Catalog Builder pre-0025 upgrade and encrypted history restore
+        run: |
+          psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_upgrade_source;'
+          psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_upgrade_restore;'
+          python tests/postgres/catalog_builder_backup_rehearsal.py
       - name: Create isolated concurrency database
         run: psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_concurrency;'
       - name: Real PostgreSQL overlapping domain transactions
