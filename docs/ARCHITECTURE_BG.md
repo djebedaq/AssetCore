@@ -26,7 +26,7 @@
   bearer credential в browser storage.
 - `backend/app/web_security.py` централизира explicit CORS origins, browser security headers, CSP, HSTS само за production HTTPS и cache policy за API спрямо PWA assets.
 - `backend/app/catalog/` е отделният authoritative каталог domain: `routes.py` пази HTTP/permission договора, `service.py` прилага family/source integrity правилата, `repository.py` ограничава активните заявки, `importer.py` извършва идемпотентно архивиране/upsert, а `validation.py` проверява immutable source manifest и dataset.
-- `backend/app/catalog_admin/` е отделният административен Builder домейн за логически каталози, чернови ревизии и изрични връзки към активи. В 01A той няма runtime read path или publish действие. [Договор и следващи етапи](CATALOG_ADMIN_01A_BUILDER_FOUNDATION_BG.md).
+- `backend/app/catalog_admin/` управлява чернови, атомична публикация, клониране и изрични връзки към активи. Работният каталог избира публикувана Builder ревизия по тази връзка; подробности: [CATALOG_ADMIN_01E_PUBLICATION_RUNTIME_BG.md](CATALOG_ADMIN_01E_PUBLICATION_RUNTIME_BG.md).
 - `backend/resources/catalog/v2/manifest.json` и разделените JSON файлове са versioned immutable projection на точно деветте файла под `backend/resources/technical_docs/PARTS_CATALOG/`; `backend/scripts/build_catalog_v2.py` е възпроизводимият extractor, а `catalog_v2_validation.py` е release gate.
 - `backend/resources/catalog/enrichment/v1/` е отделен non-authoritative EN/BG display слой. Генерираният record map е keyed единствено по canonical `source_record_key`; `translations.py` валидира пълно 611-record coverage и source fingerprint binding, без да записва translation текст в source projection или PDF fingerprint.
 - `backend/app/localization.py` локализира backend съобщения и статусни етикети без промяна на съхранените стойности.
@@ -57,7 +57,7 @@ repair/parts източници; `timeline_details.py` има изрични б�
 
 Catalog Builder 01B добавя изолирана чернова структура `CatalogDefinition → CatalogRevision → CatalogRevisionAssembly → CatalogRevisionArtifact → CatalogRevisionVisualPage`. Тя пази точните PDF байтове и изрични роли на страници и не участва в runtime каталога или PARTS-DOC. Договорът е описан в [CATALOG_ADMIN_01B_VISUAL_SOURCES_BG.md](CATALOG_ADMIN_01B_VISUAL_SOURCES_BG.md).
 
-Активният dataset е само `PARTS_CATALOG_V2`: 611 source реда от FALCH_500, FALCH_1000 и HYDWIN_FUSSEN_500. Семейството се определя чрез exact brand/model плюс проверен inventory number от manifest-а; няма fuzzy matching. CombiJet, машина №19 и всеки неподдържан модел получават празен каталог, не чужди части.
+Провереният статичен dataset `PARTS_CATALOG_V2` съдържа 611 source реда от FALCH_500, FALCH_1000 и HYDWIN_FUSSEN_500. За машини без публикуван Builder каталог семейството се определя чрез exact brand/model плюс проверен inventory number от manifest-а; няма fuzzy matching. Друг модел не получава чужди V2 части. Изрично обвързана машина с публикувана Builder ревизия използва само тази ревизия.
 
 `PartCatalog.source_record_key` е уникалната identity на source реда. Тя пази repeated positions/applicability variants, които старият ключ `brand + model + assembly + position + part_number` не можеше да представи без overwrite. Оригиналният номер, `Replaced by`, `quantity_raw`, `Valid for`, repair-kit code, source page/version/hash и anomaly codes остават отделни полета.
 

@@ -71,6 +71,9 @@ def update_catalog(db: Session, actor: User, catalog_id: int, data: CatalogUpdat
         raise fail("catalog_code_immutable")
     if any(changes.get(key) is None for key in ("name_bg", "name_en", "name_ru", "is_active", "asset_category_id") if key in changes):
         raise fail("catalog_invalid_update", 422)
+    if changes.get("is_active") is False and db.scalar(select(CatalogRevision.id).where(
+            CatalogRevision.catalog_id == item.id, CatalogRevision.status == "PUBLISHED").limit(1)):
+        raise fail("catalog_published_content_immutable")
     if "asset_category_id" in changes and changes["asset_category_id"] != item.asset_category_id:
         used = db.scalar(select(CatalogRevision.id).where(CatalogRevision.catalog_id == item.id).limit(1))
         bound = db.scalar(select(CatalogAssetBinding.id).where(CatalogAssetBinding.catalog_id == item.id).limit(1))
@@ -130,13 +133,16 @@ def update_revision(db: Session, actor: User, revision_id: int, data: RevisionUp
         raise fail("catalog_revision_status_managed", 422)
     if "revision_code" in data.model_fields_set:
         raise fail("catalog_revision_code_immutable")
+    revision = db.get(CatalogRevision, revision_id)
+    if revision is None:
+        raise fail("catalog_revision_not_found", 404)
+    item = catalog(db, revision.catalog_id, lock=True)
     revision = db.scalar(select(CatalogRevision).where(CatalogRevision.id == revision_id)
                          .with_for_update().execution_options(populate_existing=True))
-    if revision is None:
+    if revision is None or revision.catalog_id != item.id:
         raise fail("catalog_revision_not_found", 404)
     if revision.status != "DRAFT":
         raise fail("catalog_revision_immutable")
-    item = catalog(db, revision.catalog_id)
     if not item.is_active:
         raise fail("catalog_inactive")
     if "change_note" in data.model_fields_set:

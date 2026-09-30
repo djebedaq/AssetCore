@@ -57,13 +57,16 @@ def test_builder_requires_parts_manage(client, session_factory, role):
     assert client.patch(f"{BASE}/repair-kit-components/1", headers=headers,
                         json={"expected_version": 1, "quantity": 2}).status_code == 403
     assert client.delete(f"{BASE}/repair-kit-components/1?expected_version=1", headers=headers).status_code == 403
+    assert client.get(f"{BASE}/revisions/1/publication-readiness", headers=headers).status_code == 403
+    assert client.post(f"{BASE}/revisions/1/publish", headers=headers, json={}).status_code == 403
+    assert client.post(f"{BASE}/revisions/1/clone", headers=headers, json={}).status_code == 403
 
 
 def test_builder_routes_are_permission_classified():
     report = build_authorization_inventory(app)
     assert report.valid, report.errors
     builder = [route for route in report.routes if route.path.startswith(BASE)]
-    assert len(builder) == 51
+    assert len(builder) == 54
     assert all(route.permission == "parts.manage" for route in builder)
 
 
@@ -146,7 +149,7 @@ def test_generic_builder_bindings_and_lifecycle(client, auth_headers, session_fa
                         json={"is_active": True}).status_code == 200
     assert client.post(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers,
                        json={"revision_code": "B"}).status_code == 201
-    assert all(route.path != f"{BASE}/revisions/{{revision_id}}/publish" for route in client.app.routes)
+    assert any(route.path == f"{BASE}/revisions/{{revision_id}}/publish" for route in client.app.routes)
     with session_factory() as db:
         assert db.scalar(select(func.count(PartCatalog.id)).where(PartCatalog.source_version == "PARTS_CATALOG_V2")) == 611
 

@@ -19,7 +19,7 @@ type MachineCartState = { machineId: number | null; lines: CatalogCartLine[] }
 const EMPTY_MACHINE_CART: MachineCartState = { machineId: null, lines: [] }
 
 export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [machines, setMachines] = useState<Machine[]>([])
   const [machineId, setMachineId] = useState<number | ''>(defaultMachineId || '')
   const previousDefaultMachineId = useRef(defaultMachineId)
@@ -153,7 +153,7 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
     <section className="catalog-v2-machine panel">
       <label>{t('catalog.chooseMachine')}<select value={machineId} onChange={(event) => requestMachineSelection(event.target.value ? Number(event.target.value) : '')}><option value="">{t('catalog.chooseMachinePlaceholder')}</option>{machines.filter(item => item.category_capabilities?.includes('HAS_PARTS_CATALOG') !== false).map((item) => <option value={item.id} key={item.id}>№{item.inventory_number} · {item.brand} {item.model || ''}</option>)}</select></label>
       {machine && <div><b>№{machine.inventory_number} · {machine.brand}</b><span>{machine.model || t('common.noValue')}</span><small>{machine.pressure_bar != null && <>{t('machines.pressure')}: {machine.pressure_bar} · </>}{t('common.status')}: {statusText(t, machine.status)} · {t('common.location')}: {machine.location?.name || t('common.noValue')}</small></div>}
-      {context?.supported && <label>{t('catalog.chooseAssembly')}<select value={sourceId} onChange={(event) => setSourceId(event.target.value)}>{context.assemblies.map((assembly) => <option key={assembly.source_id} value={assembly.source_id}>{assembly.title} · {assembly.part_count}</option>)}</select></label>}
+      {context?.supported && <label>{t('catalog.chooseAssembly')}<select value={sourceId} onChange={(event) => setSourceId(event.target.value)}>{context.assemblies.map((assembly) => <option key={assembly.source_id} value={assembly.source_id}>{assembly[`name_${locale}`] || assembly.title} · {assembly.part_count}</option>)}</select></label>}
     </section>
     {pendingMachineId !== null && <div className="catalog-v2-machine-switch panel" role="dialog" aria-modal="true" aria-labelledby="catalog-machine-switch-title"><h3 id="catalog-machine-switch-title">{t('catalog.changeMachineTitle')}</h3><p>{t('catalog.changeMachineWarning')}</p><div className="actions"><button className="secondary" onClick={() => setPendingMachineId(null)}>{t('common.cancel')}</button><button className="primary" onClick={() => applyMachineSelection(pendingMachineId)}>{t('catalog.changeMachineConfirm')}</button></div></div>}
     {loading && <div className="empty-state">{t('common.loading')}</div>}
@@ -162,7 +162,7 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
     {details && machineId && <div className="catalog-v2-layout">
       <main className="catalog-v2-workspace">
         <nav className="catalog-v2-diagram-tabs" aria-label={t('catalog.visualWorkspace')}>{details.diagrams.map((item) => <button className={item.id === diagramId ? 'active' : ''} key={item.id} onClick={() => setDiagramId(item.id)}>{t('common.page')} {item.page_number}</button>)}</nav>
-        {diagram && <CatalogDiagramViewer machineId={machineId} diagram={diagram} hotspots={currentHotspots} selectedPosition={selectedPosition} focus={focus} kitPositions={kitPositions} onSelectPosition={selectDiagramPosition} onOpenPosition={openDiagramPosition} onHotspotsChange={(items) => setHotspotsByDiagram((current) => ({ ...current, [diagram.id]: items }))} />}
+        {diagram && <CatalogDiagramViewer machineId={machineId} editableQa={details.dataset_version === 'PARTS_CATALOG_V2'} diagram={diagram} hotspots={currentHotspots} selectedPosition={selectedPosition} focus={focus} kitPositions={kitPositions} onSelectPosition={selectDiagramPosition} onOpenPosition={openDiagramPosition} onHotspotsChange={(items) => setHotspotsByDiagram((current) => ({ ...current, [diagram.id]: items }))} />}
         {!diagram && <div className="empty-state">{t('catalog.noVerifiedDiagram')}</div>}
         {variantChoice && <CatalogVariantDialog position={variantChoice.position} variants={variantChoice.variants} onSelect={(part) => { setSelectedPart(part); setVariantChoice(null) }} onClose={() => setVariantChoice(null)} />}
         <CatalogPartsTable parts={filteredParts} query={partsQuery} selectedPart={selectedPart} diagramPositions={diagramPositions} onQueryChange={setPartsQuery} onSelect={selectPartFromTable} onShowDiagram={focusPartOnDiagram} />

@@ -57,6 +57,9 @@ class CatalogAssemblyOut(BaseModel):
     family: str
     assembly: str
     title: str
+    name_bg: str | None = None
+    name_en: str | None = None
+    name_ru: str | None = None
     document_reference: str | None = None
     part_count: int
     diagram_count: int
@@ -84,6 +87,9 @@ class AssemblyDetailsOut(BaseModel):
     source_id: str
     assembly: str
     title: str
+    name_bg: str | None = None
+    name_en: str | None = None
+    name_ru: str | None = None
     diagrams: list[CatalogDiagramOut]
     parts: list[CatalogPartOut]
 
@@ -127,14 +133,17 @@ class RepairKitOut(BaseModel):
     id: int
     code: str
     name: str
+    name_bg: str | None = None
+    name_en: str | None = None
+    name_ru: str | None = None
     family: str
     source_id: str
     brand: str
     model: str
     assembly: str
-    source_document: str
-    source_page: int
-    source_document_sha256: str
+    source_document: str | None
+    source_page: int | None
+    source_document_sha256: str | None
     source_version: str
     is_approved: bool
     is_active: bool

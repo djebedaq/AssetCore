@@ -178,10 +178,10 @@ export function CatalogRepairKitPreview({
   onConfirm: () => void
   onClose: () => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   return <CatalogDialog title={`${t('catalog.repairKit')} ${kit.code}`} onClose={onClose} contentClassName="catalog-v2-kit-dialog">
     <div className="catalog-v2-kit-preview">
-    <div className="toolbar"><div><span className="badge batch-complete">{t('catalog.verified')}</span><h3>{t('catalog.repairKit')} {kit.code}</h3><p>{t('catalog.kitContains', { count: kit.components.length })}</p></div></div>
+    <div className="toolbar"><div><span className="badge batch-complete">{t('catalog.verified')}</span><h3>{t('catalog.repairKit')} {kit.code}</h3><p>{kit[`name_${locale}`] || kit.name}</p><p>{t('catalog.kitContains', { count: kit.components.length })}</p></div></div>
     <button className={`secondary ${positionsVisible ? 'active' : ''}`} aria-pressed={positionsVisible} onClick={onTogglePositions}><Layers3 size={17} />{positionsVisible ? t('catalog.hideKitPositions') : t('catalog.showKitPositions')}</button>
     <div className="catalog-v2-kit-components">{kit.components.map((component) => <div key={component.id}><b>{t('catalog.position')} {component.position} · {component.part_number || t('common.noValue')}</b><span>{catalogDisplayName(component)}</span><em>{t('catalog.sourceQuantity')}: {formatCatalogSourceQuantity(component.quantity, component.quantity_raw)}</em></div>)}</div>
     <div className="actions"><button className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" onClick={onConfirm}><PackagePlus size={17} />{t('catalog.addWholeKit')}</button></div>

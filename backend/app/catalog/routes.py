@@ -126,6 +126,10 @@ def update_hotspot(
             operation="catalog_hotspot_update",
             stage="lookup",
         )
+    if hotspot.builder_revision_id is not None:
+        raise ApplicationError(status_code=409, code="catalog_published_content_immutable",
+                               message="Публикуваната схема се променя чрез нова ревизия.",
+                               operation="catalog_hotspot_update", stage="immutability")
     service.ensure_integrity(hotspot.diagram.source_id)
     before = {
         "x": hotspot.x,

@@ -169,7 +169,7 @@ def _upsert_parts(
     db: Session, verifier: User, counters: dict[str, int]
 ) -> dict[str, PartCatalog]:
     for part in db.scalars(select(PartCatalog).where(PartCatalog.is_active.is_(True))):
-        if part.source_version != CATALOG_VERSION:
+        if part.source_version != CATALOG_VERSION and part.builder_revision_id is None:
             part.is_active = False
             counters["archived_parts"] += 1
 
@@ -402,7 +402,7 @@ def _upsert_repair_kits(
     counters: dict[str, int],
 ) -> None:
     for kit in db.scalars(select(RepairKit).where(RepairKit.is_active.is_(True))):
-        if kit.source_version != CATALOG_VERSION:
+        if kit.source_version != CATALOG_VERSION and kit.builder_revision_id is None:
             kit.is_active = False
             kit.is_approved = False
             counters["archived_repair_kits"] += 1

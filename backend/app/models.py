@@ -673,7 +673,7 @@ class PartRequest(Base):
         ForeignKey("repair_kits.id"), nullable=True, index=True
     )
     repair_kit_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    part_name: Mapped[str] = mapped_column(String(255))
+    part_name: Mapped[str] = mapped_column(Text)
     part_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -726,6 +726,8 @@ class PartCatalog(Base):
     __tablename__ = "part_catalog"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    builder_revision_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revisions.id"), nullable=True, index=True)
+    builder_part_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_parts.id"), nullable=True, unique=True)
     source_record_key: Mapped[str | None] = mapped_column(
         String(500), nullable=True, unique=True, index=True
     )
@@ -735,9 +737,9 @@ class PartCatalog(Base):
     brand: Mapped[str] = mapped_column(String(120), index=True)
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     assembly: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    position: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    position: Mapped[str | None] = mapped_column(String(80), nullable=True)
     part_number: Mapped[str] = mapped_column(String(120), index=True)
-    description: Mapped[str] = mapped_column(String(500))
+    description: Mapped[str] = mapped_column(Text)
     quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
     quantity_raw: Mapped[str | None] = mapped_column(String(120), nullable=True)
     description_de: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -760,12 +762,12 @@ class PartCatalog(Base):
     )
     replaced_by_part_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     manufacturer: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    category: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name_bg: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name_en: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name_ru: Mapped[str | None] = mapped_column(String(255), nullable=True)
     original_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(80), nullable=True)
     technical_specification: Mapped[str | None] = mapped_column(Text, nullable=True)
     compatible_models: Mapped[str | None] = mapped_column(Text, nullable=True)
     compatible_machine_numbers: Mapped[list | None] = mapped_column(JSON, nullable=True)
@@ -824,6 +826,7 @@ class TechnicalDocument(Base):
     __tablename__ = "technical_documents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    builder_artifact_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_artifacts.id"), nullable=True, unique=True)
     brand: Mapped[str] = mapped_column(String(120), index=True)
     category: Mapped[str] = mapped_column(String(120))
     title: Mapped[str] = mapped_column(String(500))
@@ -916,6 +919,9 @@ class CatalogRevision(Base):
     __table_args__ = (
         UniqueConstraint("catalog_id", "revision_code", name="uq_catalog_revision_code"),
         CheckConstraint("status IN ('DRAFT', 'PUBLISHED', 'RETIRED')", name="ck_catalog_revision_status"),
+        Index("uq_catalog_current_publication", "catalog_id", unique=True,
+              postgresql_where=text("status = 'PUBLISHED'"),
+              sqlite_where=text("status = 'PUBLISHED'")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -1426,9 +1432,9 @@ class PartRequestLine(Base):
     catalog_part_id: Mapped[int | None] = mapped_column(
         ForeignKey("part_catalog.id"), nullable=True, index=True
     )
-    position: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    position: Mapped[str | None] = mapped_column(String(80), nullable=True)
     part_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    description: Mapped[str] = mapped_column(String(500))
+    description: Mapped[str] = mapped_column(Text)
     quantity: Mapped[float] = mapped_column(Float, default=1.0)
     unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -1614,14 +1620,24 @@ class PartHotspot(Base):
 
 class RepairKit(Base):
     __tablename__ = "repair_kits"
+    __table_args__ = (
+        Index("uq_legacy_repair_kit_code", "code", unique=True,
+              postgresql_where=text("builder_kit_id IS NULL"),
+              sqlite_where=text("builder_kit_id IS NULL")),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    code: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    builder_revision_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revisions.id"), nullable=True, index=True)
+    builder_kit_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_repair_kits.id"), nullable=True, unique=True)
+    code: Mapped[str] = mapped_column(String(120), index=True)
     family: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     source_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     source_version: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     source_document_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    name: Mapped[str] = mapped_column(String(255))
+    name: Mapped[str] = mapped_column(Text)
+    name_bg: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name_en: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name_ru: Mapped[str | None] = mapped_column(String(255), nullable=True)
     brand: Mapped[str | None] = mapped_column(String(120), nullable=True)
     model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     compatible_models: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -1658,6 +1674,7 @@ class RepairKitComponent(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    builder_component_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_repair_kit_components.id"), nullable=True, unique=True)
     kit_id: Mapped[int] = mapped_column(ForeignKey("repair_kits.id"), index=True)
     part_id: Mapped[int] = mapped_column(ForeignKey("part_catalog.id"), index=True)
     quantity: Mapped[float] = mapped_column(Float, default=1.0)
@@ -1679,10 +1696,13 @@ class CatalogDiagram(Base):
 
     __tablename__ = "catalog_diagrams"
     __table_args__ = (
-        UniqueConstraint("source_id", "page_number", name="uq_catalog_diagram_source_page"),
+        UniqueConstraint("source_id", "technical_document_id", "page_number",
+                         name="uq_catalog_diagram_source_document_page"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    builder_revision_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revisions.id"), nullable=True, index=True)
+    builder_visual_page_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_visual_pages.id"), nullable=True, unique=True)
     source_id: Mapped[str] = mapped_column(String(120), index=True)
     family: Mapped[str] = mapped_column(String(80), index=True)
     assembly: Mapped[str] = mapped_column(String(120), index=True)
@@ -1716,6 +1736,8 @@ class CatalogVisualSource(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    builder_revision_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revisions.id"), nullable=True, index=True)
+    builder_visual_page_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_visual_pages.id"), nullable=True, unique=True)
     source_id: Mapped[str] = mapped_column(String(120), index=True)
     catalog_revision: Mapped[str] = mapped_column(String(255), nullable=False)
     technical_document_id: Mapped[int] = mapped_column(
@@ -1736,6 +1758,7 @@ class CatalogVisualPartMap(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    builder_part_page_map_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_part_page_maps.id"), nullable=True, unique=True)
     visual_source_id: Mapped[int] = mapped_column(
         ForeignKey("catalog_visual_sources.id", ondelete="RESTRICT"), index=True
     )
@@ -1749,9 +1772,11 @@ class CatalogPositionHotspot(Base):
     __tablename__ = "catalog_position_hotspots"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    builder_revision_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revisions.id"), nullable=True, index=True)
+    builder_hotspot_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_position_hotspots.id"), nullable=True, unique=True)
     hotspot_key: Mapped[str] = mapped_column(String(500), unique=True, index=True)
     diagram_id: Mapped[int] = mapped_column(ForeignKey("catalog_diagrams.id"), index=True)
-    position: Mapped[str] = mapped_column(String(40), index=True)
+    position: Mapped[str] = mapped_column(String(80), index=True)
     x: Mapped[float] = mapped_column(Float)
     y: Mapped[float] = mapped_column(Float)
     width: Mapped[float] = mapped_column(Float, default=0.03)

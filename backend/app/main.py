@@ -42,6 +42,7 @@ from .auth_throttle import (
     throttled_error,
 )
 from .catalog import router as catalog_router
+from .catalog.runtime_context import published_binding
 from .catalog_admin.routes import router as catalog_builder_router
 from .database import SessionLocal, engine, get_db
 from .document_generation import (
@@ -810,10 +811,15 @@ def catalog(
             raise HTTPException(404, "Машината не е намерена")
         if not asset_supports(machine, "HAS_PARTS_CATALOG"):
             return []
+    selected = published_binding(db, machine) if machine is not None else None
     statement = select(PartCatalog).where(PartCatalog.is_active.is_(True))
-    if brand:
+    statement = statement.where(
+        PartCatalog.builder_revision_id == selected.revision_id if selected is not None
+        else PartCatalog.builder_revision_id.is_(None)
+    )
+    if brand and selected is None:
         statement = statement.where(PartCatalog.brand == brand)
-    if model:
+    if model and selected is None:
         statement = statement.where(PartCatalog.model == model)
     if assembly:
         statement = statement.where(PartCatalog.assembly == assembly)
@@ -847,10 +853,11 @@ def catalog(
         ).limit(2000)
     ).all()
     if machine is not None:
-        items = [
-            item for item in items
-            if str(machine.inventory_number) in (item.compatible_machine_numbers or [])
-        ]
+        if selected is None:
+            items = [
+                item for item in items
+                if str(machine.inventory_number) in (item.compatible_machine_numbers or [])
+            ]
     return items[:1000]
 
 

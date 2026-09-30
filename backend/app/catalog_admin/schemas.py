@@ -43,6 +43,17 @@ class RevisionUpdate(Payload):
     status: str | None = None
 
 
+class PublishRevision(Payload):
+    expected_publication_digest: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
+    expected_current_published_revision_id: int | None = Field(default=None, gt=0)
+    confirmed: bool
+
+
+class CloneRevision(Payload):
+    revision_code: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+    change_note: str | None = None
+
+
 class AssemblyCreate(Payload):
     code: str = Field(min_length=2, max_length=80, pattern=r"^[A-Z][A-Z0-9_]*$")
     name_bg: str = Field(min_length=1, max_length=255)
