@@ -91,7 +91,7 @@ def upgrade() -> None:
                 continue
             with op.batch_alter_table(table) as batch:
                 batch.add_column(sa.Column(name, sa.Integer(), nullable=True))
-                batch.create_foreign_key(f"fk_{table}_{name}", target.split(".")[0], [name], ["id"])
+                batch.create_foreign_key(f"{table}_{name}_fkey", target.split(".")[0], [name], ["id"])
                 batch.create_index(f"ix_{table}_{name}", [name], unique=name in UNIQUE_SOURCES)
     kit_columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("repair_kits")}
     with op.batch_alter_table("repair_kits") as batch:
@@ -142,8 +142,8 @@ def downgrade() -> None:
             for name, _ in reversed(columns):
                 if f"ix_{table}_{name}" in indexes:
                     batch.drop_index(f"ix_{table}_{name}")
-                if f"fk_{table}_{name}" in foreign_keys:
-                    batch.drop_constraint(f"fk_{table}_{name}", type_="foreignkey")
+                if f"{table}_{name}_fkey" in foreign_keys:
+                    batch.drop_constraint(f"{table}_{name}_fkey", type_="foreignkey")
                 batch.drop_column(name)
     op.drop_index("uq_catalog_current_publication", table_name="catalog_revisions")
     with op.batch_alter_table("catalog_diagrams") as batch:
