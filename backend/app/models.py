@@ -1710,7 +1710,7 @@ class CatalogDiagram(Base):
         ForeignKey("technical_documents.id"), index=True
     )
     page_number: Mapped[int] = mapped_column(Integer)
-    title: Mapped[str] = mapped_column(String(500))
+    title: Mapped[str] = mapped_column(Text)
     source_pdf_sha256: Mapped[str] = mapped_column(String(64), index=True)
     render_version: Mapped[str] = mapped_column(String(80), default="PDF_PREVIEW_V1")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

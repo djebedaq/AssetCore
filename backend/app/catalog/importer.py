@@ -65,7 +65,8 @@ def _upsert_documents(
     db: Session, verifier: User, counters: dict[str, int]
 ) -> dict[str, TechnicalDocument]:
     active_paths = {source_relative_path(source) for source in dataset_sources()}
-    for document in db.scalars(select(TechnicalDocument)).all():
+    for document in db.scalars(select(TechnicalDocument).where(
+            TechnicalDocument.builder_artifact_id.is_(None))).all():
         if (
             document.file_path not in active_paths
             and document.uploaded_content is None
@@ -79,7 +80,8 @@ def _upsert_documents(
     for source in dataset_sources():
         relative = source_relative_path(source)
         document = db.scalar(
-            select(TechnicalDocument).where(TechnicalDocument.file_path == relative)
+            select(TechnicalDocument).where(TechnicalDocument.file_path == relative,
+                                             TechnicalDocument.builder_artifact_id.is_(None))
         )
         is_new = document is None
         family = manifest["families"][source["family"]]
@@ -168,8 +170,10 @@ def _upsert_documents(
 def _upsert_parts(
     db: Session, verifier: User, counters: dict[str, int]
 ) -> dict[str, PartCatalog]:
-    for part in db.scalars(select(PartCatalog).where(PartCatalog.is_active.is_(True))):
-        if part.source_version != CATALOG_VERSION and part.builder_revision_id is None:
+    for part in db.scalars(select(PartCatalog).where(
+            PartCatalog.is_active.is_(True), PartCatalog.builder_revision_id.is_(None),
+            PartCatalog.builder_part_id.is_(None))):
+        if part.source_version != CATALOG_VERSION:
             part.is_active = False
             counters["archived_parts"] += 1
 
@@ -182,7 +186,8 @@ def _upsert_parts(
         for data in load_source_dataset(source).get("records") or []:
             item = db.scalar(
                 select(PartCatalog).where(
-                    PartCatalog.source_record_key == data["source_record_key"]
+                    PartCatalog.source_record_key == data["source_record_key"],
+                    PartCatalog.builder_revision_id.is_(None), PartCatalog.builder_part_id.is_(None),
                 )
             )
             if item is None:
@@ -276,6 +281,8 @@ def _upsert_diagrams_and_hotspots(
                 select(CatalogDiagram).where(
                     CatalogDiagram.source_id == source["source_id"],
                     CatalogDiagram.page_number == page,
+                    CatalogDiagram.builder_revision_id.is_(None),
+                    CatalogDiagram.builder_visual_page_id.is_(None),
                 )
             )
             if diagram is None:
@@ -302,7 +309,9 @@ def _upsert_diagrams_and_hotspots(
         for data in load_source_dataset(source).get("hotspots") or []:
             hotspot = db.scalar(
                 select(CatalogPositionHotspot).where(
-                    CatalogPositionHotspot.hotspot_key == data["hotspot_key"]
+                    CatalogPositionHotspot.hotspot_key == data["hotspot_key"],
+                    CatalogPositionHotspot.builder_revision_id.is_(None),
+                    CatalogPositionHotspot.builder_hotspot_id.is_(None),
                 )
             )
             preserve_manual_correction = hotspot is not None and is_manually_confirmed(
@@ -366,6 +375,8 @@ def _upsert_visual_sources(
                     CatalogVisualSource.technical_document_id == document.id,
                     CatalogVisualSource.page_number == page,
                     CatalogVisualSource.role == role,
+                    CatalogVisualSource.builder_revision_id.is_(None),
+                    CatalogVisualSource.builder_visual_page_id.is_(None),
                 ))
                 if visual is None:
                     visual = CatalogVisualSource(
@@ -389,6 +400,7 @@ def _upsert_visual_sources(
                         existing = db.scalar(select(CatalogVisualPartMap.id).where(
                             CatalogVisualPartMap.visual_source_id == visual.id,
                             CatalogVisualPartMap.part_id == part.id,
+                            CatalogVisualPartMap.builder_part_page_map_id.is_(None),
                         ))
                         if existing is None:
                             db.add(CatalogVisualPartMap(visual_source_id=visual.id, part_id=part.id))

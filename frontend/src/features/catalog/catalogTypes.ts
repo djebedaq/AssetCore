@@ -11,10 +11,14 @@ export type CatalogPart = {
   part_number: string
   order_part_number: string
   replaced_by_part_number?: string | null
+  alternative_part_number?: string | null
+  supplier?: string | null
+  supplier_code?: string | null
   description: string
   source_description: string
   description_en: string
   description_bg: string
+  description_ru?: string | null
   original_name?: string | null
   description_2?: string | null
   quantity?: number | null
@@ -87,7 +91,7 @@ export type AssemblyDetails = {
   parts: CatalogPart[]
 }
 
-export type PositionProvenance = 'AUTO_MATCHED' | 'MANUALLY_CONFIRMED' | 'MANUAL_VERIFIED' | 'INHERITED_VERIFICATION'
+export type PositionProvenance = 'AUTO_MATCHED' | 'MANUALLY_CONFIRMED' | 'MANUAL_BUILDER' | 'MANUAL_VERIFIED' | 'INHERITED_VERIFICATION'
 
 export type PositionHotspot = {
   id: number
@@ -133,6 +137,7 @@ export type RepairKitComponent = {
   source_description: string
   description_en: string
   description_bg: string
+  description_ru?: string | null
   quantity: number
   quantity_raw: string
   source_document: string

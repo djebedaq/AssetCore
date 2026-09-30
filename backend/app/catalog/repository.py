@@ -54,6 +54,7 @@ def search_parts(
         conditions = [
             PartCatalog.part_number.ilike(term),
             PartCatalog.replaced_by_part_number.ilike(term),
+            PartCatalog.alternative_part_number.ilike(term),
             PartCatalog.position.ilike(term),
             PartCatalog.description.ilike(term),
             PartCatalog.description_de.ilike(term),

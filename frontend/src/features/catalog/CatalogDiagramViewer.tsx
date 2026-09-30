@@ -68,7 +68,7 @@ export function CatalogDiagramViewer({
   onOpenPosition,
   onHotspotsChange,
 }: Props) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [url, setUrl] = useState('')
   const [zoom, setZoom] = useState(100)
   const [error, setError] = useState('')
@@ -312,7 +312,7 @@ export function CatalogDiagramViewer({
         {visibleHotspots.map((hotspot) => {
           const variants = hotspot.variants
           const description = variants[0]
-            ? catalogDisplayName(variants[0])
+            ? catalogDisplayName(variants[0], locale)
             : t('common.noValue')
           return <button
             key={hotspot.id}

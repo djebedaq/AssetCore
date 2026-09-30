@@ -124,10 +124,14 @@ def serialize_part(part: PartCatalog) -> dict[str, Any]:
         "part_number": part.part_number,
         "order_part_number": part.replaced_by_part_number or part.part_number,
         "replaced_by_part_number": part.replaced_by_part_number,
+        "alternative_part_number": part.alternative_part_number,
+        "supplier": part.supplier,
+        "supplier_code": part.supplier_code,
         "description": part.description,
         "source_description": part.original_name or part.description,
         "description_en": translation["description_en"],
         "description_bg": translation["description_bg"],
+        "description_ru": part.name_ru if part.builder_revision_id is not None else None,
         "original_name": part.original_name,
         "description_2": part.description_2,
         "quantity": part.quantity,
@@ -201,7 +205,6 @@ def _builder_assembly(db: Session, revision_id: int, source_id: str) -> CatalogR
 def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
     machine = require_machine(db, machine_id)
     binding = published_binding(db, machine)
-    family = machine_family(machine)
     base = {
         "dataset_version": CATALOG_VERSION,
         "machine_id": machine.id,
@@ -231,6 +234,7 @@ def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
         return {**base, "dataset_version": f"CATALOG_BUILDER_R{binding.revision_id}",
                 "supported": True, "message": "Публикуван каталог.",
                 "family": catalog_code, "assemblies": assemblies}
+    family = machine_family(machine)
     if family is None or not asset_supports(machine, "HAS_PARTS_CATALOG"):
         return {
             **base,
@@ -471,6 +475,7 @@ def _serialize_kit_component(component: Any) -> dict[str, Any]:
         or component.part.description,
         "description_en": translation["description_en"],
         "description_bg": translation["description_bg"],
+        "description_ru": component.part.name_ru if component.part.builder_revision_id is not None else None,
         "quantity": component.quantity,
         "quantity_raw": component.quantity_raw or "",
         "source_document": component.source_document,

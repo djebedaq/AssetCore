@@ -23,7 +23,7 @@ export function CatalogPartsTable({
   onSelect: (part: CatalogPart) => void
   onShowDiagram: (part: CatalogPart) => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [position, setPosition] = useState('')
   const [navigatorError, setNavigatorError] = useState('')
   const rows = useRef(new Map<string, HTMLTableRowElement>())
@@ -67,7 +67,7 @@ export function CatalogPartsTable({
     >
       <td><b>{part.position}</b></td>
       <td><code>{part.part_number || t('common.noValue')}</code>{part.replaced_by_part_number && <small>→ {part.replaced_by_part_number}</small>}</td>
-      <td>{catalogDisplayName(part)}<small>{part.valid_for_raw}</small></td>
+      <td>{catalogDisplayName(part, locale)}<small>{part.valid_for_raw}</small></td>
       <td>{formatCatalogSourceQuantity(part.quantity, part.quantity_raw) || t('common.noValue')}</td>
       <td>{part.repair_kit_code || t('common.noValue')}</td>
       <td>{diagramPositions.has(part.position) && <button className="link" aria-label={`${t('catalog.showOnDiagram')} ${part.position}`} onClick={(event) => { event.stopPropagation(); onSelect(part); onShowDiagram(part) }}><LocateFixed size={17} /><span>{t('catalog.showOnDiagram')}</span></button>}</td>
