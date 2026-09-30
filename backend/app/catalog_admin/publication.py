@@ -464,12 +464,14 @@ def clone(db: Session, actor: User, revision_id: int,
                 is_verified=item.is_verified, verified_by_id=item.verified_by_id,
                 verified_at=item.verified_at, version=1, created_by_id=actor.id,
             ))
+        kits_with_components = {item.kit_id for item in content["components"]}
         for item in content["kits"]:
             values = {key: getattr(item, key) for key in PUBLISH_FIELDS["kits"]
                       if key not in {"id", "assembly_id", "source_visual_page_id"}}
             new = CatalogRevisionRepairKit(
                 assembly_id=assembly_ids[item.assembly_id],
                 source_visual_page_id=page_ids.get(item.source_visual_page_id),
+                code_locked=item.code_locked or item.id in kits_with_components,
                 created_by_id=actor.id, **values,
             )
             db.add(new)

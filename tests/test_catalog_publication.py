@@ -16,6 +16,7 @@ from app.models import (
     CatalogPositionHotspot,
     CatalogRevision,
     CatalogRevisionArtifact,
+    CatalogRevisionRepairKit,
     CatalogVisualPartMap,
     CatalogVisualSource,
     GeneratedDocument,
@@ -23,13 +24,21 @@ from app.models import (
     PartCatalog,
     PartVisualSnapshot,
     RepairKit,
+    RepairKitComponent,
     TechnicalDocument,
     User,
 )
 from app.part_requests.service import load_request
 from reportlab.pdfgen import canvas
-from sqlalchemy import func, select
-from test_catalog_builder_parts import BASE, source, workspace
+from sqlalchemy import func, inspect, select, text
+from test_catalog_builder_parts import BASE, part, source, workspace
+
+V2_KIT_CODE = "E0113549"
+
+
+def _persisted_columns(row):
+    return {attribute.key: getattr(row, attribute.key)
+            for attribute in inspect(type(row)).column_attrs}
 
 
 def test_publish_binding_request_and_clone(client, auth_headers, session_factory, monkeypatch):
@@ -51,7 +60,7 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
                            json={"expected_version": hotspot.json()["version"]})
     assert verified.status_code == 200, verified.text
     kit = client.post(f"{BASE}/assemblies/{assembly_id}/repair-kits", headers=auth_headers,
-                      json={"code": "QA_KIT", "name_bg": "Тестов комплект",
+                      json={"code": V2_KIT_CODE, "name_bg": "Тестов комплект",
                             "source_visual_page_id": spare_page_id})
     assert kit.status_code == 201, kit.text
     component = client.post(f"{BASE}/repair-kits/{kit.json()['id']}/components",
@@ -104,7 +113,7 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
     kits = client.get(f"/api/catalog/v2/repair-kits?machine_id={machine_id}", headers=auth_headers)
     assert kits.status_code == 200 and len(kits.json()) == 1, kits.text
     runtime_kit = kits.json()[0]
-    assert runtime_kit["code"] == "QA_KIT"
+    assert runtime_kit["code"] == V2_KIT_CODE
     assert runtime_kit["components"][0]["part_id"] == runtime_part["id"]
     legacy_kits = client.get("/api/repair-kits", headers=auth_headers)
     assert legacy_kits.status_code == 200
@@ -173,14 +182,117 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
             PartVisualSnapshot.line_id == request.json()["lines"][0]["id"])).sha256 == historical_snapshot
         assert {item.format: item.sha256 for item in db.scalars(select(GeneratedDocument).where(
             GeneratedDocument.part_request_id == request.json()["id"])).all()} == historical_documents
+        v2_kit = db.scalar(select(RepairKit).where(
+            RepairKit.code == V2_KIT_CODE, RepairKit.builder_revision_id.is_(None)))
+        builder_kit = db.scalar(select(RepairKit).where(RepairKit.builder_revision_id == clone_id))
+        assert v2_kit is not None and v2_kit.source_version == CATALOG_VERSION
+        assert v2_kit.builder_kit_id is None
+        assert builder_kit is not None and builder_kit.code == V2_KIT_CODE
+        v2_kit_id, builder_kit_id = v2_kit.id, builder_kit.id
+        builder_fields = _persisted_columns(builder_kit)
+        builder_components = [_persisted_columns(item) for item in builder_kit.components]
+        assert len(builder_components) == 1
+        # Exercise the previously ambiguous code-only lookup with Builder first.
+        db.execute(text("PRAGMA reverse_unordered_selects = ON"))
+        assert db.scalar(select(RepairKit).where(RepairKit.code == V2_KIT_CODE)).id == builder_kit_id
         import_authoritative_catalog(db, db.get(User, 1))
         db.commit()
+        db.expire_all()
+        v2_kit = db.get(RepairKit, v2_kit_id)
+        builder_kit = db.get(RepairKit, builder_kit_id)
+        assert v2_kit.code == V2_KIT_CODE
+        assert v2_kit.source_version == CATALOG_VERSION
+        assert v2_kit.builder_revision_id is None and v2_kit.builder_kit_id is None
+        assert _persisted_columns(builder_kit) == builder_fields
+        assert [_persisted_columns(item) for item in builder_kit.components] == builder_components
+        assert [item.id for item in db.scalars(select(RepairKit).where(
+            RepairKit.code == V2_KIT_CODE,
+            RepairKit.is_active.is_(True))).all()] == [builder_kit_id, v2_kit_id]
         assert db.scalar(select(func.count(PartCatalog.id)).where(
             PartCatalog.source_version == CATALOG_VERSION, PartCatalog.is_active.is_(True))) == 611
+        assert db.scalar(select(func.count(RepairKit.id)).where(
+            RepairKit.source_version == CATALOG_VERSION, RepairKit.builder_revision_id.is_(None),
+            RepairKit.is_active.is_(True))) == 7
+        assert db.scalar(select(func.count(RepairKitComponent.id)).join(RepairKit).where(
+            RepairKit.source_version == CATALOG_VERSION, RepairKit.builder_revision_id.is_(None),
+            RepairKit.is_active.is_(True))) == 84
         assert db.scalar(select(func.count(PartCatalog.id)).where(
             PartCatalog.builder_revision_id == clone_id, PartCatalog.is_active.is_(True))) == 1
         assert db.scalar(select(func.count(RepairKit.id)).where(
             RepairKit.builder_revision_id == clone_id, RepairKit.is_active.is_(True))) == 1
+    after_import = client.get(f"/api/catalog/v2/repair-kits?machine_id={machine_id}",
+                              headers=auth_headers)
+    assert after_import.status_code == 200, after_import.text
+    assert len(after_import.json()) == 1
+    assert after_import.json()[0]["id"] == builder_kit_id
+    assert after_import.json()[0]["code"] == V2_KIT_CODE
+    assert len(after_import.json()[0]["components"]) == 1
+
+
+def test_clone_preserves_repair_kit_code_lock_after_component_removal(
+        client, auth_headers, session_factory):
+    _, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory)
+    _, spare_page_id, _, _ = source(client, auth_headers, assembly_id)
+    created_part = part(client, auth_headers, assembly_id, position="QA-CLONE-LOCK")
+    assert created_part.status_code == 201, created_part.text
+    part_id = created_part.json()["id"]
+    assert client.post(f"{BASE}/parts/{part_id}/source-pages", headers=auth_headers,
+                       json={"visual_page_ids": [spare_page_id]}).status_code == 201
+    created_kit = client.post(f"{BASE}/assemblies/{assembly_id}/repair-kits",
+                              headers=auth_headers, json={
+                                  "code": "QA_CLONE_LOCK", "name_bg": "Тестов комплект",
+                                  "source_visual_page_id": spare_page_id,
+                              })
+    assert created_kit.status_code == 201, created_kit.text
+    kit_id = created_kit.json()["id"]
+    added = client.post(f"{BASE}/repair-kits/{kit_id}/components",
+                        headers=auth_headers, json={"part_id": part_id, "quantity": 2})
+    assert added.status_code == 201, added.text
+    source_kit = client.get(f"{BASE}/repair-kits/{kit_id}", headers=auth_headers).json()
+    assert source_kit["code_locked"] is True and source_kit["component_count"] == 1
+
+    readiness = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness",
+                           headers=auth_headers)
+    assert readiness.status_code == 200 and readiness.json()["ready"], readiness.text
+    published = client.post(f"{BASE}/revisions/{revision_id}/publish", headers=auth_headers,
+                            json={"expected_publication_digest": readiness.json()["publication_digest"],
+                                  "expected_current_published_revision_id": None,
+                                  "confirmed": True})
+    assert published.status_code == 200, published.text
+    cloned = client.post(f"{BASE}/revisions/{revision_id}/clone", headers=auth_headers,
+                         json={"revision_code": "B"})
+    assert cloned.status_code == 201, cloned.text
+    assemblies = client.get(f"{BASE}/revisions/{cloned.json()['id']}/assemblies",
+                            headers=auth_headers).json()
+    cloned_assembly_id = next(item["id"] for item in assemblies if item["code"] == "PUMP")
+    cloned_kit = client.get(f"{BASE}/assemblies/{cloned_assembly_id}/repair-kits",
+                            headers=auth_headers).json()[0]
+    assert cloned_kit["code"] == source_kit["code"]
+    assert cloned_kit["component_count"] == 1
+    assert cloned_kit["code_locked"] is True
+    with session_factory() as db:
+        assert db.get(CatalogRevisionRepairKit, cloned_kit["id"]).code_locked is True
+
+    rejected = client.patch(f"{BASE}/repair-kits/{cloned_kit['id']}", headers=auth_headers,
+                            json={"code": "QA_NEW_CODE",
+                                  "expected_version": cloned_kit["version"]})
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"]["code"] == "catalog_repair_kit_code_immutable"
+    component = cloned_kit["components"][0]
+    removed = client.delete(
+        f"{BASE}/repair-kit-components/{component['id']}?expected_version={component['version']}",
+        headers=auth_headers,
+    )
+    assert removed.status_code == 204, removed.text
+    empty_kit = client.get(f"{BASE}/repair-kits/{cloned_kit['id']}",
+                           headers=auth_headers).json()
+    assert empty_kit["component_count"] == 0 and empty_kit["code_locked"] is True
+    rejected_again = client.patch(f"{BASE}/repair-kits/{cloned_kit['id']}",
+                                  headers=auth_headers, json={
+                                      "code": "QA_NEW_CODE", "expected_version": empty_kit["version"],
+                                  })
+    assert rejected_again.status_code == 409
+    assert rejected_again.json()["detail"]["code"] == "catalog_repair_kit_code_immutable"
 
 
 def test_separate_pdf_pages_group_two_requested_positions(client, auth_headers, session_factory):
