@@ -5,6 +5,7 @@ import { useI18n, type TranslationKey } from '../../i18n'
 import RevisionParts from './RevisionParts'
 import RevisionHotspotEditor from './RevisionHotspotEditor'
 import RevisionRepairKits from './RevisionRepairKits'
+import useDraftGuard from './useDraftGuard'
 
 type Role = 'EXPLODED_SCHEME' | 'SPARE_PARTS_LIST'
 type Assembly = { id: number; code: string; name_bg: string; name_en: string; name_ru: string;
@@ -57,7 +58,7 @@ function Thumbnail({ artifactId, pageNumber }: { artifactId: number; pageNumber:
     <span>{url === 'error' ? t('builder.previewError') : t('builder.previewPending')}</span>}</div>
 }
 
-export default function RevisionVisualSources({ revisionId, editable }: { revisionId: number; editable: boolean }) {
+export default function RevisionVisualSources({ revisionId, editable, onDirtyChange }: { revisionId: number; editable: boolean; onDirtyChange?: (dirty: boolean) => void }) {
   const { locale, t } = useI18n()
   const [assemblies, setAssemblies] = useState<Assembly[]>([])
   const [assemblyId, setAssemblyId] = useState<number | null>(null)
@@ -74,6 +75,8 @@ export default function RevisionVisualSources({ revisionId, editable }: { revisi
   const [intent, setIntent] = useState<Role | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [childDirty, setChildDirty] = useState(false)
+  useDraftGuard(!!edit || upload || busy || childDirty, onDirtyChange)
   const assembly = assemblies.find(item => item.id === assemblyId)
   const artifact = artifacts.find(item => item.id === artifactId)
   const label = (item: Assembly) => item[`name_${locale}`] || item.name_bg
@@ -187,9 +190,9 @@ export default function RevisionVisualSources({ revisionId, editable }: { revisi
         <button className={assemblyTab === 'parts' ? 'primary compact' : 'secondary compact'} onClick={() => setAssemblyTab('parts')}>{t('builder.part.partsTab')}</button>
         <button className={assemblyTab === 'mapping' ? 'primary compact' : 'secondary compact'} onClick={() => setAssemblyTab('mapping')}>{t('builder.mapping.title')}</button>
         <button className={assemblyTab === 'kits' ? 'primary compact' : 'secondary compact'} onClick={() => setAssemblyTab('kits')}>{t('builder.kit.title')}</button></div>
-      {assemblyTab === 'parts' ? <RevisionParts assemblyId={assembly.id} editable={editable} /> :
-        assemblyTab === 'mapping' ? <RevisionHotspotEditor assemblyId={assembly.id} editable={editable} /> :
-        assemblyTab === 'kits' ? <RevisionRepairKits assemblyId={assembly.id} editable={editable} /> : <>
+      {assemblyTab === 'parts' ? <RevisionParts assemblyId={assembly.id} editable={editable} onDirtyChange={setChildDirty} /> :
+        assemblyTab === 'mapping' ? <RevisionHotspotEditor assemblyId={assembly.id} editable={editable} onDirtyChange={setChildDirty} /> :
+        assemblyTab === 'kits' ? <RevisionRepairKits assemblyId={assembly.id} editable={editable} onDirtyChange={setChildDirty} /> : <>
       {editable && <div className="actions"><button className="primary compact" onClick={() => { setIntent('EXPLODED_SCHEME'); setArtifactId(null) }}>{t('builder.addExploded')}</button>
         <button className="primary compact" onClick={() => { setIntent('SPARE_PARTS_LIST'); setArtifactId(null) }}>{t('builder.addSpare')}</button>
         <button className="secondary compact" onClick={() => { setUploadFile(null); setUploadTitle(''); setUpload(true) }}>{t('builder.uploadSource')}</button></div>}

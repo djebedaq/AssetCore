@@ -168,6 +168,10 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         if artifact is None or page.role not in ROLES or not 1 <= page.page_number <= artifact.page_count:
             errors.append(_error("catalog_publication_visual_page_invalid", visual_page_id=page.id))
     positions = defaultdict(set)
+    assemblies_with_parts = {part.assembly_id for part in content["parts"]}
+    for assembly in content["assemblies"]:
+        if assembly.id not in assemblies_with_parts:
+            errors.append(_error("catalog_publication_empty_assembly", assembly_id=assembly.id))
     for part in content["parts"]:
         positions[part.assembly_id].add(part.position)
         if (part.assembly_id not in assembly_by_id or not part.position.strip()

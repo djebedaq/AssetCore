@@ -136,7 +136,7 @@ def list_assemblies(db: Session, revision_id: int) -> list[dict]:
     return [_assembly_dict(db, item) for item in items]
 
 
-def create_assembly(db: Session, actor: User, revision_id: int, data: AssemblyCreate) -> dict:
+def create_assembly(db: Session, actor: User, revision_id: int, data: AssemblyCreate, *, commit: bool = True) -> dict:
     revision, catalog = _revision(db, revision_id, mutate=True)
     item = CatalogRevisionAssembly(revision_id=revision.id, created_by_id=actor.id, **data.model_dump())
     db.add(item)
@@ -147,7 +147,8 @@ def create_assembly(db: Session, actor: User, revision_id: int, data: AssemblyCr
         raise fail("catalog_assembly_duplicate") from exc
     add_audit_log(db, actor, "catalog_revision_assembly", item.id, "ASSEMBLY_CREATED",
                   _meta(catalog, revision, item))
-    db.commit()
+    if commit:
+        db.commit()
     return _assembly_dict(db, item)
 
 
@@ -356,14 +357,15 @@ def remove_visual_page(db: Session, actor: User, assignment_id: int) -> None:
     db.commit()
 
 
-def preview_page(db: Session, artifact_id: int, page_number: int) -> bytes:
+def preview_page(db: Session, artifact_id: int, page_number: int, *, thumbnail: bool = False) -> bytes:
     item, _, _, _ = _artifact(db, artifact_id)
     if page_number < 1 or page_number > item.page_count:
         raise fail("catalog_visual_page_invalid", 404)
     try:
         with fitz.open(stream=item.content, filetype="pdf") as document:
             page = document.load_page(page_number - 1)
-            scale = min(1.0, (4_000_000 / max(1, page.rect.width * page.rect.height)) ** 0.5)
+            pixels = 160_000 if thumbnail else 4_000_000
+            scale = min(1.0, (pixels / max(1, page.rect.width * page.rect.height)) ** 0.5)
             return page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False,
                                    colorspace=fitz.csRGB).tobytes("png")
     except Exception as exc:

@@ -149,6 +149,23 @@ class VersionPrecondition(Payload):
     expected_version: int = Field(ge=1)
 
 
+class SimpleCatalogCreate(Payload):
+    name: str = Field(min_length=1, max_length=255)
+    asset_category_id: int = Field(gt=0)
+    manufacturer: str | None = Field(default=None, max_length=255)
+    model_reference: str | None = Field(default=None, max_length=255)
+
+
+class SimpleGroupCreate(Payload):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class ClassifyDocumentPages(Payload):
+    assembly_id: int = Field(gt=0)
+    page_numbers: list[int] = Field(min_length=1, max_length=500)
+    roles: list[str] = Field(max_length=2)
+
+
 class RepairKitCreate(Payload):
     code: str = Field(min_length=1, max_length=120, pattern=r"^[A-Z][A-Z0-9_]*$")
     name_bg: str | None = Field(default=None, max_length=255)

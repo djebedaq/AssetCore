@@ -106,7 +106,8 @@ def list_hotspots(db: Session, page_id: int) -> list[dict]:
 
 def coverage(db: Session, assembly_id: int) -> list[dict]:
     _assembly(db, assembly_id)
-    parts = db.execute(select(CatalogRevisionPart.position, CatalogRevisionPart.part_number)
+    parts = db.execute(select(CatalogRevisionPart.position, CatalogRevisionPart.part_number,
+                              CatalogRevisionPart.name_bg, CatalogRevisionPart.name_en, CatalogRevisionPart.name_ru)
                        .where(CatalogRevisionPart.assembly_id == assembly_id)
                        .order_by(CatalogRevisionPart.position, CatalogRevisionPart.id)).all()
     page_ids = select(CatalogRevisionVisualPage.id).join(
@@ -116,11 +117,12 @@ def coverage(db: Session, assembly_id: int) -> list[dict]:
     hotspots = db.execute(select(CatalogRevisionPositionHotspot.position, CatalogRevisionPositionHotspot.is_verified)
                           .where(CatalogRevisionPositionHotspot.visual_page_id.in_(page_ids))).all()
     result: dict[str, dict] = {}
-    for position, part_number in parts:
+    for position, part_number, name_bg, name_en, name_ru in parts:
         row = result.setdefault(position, {"position": position, "part_count": 0, "part_numbers": [],
-                                            "hotspot_count": 0, "verified_hotspot_count": 0})
+                                            "hotspot_count": 0, "verified_hotspot_count": 0, "names": []})
         row["part_count"] += 1
         row["part_numbers"].append(part_number)
+        row["names"].append({"name_bg": name_bg, "name_en": name_en, "name_ru": name_ru})
     for position, verified in hotspots:
         if position in result:
             result[position]["hotspot_count"] += 1

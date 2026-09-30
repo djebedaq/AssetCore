@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError, createApiObjectUrl } from '../../api'
 import { filePayload, Modal } from '../../industrialUi'
 import { useI18n, type TranslationKey } from '../../i18n'
+import useDraftGuard from './useDraftGuard'
 
 type Page = { visual_page_id: number; artifact_id: number; artifact_title: string; filename: string; sha256: string; page_number: number }
 type Map = Page & { id: number }
@@ -63,7 +64,7 @@ function PagePreview({ page }: { page: Page }) {
     <span>{t(url === 'error' ? 'builder.previewError' : 'builder.previewPending')}</span>}</div>
 }
 
-export default function RevisionParts({ assemblyId, editable }: { assemblyId: number; editable: boolean }) {
+export default function RevisionParts({ assemblyId, editable, simple = false, incompleteOnly = false, onDirtyChange, onChanged }: { assemblyId: number; editable: boolean; simple?: boolean; incompleteOnly?: boolean; onDirtyChange?: (dirty: boolean) => void; onChanged?: () => Promise<void> }) {
   const { locale, t } = useI18n()
   const [parts, setParts] = useState<Part[]>([])
   const [pages, setPages] = useState<Page[]>([])
@@ -77,6 +78,8 @@ export default function RevisionParts({ assemblyId, editable }: { assemblyId: nu
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  useDraftGuard(!!editing || !!mapping || busy, onDirtyChange)
+  const visibleFields = simple ? (['position', 'part_number', `name_${locale}`, 'description', 'quantity', 'unit'] as (keyof PartForm)[]) : fields
   const problem = (code: string) => t(problemKeys[code] || 'builder.error.generic')
   const message = (caught: unknown) => problem(caught instanceof ApiError ? caught.code || '' : '')
   async function load() {
@@ -96,15 +99,17 @@ export default function RevisionParts({ assemblyId, editable }: { assemblyId: nu
     if (!editing || busy) return
     setBusy(true)
     try {
-      const payload = { ...form, quantity: form.quantity.trim() ? Number(form.quantity) : null }
+      const name = form[`name_${locale}`]
+      const payload = { ...form, quantity: form.quantity.trim() ? Number(form.quantity) : null,
+        ...(simple ? { name_bg: form.name_bg || name, name_en: form.name_en || name, name_ru: form.name_ru || name } : {}) }
       await api(editing === 'new' ? `/admin/catalog-builder/assemblies/${assemblyId}/parts` :
         `/admin/catalog-builder/parts/${editing.id}`, { method: editing === 'new' ? 'POST' : 'PATCH', body: JSON.stringify(payload) })
-      setEditing(null); setError(''); await load()
+      setEditing(null); setError(''); await load(); await onChanged?.()
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
   }
   async function remove(part: Part) {
     if (!window.confirm(t('builder.part.deleteConfirm'))) return
-    try { await api(`/admin/catalog-builder/parts/${part.id}`, { method: 'DELETE' }); await load() }
+    try { await api(`/admin/catalog-builder/parts/${part.id}`, { method: 'DELETE' }); await load(); await onChanged?.() }
     catch (caught) { setError(message(caught)) }
   }
   async function saveMapping() {
@@ -113,11 +118,11 @@ export default function RevisionParts({ assemblyId, editable }: { assemblyId: nu
     try {
       await api(`/admin/catalog-builder/parts/${mapping.id}/source-pages`,
         { method: 'POST', body: JSON.stringify({ visual_page_ids: selected }) })
-      setMapping(null); setSelected([]); await load()
+      setMapping(null); setSelected([]); await load(); await onChanged?.()
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
   }
   async function removeMapping(id: number) {
-    try { await api(`/admin/catalog-builder/part-page-maps/${id}`, { method: 'DELETE' }); await load() }
+    try { await api(`/admin/catalog-builder/part-page-maps/${id}`, { method: 'DELETE' }); await load(); await onChanged?.() }
     catch (caught) { setError(message(caught)) }
   }
   async function previewFile() {
@@ -139,13 +144,13 @@ export default function RevisionParts({ assemblyId, editable }: { assemblyId: nu
       setImportOpen(false); setFile(null); setPreview(null); setError(''); await load()
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
   }
-  const filtered = parts.filter(part => [part.position, part.part_number, part.name_bg, part.name_en,
+  const filtered = parts.filter(part => (!incompleteOnly || part.validation_status === 'INCOMPLETE') && [part.position, part.part_number, part.name_bg, part.name_en,
     part.name_ru, part.description].some(value => String(value || '').toLocaleLowerCase().includes(search.toLocaleLowerCase())))
   const partName = (part: Part) => part[`name_${locale}`] || part.name_bg || part.name_en || part.name_ru || part.description
   return <div className="builder-workspace">
     {error && <p className="error" role="alert">{error}</p>}
     <div className="actions">{editable && <><button className="primary compact" onClick={() => openForm('new')}>{t('builder.part.add')}</button>
-      <button className="secondary compact" onClick={() => { setImportOpen(true); setPreview(null) }}>{t('builder.part.import')}</button></>}</div>
+      {!simple && <button className="secondary compact" onClick={() => { setImportOpen(true); setPreview(null) }}>{t('builder.part.import')}</button>}</>}</div>
     <input aria-label={t('builder.part.search')} placeholder={t('builder.part.search')} value={search} onChange={event => setSearch(event.target.value)} />
     {!filtered.length && <p>{t('builder.part.empty')}</p>}
     <div className="builder-parts-table"><table><thead><tr>{(['position', 'partNumber', 'name', 'quantity', 'unit', 'sourcePages', 'state', 'actions'] as const)
@@ -159,7 +164,7 @@ export default function RevisionParts({ assemblyId, editable }: { assemblyId: nu
           <button className="secondary compact" onClick={() => void remove(part)}>{t('common.remove')}</button></>}</div></td>
       </tr>)}</tbody></table></div>
     {editing && <Modal title={t(editing === 'new' ? 'builder.part.add' : 'common.edit')} onClose={() => setEditing(null)} wide>
-      <form className="form-grid" onSubmit={event => void save(event)}>{fields.map(key => <label key={key} className={['description', 'description_2', 'technical_specification', 'technical_notes'].includes(key) ? 'wide' : ''}>
+      <form className="form-grid" onSubmit={event => void save(event)}>{visibleFields.map(key => <label key={key} className={['description', 'description_2', 'technical_specification', 'technical_notes'].includes(key) ? 'wide' : ''}>
         {t(`builder.part.field.${key}` as TranslationKey)}
         {['description', 'description_2', 'technical_specification', 'technical_notes'].includes(key) ?
           <textarea value={form[key]} onChange={event => setForm({ ...form, [key]: event.target.value })} /> :
@@ -172,7 +177,7 @@ export default function RevisionParts({ assemblyId, editable }: { assemblyId: nu
     {mapping && <Modal title={t('builder.part.map')} onClose={() => setMapping(null)} wide>
       <div className="builder-page-grid">{pages.map(page => <label className="builder-page-card" key={page.visual_page_id}>
         <PagePreview page={page} /><b>{page.artifact_title} · {t('builder.pageNumber', { count: page.page_number })}</b>
-        <small>{page.filename} · SHA-256: {page.sha256}</small>
+        {!simple && <small>{page.filename} · {page.sha256}</small>}
         <input type="checkbox" checked={selected.includes(page.visual_page_id) || mapping.source_pages.some(item => item.visual_page_id === page.visual_page_id)}
           disabled={mapping.source_pages.some(item => item.visual_page_id === page.visual_page_id)}
           onChange={() => setSelected(ids => ids.includes(page.visual_page_id) ? ids.filter(id => id !== page.visual_page_id) : [...ids, page.visual_page_id])} />

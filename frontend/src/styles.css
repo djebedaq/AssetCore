@@ -179,6 +179,7 @@
 .builder-scheme-viewport { overflow: auto; max-height: 70vh; min-height: 300px; border: 1px solid var(--border, #d6dce3); background: #eef2f5; }
 .builder-scheme-canvas { position: relative; min-width: 100%; margin: auto; background: white; }
 .builder-scheme-canvas.mode-draw { cursor: crosshair; touch-action: none; }
+.builder-scheme-canvas.mode-point { cursor: crosshair; touch-action: none; }
 .builder-scheme-canvas.mode-select { touch-action: none; }
 .builder-scheme-canvas.mode-pan { touch-action: auto; }
 .builder-scheme-canvas.mode-pan .builder-hotspot { pointer-events: none; }
@@ -197,3 +198,20 @@
 .builder-geometry-fields input { width: 100%; }
 .builder-hotspot-list { display: flex; flex-wrap: wrap; gap: .4rem; }
 @media (max-width: 800px) { .builder-scheme-layout { grid-template-columns: 1fr; } .builder-scheme-viewport { max-height: 55vh; } }
+.wizard-progress { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; margin: 1rem 0; }
+.wizard-progress button { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: .5rem; flex-wrap: wrap; }
+.wizard-progress button[aria-current="step"] { outline: 2px solid currentColor; outline-offset: 2px; }
+.wizard-progress span { font-weight: 800; }
+.wizard-groups { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.wizard-groups article { padding: .6rem; border: 1px solid var(--border, #d6dce3); border-radius: .5rem; min-width: 0; }
+.wizard-groups small { display: block; overflow-wrap: anywhere; }
+.wizard-upload, .wizard-page-tools { display: flex; flex-wrap: wrap; gap: .7rem; align-items: end; padding: .75rem 0; }
+.wizard-page-tools label, .wizard-upload label { flex: 1 1 180px; min-width: 0; }
+.wizard-position-list { display: grid; gap: .4rem; max-height: 42vh; overflow: auto; }
+.wizard-position-list button { display: grid; gap: .3rem; text-align: left; padding: .7rem; min-height: 60px; overflow-wrap: anywhere; }
+.wizard-readiness { list-style: none; padding: 0; display: grid; gap: .7rem; }
+.wizard-readiness li { display: flex; align-items: center; flex-wrap: wrap; gap: .7rem; }
+.wizard-navigation, .wizard-pagination { justify-content: space-between; padding: .75rem 0; }
+.wizard-mode { justify-content: flex-end; margin-bottom: .5rem; }
+.builder-page [hidden] { display: none !important; }
+@media (max-width: 700px) { .wizard-progress { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wizard-progress button:last-child { grid-column: 1 / -1; } }

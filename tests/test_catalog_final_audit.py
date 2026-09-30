@@ -34,7 +34,7 @@ from test_catalog_builder_parts import BASE, part, source, workspace
 
 
 def _draft(client, headers, factory):
-    catalog_id, revision_id, assembly_id, _ = workspace(client, headers, factory)
+    catalog_id, revision_id, assembly_id, _ = workspace(client, headers, factory, include_empty_group=False)
     artifact_id, spare_id, scheme_id, _ = source(client, headers, assembly_id)
     created = part(client, headers, assembly_id, position="P" * 80).json()
     response = client.post(f"{BASE}/parts/{created['id']}/source-pages", headers=headers,
