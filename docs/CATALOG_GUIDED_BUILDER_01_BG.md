@@ -50,7 +50,7 @@ OCR се използва само за избран списък без дос�
 
 ## Преглед, атомичност и audit
 
-Preview е HMAC-подписан, actor/logical-page/version/source-bound, с 15-минутна валидност и ограничен payload. Клиентът не може да подмени source evidence. Preview/mapping не създават trusted DB части. Confirm записва избраните човешки стойности и автоматично exact `CatalogRevisionPartPageMap` в една транзакция. При невалиден ред/duplicate конфликт целият confirm се връща назад.
+Preview е HMAC-подписан, actor/logical-page/version/source-bound, с 15-минутна валидност и максимум 2.9 MB unsigned payload. Source assignment приема до 100 physical pages наведнъж, а един confirm — до 1000 избрани реда. Клиентът не може да подмени source evidence. Preview/mapping не създават trusted DB части. Confirm записва избраните човешки стойности и автоматично exact `CatalogRevisionPartPageMap` в една транзакция. При невалиден ред/duplicate конфликт целият confirm се връща назад.
 
 Stable extraction key е SHA + physical page + row bbox + raw source text в logical-page scope. Повторното потвърждение пропуска съществуващата част и не презаписва човешките корекции. Повторен upload връща съществуващия source. Page/source edits използват optimistic version и established catalog/revision locks; stale assignments/reorder се отхвърлят. References/pages/sources reorder е атомичен. Изтриване на използван source/page се блокира. Изтриване през legacy artifact endpoint не може да изтрие guided assignments. Само DRAFT се редактира; Owner/Admin checks са централизирани в PARTS_MANAGE.
 
