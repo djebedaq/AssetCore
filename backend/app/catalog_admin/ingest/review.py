@@ -40,7 +40,12 @@ def assembly_for(db: Session, run, payload: dict) -> CatalogRevisionAssembly:
 
 
 def source_for(db: Session, run) -> CatalogRevisionArtifact:
-    source = db.get(CatalogRevisionArtifact, run.artifact_id)
+    # The artifact ID is a historical snapshot, not a live foreign key. SQLite
+    # may reuse a deleted integer PK; both SHA and revision remain authoritative.
+    source = db.scalar(select(CatalogRevisionArtifact).join(CatalogRevisionAssembly).where(
+        CatalogRevisionArtifact.id == run.artifact_id,
+        CatalogRevisionAssembly.revision_id == run.revision_id,
+        CatalogRevisionArtifact.sha256 == run.sha256))
     if source is None:
         source = db.scalar(select(CatalogRevisionArtifact).join(CatalogRevisionAssembly).where(
             CatalogRevisionAssembly.revision_id == run.revision_id, CatalogRevisionArtifact.sha256 == run.sha256))

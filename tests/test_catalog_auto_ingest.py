@@ -299,3 +299,23 @@ def test_ambiguity_multiple_occurrences_and_rotation_geometry(client, auth_heade
     accepted = checked(decide(client, auth_headers, run, row, locations=[0, 1]))
     assert len(accepted["payload"]["accepted_hotspots"]) == 2
     checked(decide(client, auth_headers, run, accepted, "VERIFY"))
+
+
+def test_deleted_source_id_reuse_cannot_accept_a_group_against_another_pdf(client, auth_headers, session_factory):
+    _, revision = workspace(client, auth_headers, session_factory)
+    original = checked(upload(client, auth_headers, revision, manual()), 201)
+    run = analyze(client, auth_headers, original)
+    group = proposals(client, auth_headers, run, "GROUP")[0]
+    assert client.delete(f"{BASE}/artifacts/{original['id']}", headers=auth_headers).status_code == 204
+    replacement = checked(upload(client, auth_headers, revision, manual(groups=2)), 201)
+    assert replacement['id'] == original['id']  # SQLite reuses the deleted highest integer PK.
+    assert replacement['sha256'] != original['sha256']
+    response = decide(client, auth_headers, run, group)
+    assert response.status_code == 404
+    assert response.json()['detail']['code'] == 'catalog_source_not_found'
+    with session_factory() as db:
+        assert db.get(CatalogIngestCandidate, group['id']).state == 'PROPOSED'
+        assert db.get(CatalogRevisionArtifact, replacement['id']).sha256 == replacement['sha256']
+    # Retained original-byte evidence remains accessible despite deleting its draft alias.
+    preview = client.get(f"{BASE}/analyses/{run['id']}/pages/1/preview", headers=auth_headers)
+    assert preview.status_code == 200 and preview.content.startswith(b'\x89PNG')

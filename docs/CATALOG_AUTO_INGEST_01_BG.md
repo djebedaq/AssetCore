@@ -113,6 +113,8 @@ API допуска няколко избрани occurrence locations за ед�
 `PROPOSED`, `NEEDS_REVIEW`, `ACCEPTED`, `REJECTED`. Source evidence не може да се
 редактира през API. Human edits са отделен payload с actor/time и optimistic
 version. Повторно разчитане запазва приети данни, редакции и откази.
+Artifact ID в run е исторически snapshot; преди приемане се проверяват също
+revision и SHA, защото SQLite може да използва повторно ID на изтрит draft alias.
 
 Run checkpoint е след всяка страница. Кратките `advance` заявки се изпълняват
 автоматично; DB lease предотвратява две едновременни PDF обработки за една
