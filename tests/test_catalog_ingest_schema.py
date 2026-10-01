@@ -130,3 +130,15 @@ def test_section_and_subtotal_rows_do_not_create_parts_and_legacy_row_text_stays
     with fitz.open(stream=manual(), filetype="pdf") as pdf:
         row = extraction.extract_page(pdf[1], configuration(settings))["rows"][0]
     assert row["raw_text"] == "1 QA-0-0 QA component 2.5"  # Original CATALOG_INGEST_1 identity input.
+
+
+@pytest.mark.parametrize("ruled", [False, True])
+def test_version_date_page_footer_is_retained_as_metadata_instead_of_a_fake_part(ruled):
+    page = analyze(contextual_table(rows=[["1", "QA-1", "Seal", "1"],
+        ["V1.0", "30/10/2025", "", "11"]], ruled=ruled))
+    assert [row["payload"]["position"] for row in page["rows"]] == ["1"]
+    assert page["tables"][0]["excluded_rows"][0]["raw_cells"] == ["V1.0", "30/10/2025", "", "11"]
+    assert page["tables"][0]["excluded_rows"][0]["bbox"]
+    # Version-like genuine position plus an actual part/description is preserved.
+    genuine = analyze(contextual_table(rows=[["1", "QA-1", "Seal", "1"], ["V1.0", "QA-2", "Valve", "2"]]))
+    assert len(genuine["rows"]) == 2

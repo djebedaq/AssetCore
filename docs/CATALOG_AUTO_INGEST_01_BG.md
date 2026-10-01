@@ -282,6 +282,10 @@ headers изискват поне два геометрично последов
 таблици на страница. Headerless continuation мащабира normalized региони по
 новата ширина и остава inferred/reviewable.
 
+Комбинация само от document version, дата и page-number cells се запазва като
+`excluded_rows / DOCUMENT_METADATA` с raw cells и bbox, вместо да създава
+непълна част. Version-like позиция с реален part number и описание остава ред.
+
 Търсенето е ограничено до 32 populated sample rows, три варианта на boundary,
 beam 16 и четири различни крайни алтернативи. Evidence пази оригинални клетки,
 source row bbox, regions, assignments/overlap/conflicts и alternative cells.

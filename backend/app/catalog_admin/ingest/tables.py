@@ -1,8 +1,19 @@
 """Geometry first, contextual schemas second, exact source rows throughout."""
 
+import re
+
 from .columns import assign_words, header_geometry, infer_columns
 from .schema import header_candidates, infer_schema
 from .values import PLACEHOLDERS, POSITION, quantity
+
+
+def document_metadata(cells: list[str]) -> bool:
+    values = [value.strip() for value in cells if value.strip()]
+    version = re.compile(r"v(?:er(?:sion)?)?[.:]?\s*\d+(?:\.\d+){1,3}", re.I)
+    date = re.compile(r"(?:\d{1,2}[/.-]\d{1,2}[/.-]\d{4}|\d{4}-\d{1,2}-\d{1,2})")
+    return (any(version.fullmatch(value) for value in values)
+            and any(date.fullmatch(value) for value in values)
+            and all(version.fullmatch(value) or date.fullmatch(value) or value.isdigit() for value in values))
 
 
 def make_row(values: dict, bbox: list[float], raw: str, *, method: str) -> dict | None:
@@ -46,6 +57,10 @@ def parse_region(headers: list[str], cells: list[list[str]], boxes: list[list[fl
     for raw_cells, box in zip(cells, boxes, strict=True):
         if schema["state"] != "RESOLVED":
             break
+        if document_metadata(raw_cells):
+            table.setdefault("excluded_rows", []).append({"raw_cells": raw_cells, "bbox": box, "reason": "DOCUMENT_METADATA"})
+            previous = None
+            continue
         values = {role: raw_cells[int(col)] if int(col) < len(raw_cells) else ""
                   for col, role in schema["mapping"].items() if role != "unknown"}
         if sum(bool(header_candidates(value)) for value in raw_cells) >= 3:
