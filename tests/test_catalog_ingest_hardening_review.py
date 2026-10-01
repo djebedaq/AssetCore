@@ -15,6 +15,8 @@ def test_ambiguous_schema_is_reviewable_and_never_accepted_as_parts(client, auth
     page = proposals(client, auth_headers, run, "PAGE")[0]
     assert page["state"] == "NEEDS_REVIEW" and page["payload"]["role"] == "SPARE_PARTS_LIST"
     assert page["evidence"]["tables"][0]["schema"]["margin"] == 0
+    group = proposals(client, auth_headers, run, "GROUP")[0]
+    assert group["state"] == "NEEDS_REVIEW" and group["confidence"] <= page["confidence"]
     assert not proposals(client, auth_headers, run, "PART")
     ready = checked(client.get(f"{BASE}/revisions/{revision['id']}/publication-readiness", headers=auth_headers))
     assert not ready["ready"] and any(error["code"] == "catalog_ingest_review_required" for error in ready["errors"])

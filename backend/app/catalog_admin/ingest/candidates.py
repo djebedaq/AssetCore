@@ -59,7 +59,7 @@ def store_page(db: Session, run: CatalogIngestRun, number: int, layout: dict) ->
         propose(db, run.id, key, "GROUP", {"name": heading},
             {"source_heading": heading, "headings": layout["headings"], "page_number": number,
              "heading_evidence": layout.get("heading_evidence", {})},
-            .92 if layout["role"] in {"SPARE_PARTS_LIST", "EXPLODED_SCHEME", "BOTH"} else .5,
+            min(.92, layout["confidence"]),
             ["OCR_REQUIRES_REVIEW"] if layout["ocr_used"] else [], number)
     elif "group_key" not in context and layout["role"] not in {"OTHER", "AMBIGUOUS"}:
         # No made-up name: use an actual extracted source line for a manual decision.
