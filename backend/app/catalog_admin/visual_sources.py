@@ -5,9 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
-import math
 
-import fitz
 from fastapi import HTTPException
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -28,11 +26,13 @@ from ..models import (
     User,
     utcnow,
 )
+from ..settings import settings
+from . import source_storage
 from .schemas import ArtifactUpload, AssemblyCreate, AssemblyUpdate, VisualPageCreate
 from .service import fail
 
-MAX_PDF_BYTES = 12 * 1024 * 1024
-MAX_PDF_PAGES = 1000
+MAX_PDF_BYTES = settings.catalog_pdf_max_bytes
+MAX_PDF_PAGES = settings.catalog_pdf_max_pages
 ROLES = {"EXPLODED_SCHEME", "SPARE_PARTS_LIST"}
 
 
@@ -221,45 +221,39 @@ def get_artifact(db: Session, artifact_id: int) -> dict:
 
 
 def upload_artifact(db: Session, actor: User, assembly_id: int, data: ArtifactUpload) -> dict:
-    assembly, revision, catalog = _assembly(db, assembly_id, mutate=True)
+    # Legacy compatibility endpoint. The primary UI uses binary UploadFile.
     if data.media_type != "application/pdf" or not data.filename.lower().endswith(".pdf"):
         raise fail("catalog_source_invalid_pdf", 422)
-    if (any(ch in data.filename for ch in ("/", "\\", '"'))
-            or any(ord(ch) < 32 or ord(ch) == 127 for ch in data.filename)
-            or data.filename in {".", ".."} or not data.title.strip()):
-        raise fail("catalog_source_invalid_pdf", 422)
-    if len(data.content_base64) > ((MAX_PDF_BYTES + 2) // 3) * 4:
+    if len(data.content_base64) > ((settings.catalog_pdf_max_bytes + 2) // 3) * 4:
         raise fail("catalog_source_too_large", 413)
     try:
         content = base64.b64decode(data.content_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
         raise fail("catalog_source_invalid_pdf", 422) from exc
-    if len(content) > MAX_PDF_BYTES:
-        raise fail("catalog_source_too_large", 413)
-    if not content.startswith(b"%PDF-"):
+    return store_artifact(db, actor, assembly_id, content, data.filename, data.title,
+                          document_reference=data.document_reference, document_date=data.document_date,
+                          language=data.language)
+
+
+def store_artifact(db: Session, actor: User, assembly_id: int, content: bytes,
+                   filename: str, title: str, **metadata) -> dict:
+    assembly, revision, catalog = _assembly(db, assembly_id, mutate=True)
+    if (not 1 <= len(filename) <= 255 or not 1 <= len(title.strip()) <= 255
+            or any(ch in filename for ch in ("/", "\\", '"'))
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in filename)
+            or filename in {".", ".."}):
         raise fail("catalog_source_invalid_pdf", 422)
-    try:
-        with fitz.open(stream=content, filetype="pdf") as document:
-            if document.needs_pass or document.is_repaired or not 1 <= document.page_count <= MAX_PDF_PAGES:
-                raise ValueError("unsupported PDF")
-            page_count = document.page_count
-            for page in document:
-                if (not all(math.isfinite(value) for value in (page.rect.x0, page.rect.y0,
-                                                               page.rect.x1, page.rect.y1))
-                        or page.rect.width <= 0 or page.rect.height <= 0):
-                    raise ValueError("invalid page")
-    except Exception as exc:
-        raise fail("catalog_source_invalid_pdf", 422) from exc
+    page_count = source_storage.validate_pdf(content)
     digest = hashlib.sha256(content).hexdigest()
     existing = db.scalar(select(CatalogRevisionArtifact).where(
         CatalogRevisionArtifact.assembly_id == assembly.id, CatalogRevisionArtifact.sha256 == digest))
     if existing:
         raise HTTPException(409, detail={"code": "catalog_source_duplicate", "artifact_id": existing.id})
-    item = CatalogRevisionArtifact(assembly_id=assembly.id, title=data.title.strip(),
-                                   filename=data.filename, media_type="application/pdf", content=content,
+    item = CatalogRevisionArtifact(assembly_id=assembly.id, title=title.strip(),
+                                   filename=filename, media_type="application/pdf",
+                                   source_blob=source_storage.shared_blob(db, content, digest), stored_content=b"",
                                    sha256=digest, page_count=page_count,
-                                   document_reference=data.document_reference, document_date=data.document_date,
-                                   language=data.language, created_by_id=actor.id)
+                                   created_by_id=actor.id, **metadata)
     db.add(item)
     try:
         db.flush()
@@ -361,15 +355,11 @@ def preview_page(db: Session, artifact_id: int, page_number: int, *, thumbnail: 
     item, _, _, _ = _artifact(db, artifact_id)
     if page_number < 1 or page_number > item.page_count:
         raise fail("catalog_visual_page_invalid", 404)
-    try:
-        with fitz.open(stream=item.content, filetype="pdf") as document:
-            page = document.load_page(page_number - 1)
-            pixels = 160_000 if thumbnail else 4_000_000
-            scale = min(1.0, (pixels / max(1, page.rect.width * page.rect.height)) ** 0.5)
-            return page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False,
-                                   colorspace=fitz.csRGB).tobytes("png")
-    except Exception as exc:
-        raise fail("catalog_source_invalid_pdf", 422) from exc
+    from .ingest.process import configuration, extract
+    result = extract(item.content, "thumbnail" if thumbnail else "preview", page_number, configuration(settings))
+    if result.get("error"):
+        raise fail("catalog_source_invalid_pdf", 422)
+    return base64.b64decode(result["image"])
 
 
 def download_artifact(db: Session, artifact_id: int) -> tuple[bytes, str]:

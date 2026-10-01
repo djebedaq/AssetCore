@@ -25,6 +25,9 @@ from ..models import (
     AuthSession,
     CatalogAssetBinding,
     CatalogDefinition,
+    CatalogIngestCandidate,
+    CatalogIngestPage,
+    CatalogIngestRun,
     CatalogRevision,
     CatalogRevisionArtifact,
     CatalogRevisionAssembly,
@@ -130,6 +133,8 @@ REFERENCE_LABELS = {
     "catalog_revision_position_hotspots": "builderHotspots",
     "catalog_revision_repair_kits": "builderRepairKits",
     "catalog_revision_repair_kit_components": "builderRepairKitComponents",
+    "catalog_ingest_runs": "builderAnalyses",
+    "catalog_ingest_candidates": "builderProposals",
 }
 
 # Only local events are owned data. Unknown or operational events fail closed.
@@ -334,6 +339,7 @@ def _analyze(db, actor, kind, target) -> dict:
             blockers.append(_dependency("official_documents", count))
     elif kind == ResourceType.CATALOG_DEFINITION:
         owned = {CatalogRevision.__tablename__, CatalogAssetBinding.__tablename__,
+                 CatalogIngestRun.__tablename__, CatalogIngestPage.__tablename__, CatalogIngestCandidate.__tablename__,
                  CatalogRevisionAssembly.__tablename__, CatalogRevisionArtifact.__tablename__,
                  CatalogRevisionVisualPage.__tablename__, CatalogRevisionPart.__tablename__,
                  CatalogRevisionPartPageMap.__tablename__, CatalogRevisionPositionHotspot.__tablename__,
@@ -344,12 +350,16 @@ def _analyze(db, actor, kind, target) -> dict:
         if published:
             blockers.append(_dependency("catalog_revisions", published))
         revision_ids = select(CatalogRevision.id).where(CatalogRevision.catalog_id == target.id)
+        run_ids = select(CatalogIngestRun.id).where(CatalogIngestRun.revision_id.in_(revision_ids))
         assembly_ids = select(CatalogRevisionAssembly.id).where(CatalogRevisionAssembly.revision_id.in_(revision_ids))
         artifact_ids = select(CatalogRevisionArtifact.id).where(CatalogRevisionArtifact.assembly_id.in_(assembly_ids))
         part_ids = select(CatalogRevisionPart.id).where(CatalogRevisionPart.assembly_id.in_(assembly_ids))
         page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id.in_(artifact_ids))
         kit_ids = select(CatalogRevisionRepairKit.id).where(CatalogRevisionRepairKit.assembly_id.in_(assembly_ids))
         for model, condition in (
+            (CatalogIngestRun, CatalogIngestRun.revision_id.in_(revision_ids)),
+            (CatalogIngestPage, CatalogIngestPage.run_id.in_(run_ids)),
+            (CatalogIngestCandidate, CatalogIngestCandidate.run_id.in_(run_ids)),
             (CatalogRevisionAssembly, CatalogRevisionAssembly.revision_id.in_(revision_ids)),
             (CatalogRevisionArtifact, CatalogRevisionArtifact.assembly_id.in_(assembly_ids)),
             (CatalogRevisionVisualPage, CatalogRevisionVisualPage.artifact_id.in_(artifact_ids)),
@@ -413,6 +423,7 @@ def _lock_dependencies(db: Session, kind: ResourceType) -> None:
         tables.update({"document_participants", "official_documents", "official_document_versions"})
     if kind == ResourceType.CATALOG_DEFINITION:
         tables.update({"catalog_revisions", "catalog_asset_bindings", "catalog_revision_assemblies",
+                       "catalog_ingest_runs", "catalog_ingest_pages", "catalog_ingest_candidates",
                        "catalog_revision_artifacts", "catalog_revision_visual_pages",
                        "catalog_revision_parts", "catalog_revision_part_page_maps",
                        "catalog_revision_position_hotspots", "catalog_revision_repair_kits",
@@ -510,6 +521,10 @@ def execute(
             )
         elif kind == ResourceType.CATALOG_DEFINITION:
             revision_ids = select(CatalogRevision.id).where(CatalogRevision.catalog_id == identifier)
+            run_ids = select(CatalogIngestRun.id).where(CatalogIngestRun.revision_id.in_(revision_ids))
+            db.execute(delete(CatalogIngestCandidate).where(CatalogIngestCandidate.run_id.in_(run_ids)))
+            db.execute(delete(CatalogIngestPage).where(CatalogIngestPage.run_id.in_(run_ids)))
+            db.execute(delete(CatalogIngestRun).where(CatalogIngestRun.revision_id.in_(revision_ids)))
             assembly_ids = select(CatalogRevisionAssembly.id).where(CatalogRevisionAssembly.revision_id.in_(revision_ids))
             artifact_ids = select(CatalogRevisionArtifact.id).where(CatalogRevisionArtifact.assembly_id.in_(assembly_ids))
             part_ids = select(CatalogRevisionPart.id).where(CatalogRevisionPart.assembly_id.in_(assembly_ids))

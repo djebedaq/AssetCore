@@ -119,6 +119,8 @@ def workflow(db: Session, revision_id: int) -> dict:
     maps = {row.id: row for row in content["maps"]}
     components = {row.id: row for row in content["components"]}
     for issue in result["errors"] + result["warnings"]:
+        if issue["code"].startswith("catalog_ingest_"):
+            continue
         part = part_rows.get(issue.get("part_id"))
         if issue.get("mapping_id") in maps:
             part = part_rows.get(maps[issue["mapping_id"]].part_id)

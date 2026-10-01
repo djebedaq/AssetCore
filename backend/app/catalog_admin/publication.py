@@ -9,7 +9,6 @@ from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 
-import fitz
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,6 +19,8 @@ from ..models import (
     CatalogAssetBinding,
     CatalogDefinition,
     CatalogDiagram,
+    CatalogIngestCandidate,
+    CatalogIngestRun,
     CatalogPositionHotspot,
     CatalogRevision,
     CatalogRevisionArtifact,
@@ -41,7 +42,8 @@ from ..models import (
     utcnow,
 )
 from .service import fail, revision_dict
-from .visual_sources import MAX_PDF_PAGES, ROLES
+from .source_storage import shared_blob
+from .visual_sources import ROLES
 
 
 def source_id(assembly: CatalogRevisionAssembly) -> str:
@@ -66,11 +68,16 @@ def graph(db: Session, revision: CatalogRevision) -> dict:
     hotspots = _rows(db, CatalogRevisionPositionHotspot, CatalogRevisionPositionHotspot.visual_page_id, [x.id for x in pages])
     kits = _rows(db, CatalogRevisionRepairKit, CatalogRevisionRepairKit.assembly_id, [x.id for x in assemblies])
     components = _rows(db, CatalogRevisionRepairKitComponent, CatalogRevisionRepairKitComponent.kit_id, [x.id for x in kits])
+    ingest_runs = _rows(db, CatalogIngestRun, CatalogIngestRun.revision_id, [revision.id])
+    ingest_candidates = _rows(db, CatalogIngestCandidate, CatalogIngestCandidate.run_id, [x.id for x in ingest_runs])
     return dict(assemblies=assemblies, artifacts=artifacts, pages=pages, parts=parts,
-                maps=maps, hotspots=hotspots, kits=kits, components=components)
+                maps=maps, hotspots=hotspots, kits=kits, components=components,
+                ingest_runs=ingest_runs, ingest_candidates=ingest_candidates)
 
 
 PUBLISH_FIELDS = {
+    "ingest_runs": ("id", "sha256", "extractor_version", "status", "next_page"),
+    "ingest_candidates": ("id", "run_id", "kind", "state", "version", "target_id"),
     "assemblies": ("id", "revision_id", "code", "name_bg", "name_en", "name_ru", "description", "sort_order"),
     "artifacts": ("id", "assembly_id", "title", "filename", "media_type", "sha256", "page_count", "document_reference", "document_date", "language"),
     "pages": ("id", "artifact_id", "page_number", "role"),
@@ -98,7 +105,7 @@ def digest(catalog: CatalogDefinition, revision: CatalogRevision, content: dict)
                     ("id", "code", "asset_category_id", "name_bg", "name_en", "name_ru", "description", "manufacturer", "model_reference", "is_active")},
         "revision": {"id": revision.id, "catalog_id": revision.catalog_id, "revision_code": revision.revision_code},
         **{kind: [{key: _value(getattr(row, key)) for key in fields} for row in content[kind]]
-           for kind, fields in PUBLISH_FIELDS.items()},
+           for kind, fields in PUBLISH_FIELDS.items() if not kind.startswith("ingest_") or content[kind]},
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False,
                                      separators=(",", ":"), allow_nan=False).encode()).hexdigest()
@@ -134,6 +141,13 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         errors.append(_error("catalog_category_not_supported"))
     if revision.status != "DRAFT":
         errors.append(_error("catalog_revision_not_draft"))
+    for run in content["ingest_runs"]:
+        if run.status not in {"COMPLETED", "DISMISSED"}:
+            errors.append(_error("catalog_ingest_not_completed", run_id=run.id, step="documents"))
+    pending = {row.kind for row in content["ingest_candidates"] if row.state in {"PROPOSED", "NEEDS_REVIEW"}}
+    for kind in sorted(pending):
+        errors.append(_error("catalog_ingest_review_required", candidate_kind=kind,
+            step="parts" if kind == "PART" else "hotspots" if kind == "HOTSPOT" else "documents"))
     if not content["assemblies"]:
         errors.append(_error("catalog_publication_no_assemblies"))
     assembly_by_id = {x.id: x for x in content["assemblies"]}
@@ -149,18 +163,21 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
             errors.append(_error("catalog_publication_part_mapping_invalid", mapping_id=item.id))
         else:
             mapped[part.id].append(page)
+    validated = {}
+    analyzed = {run.sha256: run.page_count for run in content["ingest_runs"] if run.status == "COMPLETED"}
     for artifact in content["artifacts"]:
         try:
             raw = artifact.content
             if (artifact.media_type != "application/pdf" or not raw.startswith(b"%PDF-")
                     or hashlib.sha256(raw).hexdigest() != artifact.sha256):
                 raise ValueError("hash or media type")
-            with fitz.open(stream=raw, filetype="pdf") as pdf:
-                if pdf.needs_pass or pdf.is_repaired or not 1 <= pdf.page_count <= MAX_PDF_PAGES or pdf.page_count != artifact.page_count:
-                    raise ValueError("invalid PDF")
-                if any(not all(math.isfinite(v) for v in (page.rect.x0, page.rect.y0, page.rect.x1, page.rect.y1))
-                       or page.rect.width <= 0 or page.rect.height <= 0 for page in pdf):
-                    raise ValueError("invalid page")
+            if artifact.sha256 not in validated:
+                from .source_storage import validate_pdf
+                # Completed isolated analysis is bound to the exact SHA. Manual
+                # sources are validated once per PDF, never once per assembly.
+                validated[artifact.sha256] = analyzed.get(artifact.sha256) or validate_pdf(raw)
+            if validated[artifact.sha256] != artifact.page_count:
+                raise ValueError("invalid page count")
         except Exception:
             errors.append(_error("catalog_publication_source_invalid", artifact_id=artifact.id))
     for page in content["pages"]:
@@ -238,6 +255,7 @@ def _materialize(db: Session, actor: User, catalog: CatalogDefinition,
     pages = {row.id: row for row in content["pages"]}
     documents = {}
     for artifact in content["artifacts"]:
+        blob = artifact.source_blob or shared_blob(db, artifact.content, artifact.sha256)
         document = TechnicalDocument(
             builder_artifact_id=artifact.id, brand="", category="CATALOG_BUILDER",
             title=artifact.title, file_path=f"catalog-builder/{artifact.id}/{artifact.sha256}",
@@ -246,14 +264,14 @@ def _materialize(db: Session, actor: User, catalog: CatalogDefinition,
             document_date=datetime.combine(artifact.document_date, datetime.min.time()) if artifact.document_date else None,
             language=artifact.language if artifact.language in {"bg", "en", "ru"} else None,
             page_count=artifact.page_count, sha256=artifact.sha256,
-            uploaded_content=artifact.content, uploaded_filename=artifact.filename,
+            source_blob=blob, uploaded_bytes=None, uploaded_filename=artifact.filename,
             media_type=artifact.media_type, uploaded_by_id=actor.id,
         )
         db.add(document)
         db.flush()
         db.add(TechnicalDocumentRevision(document_id=document.id, version=1,
                                          revision_label=revision.revision_code, filename=artifact.filename,
-                                         media_type=artifact.media_type, content=artifact.content,
+                                         media_type=artifact.media_type, source_blob=blob, stored_content=None,
                                          sha256=artifact.sha256, created_by_id=actor.id))
         documents[artifact.id] = document
     visuals = {}
@@ -437,7 +455,8 @@ def clone(db: Session, actor: User, revision_id: int,
             values = {key: getattr(item, key) for key in PUBLISH_FIELDS["artifacts"]
                       if key not in {"id", "assembly_id"}}
             new = CatalogRevisionArtifact(assembly_id=assembly_ids[item.assembly_id],
-                                          content=item.content, created_by_id=actor.id, **values)
+                                          source_blob=item.source_blob or shared_blob(db, item.content, item.sha256),
+                                          stored_content=b"", created_by_id=actor.id, **values)
             db.add(new)
             db.flush()
             artifact_ids[item.id] = new.id

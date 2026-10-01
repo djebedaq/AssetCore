@@ -2,7 +2,7 @@
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -51,6 +51,7 @@ router = APIRouter(prefix="/api/admin/catalog-builder", tags=["catalog-builder"]
 manager = require_permission(Permission.PARTS_MANAGE)
 
 
+
 @router.post("/simple/catalogs", status_code=201)
 def create_simple_catalog(data: SimpleCatalogCreate, actor: User = Depends(manager),
                           db: Session = Depends(get_db)) -> dict:
@@ -79,6 +80,42 @@ def list_wizard_documents(revision_id: int, _: User = Depends(manager),
 def upload_wizard_document(revision_id: int, data: ArtifactUpload, actor: User = Depends(manager),
                            db: Session = Depends(get_db)) -> dict:
     return wizard_documents.upload(db, actor, revision_id, data)
+
+
+@router.post("/revisions/{revision_id}/pdf", status_code=201)
+def upload_binary_document(revision_id: int, file: UploadFile = File(...),
+                           title: str = Form(default="", max_length=255),
+                           actor: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    from sqlalchemy import select
+
+    from ..models import CatalogRevisionAssembly
+    from . import source_storage
+    from .schemas import AssemblyCreate
+
+    visual_sources._revision(db, revision_id, mutate=True)
+    group = db.scalar(select(CatalogRevisionAssembly).where(
+        CatalogRevisionAssembly.revision_id == revision_id).order_by(CatalogRevisionAssembly.id).limit(1))
+    try:
+        content, digest = source_storage.read_upload(file.file)
+        # Same SHA in this revision is an idempotent upload, including double-clicks.
+        existing = db.scalar(select(visual_sources.CatalogRevisionArtifact).join(CatalogRevisionAssembly).where(
+            CatalogRevisionAssembly.revision_id == revision_id,
+            visual_sources.CatalogRevisionArtifact.sha256 == digest).order_by(visual_sources.CatalogRevisionArtifact.id))
+        if existing:
+            db.commit()
+            return {**visual_sources._artifact_dict(existing), "duplicate": True}
+        if group is None:
+            created = visual_sources.create_assembly(db, actor, revision_id, AssemblyCreate(
+                code=wizard.group_code(db, revision_id, "INITIAL_GROUP"),
+                name_bg="Първоначална група", name_en="Initial group", name_ru="Начальная группа"), commit=False)
+            group = db.get(CatalogRevisionAssembly, created["id"])
+        filename = file.filename or "source.pdf"
+        return visual_sources.store_artifact(db, actor, group.id, content, filename, title or filename)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        file.file.close()
 
 
 @router.get("/revisions/{revision_id}/workflow")

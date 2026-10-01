@@ -7,6 +7,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    catalog_pdf_max_bytes: int = Field(default=256 * 1024 * 1024, ge=1024, le=1024**3)
+    catalog_pdf_max_pages: int = Field(default=5000, ge=1, le=20000)
+    catalog_ingest_page_timeout_seconds: int = Field(default=45, ge=5, le=120)
+    catalog_ingest_max_processes: int = Field(default=2, ge=1, le=4)
+    catalog_ingest_max_words: int = Field(default=30000, ge=100, le=100000)
+    catalog_ocr_enabled: bool = True
+    catalog_ocr_languages: str = "eng+deu+bul+rus"
+    catalog_ocr_dpi: int = Field(default=150, ge=72, le=300)
+    catalog_ocr_max_pixels: int = Field(default=16_000_000, ge=1_000_000, le=40_000_000)
     app_name: str = "AssetCore"
     database_url: str = "sqlite:///./assetcore.db"
     secret_key: str = "change-me-before-production"
