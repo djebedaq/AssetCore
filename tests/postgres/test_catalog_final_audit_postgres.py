@@ -184,6 +184,18 @@ def test_maximum_names_and_position_publish_without_truncation_and_guard_downgra
     config.set_main_option("script_location", str(ROOT / "backend/alembic"))
     with pg_factory.kw["bind"].begin() as connection:
         config.attributes["connection"] = connection
-        with pytest.raises(RuntimeError, match="title exceeds 500"):
+        with pytest.raises(RuntimeError, match="shared source evidence"):
             command.downgrade(config, "20260929_0029")
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20260930_0030"
+        # Retain the preceding migration's PostgreSQL truncation assertion too.
+        import importlib.util
+
+        from alembic.migration import MigrationContext
+        from alembic.operations import Operations
+        path = ROOT / "backend/alembic/versions/20260930_0030_catalog_diagram_titles.py"
+        spec = importlib.util.spec_from_file_location("qa_title_migration", path)
+        title_migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(title_migration)
+        with Operations.context(MigrationContext.configure(connection)):
+            with pytest.raises(RuntimeError, match="title exceeds 500"):
+                title_migration.downgrade()
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261001_0031"

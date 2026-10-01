@@ -79,6 +79,7 @@ def test_legacy_document_revision_cannot_change_builder_evidence(
         document = db.scalar(select(TechnicalDocument).where(
             TechnicalDocument.builder_artifact_id == artifact_id))
         document_id, before = document.id, _columns(document)
+        original_content = document.uploaded_content
     if retired:
         clone = client.post(f"{BASE}/revisions/{revision_id}/clone", headers=auth_headers,
                             json={"revision_code": "B"})
@@ -87,7 +88,7 @@ def test_legacy_document_revision_cannot_change_builder_evidence(
     response = client.post(f"/api/technical-library/{document_id}/revisions", headers=auth_headers,
                            json={"brand": "QA", "category": "QA", "title": "QA replacement",
                                  "filename": "replacement.pdf", "media_type": "application/pdf",
-                                 "content_base64": base64.b64encode(before["uploaded_content"]).decode()})
+                                 "content_base64": base64.b64encode(original_content).decode()})
     assert response.status_code == 409, response.text
     assert response.json()["detail"]["code"] == "catalog_published_content_immutable"
     with session_factory() as db:

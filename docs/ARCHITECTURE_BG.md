@@ -120,3 +120,7 @@ Document слоят получава canonical SQLAlchemy snapshot и връща
 ## CATALOG-ADMIN-01D
 
 Черновите зони върху изрични разглобени схеми сочат точна позиция в Builder, която може да има няколко варианта на част. Черновите ремонтни комплекти сочат точни Builder части и по избор една изходна страница от списъка. Геометрията и проверката са защитени при конкурентни записи; live каталогът и PARTS-DOC не четат тези таблици. Подробности: [CATALOG_ADMIN_01D_HOTSPOTS_REPAIR_KITS_BG.md](CATALOG_ADMIN_01D_HOTSPOTS_REPAIR_KITS_BG.md).
+
+## CATALOG-AUTO-INGEST-01
+
+Основният Builder приема оригиналния PDF чрез multipart upload и започва възобновим анализ с checkpoints. Native layout, таблици и селективен локален OCR предлагат групи, роли, части и callout зони с точни SHA/page/bbox доказателства. Човешкото приемане създава съществуващите чернови записи и source mappings; зоните се проверяват отделно. Един `CatalogSourceBlob` споделя байтовете между възли и нови публикувани библиотечни версии. Старите bytes и PARTS-DOC snapshots не се променят. Подробности: [CATALOG_AUTO_INGEST_01_BG.md](CATALOG_AUTO_INGEST_01_BG.md).

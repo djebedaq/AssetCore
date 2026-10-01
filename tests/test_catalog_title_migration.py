@@ -12,10 +12,13 @@ from test_migrations import _run_sqlite_revision
 def test_diagram_title_upgrade_preserves_preceding_data_and_downgrade_refuses_long_title(tmp_path):
     path = tmp_path / "catalog-title-upgrade.db"
     _run_sqlite_revision(path, command.upgrade, "head")
-    _run_sqlite_revision(path, command.downgrade, "20260929_0029")
     engine = create_engine(f"sqlite:///{path}")
     with Session(engine) as db:
         seed_database(db)
+    engine.dispose()
+    _run_sqlite_revision(path, command.downgrade, "20260929_0029")
+    engine = create_engine(f"sqlite:///{path}")
+    with Session(engine) as db:
         inventory = list(db.scalars(select(Machine.inventory_number).order_by(Machine.id)))
         parts = [(row.id, row.source_record_key) for row in db.scalars(select(PartCatalog).order_by(PartCatalog.id))]
     engine.dispose()
