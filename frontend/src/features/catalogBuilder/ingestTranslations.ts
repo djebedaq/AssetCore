@@ -1,4 +1,15 @@
 export const ingestBg = {
+  'ingest.schema.title': 'Колони и оригинални клетки',
+  'ingest.schema.resolved': 'Значението на колоните е предложено според заглавията и клетките.',
+  'ingest.schema.ambiguous': 'Таблицата е открита; значението на колоните изисква преглед.',
+  'ingest.schema.help': 'Не са създадени части от нееднозначната схема. Сравнете алтернативите с оригинала, коригирайте ролята/групата и добавете потвърдените части чрез разширените инструменти.',
+  'ingest.schema.unknown': 'Неопределена колона', 'ingest.schema.alternatives': 'Алтернативни схеми и оценки',
+  'ingest.schema.score': 'Оценка: {{score}}',
+  'ingest.field.technical_notes': 'Бележки', 'ingest.field.technical_specification': 'Технически данни',
+  'ingest.warning.SCHEMA_AMBIGUOUS': 'Няколко значения на колоните са правдоподобни; проверете оригиналната таблица.',
+  'ingest.warning.SCHEMA_UNRESOLVED': 'Структурата е открита, но колоните не могат да се определят надеждно.',
+  'ingest.warning.UNKNOWN_COLUMN': 'Неопределена колона; оригиналните клетки са запазени.',
+  'ingest.warning.CONTINUATION_INFERRED': 'Предложено продължение според съседната таблица и геометрията; проверете връзката.',
   'ingest.filter.errors': 'Липсващи или невалидни полета',
   'ingest.run.DISMISSED': 'Неуспешният автоматичен анализ е отхвърлен. Попълнете и проверете каталога ръчно.',
   'ingest.dismiss': 'Отхвърли неуспешните предложения и премини към ръчно попълване',
@@ -65,6 +76,17 @@ export const ingestBg = {
 }
 
 export const ingestEn: Record<keyof typeof ingestBg, string> = {
+  'ingest.schema.title': 'Columns and original cells',
+  'ingest.schema.resolved': 'Column meanings are proposed from headers and cell values.',
+  'ingest.schema.ambiguous': 'The table was detected; column meanings need review.',
+  'ingest.schema.help': 'No parts were created from the ambiguous schema. Compare alternatives with the source, correct its role/group, and add confirmed parts using advanced tools.',
+  'ingest.schema.unknown': 'Unknown column', 'ingest.schema.alternatives': 'Alternative schemas and scores',
+  'ingest.schema.score': 'Score: {{score}}',
+  'ingest.field.technical_notes': 'Notes', 'ingest.field.technical_specification': 'Technical specification',
+  'ingest.warning.SCHEMA_AMBIGUOUS': 'Several column meanings are plausible; review the original table.',
+  'ingest.warning.SCHEMA_UNRESOLVED': 'Structure detected, but column meanings cannot be reliably determined.',
+  'ingest.warning.UNKNOWN_COLUMN': 'Unknown column; original cells are preserved.',
+  'ingest.warning.CONTINUATION_INFERRED': 'Continuation proposed from the adjacent table and geometry; review the relationship.',
   'ingest.filter.errors': 'Missing or invalid fields',
   'ingest.run.DISMISSED': 'Failed automatic analysis dismissed. Complete and verify the catalog manually.',
   'ingest.dismiss': 'Reject failed proposals and use manual authoring',
@@ -130,6 +152,17 @@ export const ingestEn: Record<keyof typeof ingestBg, string> = {
 }
 
 export const ingestRu: Record<keyof typeof ingestBg, string> = {
+  'ingest.schema.title': 'Столбцы и исходные ячейки',
+  'ingest.schema.resolved': 'Значения столбцов предложены по заголовкам и содержимому ячеек.',
+  'ingest.schema.ambiguous': 'Таблица обнаружена; значения столбцов требуют проверки.',
+  'ingest.schema.help': 'Детали из неоднозначной схемы не созданы. Сравните варианты с оригиналом, исправьте роль/группу и добавьте подтверждённые детали через расширенные инструменты.',
+  'ingest.schema.unknown': 'Неопределённый столбец', 'ingest.schema.alternatives': 'Альтернативные схемы и оценки',
+  'ingest.schema.score': 'Оценка: {{score}}',
+  'ingest.field.technical_notes': 'Примечания', 'ingest.field.technical_specification': 'Технические данные',
+  'ingest.warning.SCHEMA_AMBIGUOUS': 'Несколько значений столбцов правдоподобны; проверьте исходную таблицу.',
+  'ingest.warning.SCHEMA_UNRESOLVED': 'Структура обнаружена, но значения столбцов нельзя надёжно определить.',
+  'ingest.warning.UNKNOWN_COLUMN': 'Неопределённый столбец; исходные ячейки сохранены.',
+  'ingest.warning.CONTINUATION_INFERRED': 'Продолжение предложено по соседней таблице и геометрии; проверьте связь.',
   'ingest.filter.errors': 'Отсутствующие или неверные поля',
   'ingest.run.DISMISSED': 'Неудачный автоматический анализ отклонён. Заполните и проверьте каталог вручную.',
   'ingest.dismiss': 'Отклонить неудачные предложения и заполнить вручную',

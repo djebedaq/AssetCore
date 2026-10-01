@@ -6,6 +6,11 @@ export type Analysis = {
 }
 export type Kind = 'GROUP' | 'PAGE' | 'PART' | 'HOTSPOT'
 export type Location = { page_number: number; bbox: number[]; x: number; y: number; width: number; height: number; method: string }
+export type TableEvidence = {
+  headers: string[]; bbox: number[]; sample_cells: string[][]
+  schema: { state: 'RESOLVED' | 'NEEDS_REVIEW'; mapping: Record<string, string>; score: number; margin?: number | null
+    alternatives: Array<{ score: number; mapping: Record<string, string> }> }
+}
 export type Candidate = {
   id: number; run_id?: number; source_key: string; version: number; kind: Kind
   state: 'PROPOSED' | 'NEEDS_REVIEW' | 'ACCEPTED' | 'REJECTED'; page_number: number | null
@@ -15,6 +20,6 @@ export type Candidate = {
     position?: string; part_number?: string; description?: string; quantity?: string | null; quantity_raw?: string | null
     match?: string; locations?: Location[]; verified?: boolean
   }
-  evidence: { raw_text?: string; bbox?: number[]; source_heading?: string; method?: string; geometry?: { x: number; y: number; width: number; height: number } }
+  evidence: { raw_text?: string; bbox?: number[]; source_heading?: string; method?: string; tables?: TableEvidence[]; geometry?: { x: number; y: number; width: number; height: number } }
 }
 export type CandidatePage = { items: Candidate[]; next_after: number | null; total: number }

@@ -4,13 +4,32 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { uploadApiFile } from '../../api'
 import { I18nProvider } from '../../i18n'
 import AnalysisProgress from './AnalysisProgress'
+import CandidateSource from './CandidateSource'
 import IngestReview from './IngestReview'
 import RevisionHotspotEditor from './RevisionHotspotEditor'
 import { ingestBg, ingestEn, ingestRu } from './ingestTranslations'
+import type { Candidate } from './ingestTypes'
 import { UploadTestTransport } from './uploadTestTransport'
 
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+it.each(['bg', 'en', 'ru'] as const)('explains an ambiguous table and shows source cells and alternatives in %s', async locale => {
+  const texts = { bg: ingestBg, en: ingestEn, ru: ingestRu }[locale]
+  const candidate: Candidate = { id: 1, source_key: 'qa', version: 1, kind: 'PAGE', state: 'NEEDS_REVIEW',
+    page_number: null, artifact_id: 1, sha256: 'a'.repeat(64), confidence: .4, warnings: ['SCHEMA_AMBIGUOUS'],
+    payload: { role: 'SPARE_PARTS_LIST' }, evidence: { tables: [{ headers: ['ID', 'Number', 'Type', 'Qty'], bbox: [30, 100, 500, 200],
+      sample_cells: [['1', '51', 'Seal', '2']], schema: { state: 'NEEDS_REVIEW', score: 20, margin: 0,
+        mapping: { '0': 'position', '1': 'part_number', '2': 'description', '3': 'quantity' }, alternatives: [
+          { score: 20, mapping: { '0': 'part_number', '1': 'position', '2': 'description', '3': 'quantity' } },
+        ] } }] } }
+  render(<I18nProvider initialLocale={locale}><CandidateSource candidate={candidate} onClose={() => {}} /></I18nProvider>)
+  expect(screen.getByRole('status')).toHaveTextContent(texts['ingest.schema.help'])
+  expect(screen.getByText('Seal')).toBeVisible()
+  expect(screen.getByText(texts['ingest.schema.ambiguous'])).toBeVisible()
+  await userEvent.click(screen.getByText(texts['ingest.schema.alternatives']))
+  expect(screen.getByText(new RegExp(`ID: ${texts['ingest.field.part_number']}`))).toBeVisible()
+})
 
 it('sends a PDF larger than the old limit as one binary File with progress and CSRF', async () => {
   vi.stubGlobal('XMLHttpRequest', UploadTestTransport)

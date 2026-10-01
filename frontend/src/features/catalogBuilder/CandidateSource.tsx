@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createApiObjectUrl } from '../../api'
 import { useI18n } from '../../i18n'
+import { ingestBg } from './ingestTranslations'
 import type { Candidate, Location } from './ingestTypes'
 import { builderBase } from './wizardTypes'
 
@@ -8,6 +9,10 @@ export default function CandidateSource({ candidate, location, onClose }: {
   candidate: Candidate; location?: Location; onClose: () => void
 }) {
   const { t } = useI18n()
+  const roleName = (role: string) => {
+    const key = `ingest.field.${role}`
+    return key in ingestBg ? t(key as keyof typeof ingestBg) : t('ingest.schema.unknown')
+  }
   const [url, setUrl] = useState('')
   const [error, setError] = useState(false)
   const number = location?.page_number || candidate.page_number
@@ -35,6 +40,21 @@ export default function CandidateSource({ candidate, location, onClose }: {
         width: `${geometry.width * 100}%`, height: `${geometry.height * 100}%` }} />}
     </div>
     <pre>{candidate.evidence.raw_text || candidate.evidence.source_heading}</pre>
+    {candidate.evidence.tables?.map((table, index) => <section key={index} aria-label={t('ingest.schema.title')}>
+      <h4>{t('ingest.schema.title')}</h4>
+      <p>{t(table.schema.state === 'RESOLVED' ? 'ingest.schema.resolved' : 'ingest.schema.ambiguous')}</p>
+      {table.schema.state === 'NEEDS_REVIEW' && <p role="status">{t('ingest.schema.help')}</p>}
+      <div className="builder-parts-table"><table><thead><tr>
+        {table.headers.map((header, col) => <th key={col}>{header}<small>{roleName(table.schema.mapping[String(col)] || 'unknown')}</small></th>)}
+      </tr></thead><tbody>{table.sample_cells.slice(0, 5).map((cells, row) => <tr key={row}>
+        {table.headers.map((_, col) => <td key={col}>{cells[col] || ''}</td>)}
+      </tr>)}</tbody></table></div>
+      <details><summary>{t('ingest.schema.alternatives')}</summary>
+        {table.schema.alternatives.map((alternative, option) => <p key={option}>
+          {t('ingest.schema.score', { score: alternative.score })} · {table.headers.map((header, col) => `${header}: ${roleName(alternative.mapping[String(col)] || 'unknown')}`).join(' · ')}
+        </p>)}
+      </details>
+    </section>)}
     <details><summary>{t('ingest.evidence')}</summary><p>SHA-256: {candidate.sha256}</p>
       <pre>{JSON.stringify(candidate.evidence, null, 2)}</pre></details>
   </aside>

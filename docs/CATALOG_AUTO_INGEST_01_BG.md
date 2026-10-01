@@ -160,3 +160,103 @@ native, Cyrillic, rotated/landscape, multipage/wrapped, ambiguity, protected,
 scanned/mixed и файл над 12 MiB. Happy path използва действителния parser,
 преглед и immutable publication. PostgreSQL тестовете използват disposable
 QA schemas. Няма включени OEM manuals или промени във verified seed/register.
+
+## Unknown-OEM hardening на PR #96
+
+Extractor-ът не избира правила по производител, модел, име на файл, префикс на
+номер или познато име на възел. Всичко се изпълнява локално; няма cloud OCR,
+LLM API, metered AI услуга или външно изпращане на PDF.
+
+### Таблична геометрия и контекстна схема
+
+`ingest/tables.py` първо открива ruled таблици чрез PyMuPDF или borderless
+таблици чрез подравнени колони/повтарящи се редове. Откритите региони остават
+evidence дори когато колоните нямат надеждно определено значение. Заглавия и
+числа вътре в тези региони не се използват като group names или callout labels.
+
+`ingest/schema.py` разглежда заглавията като подсказки. `Item`, `No.`, `Nr.`,
+`Ref.`, `Number`, `Code`, `Name`, `Type` и `ID` нямат безусловно значение.
+Използват се профили на до 32 реални реда: компактност на позициите, identifier
+форма, уникалност и повторяемост на форматите, естествен текст, числови
+количества. Едносрични/еднословни описания и големи валидни количества са
+допустими. Последователността на позициите не е задължителна. До 12 колони и
+beam от 64 назначения ограничават работата; пазят се до 5 алтернативни схеми.
+Тези оценки са evidence scores, а не статистически вероятности.
+
+Примерите се решават от общия алгоритъм:
+
+| Заглавия | Позиция | Описание |
+|---|---|---|
+| No. / Part No. / Item / Qty | No. | Item |
+| Item / Part No. / Description / Qty | Item | Description |
+| Pos / Art. Nr. / Benennung / Menge | Pos | Benennung |
+| Index / Stock Code / Part Name / Pieces | Index | Part Name |
+
+`Remark`, `Remarks`, `Notes`, `Bemerkungen`, `Забележки`, `Примечания` и
+останалите синоними се запазват като оригинални бележки. Неизвестните колони
+също запазват exact cells; редовете им изискват преглед.
+
+Когато най-добрите значения на required колоните остават близки, схемата е
+`NEEDS_REVIEW`: не се създават предполагаеми части от нея. Страницата пази
+headers, mapping, score/margin, алтернативи, профили, sample cells и bbox.
+Очевидна BOM структура може да остане `SPARE_PARTS_LIST` с предупреждение;
+напълно неизвестна таблица е `AMBIGUOUS`. Числовата плътност в таблицата не
+превръща страницата в схема. `BOTH` изисква и диаграмни labels извън таблицата.
+
+В source панела човекът вижда оригиналните клетки и алтернативите с BG/EN/RU
+обяснение. За неразрешена схема проверява източника и попълва потвърдените
+части чрез запазените ръчни/CSV инструменти. Няма автоматично избиране на
+алтернатива или голям нов schema editor.
+
+### Частични редове, продължения и човешки решения
+
+Липсващи part numbers, `/`, `-`, липсващи/нечислови количества и повторени
+позиции остават кандидати с оригиналния текст и warning. Placeholder номер
+и неразрешени required полета не могат да бъдат приети без човешка корекция.
+Wrapped descriptions се присъединяват само при близка геометрия и празни
+identity/quantity клетки. Header/section/subtotal редовете не създават части.
+
+`association.py` сравнява действителни headings, съвместима колонна геометрия
+и schema profiles на съседни таблици, или споделен diagram/BOM position
+vocabulary. Самата близост на две страници не е достатъчна. Headerless
+продължение може да използва предишните колони само при съвместимо heading и
+правдоподобни нови редове. Изведените връзки остават за човешки преглед.
+
+`CATALOG_INGEST_1` остава стабилен run identity. Новата версия на schema
+evidence е `schema_version=2`. Deliberate rerun преизвлича стари page checkpoints
+без този marker; checkpoint с текущия marker се преизползва. Source key за
+съществуващи коректни rows запазва page/bbox/raw-text fingerprint. Само никога
+непрегледаните предложения могат да получат обновено evidence/version.
+Приети данни, човешки редакции, отхвърлени кандидати и проверени hotspots не се
+презаписват. Не се променят historical publications/digests или snapshots.
+Няма нова DB миграция за hardening-а; JSON evidence използва схемата от 0031.
+
+### Локална проверка на произволен PDF
+
+От development repository с инсталираните Python зависимости:
+
+```powershell
+.venv/Scripts/python.exe scripts/catalog_pdf_smoke.py "manual.pdf" --details
+.venv/Scripts/python.exe scripts/catalog_pdf_smoke.py "manual.pdf" --no-ocr
+```
+
+CLI чете original PDF и работи през същия bounded subprocess като API. Не
+отваря база данни, не създава каталози, не записва върху PDF, не качва файлове
+и не изисква production. JSON report показва basename, SHA-256, bytes/pages,
+native/OCR pages, proposed groups, page roles, tables, resolved/ambiguous
+schemas, extracted/review parts, hotspot match counts и warnings. `--details`
+добавя per-page headers, schema scores/alternatives и sample rows. Sanitized
+errors не показват абсолютни source paths или environment secrets.
+
+Автоматизираните regression fixtures са неизвестни синтетични структури,
+включително контекстите по-горе, genuine schema ambiguity, ruled/borderless
+unknown headers, partial rows, повторения, продължения и BOTH. Happy path с
+`No. / Part No. / Item / Qty` преминава през действителен parser, source mapping,
+human review, immutable publication и използване от две машини. Реални OEM
+manuals не са включени в repository или използвани като условие в кода.
+
+Ограничения: наклонени сканове, слети cells, нестандартни/липсващи headers,
+неразделими footnotes и еднакво правдоподобни identifier колони могат да останат
+неразрешени. Beam search е ограничен и сложни таблици над 12 колони изискват
+ръчно попълване. OCR резултатите винаги изискват потвърждение. Не се обещава
+100% точност за произволен PDF.
