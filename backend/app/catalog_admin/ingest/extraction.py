@@ -5,7 +5,8 @@ import re
 import fitz
 
 from . import ocr
-from .tables import POSITION, field_name, layout_rows, ruled_rows, word_lines
+from .schema import SCHEMA_VERSION, header_candidates
+from .tables import POSITION, layout_rows, ruled_rows, word_lines
 
 ROLE_WORDS = re.compile(
     r"exploded\s+(view|scheme)|spare\s+parts?(\s+list)?|parts?\s+list|"
@@ -52,10 +53,12 @@ def extract_page(page, config: dict) -> dict:
         for line in block.get("lines", []):
             spans = line.get("spans", [])
             text = "".join(span["text"] for span in spans).strip()
+            size = max((span["size"] for span in spans), default=0)
             if (3 <= len(text) <= 255 and line["bbox"][1] < page.cropbox.height * .3
-                    and not field_name(text) and not POSITION.fullmatch(text)):
+                    and (size >= 12 or line["bbox"][1] < page.cropbox.height * .12)
+                    and not header_candidates(text) and not POSITION.fullmatch(text)):
                 heading_candidates.append({"text": text, "bbox": list(line["bbox"]),
-                    "size": max((span["size"] for span in spans), default=0)})
+                    "size": size})
     heading_candidates.sort(key=lambda item: (-item["size"], item["bbox"][1]))
     heading = None
     for candidate in heading_candidates:
@@ -70,8 +73,19 @@ def extract_page(page, config: dict) -> dict:
             rows, tables = ruled_rows(page)
         except Exception:
             warnings.append("TABLE_DETECTION_FAILED")
-    if not rows:
-        rows, tables = layout_rows(words, page.cropbox.width)
+    if not tables:
+        previous_heading = config.get("previous_heading")
+        compatible = not heading or heading.casefold() == (previous_heading or "").casefold()
+        rows, tables = layout_rows(words, page.cropbox.width,
+            continuation=config.get("continuation_tables") if compatible else None)
+    for table in tables:
+        if table["schema"]["state"] != "RESOLVED":
+            warnings.extend(table["schema"]["warnings"])
+    # A table header is not an assembly title, even if the PDF font is large.
+    heading_candidates = [candidate for candidate in heading_candidates if not any(
+        fitz.Rect(candidate["bbox"]).intersects(fitz.Rect(table["bbox"])) for table in tables)]
+    heading = next((ROLE_WORDS.sub("", candidate["text"]).strip(" -—:·") for candidate in heading_candidates
+                    if len(ROLE_WORDS.sub("", candidate["text"]).strip(" -—:·")) >= 3), None)
     if method == "OCR":
         for row in rows:
             row["method"] = "OCR_WORD_LAYOUT"
@@ -95,8 +109,8 @@ def extract_page(page, config: dict) -> dict:
                 labels.append(word)
     drawing_count = len(page.get_drawings())
     scheme_title = bool(re.search(r"exploded|explosions|разглобена|взрыв", raw_text, re.I))
-    scheme = scheme_title or len(labels) >= 2 and drawing_count >= 1 or len(labels) >= 5
-    list_page = bool(rows)
+    scheme = scheme_title and bool(labels) or len(labels) >= 2 and drawing_count >= 1 or len(labels) >= 5
+    list_page = bool(rows) or any(table["bom_evidence"] and table["row_count"] >= 1 for table in tables)
     role = "BOTH" if scheme and list_page else "SPARE_PARTS_LIST" if list_page else "EXPLODED_SCHEME" if scheme else "AMBIGUOUS" if tables or needs_ocr else "OTHER"
     confidence = .94 if list_page and not warnings else .9 if scheme_title and heading else .7 if scheme else .4
     if role == "OTHER" and not warnings and words:
@@ -108,6 +122,6 @@ def extract_page(page, config: dict) -> dict:
         "rotation": page.rotation, "rotation_matrix": list(page.rotation_matrix),
         "headings": heading_candidates[:40], "heading": heading, "tables": tables,
         "rows": rows, "labels": labels, "method": method, "ocr_used": method == "OCR",
-        "warnings": warnings, "role": role, "confidence": confidence,
+        "schema_version": SCHEMA_VERSION, "warnings": sorted(set(warnings)), "role": role, "confidence": confidence,
         "role_evidence": {"table_rows": len(rows), "isolated_labels": len(labels),
                           "drawing_count": drawing_count, "scheme_title": scheme_title}}

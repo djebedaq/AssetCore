@@ -21,6 +21,7 @@ from .. import visual_sources
 from ..service import fail
 from ..source_storage import shared_blob
 from . import candidates, process
+from .schema import SCHEMA_VERSION
 
 
 def load_run(db: Session, run_id: int, *, mutate: bool = False) -> CatalogIngestRun:
@@ -77,13 +78,18 @@ def advance(db: Session, actor, run_id: int) -> dict:
     try:
         cached = db.scalar(select(CatalogIngestPage).where(CatalogIngestPage.run_id == run.id,
             CatalogIngestPage.page_number == number))
-        if cached:
+        if cached and cached.evidence.get("schema_version") == SCHEMA_VERSION:
             layout = cached.evidence
         else:
+            previous = db.scalar(select(CatalogIngestPage).where(CatalogIngestPage.run_id == run.id,
+                CatalogIngestPage.page_number == number - 1))
+            prior = previous.evidence if previous else {}
+            config = {**process.configuration(settings), "previous_heading": prior.get("heading"),
+                      "continuation_tables": prior.get("tables", []) if prior.get("role") in {"SPARE_PARTS_LIST", "BOTH"} else []}
             blob = db.get(CatalogSourceBlob, run.source_blob_id)
             content = blob.content
             db.rollback()  # No transaction/row lock during native parsing or OCR.
-            layout = process.extract(content, "page", number, process.configuration(settings))
+            layout = process.extract(content, "page", number, config)
         if layout.get("error"):
             raise fail(layout["error"], 422)
         run = load_run(db, run_id, mutate=True)
@@ -91,6 +97,8 @@ def advance(db: Session, actor, run_id: int) -> dict:
             raise fail("catalog_ingest_busy")
         if cached is None:
             db.add(CatalogIngestPage(run_id=run.id, page_number=number, evidence=layout))
+        elif cached.evidence.get("schema_version") != SCHEMA_VERSION:
+            db.get(CatalogIngestPage, cached.id).evidence = layout
         candidates.store_page(db, run, number, layout)
         run.context = {**run.context, "ocr_pages": run.context.get("ocr_pages", 0) + int(layout["ocr_used"])}
         run.next_page = number + 1

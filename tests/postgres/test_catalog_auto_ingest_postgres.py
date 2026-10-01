@@ -22,16 +22,17 @@ from test_concurrency import pg_factory as pg_factory  # noqa: F811
 pytestmark = pytest.mark.postgres
 
 
-def create_source(factory):
+def create_source(factory, *, item_description=False):
     assembly_id, _ = setup(factory)
     with factory() as db:
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
-        artifact = visual_sources.store_artifact(db, actor, assembly_id, manual(), "qa-auto.pdf", "QA source")
+        artifact = visual_sources.store_artifact(db, actor, assembly_id, manual(item_description=item_description), "qa-auto.pdf", "QA source")
     return artifact
 
 
-def test_postgres_competing_analysis_identity_and_optimistic_review(pg_factory):
-    artifact = create_source(pg_factory)
+@pytest.mark.parametrize("item_description", [False, True])
+def test_postgres_competing_analysis_identity_and_optimistic_review(pg_factory, item_description):
+    artifact = create_source(pg_factory, item_description=item_description)
     barrier = Barrier(2)
     def start():
         with pg_factory() as db:
@@ -47,6 +48,10 @@ def test_postgres_competing_analysis_identity_and_optimistic_review(pg_factory):
         while runs.load_run(db, run_id).status == "RUNNING":
             result = runs.advance(db, actor, run_id)
         assert result["status"] == "COMPLETED", result
+        extracted = db.scalars(select(CatalogIngestCandidate).where(CatalogIngestCandidate.run_id == run_id,
+            CatalogIngestCandidate.kind == "PART")).all()
+        assert len(extracted) == 4 and all(row.payload["description"] == "QA component" for row in extracted)
+        assert all(row.evidence["schema"]["mapping"]["2"] == "description" for row in extracted)
         group = db.scalar(select(CatalogIngestCandidate).where(CatalogIngestCandidate.run_id == run_id,
             CatalogIngestCandidate.kind == "GROUP"))
         candidate_id, version = group.id, group.version

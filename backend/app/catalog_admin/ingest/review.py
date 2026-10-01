@@ -21,6 +21,7 @@ from .. import hotspots, parts, wizard, wizard_documents
 from ..schemas import ClassifyDocumentPages, PartCreate
 from ..service import fail
 from . import candidates, runs
+from .values import PLACEHOLDERS, POSITION, quantity
 
 
 def group_candidate(db: Session, run_id: int, key: str) -> CatalogIngestCandidate:
@@ -117,6 +118,11 @@ def accept_page(db: Session, actor, run, candidate) -> None:
 def accept_part(db: Session, actor, run, candidate) -> None:
     assembly = assembly_for(db, run, candidate.payload)
     values = {key: value for key, value in candidate.payload.items() if key in PartCreate.model_fields}
+    if (not POSITION.fullmatch(values.get("position", ""))
+            or str(values.get("part_number") or "").strip() in PLACEHOLDERS
+            or str(values.get("description") or "").strip() in PLACEHOLDERS
+            or quantity(str(values["quantity"]) if values.get("quantity") is not None else "") is None):
+        raise fail("catalog_ingest_invalid", 422)
     try:
         clean = parts._clean(PartCreate(**values).model_dump())
     except ValidationError:

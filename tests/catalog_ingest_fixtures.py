@@ -7,10 +7,12 @@ from PIL import Image
 
 
 def manual(*, groups=1, repeated=False, missing=False, landscape=False, rotated=False,
-           both=False, language="en", multipage=False, wrapped=False) -> bytes:
+           both=False, language="en", multipage=False, wrapped=False, item_description=False) -> bytes:
     pdf = fitz.open()
     headers = {"en": ["Item", "Part No.", "Description", "Qty"],
                "de": ["Pos.", "Teile-Nr.", "Benennung", "Menge"]}[language]
+    if item_description:
+        headers = ["No.", "Part No.", "Item", "Qty"]
     for group in range(groups):
         name = f"QA ASSEMBLY {group + 1}"
         page = pdf.new_page(width=842 if landscape else 595, height=595 if landscape else 842)
@@ -85,3 +87,33 @@ def over_12_mib() -> bytes:
         pdf.update_object(xref, "<<>>")
         pdf.update_stream(xref, b"Q" * (13 * 1024 * 1024), compress=False)
         return pdf.tobytes(garbage=0, deflate=False)
+
+
+def contextual_table(headers=None, rows=None, *, ruled=False, both=False, continuation=False,
+                     repeat_header=True, heading=True) -> bytes:
+    """Unknown-OEM QA patterns, entirely synthetic, with configurable evidence."""
+    headers = headers or ["No.", "Part No.", "Item", "Qty"]
+    rows = rows or [["13A", "QA-101", "Seal", "2.5"], ["2", "QA-102", "Bolt M8, DIN (20 mm)", "1200"]]
+    with fitz.open() as pdf:
+        for index in range(2 if continuation else 1):
+            page = pdf.new_page(width=850, height=650)
+            if heading and index == 0:
+                page.insert_text((30, 35), "QA ROTATING UNIT", fontsize=18)
+            if both and index == 0:
+                page.insert_text((40, 65), "Exploded view")
+                page.draw_rect((30, 90, 300, 210))
+                page.insert_text((60, 120), "13A")
+                page.insert_text((220, 180), "2")
+            top = 250 if both and index == 0 else 100
+            xs = [30, 110, 280, 600, 680, 760][:len(headers)] + [830]
+            include_header = index == 0 or repeat_header
+            records = ([headers] if include_header else []) + rows
+            if ruled:
+                for x in xs:
+                    page.draw_line((x, top - 20), (x, top + len(records) * 30 - 20))
+                for row in range(len(records) + 1):
+                    page.draw_line((xs[0], top - 20 + row * 30), (xs[-1], top - 20 + row * 30))
+            for row, values in enumerate(records):
+                for col, value in enumerate(values):
+                    page.insert_text((xs[col] + 4, top + row * 30), value, fontsize=10)
+        return pdf.tobytes()

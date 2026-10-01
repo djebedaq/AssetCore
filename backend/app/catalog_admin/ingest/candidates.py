@@ -3,7 +3,6 @@
 import hashlib
 import json
 
-import fitz
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -13,6 +12,8 @@ from ...models import (
     CatalogIngestRun,
     CatalogRevisionPart,
 )
+from .association import relationship
+from .geometry import match_position, normalized_geometry
 
 EXTRACTOR_VERSION = "CATALOG_INGEST_1"
 
@@ -28,12 +29,13 @@ def propose(db: Session, run_id: int, key: str, kind: str, payload: dict, eviden
         CatalogIngestCandidate.run_id == run_id, CatalogIngestCandidate.source_key == key))
     if existing is not None:
         # Re-analysis never touches a reviewed decision or human correction.
-        if (kind == "HOTSPOT" and existing.reviewed_by_id is None
+        if (existing.reviewed_by_id is None
                 and existing.state in {"PROPOSED", "NEEDS_REVIEW"}):
-            existing.payload, existing.evidence, existing.confidence = payload, evidence, confidence
-            existing.warnings = warnings
-            existing.state = "NEEDS_REVIEW" if warnings or confidence < .9 else "PROPOSED"
-            existing.version += 1
+            if (existing.payload, existing.evidence, existing.confidence, existing.warnings) != (payload, evidence, confidence, warnings):
+                existing.payload, existing.evidence, existing.confidence = payload, evidence, confidence
+                existing.warnings = warnings
+                existing.state = "NEEDS_REVIEW" if warnings or confidence < .9 else "PROPOSED"
+                existing.version += 1
         return existing
     candidate = CatalogIngestCandidate(run_id=run_id, source_key=key, kind=kind,
         payload=payload, evidence=evidence, confidence=confidence, warnings=warnings,
@@ -46,6 +48,11 @@ def propose(db: Session, run_id: int, key: str, kind: str, payload: dict, eviden
 def store_page(db: Session, run: CatalogIngestRun, number: int, layout: dict) -> None:
     context = dict(run.context)
     heading = layout.get("heading")
+    previous = db.scalar(select(CatalogIngestPage).where(CatalogIngestPage.run_id == run.id,
+        CatalogIngestPage.page_number == number - 1))
+    association = relationship(previous.evidence if previous else None, layout)
+    if not association:
+        context.pop("group_key", None)
     if heading and layout["role"] in {"SPARE_PARTS_LIST", "EXPLODED_SCHEME", "BOTH"}:
         key = fingerprint("GROUP", heading.casefold())
         context["group_key"] = key
@@ -62,31 +69,21 @@ def store_page(db: Session, run: CatalogIngestRun, number: int, layout: dict) ->
     group_key = context.get("group_key")
     warnings = list(layout["warnings"])
     if not heading and group_key and layout["role"] != "OTHER":
-        warnings.append("ADJACENCY_INFERRED")
+        warnings.append("CONTINUATION_INFERRED" if association == "TABLE_CONTINUATION" else "GROUP_UNCERTAIN")
     propose(db, run.id, fingerprint("PAGE", number), "PAGE",
         {"role": layout["role"], "group_key": group_key},
         {"role_signals": layout["role_evidence"], "heading": heading,
-         "method": layout["method"], "rotation": layout["rotation"]},
+         "method": layout["method"], "rotation": layout["rotation"], "association": association,
+         "tables": layout["tables"], "schema_version": layout.get("schema_version")},
         layout["confidence"], warnings, number)
     for row in layout["rows"]:
         key = fingerprint("PART", number, row["bbox"], row["raw_text"])
         propose(db, run.id, key, "PART", {**row["payload"], "group_key": group_key},
             {**{key: row[key] for key in ("bbox", "raw_text", "raw_values", "method")},
+             **{key: row[key] for key in ("schema", "raw_cells", "continuation_cells") if key in row},
              "geometry": normalized_geometry(row["bbox"], layout)},
             row["confidence"], row["warnings"] + (["GROUP_UNCERTAIN"] if not group_key else []), number)
     run.context = context
-
-
-def normalized_geometry(bbox: list[float], page: dict) -> dict:
-    # Native coordinates are unrotated. Preview pixels follow page.rect/rotation.
-    rect = fitz.Rect(bbox) * fitz.Matrix(*page["rotation_matrix"])
-    width, height = page["width"], page["height"]
-    padding = 2
-    x = min(.998, max(0, (rect.x0 - padding) / width))
-    y = min(.998, max(0, (rect.y0 - padding) / height))
-    w = min(1 - x, max(.002, (rect.width + 2 * padding) / width))
-    h = min(1 - y, max(.002, (rect.height + 2 * padding) / height))
-    return {"x": round(x, 8), "y": round(y, 8), "width": round(w, 8), "height": round(h, 8)}
 
 
 def match_hotspots(db: Session, run: CatalogIngestRun) -> None:
@@ -111,17 +108,8 @@ def match_hotspots(db: Session, run: CatalogIngestRun) -> None:
         layouts = db.scalars(select(CatalogIngestPage).where(CatalogIngestPage.run_id == run.id,
             CatalogIngestPage.page_number.in_(schemes.get(group, [])))).all()
         for position in sorted(positions):
-            locations = []
-            ocr = False
-            for source in layouts:
-                page = source.evidence
-                for label in page["labels"]:
-                    if label["text"].strip() == position:
-                        locations.append({"page_number": source.page_number, "bbox": label["bbox"],
-                            "raw_text": label["text"], "method": page["method"],
-                            **normalized_geometry(label["bbox"], page)})
-                        ocr |= page["ocr_used"]
-            match = "NOT_FOUND" if not locations else "MULTIPLE_CANDIDATES" if len(locations) > 1 else "LOW_CONFIDENCE" if ocr else "EXACT"
+            result = match_position(position, [(source.page_number, source.evidence) for source in layouts])
+            match, locations, ocr = result["match"], result["locations"], result["ocr_used"]
             propose(db, run.id, fingerprint("HOTSPOT", group, position), "HOTSPOT",
                 {"group_key": group, "position": position, "match": match, "locations": locations},
                 {"source_pages": schemes.get(group, []), "ocr_used": ocr},
