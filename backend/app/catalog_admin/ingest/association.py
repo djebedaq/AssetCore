@@ -4,7 +4,8 @@
 def table_signature(table: dict, width: float) -> tuple:
     schema = table.get("schema", {})
     return (tuple(schema.get("mapping", {}).values()),
-            tuple(round(x / max(1, width), 2) for x in table.get("anchors", [])))
+            tuple(round(h["center"] / max(1, width), 2) for h in table.get("header_geometry", []))
+            or tuple(round(x / max(1, width), 2) for x in table.get("anchors", [])))
 
 
 def relationship(previous: dict | None, current: dict) -> str | None:

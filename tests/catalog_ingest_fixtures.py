@@ -7,7 +7,8 @@ from PIL import Image
 
 
 def manual(*, groups=1, repeated=False, missing=False, landscape=False, rotated=False,
-           both=False, language="en", multipage=False, wrapped=False, item_description=False) -> bytes:
+           both=False, language="en", multipage=False, wrapped=False, item_description=False,
+           centered_headers=False) -> bytes:
     pdf = fitz.open()
     headers = {"en": ["Item", "Part No.", "Description", "Qty"],
                "de": ["Pos.", "Teile-Nr.", "Benennung", "Menge"]}[language]
@@ -32,7 +33,9 @@ def manual(*, groups=1, repeated=False, missing=False, landscape=False, rotated=
                 page = pdf.new_page(width=842 if landscape else 595, height=595 if landscape else 842)
                 page.insert_text((50, 40), name, fontsize=18)
             y = 430 if both and not continuation else 100
-            for x, text in zip([50, 150, 270, 530], headers, strict=True):
+            for x, text in zip([55, 215, 370, 540] if centered_headers else [50, 150, 270, 530], headers, strict=True):
+                if centered_headers:
+                    x -= fitz.get_text_length(text, fontsize=10) / 2
                 page.insert_text((x, y), text, fontsize=10)
             for row, pos in enumerate(["1", "13A", "13.1", "A12"]):
                 for x, text in zip([50, 150, 270, 530], [pos, f"QA-{group}-{row}", "QA component", "2.5"], strict=True):
@@ -116,4 +119,42 @@ def contextual_table(headers=None, rows=None, *, ruled=False, both=False, contin
             for row, values in enumerate(records):
                 for col, value in enumerate(values):
                     page.insert_text((xs[col] + 4, top + row * 30), value, fontsize=10)
+        return pdf.tobytes()
+
+
+def centered_geometry(*, width=720, shifted=0, notes=False, noisy=False, wrapped=False,
+                      continuation=False, second_width=None, multiple=False) -> bytes:
+    """Geometrically realistic unknown-OEM QA; centered headers over varied cells."""
+    with fitz.open() as pdf:
+        for number in range(2 if continuation else 1):
+            page_width = second_width if number and second_width else width
+            page = pdf.new_page(width=page_width, height=650)
+            if not number:
+                page.insert_text((25, 35), "QA SOURCE UNIT", fontsize=18)
+            scale = page_width / 720
+            for side in range(2 if multiple else 1):
+                local = .48 if multiple else 1
+                offset = side * page_width * .5 + shifted * scale
+                xs = [50, 190, 390, 600, 660] if notes else [50, 190, 390, 620]
+                headers = ["No.", "Part No.", "Item", "Qty"] + (["Remark"] if notes else [])
+                font = 8 if multiple else 10
+                factor = scale * local
+                if not number:
+                    for x, header in zip(xs, headers, strict=True):
+                        tw = fitz.get_text_length(header, fontsize=font)
+                        page.insert_text((offset + x * factor - tw / 2, 100), header, fontsize=font)
+                values = [["1", "QA-123456", "Hex Head Bolt", "4"],
+                          ["13A", "QA.03-00-0060", "Spring Washer, 10x2.6", "1200"],
+                          ["2", "QA-998877665544", "PVC Steel Wire Reinforced Hose", "2.5"]]
+                for row, cells in enumerate(values):
+                    y = 130 + 40 * row
+                    for col, text in enumerate(cells):
+                        noise = (-2 if row % 2 else 2) * scale if noisy else 0
+                        x = ([45, 125, 290][col] * factor + noise if col < 3 else 630 * factor - fitz.get_text_length(text, fontsize=font))
+                        page.insert_text((offset + x, y), text, fontsize=font)
+                    if wrapped:
+                        page.insert_text((offset + 290 * factor, y + 12), "continued source description", fontsize=font)
+                if not multiple:
+                    outside = min(offset + 690 * factor, page_width - fitz.get_text_length("Outside", fontsize=font) - 8)
+                    page.insert_text((outside, 150), "Outside", fontsize=font)
         return pdf.tobytes()

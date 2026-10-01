@@ -100,10 +100,10 @@ def decide(client, headers, run, row, action="ACCEPT", **extra):
         json={"action": action, "expected_version": row["version"], **extra})
 
 
-@pytest.mark.parametrize("item_description", [False, True])
-def test_actual_ingestion_happy_path_publication_binding_and_shared_bytes(client, auth_headers, session_factory, machine_ids, item_description):
+@pytest.mark.parametrize("item_description,centered_headers", [(False, False), (True, False), (True, True)])
+def test_actual_ingestion_happy_path_publication_binding_and_shared_bytes(client, auth_headers, session_factory, machine_ids, item_description, centered_headers):
     catalog, revision = workspace(client, auth_headers, session_factory)
-    content = manual(groups=2, item_description=item_description)
+    content = manual(groups=2, item_description=item_description, centered_headers=centered_headers)
     artifact = checked(upload(client, auth_headers, revision, content), 201)
     assert artifact["sha256"] == hashlib.sha256(content).hexdigest()
     duplicate = checked(upload(client, auth_headers, revision, content), 201)

@@ -5,6 +5,8 @@ import re
 import fitz
 
 from . import ocr
+from .headings import select_heading
+from .labels import label_members
 from .schema import SCHEMA_VERSION, header_candidates
 from .tables import POSITION, layout_rows, ruled_rows, word_lines
 
@@ -58,14 +60,10 @@ def extract_page(page, config: dict) -> dict:
                     and (size >= 12 or line["bbox"][1] < page.cropbox.height * .12)
                     and not header_candidates(text) and not POSITION.fullmatch(text)):
                 heading_candidates.append({"text": text, "bbox": list(line["bbox"]),
-                    "size": size})
-    heading_candidates.sort(key=lambda item: (-item["size"], item["bbox"][1]))
-    heading = None
-    for candidate in heading_candidates:
-        cleaned = ROLE_WORDS.sub("", candidate["text"]).strip(" -—:·")
-        if len(cleaned) >= 3 and not re.fullmatch(r"[\d\W]+", cleaned):
-            heading = cleaned
-            break
+                    "size": size, "method": "OCR" if method == "OCR" and all(
+                        span.get("font") == "GlyphLessFont" for span in spans) else "NATIVE"})
+    heading_candidates.sort(key=lambda item: (item["method"] == "OCR", -item["size"], item["bbox"][1]))
+    heading, heading_evidence = select_heading(heading_candidates, page.cropbox.width, page.cropbox.height, ROLE_WORDS)
     # Prefer actual cell borders; coordinate columns work for borderless and OCR tables.
     rows, tables = [], []
     if method == "NATIVE":
@@ -79,13 +77,13 @@ def extract_page(page, config: dict) -> dict:
         rows, tables = layout_rows(words, page.cropbox.width,
             continuation=config.get("continuation_tables") if compatible else None)
     for table in tables:
+        warnings.extend(table.get("geometry", {}).get("warnings", []))
         if table["schema"]["state"] != "RESOLVED":
             warnings.extend(table["schema"]["warnings"])
     # A table header is not an assembly title, even if the PDF font is large.
     heading_candidates = [candidate for candidate in heading_candidates if not any(
         fitz.Rect(candidate["bbox"]).intersects(fitz.Rect(table["bbox"])) for table in tables)]
-    heading = next((ROLE_WORDS.sub("", candidate["text"]).strip(" -—:·") for candidate in heading_candidates
-                    if len(ROLE_WORDS.sub("", candidate["text"]).strip(" -—:·")) >= 3), None)
+    heading, heading_evidence = select_heading(heading_candidates, page.cropbox.width, page.cropbox.height, ROLE_WORDS)
     if method == "OCR":
         for row in rows:
             row["method"] = "OCR_WORD_LAYOUT"
@@ -101,12 +99,38 @@ def extract_page(page, config: dict) -> dict:
     for line in word_lines(words):
         if any(word["text"].casefold() in {"mm", "cm", "kg", "bar", "ø", "°"} for word in line):
             continue
+        used = set()
+        for start in range(len(line)):
+            if start in used:
+                continue
+            for length in range(min(5, len(line) - start), 1, -1):
+                tokens = line[start:start + length]
+                text = " ".join(token["text"] for token in tokens)
+                members = label_members(text)
+                if not members or len(members) < 2:
+                    continue
+                if any(b["bbox"][0] - a["bbox"][2] > max(6, a["bbox"][3] - a["bbox"][1])
+                       for a, b in zip(tokens, tokens[1:])):
+                    continue
+                end = start + length
+                if (start and tokens[0]["bbox"][0] - line[start - 1]["bbox"][2] <= 20
+                        or end < len(line) and line[end]["bbox"][0] - tokens[-1]["bbox"][2] <= 20):
+                    continue
+                bbox = [min(w["bbox"][0] for w in tokens), min(w["bbox"][1] for w in tokens),
+                        max(w["bbox"][2] for w in tokens), max(w["bbox"][3] for w in tokens)]
+                if not in_table(bbox) and .05 * page.cropbox.height < bbox[1] < .94 * page.cropbox.height:
+                    labels.append({"text": text, "bbox": bbox, "members": members, "combined": True})
+                    used.update(range(start, end))
+                break
         for index, word in enumerate(line):
+            if index in used:
+                continue
             isolated = ((index == 0 or word["bbox"][0] - line[index - 1]["bbox"][2] > 20)
                         and (index == len(line) - 1 or line[index + 1]["bbox"][0] - word["bbox"][2] > 20))
-            if (isolated and POSITION.fullmatch(word["text"]) and not in_table(word["bbox"])
+            if (isolated and label_members(word["text"]) and not in_table(word["bbox"])
                     and 0.05 * page.cropbox.height < word["bbox"][1] < .94 * page.cropbox.height):
-                labels.append(word)
+                labels.append({**word, "members": label_members(word["text"]),
+                               "combined": not bool(POSITION.fullmatch(word["text"]))})
     drawing_count = len(page.get_drawings())
     scheme_title = bool(re.search(r"exploded|explosions|разглобена|взрыв", raw_text, re.I))
     scheme = scheme_title and bool(labels) or len(labels) >= 2 and drawing_count >= 1 or len(labels) >= 5
@@ -120,7 +144,7 @@ def extract_page(page, config: dict) -> dict:
     return {"raw_text": raw_text, "words": words, "width": page.rect.width, "height": page.rect.height,
         "unrotated_width": page.cropbox.width, "unrotated_height": page.cropbox.height,
         "rotation": page.rotation, "rotation_matrix": list(page.rotation_matrix),
-        "headings": heading_candidates[:40], "heading": heading, "tables": tables,
+        "headings": heading_candidates[:40], "heading": heading, "heading_evidence": heading_evidence, "tables": tables,
         "rows": rows, "labels": labels, "method": method, "ocr_used": method == "OCR",
         "schema_version": SCHEMA_VERSION, "warnings": sorted(set(warnings)), "role": role, "confidence": confidence,
         "role_evidence": {"table_rows": len(rows), "isolated_labels": len(labels),

@@ -57,7 +57,8 @@ def store_page(db: Session, run: CatalogIngestRun, number: int, layout: dict) ->
         key = fingerprint("GROUP", heading.casefold())
         context["group_key"] = key
         propose(db, run.id, key, "GROUP", {"name": heading},
-            {"source_heading": heading, "headings": layout["headings"], "page_number": number},
+            {"source_heading": heading, "headings": layout["headings"], "page_number": number,
+             "heading_evidence": layout.get("heading_evidence", {})},
             .92 if layout["role"] in {"SPARE_PARTS_LIST", "EXPLODED_SCHEME", "BOTH"} else .5,
             ["OCR_REQUIRES_REVIEW"] if layout["ocr_used"] else [], number)
     elif "group_key" not in context and layout["role"] not in {"OTHER", "AMBIGUOUS"}:
@@ -74,13 +75,14 @@ def store_page(db: Session, run: CatalogIngestRun, number: int, layout: dict) ->
         {"role": layout["role"], "group_key": group_key},
         {"role_signals": layout["role_evidence"], "heading": heading,
          "method": layout["method"], "rotation": layout["rotation"], "association": association,
-         "tables": layout["tables"], "schema_version": layout.get("schema_version")},
+         "tables": layout["tables"], "schema_version": layout.get("schema_version"),
+         "heading_evidence": layout.get("heading_evidence", {})},
         layout["confidence"], warnings, number)
     for row in layout["rows"]:
         key = fingerprint("PART", number, row["bbox"], row["raw_text"])
         propose(db, run.id, key, "PART", {**row["payload"], "group_key": group_key},
             {**{key: row[key] for key in ("bbox", "raw_text", "raw_values", "method")},
-             **{key: row[key] for key in ("schema", "raw_cells", "continuation_cells") if key in row},
+             **{key: row[key] for key in ("schema", "raw_cells", "continuation_cells", "column_geometry") if key in row},
              "geometry": normalized_geometry(row["bbox"], layout)},
             row["confidence"], row["warnings"] + (["GROUP_UNCERTAIN"] if not group_key else []), number)
     run.context = context
@@ -108,11 +110,11 @@ def match_hotspots(db: Session, run: CatalogIngestRun) -> None:
         layouts = db.scalars(select(CatalogIngestPage).where(CatalogIngestPage.run_id == run.id,
             CatalogIngestPage.page_number.in_(schemes.get(group, [])))).all()
         for position in sorted(positions):
-            result = match_position(position, [(source.page_number, source.evidence) for source in layouts])
+            result = match_position(position, [(source.page_number, source.evidence) for source in layouts], positions)
             match, locations, ocr = result["match"], result["locations"], result["ocr_used"]
             propose(db, run.id, fingerprint("HOTSPOT", group, position), "HOTSPOT",
                 {"group_key": group, "position": position, "match": match, "locations": locations},
-                {"source_pages": schemes.get(group, []), "ocr_used": ocr},
+                {"source_pages": schemes.get(group, []), "ocr_used": ocr, "combined_callout": result["combined"]},
                 .94 if match == "EXACT" else .5, [] if match == "EXACT" else [match])
     for row in db.scalars(select(CatalogIngestCandidate).where(CatalogIngestCandidate.run_id == run.id,
         CatalogIngestCandidate.kind == "HOTSPOT", CatalogIngestCandidate.reviewed_by_id.is_(None),

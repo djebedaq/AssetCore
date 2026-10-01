@@ -1,5 +1,6 @@
 """Geometry first, contextual schemas second, exact source rows throughout."""
 
+from .columns import assign_words, header_geometry, infer_columns
 from .schema import header_candidates, infer_schema
 from .values import PLACEHOLDERS, POSITION, quantity
 
@@ -100,7 +101,7 @@ def word_lines(words: list[dict]) -> list[list[dict]]:
     return [sorted(line, key=lambda word: word["bbox"][0]) for line in lines]
 
 
-def header_anchors(line: list[dict]) -> list[tuple[float, str]]:
+def header_anchors(line: list[dict]) -> list[dict]:
     anchors, used = [], set()
     for length in (3, 2, 1):
         for index in range(len(line) - length + 1):
@@ -111,75 +112,123 @@ def header_anchors(line: list[dict]) -> list[tuple[float, str]]:
                 continue
             text = " ".join(word["text"] for word in selected)
             if header_candidates(text):
-                anchors.append((selected[0]["bbox"][0], text))
+                anchors.append(header_geometry(text, selected))
                 used.update(range(index, index + length))
+    pending = []
     for index, word in enumerate(line):
-        if index not in used:
-            anchors.append((word["bbox"][0], word["text"]))
-    return sorted(anchors)
+        if index in used:
+            if pending:
+                anchors.append(header_geometry(" ".join(w["text"] for w in pending), pending))
+                pending = []
+            continue
+        if pending and word["bbox"][0] - pending[-1]["bbox"][2] > max(4, word["bbox"][3] - word["bbox"][1]):
+            anchors.append(header_geometry(" ".join(w["text"] for w in pending), pending))
+            pending = []
+        pending.append(word)
+    if pending:
+        anchors.append(header_geometry(" ".join(w["text"] for w in pending), pending))
+    return sorted(anchors, key=lambda item: item["center"])
 
 
 def layout_rows(words: list[dict], width: float, *, continuation: list[dict] | None = None) -> tuple[list[dict], list[dict]]:
     rows, tables, regions = [], [], []
     lines = word_lines(words)
     for index, line in enumerate(lines):
-        anchors = header_anchors(line)
-        recognized = [header_candidates(header) for _, header in anchors]
+        headers = header_anchors(line)
+        if not 3 <= len(headers) <= 24:
+            continue
+        recognized = [header_candidates(header["text"]) for header in headers]
         known = sum(bool(hints) for hints in recognized)
         strong = sum(max(hints.values(), default=0) >= 2 for hints in recognized)
-        recognized_header = len(anchors) >= 3 and known >= 2 and known / len(anchors) >= .5 and (known >= 3 or strong)
-        # Borderless unknown headers still have independent, repeated alignment.
-        geometric_header = (3 <= len(anchors) <= 12 and not any(POSITION.fullmatch(text) for _, text in anchors)
-            and all(anchors[i + 1][0] - anchors[i][0] >= 30 for i in range(len(anchors) - 1))
-            and len(lines[index + 1:index + 3]) == 2
-            and all(sum(any(abs(word["bbox"][0] - x) <= 8 for word in following) for x, _ in anchors) >= 3
-                    for following in lines[index + 1:index + 3]))
-        if recognized_header or geometric_header:
-            pn = [i for i, hints in enumerate(recognized) if hints.get("part_number", 0) >= 2]
-            starts = [0] + [max(1, col - 1) for col in pn[1:]]
-            for segment, start in enumerate(starts):
-                end = starts[segment + 1] if segment + 1 < len(starts) else len(anchors)
-                if end - start >= 3:
-                    regions.append({"line": index, "anchors": anchors[start:end],
-                                    "right": anchors[end][0] - 6 if end < len(anchors) else width})
+        recognized_header = known >= 2 and known / len(headers) >= .5 and (known >= 3 or strong)
+        geometric_header = (not any(POSITION.fullmatch(h["text"]) for h in headers)
+            and len(lines[index + 1:index + 3]) == 2)
+        if not recognized_header and not geometric_header:
+            continue
+        pn = [i for i, hints in enumerate(recognized) if hints.get("part_number", 0) >= 2]
+        starts = [0] + [max(1, col - 1) for col in pn[1:]]
+        for segment, start in enumerate(starts):
+            end = starts[segment + 1] if segment + 1 < len(starts) else len(headers)
+            selected = headers[start:end]
+            if not 3 <= len(selected) <= 12:
+                continue
+            centers = [h["center"] for h in selected]
+            left = (headers[start - 1]["center"] + centers[0]) / 2 if start else max(0, centers[0] - .55 * (centers[1] - centers[0]))
+            right = (centers[-1] + headers[end]["center"]) / 2 if end < len(headers) else min(width, centers[-1] + .55 * (centers[-1] - centers[-2]))
+            if not recognized_header:
+                trial = infer_columns(selected, lines[index + 1:index + 3], left, right, width)
+                if trial.get("coherence", 0) < .8 or trial.get("populated_rows", 0) < 2:
+                    continue
+            regions.append({"line": index, "headers": selected, "left": left, "right": right})
     if not regions and continuation:
         for old in continuation[:4]:
-            if old.get("schema", {}).get("state") == "RESOLVED" and old.get("anchors"):
-                regions.append({"line": -1, "anchors": list(zip(old["anchors"], old["headers"], strict=True)),
-                                "right": min(width, old["bbox"][2] + 10), "inferred": True})
+            bounds = old.get("geometry", {}).get("normalized_boundaries")
+            if old.get("schema", {}).get("state") != "RESOLVED" or not bounds:
+                continue  # Legacy geometry is deliberately re-extracted, never reinterpreted.
+            scale = width / old["page_width"]
+            headers = [{**h, "x0": h["x0"] * scale, "x1": h["x1"] * scale,
+                "center": h["center"] * scale, "width": h["width"] * scale,
+                "bbox": [h["bbox"][0] * scale, h["bbox"][1], h["bbox"][2] * scale, h["bbox"][3]]}
+                for h in old["header_geometry"]]
+            regions.append({"line": -1, "headers": headers, "left": bounds[0] * width, "right": bounds[-1] * width,
+                            "inferred": True, "stored_boundaries": [b * width for b in bounds]})
     for region in regions[:80]:
-        anchors = region["anchors"]
-        first, right = anchors[0][0] - 6, region["right"]
+        headers = region["headers"]
         next_header = min((r["line"] for r in regions if r["line"] > region["line"]), default=len(lines))
-        cells, boxes = [], []
+        selected_lines = []
         for line in lines[region["line"] + 1:next_header]:
-            selected = [word for word in line if first <= word["bbox"][0] < right]
+            selected = [w for w in line if region["left"] <= (w["bbox"][0] + w["bbox"][2]) / 2 <= region["right"]]
             if not selected:
                 continue
-            values = [""] * len(anchors)
-            for word in selected:
-                col = max((i for i, (x, _) in enumerate(anchors) if word["bbox"][0] >= x - 6), default=0)
-                values[col] = (values[col] + " " + word["text"]).strip()
-            if region.get("inferred") and not POSITION.fullmatch(values[0]) and not cells:
+            if selected_lines and selected[0]["bbox"][1] - max(w["bbox"][3] for w in selected_lines[-1]) > 65:
+                break
+            selected_lines.append(selected)
+            if len(selected_lines) >= 2000:
+                break
+        if not selected_lines:
+            continue
+        if region.get("stored_boundaries"):
+            boundaries = region["stored_boundaries"]
+            geometry = {"boundaries": boundaries, "normalized_boundaries": [b / width for b in boundaries],
+                        "state": "RESOLVED", "alternatives": [], "warnings": [], "reused": True}
+        else:
+            geometry = infer_columns(headers, selected_lines, region["left"], region["right"], width)
+            boundaries = geometry["boundaries"]
+        if not boundaries:
+            continue
+        cells, boxes, assignments, conflicts = [], [], [], []
+        for line in selected_lines:
+            values, assigned, conflict = assign_words(line, boundaries)
+            if not assigned:
                 continue
-            box = [min(w["bbox"][0] for w in selected), min(w["bbox"][1] for w in selected),
-                   max(w["bbox"][2] for w in selected), max(w["bbox"][3] for w in selected)]
-            if boxes and box[1] - boxes[-1][3] > 65:
-                break
+            if region.get("inferred") and sum(bool(value) for value in values) < 3 and not cells:
+                continue
             cells.append(values)
-            boxes.append(box)
-            if len(cells) >= 2000:
-                break
+            assignments.append(assigned)
+            conflicts.append(conflict)
+            boxes.append([min(w["bbox"][0] for w in assigned), min(w["bbox"][1] for w in assigned),
+                          max(w["bbox"][2] for w in assigned), max(w["bbox"][3] for w in assigned)])
         if not cells:
             continue
         top = lines[region["line"]][0]["bbox"][1] if region["line"] >= 0 else boxes[0][1]
-        box = [first, top, max(box[2] for box in boxes), max(box[3] for box in boxes)]
-        parts, table = parse_region([text for _, text in anchors], cells, boxes, box, "WORD_LAYOUT", [x for x, _ in anchors])
+        bbox = [boundaries[0], top, boundaries[-1], max(box[3] for box in boxes)]
+        parts, table = parse_region([h["text"] for h in headers], cells, boxes, bbox, "WORD_LAYOUT", [h["x0"] for h in headers])
+        table.update({"header_geometry": headers, "geometry": geometry, "page_width": width,
+                      "sample_assignments": assignments[:5]})
+        warnings = list(geometry["warnings"])
+        if any(conflicts) and "GEOMETRY_AMBIGUOUS" not in warnings:
+            warnings.append("GEOMETRY_AMBIGUOUS")
+            geometry["warnings"] = warnings
+            geometry["state"] = "NEEDS_REVIEW"
         if region.get("inferred"):
             table["continuation_inferred"] = True
-            for part in parts:
-                part["warnings"].append("CONTINUATION_INFERRED")
-                part["confidence"] = min(part["confidence"], .7)
+            warnings.append("CONTINUATION_INFERRED")
+        for part in parts:
+            part["column_geometry"] = {"table_bbox": bbox, "header_geometry": headers,
+                "normalized_boundaries": geometry["normalized_boundaries"], "state": geometry["state"]}
+            part["warnings"].extend(warnings)
+            if warnings:
+                part["confidence"] = min(part["confidence"], .55 if "GEOMETRY_AMBIGUOUS" in warnings else .7)
         rows.extend(parts)
         tables.append(table)
     return rows, tables

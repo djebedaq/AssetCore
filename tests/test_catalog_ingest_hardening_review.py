@@ -25,7 +25,8 @@ def test_ambiguous_schema_is_reviewable_and_never_accepted_as_parts(client, auth
 
 
 @pytest.mark.parametrize("missing", ["/", "-"])
-def test_placeholder_requires_human_correction_and_old_cache_reanalysis_preserves_it(client, auth_headers, session_factory, missing):
+@pytest.mark.parametrize("cached_version", [None, 2])
+def test_placeholder_requires_human_correction_and_old_cache_reanalysis_preserves_it(client, auth_headers, session_factory, missing, cached_version):
     _, revision = workspace(client, auth_headers, session_factory)
     data = contextual_table(rows=[["1", missing, "Seal", "1"], ["2", "QA-02", "Pump", "2"]])
     artifact = checked(upload(client, auth_headers, revision, data), 201)
@@ -42,12 +43,14 @@ def test_placeholder_requires_human_correction_and_old_cache_reanalysis_preserve
     with session_factory() as db:
         cached = db.scalar(select(CatalogIngestPage).where(CatalogIngestPage.run_id == run["id"]))
         cached.evidence = {key: value for key, value in cached.evidence.items() if key != "schema_version"}
+        if cached_version:
+            cached.evidence = {**cached.evidence, "schema_version": cached_version}
         db.commit()
     checked(client.post(f"{BASE}/analyses/{run['id']}/retry?rerun=true", headers=auth_headers))
     again = analyze(client, auth_headers, artifact)
-    assert again["id"] == run["id"]  # CATALOG_INGEST_1 stable; schema evidence is version 2.
+    assert again["id"] == run["id"]  # CATALOG_INGEST_1 stable; geometry/schema evidence is version 3.
     with session_factory() as db:
-        assert db.scalar(select(CatalogIngestPage).where(CatalogIngestPage.run_id == run["id"])).evidence["schema_version"] == 2
+        assert db.scalar(select(CatalogIngestPage).where(CatalogIngestPage.run_id == run["id"])).evidence["schema_version"] == 3
         assert db.get(CatalogIngestCandidate, accepted["id"]).payload["part_number"] == "QA-HUMAN"
         assert db.get(CatalogRevisionPart, accepted["target_id"]).description == "Confirmed source"
         assert db.get(CatalogIngestCandidate, rejected["id"]).state == "REJECTED"

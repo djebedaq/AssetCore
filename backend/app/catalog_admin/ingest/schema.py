@@ -4,7 +4,7 @@ import re
 
 from .values import POSITION, quantity
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 ROLES = ("position", "part_number", "description", "quantity", "technical_notes", "technical_specification")
 ALIASES = {
     "position": {"pos", "position", "index", "позиция", "поз", "позиц", "позномер"},
