@@ -215,3 +215,19 @@
 .wizard-mode { justify-content: flex-end; margin-bottom: .5rem; }
 .builder-page [hidden] { display: none !important; }
 @media (max-width: 700px) { .wizard-progress { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wizard-progress button:last-child { grid-column: 1 / -1; } }
+/* Catalog ingestion: one lazy source preview beside a paginated review. */
+.ingest-review { margin: 1.25rem 0; min-width: 0; }
+.ingest-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .8fr); gap: 1rem; align-items: start; }
+.ingest-review-layout:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.ingest-review td { vertical-align: top; }
+.ingest-review td small { display: block; }
+.ingest-review button, .ingest-review select { min-height: 44px; }
+.ingest-source { position: sticky; top: 1rem; max-height: 80vh; overflow: auto; }
+.ingest-source pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ingest-source-image { position: relative; }
+.ingest-source-image img { display: block; width: 100%; }
+.ingest-source-bbox { position: absolute; border: 2px solid var(--accent, #d97706); background: #f59e0b33; pointer-events: none; }
+@media (max-width: 800px) {
+  .ingest-review-layout { grid-template-columns: minmax(0, 1fr); }
+  .ingest-source { position: static; max-height: none; }
+}

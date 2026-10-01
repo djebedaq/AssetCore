@@ -7,6 +7,7 @@ import RevisionHotspotEditor from './RevisionHotspotEditor'
 import RevisionRepairKits from './RevisionRepairKits'
 import WizardDocuments from './WizardDocuments'
 import WizardParts from './WizardParts'
+import IngestReview from './IngestReview'
 import WizardReview from './WizardReview'
 import WizardMachines from './WizardMachines'
 import useDraftGuard from './useDraftGuard'
@@ -42,6 +43,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   const importDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, import: value })), [])
   const partsDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, parts: value })), [])
   const hotspotsDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, hotspots: value })), [])
+  const hotspotReviewDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, hotspotReview: value })), [])
   const kitsDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, kits: value })), [])
   const label = (value: { name_bg: string; name_en: string; name_ru: string }) => value[`name_${locale}`] || value.name_bg
   const report = (caught: unknown) => setError(t(caught instanceof ApiError && caught.code ? problemKeys[caught.code] || 'builder.error.generic' : 'builder.error.generic'))
@@ -197,8 +199,9 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
           onChanged={refresh} incompleteOnly={fix?.step === 'parts'} onDirtyChange={importDirty} onEditorDirtyChange={partsDirty} editorDirty={!!dirtyChildren.parts}
           onDocumentProblem={page => { setFix({ code: '', step: 'documents', visual_page_id: page }); navigate('documents') }} /></div>}
         {visited.includes('hotspots') && <div hidden={step !== 'hotspots'}>
+          <IngestReview revisionId={revision.id} kind="HOTSPOT" groups={groups} onChanged={refresh} onDirtyChange={hotspotReviewDirty} blocked={!!dirtyChildren.hotspots} />
           <label>{t('wizard.group')}<select value={groupId ?? ''} onChange={event => changeGroup(Number(event.target.value))}>{groups.map(group => <option key={group.id} value={group.id}>{label(group)}</option>)}</select></label>
-          {groupId && <RevisionHotspotEditor key={groupId} assemblyId={groupId} editable simple
+          {groupId && <RevisionHotspotEditor key={`${groupId}-${groups.find(group => group.id === groupId)?.hotspot_count}`} assemblyId={groupId} editable simple
             initialFilter={fix?.step === 'hotspots' ? fix.code.includes('coverage') ? 'unmarked' : 'unverified' : 'all'}
             initialPageId={fix?.visual_page_id} initialPosition={fix?.position} onDirtyChange={hotspotsDirty} />}
           <button className="secondary" onClick={() => { if (kits && dirtyChildren.kits && !window.confirm(t('wizard.unsaved'))) return; setKits(value => !value) }}>{t('wizard.optionalKits')}</button>

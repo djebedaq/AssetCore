@@ -1,4 +1,5 @@
 import { wizardBg, wizardEn, wizardRu } from './features/catalogBuilder/wizardTranslations'
+import { ingestBg, ingestEn, ingestRu } from './features/catalogBuilder/ingestTranslations'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from './api'
@@ -12,6 +13,7 @@ import {
 } from './locale'
 
 export const bg = {
+  ...ingestBg,
   ...wizardBg,
   "ownerDeletion.action": "Изтрий окончателно",
   "ownerDeletion.actionFor": "Изтрий окончателно: {{identity}}",
@@ -1287,6 +1289,8 @@ export const bg = {
   'ownerDeletion.references.builderHotspots': 'Зони на позиции в чернови',
   'ownerDeletion.references.builderRepairKits': 'Ремонтни комплекти в чернови',
   'ownerDeletion.references.builderRepairKitComponents': 'Компоненти на чернови комплекти',
+  'ownerDeletion.references.builderAnalyses': 'Анализи на чернови каталози',
+  'ownerDeletion.references.builderProposals': 'Предложения за чернови каталози',
   'ownerDeletion.references.builderCatalogs': 'Каталози в конструктора',
   'ownerDeletion.references.builderRevisions': 'Чернови ревизии на каталога',
   'ownerDeletion.references.builderBindings': 'Връзки на каталога с активи',
@@ -1301,6 +1305,7 @@ export const en: Catalog = Object.fromEntries(
 
 Object.assign(en, {
   ...wizardEn,
+  ...ingestEn,
   "ownerDeletion.action": "Delete permanently",
   "ownerDeletion.actionFor": "Delete permanently: {{identity}}",
   "ownerDeletion.title": "Permanent deletion",
@@ -1949,6 +1954,8 @@ Object.assign(en, {
   'ownerDeletion.references.builderHotspots': 'Draft position hotspots',
   'ownerDeletion.references.builderRepairKits': 'Draft repair kits',
   'ownerDeletion.references.builderRepairKitComponents': 'Draft repair kit components',
+  'ownerDeletion.references.builderAnalyses': 'Draft catalog analyses',
+  'ownerDeletion.references.builderProposals': 'Draft catalog proposals',
   'ownerDeletion.references.builderCatalogs': 'Builder catalogs',
   'ownerDeletion.references.builderRevisions': 'Draft catalog revisions',
   'ownerDeletion.references.builderBindings': 'Catalog asset bindings',
@@ -1960,6 +1967,7 @@ export const ru: Catalog = Object.fromEntries(
 
 Object.assign(ru, {
   ...wizardRu,
+  ...ingestRu,
   "ownerDeletion.action": "Удалить навсегда",
   "ownerDeletion.actionFor": "Удалить навсегда: {{identity}}",
   "ownerDeletion.title": "Окончательное удаление",
@@ -2611,6 +2619,8 @@ Object.assign(ru, {
   'ownerDeletion.references.builderHotspots': 'Зоны позиций черновых редакций',
   'ownerDeletion.references.builderRepairKits': 'Ремонтные комплекты черновых редакций',
   'ownerDeletion.references.builderRepairKitComponents': 'Компоненты черновых комплектов',
+  'ownerDeletion.references.builderAnalyses': 'Анализы черновых каталогов',
+  'ownerDeletion.references.builderProposals': 'Предложения для черновых каталогов',
   'ownerDeletion.references.builderCatalogs': 'Каталоги конструктора',
   'ownerDeletion.references.builderRevisions': 'Черновые редакции каталога',
   'ownerDeletion.references.builderBindings': 'Привязки каталога к активам',

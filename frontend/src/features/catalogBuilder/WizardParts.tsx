@@ -3,6 +3,7 @@ import { api, ApiError, downloadApiFile } from '../../api'
 import { filePayload } from '../../industrialUi'
 import { useI18n } from '../../i18n'
 import RevisionParts from './RevisionParts'
+import IngestReview from './IngestReview'
 import useDraftGuard from './useDraftGuard'
 import { builderBase, problemKeys, type Document, type Group } from './wizardTypes'
 
@@ -26,7 +27,8 @@ export default function WizardParts({ revisionId, groups, groupId, setGroupId, o
   const [error, setError] = useState('')
   const [documents, setDocuments] = useState<Document[]>([])
   const [sourceId, setSourceId] = useState<number | null>(null)
-  useDraftGuard(!!file || busy, onDirtyChange)
+  const [reviewDirty, setReviewDirty] = useState(false)
+  useDraftGuard(!!file || busy || reviewDirty, onDirtyChange)
   const problem = (code: string) => t(problemKeys[code] || 'builder.error.generic')
   const report = (caught: unknown) => setError(problem(caught instanceof ApiError ? caught.code || '' : ''))
   useEffect(() => { void api<Document[]>(`${builderBase}/revisions/${revisionId}/documents`).then(setDocuments).catch(report) }, [revisionId, groups])
@@ -54,6 +56,8 @@ export default function WizardParts({ revisionId, groups, groupId, setGroupId, o
   const source = documents.find(item => item.id === sourceId) || documents[0]
   return <div className="builder-workspace">
     {error && <p className="error" role="alert">{error}</p>}
+    <IngestReview revisionId={revisionId} kind="PART" groups={groups} onChanged={onChanged} onDirtyChange={setReviewDirty} blocked={editorDirty} />
+    <details><summary>{t('ingest.advanced')}</summary>
     <h4>{t('wizard.import')}</h4><p>{t('wizard.csvHelp')}</p>
     <p className="muted">{t('wizard.csvExampleHelp')}</p>
     <div className="wizard-groups">{groups.map(group => <article key={group.id}>
@@ -85,6 +89,7 @@ export default function WizardParts({ revisionId, groups, groupId, setGroupId, o
       </div>}
       <button className="primary" disabled={busy || editorDirty || preview.summary.error_rows > 0} onClick={() => void confirm()}>{t('builder.part.confirm')}</button>
     </>}
+    </details>
     <label>{t('wizard.group')}<select value={groupId ?? ''} onChange={event => setGroupId(Number(event.target.value))}>
       {!groups.length && <option value="">{t('wizard.noGroups')}</option>}
       {groups.map(group => <option key={group.id} value={group.id}>{group[`name_${locale}`] || group.name_bg}</option>)}

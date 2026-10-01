@@ -9,6 +9,7 @@ import RevisionHotspotEditor from './RevisionHotspotEditor'
 import { parsePageRange } from './WizardDocuments'
 import WizardDocuments from './WizardDocuments'
 import { wizardBg, wizardEn, wizardRu } from './wizardTranslations'
+import { UploadTestTransport } from './uploadTestTransport'
 
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 const category = { id: 1, code: 'QA', name_bg: 'QA категория', name_en: 'QA', name_ru: 'QA', is_active: true, capabilities: ['HAS_PARTS_CATALOG'] }
@@ -17,6 +18,7 @@ const actor = { id: 1, email: 'qa@example.invalid', role: 'administrator', permi
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 function pointerEnvironment() {
+  vi.stubGlobal('XMLHttpRequest', UploadTestTransport)
   const NativeURL = URL
   vi.stubGlobal('URL', class extends NativeURL {
     static createObjectURL = vi.fn(() => 'blob:qa-page')
@@ -54,7 +56,11 @@ it('completes a novice document-first flow with group correction, readable templ
   let templateDownloads = 0
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const path = String(input); const method = init?.method || 'GET'; const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
+    const path = String(input); const method = init?.method || 'GET'
+    const body = init?.body instanceof FormData ? { title: init.body.get('title'), filename: (init.body.get('file') as File).name }
+      : init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
+    if (path.endsWith('/analyses')) return json([])
+    if (path.endsWith('/analysis')) return json({ id: 1, status: 'COMPLETED' })
     if (method !== 'GET') writes.push({ path, body })
     if (path === '/api/categories') return json([category])
     if (path.endsWith('/simple/catalogs')) {
@@ -68,7 +74,8 @@ it('completes a novice document-first flow with group correction, readable templ
     if (path.endsWith('/revisions/11/assemblies')) return json(groups)
     if (path.endsWith('/revisions/11/groups')) { const created = { ...group, id: 9, code: 'QA_ADDITIONAL', name_bg: String(body.name) }; groups.push(created); return json(created, 201) }
     if (path.endsWith('/assemblies/7') && method === 'PATCH') { groups[0] = { ...groups[0], ...body }; return json(groups[0]) }
-    if (path.endsWith('/revisions/11/documents') && method === 'POST') {
+    if (path.endsWith('/revisions/11/pdf') && method === 'POST') {
+      expect(init?.body).toBeInstanceOf(FormData)
       expect(groups).toHaveLength(0)
       groups = [{ ...group, code: 'INITIAL_GROUP', name_bg: 'Първоначална група' }]
       documents = [{ id: 8, title: String(body.title), filename: String(body.filename), sha256: 'a'.repeat(64), page_count: 4, assignments: [] }]
@@ -132,6 +139,7 @@ it('completes a novice document-first flow with group correction, readable templ
   expect(groups).toHaveLength(0)
   await user.upload(await screen.findByLabelText('Качи оригиналния PDF'), new File(['%PDF-QA'], 'original.pdf', { type: 'application/pdf' }))
   await user.click(screen.getByRole('button', { name: 'Качи оригиналния PDF' }))
+  await user.click(screen.getByText('Разширени инструменти / ръчно въвеждане / CSV'))
   await screen.findByLabelText('Избери PDF страница 1')
   await waitFor(() => expect(groups).toHaveLength(1))
   await user.click(screen.getByRole('button', { name: 'Предложи роли и групи от текста' }))
@@ -178,6 +186,7 @@ it('completes a novice document-first flow with group correction, readable templ
   await user.click(screen.getByRole('button', { name: 'Запази' }))
   await waitFor(() => expect(catalogs[0].name_bg).toBe('QA corrected catalog'))
   await user.click(screen.getByRole('button', { name: '3 Части' }))
+  await user.click(screen.getAllByText('Разширени инструменти / ръчно въвеждане / CSV').find(item => item.closest('[hidden]') === null)!)
   await user.click(screen.getByRole('button', { name: 'Изтегли CSV образец' }))
   await waitFor(() => expect(templateDownloads).toBe(1))
   expect(screen.getByText('Код за CSV импорт: INITIAL_GROUP')).toBeVisible()
@@ -206,7 +215,7 @@ it('completes a novice document-first flow with group correction, readable templ
   await user.click(await screen.findByRole('button', { name: 'Публикувай каталог' }))
   expect(await screen.findByText('Каталогът е публикуван.')).toBeVisible()
   expect(writes.find(write => write.path.endsWith('/publish'))?.body).toMatchObject({ expected_publication_digest: 'b'.repeat(64), confirmed: true })
-  expect(writes.filter(write => write.path.endsWith('/documents') && write.body.content_base64)).toHaveLength(1)
+  expect(writes.filter(write => write.path.endsWith('/pdf') && write.body.filename)).toHaveLength(1)
   expect(writes.filter(write => write.path.endsWith('/groups'))).toHaveLength(1)
   await screen.findByText('QA_A')
   await user.click(within(screen.getByText('QA_A').closest('.builder-row') as HTMLElement).getByRole('button'))
@@ -229,6 +238,7 @@ it('confirms group contents, honours cancellation and retains groups on backend 
   render(<I18nProvider><WizardDocuments revisionId={11} groups={[{ ...group, part_count: 4, artifact_count: 2,
     exploded_page_count: 2, spare_list_page_count: 1, hotspot_count: 1, repair_kit_count: 1 }]}
     onChanged={onChanged} onDirtyChange={vi.fn()} beforeDelete={() => true} /></I18nProvider>)
+  await user.click(screen.getByText('Разширени инструменти / ръчно въвеждане / CSV'))
   await user.click(screen.getByRole('button', { name: 'Изтрий група QA група' }))
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining('4 части'))
   expect(fetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)

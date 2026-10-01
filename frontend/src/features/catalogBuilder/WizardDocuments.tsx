@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { api, ApiError } from '../../api'
-import { filePayload } from '../../industrialUi'
+import { useCallback, useEffect, useState } from 'react'
+import { api, ApiError, uploadApiFile } from '../../api'
 import { useI18n } from '../../i18n'
 import DocumentThumbnail from './DocumentThumbnail'
+import AnalysisProgress from './AnalysisProgress'
+import IngestReview from './IngestReview'
 import useDraftGuard from './useDraftGuard'
 import { builderBase, problemKeys, type Document, type Group, type Role } from './wizardTypes'
 
@@ -45,10 +46,16 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
   const [selectedSuggestions, setSelectedSuggestions] = useState<number[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null)
+  const [analysisKey, setAnalysisKey] = useState(0)
+  const [reviewKey, setReviewKey] = useState(0)
+  const [reviewDirty, setReviewDirty] = useState({ group: false, page: false })
+  const groupReviewDirty = useCallback((value: boolean) => setReviewDirty(current => ({ ...current, group: value })), [])
+  const pageReviewDirty = useCallback((value: boolean) => setReviewDirty(current => ({ ...current, page: value })), [])
   const source = documents.find(item => item.id === documentId) || documents[0]
   const targetId = groupId && groups.some(group => group.id === groupId) ? groupId : groups[0]?.id
   const label = (group: Group) => group[`name_${locale}`] || group.name_bg
-  useDraftGuard(!!name.trim() || !!file || busy || editingGroup !== null, onDirtyChange)
+  useDraftGuard(!!name.trim() || !!file || busy || editingGroup !== null || reviewDirty.group || reviewDirty.page, onDirtyChange)
   async function load() { setDocuments(await api<Document[]>(`${builderBase}/revisions/${revisionId}/documents`)) }
   useEffect(() => { void load().catch(report) }, [revisionId])
   useEffect(() => { if (targetPage && source && targetPage <= source.page_count) {
@@ -59,7 +66,12 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
     const document = documents.find(item => item.id === targetArtifactId || item.artifact_ids?.includes(targetArtifactId))
     if (document) { setDocumentId(document.id); setOffset(0) }
   }, [targetArtifactId, documents])
-  function report(caught: unknown) { setError(t(caught instanceof ApiError && caught.code ? problemKeys[caught.code] || 'builder.error.generic' : 'builder.error.generic')) }
+  function report(caught: unknown) {
+    if (caught instanceof ApiError && caught.data.limit) {
+      setError(t('ingest.limit', { limit: Number(caught.data.limit), setting: String(caught.data.configurable_setting || '') }))
+    } else setError(t(caught instanceof ApiError && caught.code === 'catalog_source_encrypted' ? 'ingest.encrypted'
+      : caught instanceof ApiError && caught.code ? problemKeys[caught.code] || 'builder.error.generic' : 'builder.error.generic'))
+  }
   async function run(action: () => Promise<void>) {
     if (busy) return
     setBusy(true); setError('')
@@ -74,7 +86,7 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
   }
   async function renameGroup(group: Group, nextName: string) {
     await run(async () => {
-      const changes = { name_bg: nextName.trim(), name_en: nextName.trim(), name_ru: nextName.trim() }
+      const changes = { [`name_${locale}`]: nextName.trim() }
       await api(`${builderBase}/assemblies/${group.id}`, { method: 'PATCH', body: JSON.stringify(changes) })
       setEditingGroup(null)
     })
@@ -115,13 +127,19 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
     <div className="wizard-upload">
       <label>{t('wizard.upload')}<input type="file" accept=".pdf,application/pdf" disabled={busy} onChange={event => setFile(event.target.files?.[0] || null)} /></label>
       <button className="primary" disabled={busy || !file} onClick={() => void run(async () => {
-        const payload = await filePayload(file!)
-        const created = await api<Document>(`${builderBase}/revisions/${revisionId}/documents`, {
-          method: 'POST', body: JSON.stringify({ ...payload, title: file!.name }),
-        })
+        setUploadPercent(0)
+        const created = await uploadApiFile<Document>(`${builderBase}/revisions/${revisionId}/pdf`, file!, setUploadPercent)
+        setUploadPercent(null)
+        await api(`${builderBase}/artifacts/${created.id}/analysis`, { method: 'POST' })
+        setAnalysisKey(value => value + 1)
         setFile(null); await load(); setDocumentId(created.id); setOffset(0)
       })}>{t('wizard.upload')}</button>
     </div>
+    {busy && uploadPercent !== null && <p role="status">{t(uploadPercent >= 100 ? 'ingest.validating' : 'ingest.uploading', { percent: uploadPercent })}</p>}
+    <AnalysisProgress revisionId={revisionId} refreshKey={analysisKey} onCompleted={async () => { setReviewKey(value => value + 1); await load(); await onChanged() }} />
+    <IngestReview revisionId={revisionId} kind="GROUP" groups={groups} refreshKey={reviewKey} onDirtyChange={groupReviewDirty} blocked={editingGroup !== null || reviewDirty.page} onChanged={async () => { setReviewKey(value => value + 1); await load(); await onChanged() }} />
+    <IngestReview revisionId={revisionId} kind="PAGE" groups={groups} refreshKey={reviewKey} onDirtyChange={pageReviewDirty} blocked={editingGroup !== null || reviewDirty.group} onChanged={async () => { setReviewKey(value => value + 1); await load(); await onChanged() }} />
+    <details><summary>{t('ingest.advanced')}</summary>
     <form className="actions" onSubmit={event => { event.preventDefault(); void addGroup(name) }}>
       <label>{t('wizard.groupName')}<input value={name} maxLength={255} required onChange={event => setName(event.target.value)} /></label>
       <button className="secondary" disabled={busy || !name.trim()}>{t('wizard.addGroup')}</button>
@@ -198,5 +216,6 @@ export default function WizardDocuments({ revisionId, groups, onChanged, onDirty
         <button className="secondary" disabled={offset + 24 >= source.page_count} onClick={() => setOffset(value => value + 24)}>{t('wizard.continue')}</button>
       </div>
     </>}
+    </details>
   </div>
 }

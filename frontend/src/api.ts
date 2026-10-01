@@ -89,6 +89,29 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return response.json()
 }
 
+export function uploadApiFile<T>(path: string, file: File, onProgress: (percent: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('POST', apiUrl(path))
+    request.withCredentials = true
+    authenticatedHeaders({ method: 'POST' }).forEach((value, key) => request.setRequestHeader(key, value))
+    request.upload.onprogress = event => { if (event.lengthComputable) onProgress(Math.round(100 * event.loaded / event.total)) }
+    request.onerror = () => reject(new ApiError(0, { code: 'request_failed' }))
+    request.onload = async () => {
+      if (request.status === 401) notifyUnauthorized()
+      if (request.status < 200 || request.status >= 300) {
+        reject(await errorFromResponse(new Response(request.responseText, { status: request.status || 500 })))
+      } else {
+        try { resolve(JSON.parse(request.responseText) as T) } catch { reject(new ApiError(500, { code: 'request_failed' })) }
+      }
+    }
+    const body = new FormData()
+    body.append('file', file, file.name)
+    body.append('title', file.name)
+    request.send(body)
+  })
+}
+
 function responseFilename(response: Response, fallback: string): string {
   const disposition = response.headers.get('Content-Disposition') || ''
   const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]

@@ -117,7 +117,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       y: clamp((event.clientY - rect.top) / rect.height, 0, 1) }
   }
   function begin(event: PointerEvent, kind: Gesture['kind'], base: Draft) {
-    if (!editable || saving.current || busy || !url || mode === 'pan' || navigationGesture.current || event.button !== 0) return
+    if (!editable || saving.current || busy || !url || mode === 'pan' || navigationGesture.current || event.pointerType !== 'touch' && event.button !== 0) return
     event.preventDefault(); event.stopPropagation()
     const start = point(event)
     gesture.current = { kind, pointerId: event.pointerId, startX: start.x, startY: start.y, base, latest: base, clientX: event.clientX, clientY: event.clientY, previousDraft: draft }
@@ -147,7 +147,11 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       event.preventDefault()
       return
     }
-    if (!editable || (mode !== 'draw' && mode !== 'point') || !position || event.target !== event.currentTarget && event.target !== canvas.current?.querySelector('img')) return
+    if (!editable || (mode !== 'draw' && mode !== 'point')) return
+    if (!position) { setError(t('ingest.noPositions')); return }
+    // Overlays own selection gestures; image/background descendants are valid
+    // placement targets, including pointer events delivered through wrappers.
+    if ((event.target as Element).closest('[data-hotspot-overlay]')) return
     const start = point(event)
     const size = clamp(pointSize / 100, .004, .12)
     begin(event, mode === 'point' ? 'point' : 'draw', { id: null, position, version: 0,
@@ -273,6 +277,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     {saveState && <p role="status">{t(`wizard.${saveState}`)}</p>}
     {error && <p className="error" role="alert">{error}</p>}
     {!pages.length && <p>{t('builder.mapping.noPages')}</p>}
+    {editable && !coverage.length && <p role="status">{t('ingest.noPositions')}</p>}
     {!!pages.length && <>
       <label>{t('builder.mapping.page')}<select disabled={busy || simple && dirty} value={pageId ?? ''} onChange={event => changePage(Number(event.target.value))}>
         {pages.map(item => <option key={item.visual_page_id} value={item.visual_page_id}>{item.artifact_title} · {t('builder.pageNumber', { count: item.page_number })}</option>)}
@@ -295,6 +300,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
             onPointerDownCapture={trackPointer} onPointerDown={beginDraw} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
             {url ? <img src={url} draggable={false} alt={t('builder.mapping.page')} /> : <div className="builder-scheme-loading">{t('builder.previewPending')}</div>}
             {shown.map(item => <button key={item.id} type="button"
+              data-hotspot-overlay
               className={`builder-hotspot ${item.is_verified ? 'verified' : 'unverified'} ${highlightPositions.includes(item.position) ? 'highlight' : ''}`}
               style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%` }}
               aria-label={t('builder.mapping.hotspotLabel', { position: item.position })}
@@ -303,6 +309,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
                 <span className="builder-hotspot-handle" onPointerDown={event => select(item, event, 'resize')} />}
             </button>)}
             {draft && <button type="button" className="builder-hotspot draft"
+              data-hotspot-overlay
               aria-label={t('builder.mapping.hotspotLabel', { position: draft.position })}
               style={{ left: `${draft.x * 100}%`, top: `${draft.y * 100}%`,
                 width: `${draft.width * 100}%`, height: `${draft.height * 100}%` }}

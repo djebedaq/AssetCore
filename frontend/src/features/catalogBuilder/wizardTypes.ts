@@ -22,6 +22,9 @@ export type Workflow = { ready: boolean; publication_digest: string; current_pub
   progress: { position_count: number; completed_positions: number }; resume_step: Step }
 
 export const problemKeys: Record<string, TranslationKey> = {
+  catalog_ingest_busy: 'ingest.error.catalog_ingest_busy',
+  catalog_ingest_review_required: 'ingest.readiness',
+  catalog_ingest_not_completed: 'ingest.error.catalog_ingest_not_completed',
   catalog_invalid_update: 'builder.error.invalid', catalog_category_not_supported: 'builder.error.capability',
   catalog_category_inactive: 'builder.error.category', catalog_code_duplicate: 'builder.error.duplicate',
   catalog_source_invalid_pdf: 'builder.error.invalidPdf', catalog_source_too_large: 'builder.error.tooLarge',
