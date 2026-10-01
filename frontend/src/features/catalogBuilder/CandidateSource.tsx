@@ -44,6 +44,7 @@ export default function CandidateSource({ candidate, location, onClose }: {
       <h4>{t('ingest.schema.title')}</h4>
       <p>{t(table.schema.state === 'RESOLVED' ? 'ingest.schema.resolved' : 'ingest.schema.ambiguous')}</p>
       {table.schema.state === 'NEEDS_REVIEW' && <p role="status">{t('ingest.schema.help')}</p>}
+      {table.geometry?.state === 'NEEDS_REVIEW' && <p role="status">{t('ingest.warning.GEOMETRY_AMBIGUOUS')}</p>}
       <div className="builder-parts-table"><table><thead><tr>
         {table.headers.map((header, col) => <th key={col}>{header}<small>{roleName(table.schema.mapping[String(col)] || 'unknown')}</small></th>)}
       </tr></thead><tbody>{table.sample_cells.slice(0, 5).map((cells, row) => <tr key={row}>
@@ -54,6 +55,15 @@ export default function CandidateSource({ candidate, location, onClose }: {
           {t('ingest.schema.score', { score: alternative.score })} · {table.headers.map((header, col) => `${header}: ${roleName(alternative.mapping[String(col)] || 'unknown')}`).join(' · ')}
         </p>)}
       </details>
+      {table.geometry?.alternatives && table.geometry.alternatives.length > 1 && <details>
+        <summary>{t('ingest.geometry.alternatives')}</summary>
+        {table.geometry.alternatives.map((alternative, option) => <div key={option}>
+          <p>{t('ingest.schema.score', { score: alternative.score })}</p>
+          <div className="builder-parts-table"><table><thead><tr>{table.headers.map((header, col) => <th key={col}>{header}</th>)}</tr></thead>
+            <tbody>{alternative.sample_cells.slice(0, 5).map((cells, row) => <tr key={row}>{table.headers.map((_, col) => <td key={col}>{cells[col] || ''}</td>)}</tr>)}</tbody>
+          </table></div>
+        </div>)}
+      </details>}
     </section>)}
     <details><summary>{t('ingest.evidence')}</summary><p>SHA-256: {candidate.sha256}</p>
       <pre>{JSON.stringify(candidate.evidence, null, 2)}</pre></details>

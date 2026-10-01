@@ -8,6 +8,8 @@ export type Kind = 'GROUP' | 'PAGE' | 'PART' | 'HOTSPOT'
 export type Location = { page_number: number; bbox: number[]; x: number; y: number; width: number; height: number; method: string }
 export type TableEvidence = {
   headers: string[]; bbox: number[]; sample_cells: string[][]
+  geometry?: { state: 'RESOLVED' | 'NEEDS_REVIEW'; normalized_boundaries?: number[]
+    alternatives?: Array<{ score: number; boundaries: number[]; sample_cells: string[][] }> }
   schema: { state: 'RESOLVED' | 'NEEDS_REVIEW'; mapping: Record<string, string>; score: number; margin?: number | null
     alternatives: Array<{ score: number; mapping: Record<string, string> }> }
 }

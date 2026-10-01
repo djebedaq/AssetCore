@@ -223,8 +223,8 @@ vocabulary. Самата близост на две страници не е д�
 правдоподобни нови редове. Изведените връзки остават за човешки преглед.
 
 `CATALOG_INGEST_1` остава стабилен run identity. Новата версия на schema
-evidence е `schema_version=2`. Deliberate rerun преизвлича стари page checkpoints
-без този marker; checkpoint с текущия marker се преизползва. Source key за
+evidence е `schema_version=3`. Deliberate rerun преизвлича стари page checkpoints
+без този marker или с предишна версия; checkpoint с текущия marker се преизползва. Source key за
 съществуващи коректни rows запазва page/bbox/raw-text fingerprint. Само никога
 непрегледаните предложения могат да получат обновено evidence/version.
 Приети данни, човешки редакции, отхвърлени кандидати и проверени hotspots не се
@@ -245,7 +245,9 @@ CLI чете original PDF и работи през същия bounded subprocess
 и не изисква production. JSON report показва basename, SHA-256, bytes/pages,
 native/OCR pages, proposed groups, page roles, tables, resolved/ambiguous
 schemas, extracted/review parts, hotspot match counts и warnings. `--details`
-добавя per-page headers, schema scores/alternatives и sample rows. Sanitized
+добавя per-page headers, геометрия, schema scores/alternatives и sample rows,
+както и per-group vocabulary intersection, BOM-only/diagram-only, repeated и
+combined labels, unresolved позиции и до 10 EXACT source bbox samples. Sanitized
 errors не показват абсолютни source paths или environment secrets.
 
 Автоматизираните regression fixtures са неизвестни синтетични структури,
@@ -260,3 +262,42 @@ manuals не са включени в repository или използвани к�
 неразрешени. Beam search е ограничен и сложни таблици над 12 колони изискват
 ръчно попълване. OCR резултатите винаги изискват потвърждение. Не се обещава
 100% точност за произволен PDF.
+
+### Геометрия на borderless таблици (evidence v3)
+
+Старото позициониране спрямо левия край на header думата смесваше клетки при
+центрирано заглавие и по-дълъг, ляво подравнен part number. `columns.py` първо
+извежда подредени неприпокриващи се региони, а semantic inference работи върху
+вече възстановените клетки. Header evidence пази text, bbox, x0/x1, center и
+width. Header centers са priors, а последователните празни gutters между
+съседни word runs и populated rows дават действителните граници. Думите се
+присвояват според bbox overlap; пресичане на граници и близки алтернативи
+дават `GEOMETRY_AMBIGUOUS`, по-ниска confidence и човешки преглед.
+
+Изолираните странични бележки и wrapped description lines не определят
+граници. Външните региони са ограничени до доказаните крайни cells. Unknown
+headers изискват поне два геометрично последователни populated rows; metadata
+ред плюс контактна информация не доказват BOM. Нативните ruled cells остават
+предпочитани. Всяка таблица има собствена геометрия, включително при две
+таблици на страница. Headerless continuation мащабира normalized региони по
+новата ширина и остава inferred/reviewable.
+
+Търсенето е ограничено до 32 populated sample rows, три варианта на boundary,
+beam 16 и четири различни крайни алтернативи. Evidence пази оригинални клетки,
+source row bbox, regions, assignments/overlap/conflicts и alternative cells.
+BG/EN/RU source панелът показва несигурността и сравнимите алтернативи.
+
+Peripheral running header не заменя близко центрирано nested title с
+съпоставима типография. И двете оригинални заглавия и inferred selection са
+запазени; еднакви source titles използват същия group identity. Няма OEM,
+filename, model, part-number prefix или специален page-number adapter.
+
+Combined callouts (`7,8`, `33–35`) се разгръщат bounded само ако всички членове
+вече са в BOM vocabulary на същата група. Те не създават части и остават
+`LOW_CONFIDENCE` или `MULTIPLE_CANDIDATES`, никога automatic verified hotspots.
+Непълни/твърде широки ranges остават нерешени с оригиналния label evidence.
+
+Geometry v3 не добавя миграция или cloud dependency и не променя publication,
+runtime binding, immutable PARTS-DOC snapshots или multilingual source text.
+Реалните частни manuals се проверяват само read-only/offline, без DB и без
+committed binary fixtures, source extracts или публични artifacts.

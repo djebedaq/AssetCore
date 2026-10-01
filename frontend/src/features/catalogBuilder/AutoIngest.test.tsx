@@ -14,6 +14,23 @@ import { UploadTestTransport } from './uploadTestTransport'
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
+it.each(['bg', 'en', 'ru'] as const)('shows geometry uncertainty and alternative reconstructed cells in %s', async locale => {
+  const texts = { bg: ingestBg, en: ingestEn, ru: ingestRu }[locale]
+  const candidate: Candidate = { id: 1, source_key: 'qa', version: 1, kind: 'PAGE', state: 'NEEDS_REVIEW',
+    page_number: null, artifact_id: 1, sha256: 'a'.repeat(64), confidence: .4, warnings: ['GEOMETRY_AMBIGUOUS'],
+    payload: { role: 'SPARE_PARTS_LIST' }, evidence: { tables: [{ headers: ['No.', 'Part No.', 'Item', 'Qty'],
+      bbox: [30, 100, 500, 200], sample_cells: [['1', 'QA-1', 'Bolt', '4']],
+      schema: { state: 'RESOLVED', mapping: {}, score: 20, alternatives: [] },
+      geometry: { state: 'NEEDS_REVIEW', alternatives: [
+        { score: 10, boundaries: [30, 80, 180, 400, 500], sample_cells: [['1', 'QA-1', 'Bolt', '4']] },
+        { score: 9.8, boundaries: [30, 80, 180, 450, 500], sample_cells: [['1', 'QA-1', 'Bolt 4', '']] },
+      ] } }] } }
+  render(<I18nProvider initialLocale={locale}><CandidateSource candidate={candidate} onClose={() => {}} /></I18nProvider>)
+  expect(screen.getByRole('status')).toHaveTextContent(texts['ingest.warning.GEOMETRY_AMBIGUOUS'])
+  await userEvent.click(screen.getByText(texts['ingest.geometry.alternatives']))
+  expect(screen.getByText('Bolt 4')).toBeVisible()
+})
+
 it.each(['bg', 'en', 'ru'] as const)('explains an ambiguous table and shows source cells and alternatives in %s', async locale => {
   const texts = { bg: ingestBg, en: ingestEn, ru: ingestRu }[locale]
   const candidate: Candidate = { id: 1, source_key: 'qa', version: 1, kind: 'PAGE', state: 'NEEDS_REVIEW',
