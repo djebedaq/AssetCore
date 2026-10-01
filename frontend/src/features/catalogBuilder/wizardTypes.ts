@@ -1,8 +1,8 @@
 import type { TranslationKey } from '../../i18n'
 
 export const builderBase = '/admin/catalog-builder'
-export type Step = 'catalog' | 'documents' | 'parts' | 'hotspots' | 'review'
-export const steps: Step[] = ['catalog', 'documents', 'parts', 'hotspots', 'review']
+export type Step = 'catalog' | 'references' | 'documents' | 'parts' | 'hotspots' | 'review'
+export const steps: Step[] = ['catalog', 'references', 'documents', 'parts', 'hotspots', 'review']
 export type Names = { name_bg: string; name_en: string; name_ru: string }
 export type Category = Names & { id: number; code: string; is_active: boolean; capabilities: string[] }
 export type Catalog = Names & { id: number; code: string; asset_category_id: number; asset_category: Category;
@@ -15,16 +15,15 @@ export type Document = { id: number; filename: string; title: string; sha256: st
   artifact_ids?: number[];
   assignments: Array<{ id: number; artifact_id: number; page_number: number; assembly_id: number; role: Role }> }
 export type Role = 'EXPLODED_SCHEME' | 'SPARE_PARTS_LIST'
-export type Issue = { code: string; step?: Step | 'kits'; assembly_id?: number; part_id?: number;
+export type Issue = { code: string; step?: Step | 'kits'; assembly_id?: number; part_id?: number; reference_page_id?: number;
   visual_page_id?: number; position?: string; artifact_id?: number; missing_positions?: number }
 export type Workflow = { ready: boolean; publication_digest: string; current_published_revision_id: number | null;
   errors: Issue[]; warnings: Issue[]; summary: Record<string, number>;
   progress: { position_count: number; completed_positions: number }; resume_step: Step }
 
 export const problemKeys: Record<string, TranslationKey> = {
-  catalog_ingest_busy: 'ingest.error.catalog_ingest_busy',
-  catalog_ingest_review_required: 'ingest.readiness',
-  catalog_ingest_not_completed: 'ingest.error.catalog_ingest_not_completed',
+  catalog_publication_reference_page_incomplete: 'guided.incomplete',
+  catalog_reference_page_stale: 'guided.stale', catalog_reference_page_in_use: 'guided.inUse',
   catalog_invalid_update: 'builder.error.invalid', catalog_category_not_supported: 'builder.error.capability',
   catalog_category_inactive: 'builder.error.category', catalog_code_duplicate: 'builder.error.duplicate',
   catalog_source_invalid_pdf: 'builder.error.invalidPdf', catalog_source_too_large: 'builder.error.tooLarge',

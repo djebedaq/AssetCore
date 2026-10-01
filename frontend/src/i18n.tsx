@@ -1,5 +1,5 @@
 import { wizardBg, wizardEn, wizardRu } from './features/catalogBuilder/wizardTranslations'
-import { ingestBg, ingestEn, ingestRu } from './features/catalogBuilder/ingestTranslations'
+import { guidedBg, guidedEn, guidedRu } from './features/catalogBuilder/guidedTranslations'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from './api'
@@ -13,7 +13,7 @@ import {
 } from './locale'
 
 export const bg = {
-  ...ingestBg,
+  ...guidedBg,
   ...wizardBg,
   "ownerDeletion.action": "Изтрий окончателно",
   "ownerDeletion.actionFor": "Изтрий окончателно: {{identity}}",
@@ -1282,6 +1282,7 @@ export const bg = {
   'builder.kit.error.partInKit': 'Частта е включена в комплект. Първо я премахнете от него.',
   'builder.deleteAssembly01DConfirm': 'Да се изтрие ли възелът с {{parts}} части, {{hotspots}} зони, {{kits}} комплекта и {{components}} компонента?',
   'ownerDeletion.references.builderAssemblies': 'Възли в чернови ревизии',
+  'ownerDeletion.references.builderPages': 'Логически страници в чернови ревизии',
   'ownerDeletion.references.builderArtifacts': 'Изходни PDF в чернови ревизии',
   'ownerDeletion.references.builderVisualPages': 'Визуални роли на страници в чернови',
   'ownerDeletion.references.builderParts': 'Части в чернови ревизии',
@@ -1289,8 +1290,6 @@ export const bg = {
   'ownerDeletion.references.builderHotspots': 'Зони на позиции в чернови',
   'ownerDeletion.references.builderRepairKits': 'Ремонтни комплекти в чернови',
   'ownerDeletion.references.builderRepairKitComponents': 'Компоненти на чернови комплекти',
-  'ownerDeletion.references.builderAnalyses': 'Анализи на чернови каталози',
-  'ownerDeletion.references.builderProposals': 'Предложения за чернови каталози',
   'ownerDeletion.references.builderCatalogs': 'Каталози в конструктора',
   'ownerDeletion.references.builderRevisions': 'Чернови ревизии на каталога',
   'ownerDeletion.references.builderBindings': 'Връзки на каталога с активи',
@@ -1305,7 +1304,7 @@ export const en: Catalog = Object.fromEntries(
 
 Object.assign(en, {
   ...wizardEn,
-  ...ingestEn,
+  ...guidedEn,
   "ownerDeletion.action": "Delete permanently",
   "ownerDeletion.actionFor": "Delete permanently: {{identity}}",
   "ownerDeletion.title": "Permanent deletion",
@@ -1947,6 +1946,7 @@ Object.assign(en, {
   'builder.kit.error.partInKit': 'This part belongs to a kit. Remove its component first.',
   'builder.deleteAssembly01DConfirm': 'Delete this assembly with {{parts}} parts, {{hotspots}} hotspots, {{kits}} kits and {{components}} components?',
   'ownerDeletion.references.builderAssemblies': 'Draft revision assemblies',
+  'ownerDeletion.references.builderPages': 'Draft logical pages',
   'ownerDeletion.references.builderArtifacts': 'Draft revision source PDFs',
   'ownerDeletion.references.builderVisualPages': 'Draft page visual roles',
   'ownerDeletion.references.builderParts': 'Draft revision parts',
@@ -1954,8 +1954,6 @@ Object.assign(en, {
   'ownerDeletion.references.builderHotspots': 'Draft position hotspots',
   'ownerDeletion.references.builderRepairKits': 'Draft repair kits',
   'ownerDeletion.references.builderRepairKitComponents': 'Draft repair kit components',
-  'ownerDeletion.references.builderAnalyses': 'Draft catalog analyses',
-  'ownerDeletion.references.builderProposals': 'Draft catalog proposals',
   'ownerDeletion.references.builderCatalogs': 'Builder catalogs',
   'ownerDeletion.references.builderRevisions': 'Draft catalog revisions',
   'ownerDeletion.references.builderBindings': 'Catalog asset bindings',
@@ -1967,7 +1965,7 @@ export const ru: Catalog = Object.fromEntries(
 
 Object.assign(ru, {
   ...wizardRu,
-  ...ingestRu,
+  ...guidedRu,
   "ownerDeletion.action": "Удалить навсегда",
   "ownerDeletion.actionFor": "Удалить навсегда: {{identity}}",
   "ownerDeletion.title": "Окончательное удаление",
@@ -2612,6 +2610,7 @@ Object.assign(ru, {
   'builder.kit.error.partInKit': 'Деталь входит в комплект. Сначала удалите её из комплекта.',
   'builder.deleteAssembly01DConfirm': 'Удалить узел с {{parts}} деталями, {{hotspots}} зонами, {{kits}} комплектами и {{components}} компонентами?',
   'ownerDeletion.references.builderAssemblies': 'Узлы черновых редакций',
+  'ownerDeletion.references.builderPages': 'Логические страницы черновых редакций',
   'ownerDeletion.references.builderArtifacts': 'Исходные PDF черновых редакций',
   'ownerDeletion.references.builderVisualPages': 'Визуальные роли страниц черновиков',
   'ownerDeletion.references.builderParts': 'Детали черновых редакций',
@@ -2619,8 +2618,6 @@ Object.assign(ru, {
   'ownerDeletion.references.builderHotspots': 'Зоны позиций черновых редакций',
   'ownerDeletion.references.builderRepairKits': 'Ремонтные комплекты черновых редакций',
   'ownerDeletion.references.builderRepairKitComponents': 'Компоненты черновых комплектов',
-  'ownerDeletion.references.builderAnalyses': 'Анализы черновых каталогов',
-  'ownerDeletion.references.builderProposals': 'Предложения для черновых каталогов',
   'ownerDeletion.references.builderCatalogs': 'Каталоги конструктора',
   'ownerDeletion.references.builderRevisions': 'Черновые редакции каталога',
   'ownerDeletion.references.builderBindings': 'Привязки каталога к активам',

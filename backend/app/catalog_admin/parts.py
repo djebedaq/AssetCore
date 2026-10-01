@@ -71,20 +71,21 @@ def _clean(values: dict) -> dict:
     return cleaned
 
 
-def _source_pages(db: Session, assembly_id: int) -> list[dict]:
+def _source_pages(db: Session, assembly_id: int, reference_page_id: int | None = None) -> list[dict]:
     rows = db.execute(select(CatalogRevisionVisualPage, CatalogRevisionArtifact)
                       .join(CatalogRevisionArtifact, CatalogRevisionVisualPage.artifact_id == CatalogRevisionArtifact.id)
                       .where(CatalogRevisionArtifact.assembly_id == assembly_id,
-                             CatalogRevisionVisualPage.role == "SPARE_PARTS_LIST")
+                             CatalogRevisionVisualPage.role == "SPARE_PARTS_LIST",
+                             CatalogRevisionVisualPage.reference_page_id == reference_page_id)
                       .order_by(CatalogRevisionArtifact.id, CatalogRevisionVisualPage.page_number)).all()
     return [{"visual_page_id": page.id, "artifact_id": artifact.id, "artifact_title": artifact.title,
              "filename": artifact.filename, "sha256": artifact.sha256, "page_number": page.page_number}
             for page, artifact in rows]
 
 
-def spare_list_pages(db: Session, assembly_id: int) -> list[dict]:
+def spare_list_pages(db: Session, assembly_id: int, reference_page_id: int | None = None) -> list[dict]:
     _assembly(db, assembly_id)
-    return _source_pages(db, assembly_id)
+    return _source_pages(db, assembly_id, reference_page_id)
 
 
 def _maps(db: Session, part_id: int) -> list[dict]:
@@ -97,7 +98,8 @@ def _maps(db: Session, part_id: int) -> list[dict]:
                       .join(CatalogRevisionPart, CatalogRevisionPartPageMap.part_id == CatalogRevisionPart.id)
                       .where(CatalogRevisionPartPageMap.part_id == part_id,
                              CatalogRevisionVisualPage.role == "SPARE_PARTS_LIST",
-                             CatalogRevisionArtifact.assembly_id == CatalogRevisionPart.assembly_id)
+                             CatalogRevisionArtifact.assembly_id == CatalogRevisionPart.assembly_id,
+                             CatalogRevisionVisualPage.reference_page_id.is_not_distinct_from(CatalogRevisionPart.reference_page_id))
                       .order_by(CatalogRevisionPartPageMap.id)).all()
     return [{"id": mapping.id, "part_id": mapping.part_id, "visual_page_id": page.id,
              "artifact_id": artifact.id, "artifact_title": artifact.title,
@@ -112,7 +114,7 @@ def _dict(db: Session, item: CatalogRevisionPart) -> dict:
              and bool(item.part_number and item.part_number.strip())
              and any(bool(getattr(item, key) and getattr(item, key).strip())
                      for key in ("name_bg", "name_en", "name_ru", "description")))
-    return {"id": item.id, "assembly_id": item.assembly_id, **fields,
+    return {"id": item.id, "assembly_id": item.assembly_id, "reference_page_id": item.reference_page_id, **fields,
             "source_pages": mappings,
             "validation_status": "READY" if mappings and valid else "INCOMPLETE",
             "created_at": item.created_at, "updated_at": item.updated_at}
@@ -122,20 +124,25 @@ def _last_position_in_use(db: Session, item: CatalogRevisionPart) -> bool:
     other = db.scalar(select(CatalogRevisionPart.id).where(
         CatalogRevisionPart.assembly_id == item.assembly_id,
         CatalogRevisionPart.position == item.position,
+        CatalogRevisionPart.reference_page_id == item.reference_page_id,
         CatalogRevisionPart.id != item.id).limit(1))
     if other is not None:
         return False
     page_ids = select(CatalogRevisionVisualPage.id).join(
         CatalogRevisionArtifact, CatalogRevisionVisualPage.artifact_id == CatalogRevisionArtifact.id).where(
-            CatalogRevisionArtifact.assembly_id == item.assembly_id)
+            CatalogRevisionArtifact.assembly_id == item.assembly_id,
+            CatalogRevisionVisualPage.reference_page_id == item.reference_page_id)
     return db.scalar(select(CatalogRevisionPositionHotspot.id).where(
         CatalogRevisionPositionHotspot.visual_page_id.in_(page_ids),
         CatalogRevisionPositionHotspot.position == item.position).limit(1)) is not None
 
 
-def list_parts(db: Session, assembly_id: int) -> list[dict]:
+def list_parts(db: Session, assembly_id: int, *, reference_page_id: int | None = None) -> list[dict]:
     _assembly(db, assembly_id)
-    items = db.scalars(select(CatalogRevisionPart).where(CatalogRevisionPart.assembly_id == assembly_id)
+    query = select(CatalogRevisionPart).where(CatalogRevisionPart.assembly_id == assembly_id)
+    if reference_page_id is not None:
+        query = query.where(CatalogRevisionPart.reference_page_id == reference_page_id)
+    items = db.scalars(query
                        .order_by(CatalogRevisionPart.sort_order, CatalogRevisionPart.id)).all()
     return [_dict(db, item) for item in items]
 
@@ -144,10 +151,15 @@ def get_part(db: Session, part_id: int) -> dict:
     return _dict(db, _part(db, part_id)[0])
 
 
-def create_part(db: Session, actor: User, assembly_id: int, data: PartCreate) -> dict:
+def create_part(db: Session, actor: User, assembly_id: int, data: PartCreate, *, reference_page_id: int | None = None) -> dict:
     assembly, revision, catalog = _assembly(db, assembly_id, mutate=True)
+    if reference_page_id is not None:
+        from .reference_pages import load
+        reference, _, _, _ = load(db, reference_page_id, mutate=True)
+        if reference.assembly_id != assembly.id:
+            raise fail("catalog_part_page_invalid", 422)
     values = _clean(data.model_dump())
-    item = CatalogRevisionPart(assembly_id=assembly.id, created_by_id=actor.id, **values)
+    item = CatalogRevisionPart(assembly_id=assembly.id, reference_page_id=reference_page_id, created_by_id=actor.id, **values)
     db.add(item)
     try:
         db.flush()
@@ -210,7 +222,10 @@ def map_pages(db: Session, actor: User, part_id: int, data: PartPageMapCreate) -
     ids = data.visual_page_ids
     if len(ids) != len(set(ids)):
         raise fail("catalog_part_page_duplicate")
-    allowed = {page["visual_page_id"] for page in _source_pages(db, assembly.id)}
+    allowed = set(db.scalars(select(CatalogRevisionVisualPage.id).join(CatalogRevisionArtifact,
+        CatalogRevisionVisualPage.artifact_id == CatalogRevisionArtifact.id).where(
+        CatalogRevisionArtifact.assembly_id == assembly.id, CatalogRevisionVisualPage.role == "SPARE_PARTS_LIST",
+        CatalogRevisionVisualPage.reference_page_id == item.reference_page_id)))
     if any(page_id not in allowed for page_id in ids):
         raise fail("catalog_part_page_invalid", 422)
     existing = db.scalar(select(CatalogRevisionPartPageMap.id).where(
@@ -265,11 +280,11 @@ def _resolve_page(row: dict, pages: list[dict]) -> tuple[list[int], list[str], l
     return [matches[0]["visual_page_id"]], [], []
 
 
-def _preview_rows(db: Session, assembly_id: int, rows: list[dict]) -> dict:
-    pages = _source_pages(db, assembly_id)
+def _preview_rows(db: Session, assembly_id: int, rows: list[dict], reference_page_id: int | None = None) -> dict:
+    pages = _source_pages(db, assembly_id, reference_page_id)
     seen = set()
     existing = set(db.execute(select(CatalogRevisionPart.position, CatalogRevisionPart.part_number)
-                              .where(CatalogRevisionPart.assembly_id == assembly_id)).all())
+                              .where(CatalogRevisionPart.assembly_id == assembly_id, CatalogRevisionPart.reference_page_id == reference_page_id)).all())
     output = []
     duplicates = 0
     for number, raw in enumerate(rows, 2):
@@ -346,12 +361,12 @@ def read_csv(data: PartImportPreview, *, whole_catalog: bool = False) -> tuple[b
     return content, rows
 
 
-def import_preview(db: Session, actor: User, assembly_id: int, data: PartImportPreview) -> dict:
+def import_preview(db: Session, actor: User, assembly_id: int, data: PartImportPreview, reference_page_id: int | None = None) -> dict:
     _assembly(db, assembly_id, mutate=True)
     content, rows = read_csv(data)
-    result = _preview_rows(db, assembly_id, rows)
+    result = _preview_rows(db, assembly_id, rows, reference_page_id)
     source_digest = hashlib.sha256(content).hexdigest()
-    payload = json.dumps({"assembly_id": assembly_id, "actor_id": actor.id, "created": int(time.time()),
+    payload = json.dumps({"assembly_id": assembly_id, "reference_page_id": reference_page_id, "actor_id": actor.id, "created": int(time.time()),
                           "source_digest": source_digest, "rows": rows},
                          ensure_ascii=False, separators=(",", ":")).encode()
     result["token"] = base64.urlsafe_b64encode(payload).decode().rstrip("=") + "." + _signature(payload)
@@ -360,7 +375,7 @@ def import_preview(db: Session, actor: User, assembly_id: int, data: PartImportP
 
 
 def import_confirm(db: Session, actor: User, assembly_id: int, token: str,
-                   confirm_warnings: bool) -> dict:
+                   confirm_warnings: bool, reference_page_id: int | None = None) -> dict:
     assembly, revision, catalog = _assembly(db, assembly_id, mutate=True)
     try:
         encoded, signature = token.split(".", 1)
@@ -368,21 +383,21 @@ def import_confirm(db: Session, actor: User, assembly_id: int, token: str,
         if not hmac.compare_digest(signature, _signature(payload)):
             raise ValueError("signature")
         claim = json.loads(payload)
-        if claim["assembly_id"] != assembly_id or claim["actor_id"] != actor.id or abs(time.time() - claim["created"]) > 900:
+        if claim.get("reference_page_id") != reference_page_id or claim["assembly_id"] != assembly_id or claim["actor_id"] != actor.id or abs(time.time() - claim["created"]) > 900:
             raise ValueError("binding")
         rows = claim["rows"]
         if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_CSV_ROWS:
             raise ValueError("rows")
     except (binascii.Error, ValueError, KeyError, TypeError, UnicodeError) as exc:
         raise fail("catalog_part_import_token_invalid", 422) from exc
-    result = _preview_rows(db, assembly_id, rows)
+    result = _preview_rows(db, assembly_id, rows, reference_page_id)
     if result["summary"]["error_rows"]:
         raise fail("catalog_part_import_conflict")
     if result["summary"]["warning_rows"] and not confirm_warnings:
         raise fail("catalog_part_import_warning_confirmation", 422)
     created = []
     try:
-        created = insert_preview_rows(db, actor, assembly, revision, catalog, result["rows"])
+        created = insert_preview_rows(db, actor, assembly, revision, catalog, result["rows"], reference_page_id)
         db.flush()
     except IntegrityError as exc:
         db.rollback()
@@ -394,11 +409,11 @@ def import_confirm(db: Session, actor: User, assembly_id: int, token: str,
     return {"created_count": len(created), "part_ids": created}
 
 
-def insert_preview_rows(db: Session, actor: User, assembly, revision, catalog, rows: list[dict]) -> list[int]:
+def insert_preview_rows(db: Session, actor: User, assembly, revision, catalog, rows: list[dict], reference_page_id: int | None = None) -> list[int]:
     created = []
     for preview_row in rows:
         values = preview_row["normalized"]
-        item = CatalogRevisionPart(assembly_id=assembly.id, created_by_id=actor.id, **values)
+        item = CatalogRevisionPart(assembly_id=assembly.id, reference_page_id=reference_page_id, created_by_id=actor.id, **values)
         db.add(item)
         db.flush()
         for page_id in preview_row["resolved_visual_page_ids"]:

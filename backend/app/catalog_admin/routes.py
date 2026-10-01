@@ -90,7 +90,6 @@ def upload_binary_document(revision_id: int, file: UploadFile = File(...),
 
     from ..models import CatalogRevisionAssembly
     from . import source_storage
-    from .schemas import AssemblyCreate
 
     visual_sources._revision(db, revision_id, mutate=True)
     group = db.scalar(select(CatalogRevisionAssembly).where(
@@ -105,10 +104,7 @@ def upload_binary_document(revision_id: int, file: UploadFile = File(...),
             db.commit()
             return {**visual_sources._artifact_dict(existing), "duplicate": True}
         if group is None:
-            created = visual_sources.create_assembly(db, actor, revision_id, AssemblyCreate(
-                code=wizard.group_code(db, revision_id, "INITIAL_GROUP"),
-                name_bg="Първоначална група", name_en="Initial group", name_ru="Начальная группа"), commit=False)
-            group = db.get(CatalogRevisionAssembly, created["id"])
+            raise service.fail("catalog_reference_required", 422)
         filename = file.filename or "source.pdf"
         return visual_sources.store_artifact(db, actor, group.id, content, filename, title or filename)
     except Exception:
@@ -122,12 +118,6 @@ def upload_binary_document(revision_id: int, file: UploadFile = File(...),
 def simple_workflow_summary(revision_id: int, _: User = Depends(manager),
                             db: Session = Depends(get_db)) -> dict:
     return wizard.workflow(db, revision_id)
-
-
-@router.get("/artifacts/{artifact_id}/suggestions")
-def suggest_document_pages(artifact_id: int, _: User = Depends(manager),
-                           db: Session = Depends(get_db)) -> dict:
-    return wizard_documents.suggestions(db, artifact_id)
 
 
 @router.post("/artifacts/{artifact_id}/classify")

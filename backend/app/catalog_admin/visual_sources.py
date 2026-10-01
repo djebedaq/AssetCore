@@ -20,6 +20,7 @@ from ..models import (
     CatalogRevisionPart,
     CatalogRevisionPartPageMap,
     CatalogRevisionPositionHotspot,
+    CatalogRevisionReferencePage,
     CatalogRevisionRepairKit,
     CatalogRevisionRepairKitComponent,
     CatalogRevisionVisualPage,
@@ -177,6 +178,9 @@ def delete_assembly(db: Session, actor: User, assembly_id: int) -> None:
     from .repair_kits import remove_assembly_kits
 
     item, revision, catalog = _assembly(db, assembly_id, mutate=True)
+    if db.scalar(select(CatalogRevisionReferencePage.id).where(
+            CatalogRevisionReferencePage.assembly_id == item.id).limit(1)):
+        raise fail("catalog_reference_page_in_use")
     artifacts = db.scalars(select(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == item.id)).all()
     artifact_audit = [{"artifact_id": artifact.id, "filename": artifact.filename,
                        "sha256": artifact.sha256, "visual_pages": _role_pages(db, artifact.id)}
@@ -276,6 +280,12 @@ def delete_artifact(db: Session, actor: User, artifact_id: int) -> None:
 
     item, assembly, revision, catalog = _artifact(db, artifact_id, mutate=True)
     page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id == item.id)
+    # Explicit logical-page assignments cannot be silently erased via the legacy
+    # artifact endpoint. Remove them through their versioned page workflow first.
+    if db.scalar(select(CatalogRevisionVisualPage.id).where(
+            CatalogRevisionVisualPage.artifact_id == item.id,
+            CatalogRevisionVisualPage.reference_page_id.is_not(None)).limit(1)):
+        raise fail("catalog_reference_page_in_use")
     if source_page_reference_count(db, page_ids):
         raise fail("catalog_repair_kit_source_page_in_use")
     mapped = db.execute(select(CatalogRevisionPartPageMap.part_id, CatalogRevisionPartPageMap.visual_page_id)
@@ -293,7 +303,7 @@ def delete_artifact(db: Session, actor: User, artifact_id: int) -> None:
 
 def _page_dict(item: CatalogRevisionVisualPage) -> dict:
     return {"id": item.id, "artifact_id": item.artifact_id, "page_number": item.page_number,
-            "role": item.role, "created_at": item.created_at}
+            "role": item.role, "reference_page_id": item.reference_page_id, "sort_order": item.sort_order, "created_at": item.created_at}
 
 
 def list_visual_pages(db: Session, artifact_id: int) -> list[dict]:
@@ -338,6 +348,12 @@ def remove_visual_page(db: Session, actor: User, assignment_id: int) -> None:
     if page is None:
         raise fail("catalog_visual_page_invalid", 404)
     item, assembly, revision, catalog = _artifact(db, page.artifact_id, mutate=True)
+    if page.reference_page_id is not None:
+        from .reference_pages import load, sources_in_use, touch
+        reference, _, _, _ = load(db, page.reference_page_id, mutate=True)
+        if sources_in_use(db, [page.id]):
+            raise fail("catalog_reference_source_in_use")
+        touch(reference)
     if source_page_reference_count(db, [page.id]):
         raise fail("catalog_repair_kit_source_page_in_use")
     mapped_parts = db.scalars(select(CatalogRevisionPartPageMap.part_id).where(
@@ -355,7 +371,7 @@ def preview_page(db: Session, artifact_id: int, page_number: int, *, thumbnail: 
     item, _, _, _ = _artifact(db, artifact_id)
     if page_number < 1 or page_number > item.page_count:
         raise fail("catalog_visual_page_invalid", 404)
-    from .ingest.process import configuration, extract
+    from .parts_extraction.process import configuration, extract
     result = extract(item.content, "thumbnail" if thumbnail else "preview", page_number, configuration(settings))
     if result.get("error"):
         raise fail("catalog_source_invalid_pdf", 422)

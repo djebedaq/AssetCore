@@ -118,9 +118,8 @@ def workflow(db: Session, revision_id: int) -> dict:
     kits = {row.id: row for row in content["kits"]}
     maps = {row.id: row for row in content["maps"]}
     components = {row.id: row for row in content["components"]}
+    reference_pages = {row.id: row for row in content["reference_pages"]}
     for issue in result["errors"] + result["warnings"]:
-        if issue["code"].startswith("catalog_ingest_"):
-            continue
         part = part_rows.get(issue.get("part_id"))
         if issue.get("mapping_id") in maps:
             part = part_rows.get(maps[issue["mapping_id"]].part_id)
@@ -130,6 +129,9 @@ def workflow(db: Session, revision_id: int) -> dict:
         kit = kits.get(issue.get("kit_id"))
         if issue.get("component_id") in components:
             kit = kits.get(components[issue["component_id"]].kit_id)
+        logical_page_id = issue.get("reference_page_id") or (part.reference_page_id if part else page.reference_page_id if page else None)
+        if logical_page_id in reference_pages:
+            issue.update(reference_page_id=logical_page_id, assembly_id=reference_pages[logical_page_id].assembly_id)
         if part:
             issue.update(assembly_id=part.assembly_id, part_id=part.id, step="parts")
         elif hotspot:
@@ -143,14 +145,14 @@ def workflow(db: Session, revision_id: int) -> dict:
             issue["step"] = "hotspots"
         else:
             issue["step"] = "documents"
-    positions = {(row.assembly_id, row.position) for row in content["parts"]}
+    positions = {(row.assembly_id, row.reference_page_id, row.position) for row in content["parts"]}
     marked = set()
     unconfirmed = set()
     for hotspot in content["hotspots"]:
         page = pages.get(hotspot.visual_page_id)
         artifact = artifacts.get(page.artifact_id) if page else None
         if artifact:
-            identity = (artifact.assembly_id, hotspot.position)
+            identity = (artifact.assembly_id, page.reference_page_id, hotspot.position)
             if hotspot.is_verified:
                 marked.add(identity)
             else:
@@ -159,7 +161,7 @@ def workflow(db: Session, revision_id: int) -> dict:
     result["progress"] = {"position_count": len(positions), "completed_positions": len(marked & positions)}
     incomplete_parts = any(issue["step"] == "parts" for issue in result["errors"])
     incomplete_hotspots = any(issue["step"] == "hotspots" for issue in result["errors"])
-    result["resume_step"] = ("documents" if not content["pages"]
+    result["resume_step"] = ("references" if not content["assemblies"] else "documents" if not content["pages"]
                             else "parts" if not content["parts"] or incomplete_parts
                             else "hotspots" if positions - marked or incomplete_hotspots else "review")
     return result

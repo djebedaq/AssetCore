@@ -43,7 +43,7 @@ from .auth_throttle import (
 )
 from .catalog import router as catalog_router
 from .catalog.runtime_context import published_binding
-from .catalog_admin.ingest.routes import router as catalog_ingest_router
+from .catalog_admin.guided_routes import router as catalog_guided_router
 from .catalog_admin.routes import router as catalog_builder_router
 from .catalog_admin.upload_guard import CatalogUploadGuard
 from .database import SessionLocal, engine, get_db
@@ -189,7 +189,7 @@ app.include_router(user_router)
 app.include_router(hardening_router)
 app.include_router(catalog_router)
 app.include_router(catalog_builder_router)
-app.include_router(catalog_ingest_router)
+app.include_router(catalog_guided_router)
 
 
 @app.middleware("http")

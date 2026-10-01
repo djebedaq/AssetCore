@@ -60,26 +60,6 @@ def documents(db: Session, revision_id: int) -> list[dict]:
     return list(grouped.values())
 
 
-def suggestions(db: Session, artifact_id: int) -> dict:
-    from ..models import CatalogIngestPage, CatalogIngestRun
-    from ..settings import settings
-    from .ingest import legacy_hints, process
-
-    artifact, _, revision, _ = visual_sources._artifact(db, artifact_id)
-    run = db.scalar(select(CatalogIngestRun).where(CatalogIngestRun.revision_id == revision.id,
-        CatalogIngestRun.sha256 == artifact.sha256, CatalogIngestRun.status == "COMPLETED")
-        .order_by(CatalogIngestRun.id.desc()))
-    if run:
-        pages = db.scalars(select(CatalogIngestPage).where(CatalogIngestPage.run_id == run.id)
-            .order_by(CatalogIngestPage.page_number)).all()
-        return legacy_hints.suggestions((page.page_number, page.evidence["raw_text"]) for page in pages)
-    result = process.extract(artifact.content, "suggestions", 0, process.configuration(settings))
-    if result.get("error"):
-        raise service.fail(result["error"], 422)
-    return result
-
-
-
 def classify(db: Session, actor: User, artifact_id: int, data: ClassifyDocumentPages, *, commit: bool = True) -> list[dict]:
     source, _, revision, catalog = visual_sources._artifact(db, artifact_id, mutate=True)
     owned_group = db.scalar(select(CatalogRevisionAssembly.id).where(

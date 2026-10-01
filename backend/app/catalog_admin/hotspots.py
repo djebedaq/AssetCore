@@ -1,6 +1,7 @@
 """Explicit, position-centric exploded-scheme staging for draft revisions."""
 
 import math
+import re
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -63,11 +64,12 @@ def _geometry(values: dict) -> None:
         raise fail("catalog_hotspot_geometry_invalid", 422)
 
 
-def _position(db: Session, assembly_id: int, position: str) -> None:
+def _position(db: Session, assembly_id: int, position: str, reference_page_id: int | None = None) -> None:
     if (not position or not position.strip() or position != position.strip()
             or db.scalar(select(CatalogRevisionPart.id).where(
                 CatalogRevisionPart.assembly_id == assembly_id,
-                CatalogRevisionPart.position == position).limit(1)) is None):
+                CatalogRevisionPart.position == position,
+                CatalogRevisionPart.reference_page_id == reference_page_id).limit(1)) is None):
         raise fail("catalog_hotspot_position_invalid", 422)
 
 
@@ -104,25 +106,27 @@ def list_hotspots(db: Session, page_id: int) -> list[dict]:
             .order_by(CatalogRevisionPositionHotspot.id)).all()]
 
 
-def coverage(db: Session, assembly_id: int) -> list[dict]:
+def coverage(db: Session, assembly_id: int, *, reference_page_id: int | None = None) -> list[dict]:
     _assembly(db, assembly_id)
     parts = db.execute(select(CatalogRevisionPart.position, CatalogRevisionPart.part_number,
-                              CatalogRevisionPart.name_bg, CatalogRevisionPart.name_en, CatalogRevisionPart.name_ru)
-                       .where(CatalogRevisionPart.assembly_id == assembly_id)
+                              CatalogRevisionPart.name_bg, CatalogRevisionPart.name_en, CatalogRevisionPart.name_ru, CatalogRevisionPart.description)
+                       .where(CatalogRevisionPart.assembly_id == assembly_id,
+                              CatalogRevisionPart.reference_page_id == reference_page_id)
                        .order_by(CatalogRevisionPart.position, CatalogRevisionPart.id)).all()
     page_ids = select(CatalogRevisionVisualPage.id).join(
         CatalogRevisionArtifact, CatalogRevisionVisualPage.artifact_id == CatalogRevisionArtifact.id).where(
             CatalogRevisionArtifact.assembly_id == assembly_id,
-            CatalogRevisionVisualPage.role == "EXPLODED_SCHEME")
+            CatalogRevisionVisualPage.role == "EXPLODED_SCHEME",
+            CatalogRevisionVisualPage.reference_page_id == reference_page_id)
     hotspots = db.execute(select(CatalogRevisionPositionHotspot.position, CatalogRevisionPositionHotspot.is_verified)
                           .where(CatalogRevisionPositionHotspot.visual_page_id.in_(page_ids))).all()
     result: dict[str, dict] = {}
-    for position, part_number, name_bg, name_en, name_ru in parts:
+    for position, part_number, name_bg, name_en, name_ru, description in parts:
         row = result.setdefault(position, {"position": position, "part_count": 0, "part_numbers": [],
                                             "hotspot_count": 0, "verified_hotspot_count": 0, "names": []})
         row["part_count"] += 1
         row["part_numbers"].append(part_number)
-        row["names"].append({"name_bg": name_bg, "name_en": name_en, "name_ru": name_ru})
+        row["names"].append({"name_bg": name_bg, "name_en": name_en, "name_ru": name_ru, "description": description})
     for position, verified in hotspots:
         if position in result:
             result[position]["hotspot_count"] += 1
@@ -130,13 +134,13 @@ def coverage(db: Session, assembly_id: int) -> list[dict]:
     for row in result.values():
         row["state"] = ("NO_HOTSPOT" if not row["hotspot_count"] else
                         "VERIFIED" if row["verified_hotspot_count"] == row["hotspot_count"] else "UNVERIFIED")
-    return list(result.values())
+    return sorted(result.values(), key=lambda row: [(0, int(token)) if token.isdigit() else (1, token.casefold()) for token in re.split(r"(\d+)", row["position"])])
 
 
 def create_hotspot(db: Session, actor: User, page_id: int, data: HotspotCreate) -> dict:
     page, artifact, assembly, revision, catalog = _page(db, page_id, mutate=True)
     values = data.model_dump()
-    _position(db, assembly.id, values["position"])
+    _position(db, assembly.id, values["position"], page.reference_page_id)
     _geometry(values)
     item = CatalogRevisionPositionHotspot(visual_page_id=page.id, provenance="MANUAL_BUILDER",
                                           is_verified=False, created_by_id=actor.id, **values)
@@ -157,7 +161,7 @@ def update_hotspot(db: Session, actor: User, hotspot_id: int, data: HotspotUpdat
     if any(value is None for value in changes.values()):
         raise fail("catalog_hotspot_geometry_invalid", 422)
     values = {"position": item.position, **{key: getattr(item, key) for key in GEOMETRY}, **changes}
-    _position(db, assembly.id, values["position"])
+    _position(db, assembly.id, values["position"], page.reference_page_id)
     _geometry(values)
     before = {key: getattr(item, key) for key in changes}
     changed = any(before[key] != value for key, value in changes.items())
@@ -183,7 +187,7 @@ def update_hotspot(db: Session, actor: User, hotspot_id: int, data: HotspotUpdat
 def set_verified(db: Session, actor: User, hotspot_id: int, expected_version: int, verified: bool) -> dict:
     item, page, artifact, assembly, revision, catalog = _hotspot(db, hotspot_id, mutate=True)
     _check_version(item, expected_version)
-    _position(db, assembly.id, item.position)
+    _position(db, assembly.id, item.position, page.reference_page_id)
     _geometry({key: getattr(item, key) for key in GEOMETRY})
     before = item.is_verified
     if before != verified:

@@ -93,6 +93,7 @@ function diagram(id = 991): CatalogDiagram {
 
 function setupFetch(options: {
   builder?: boolean
+  guided?: boolean
   falchDiagrams?: CatalogDiagram[]
   falchParts?: CatalogPart[]
   hotspots?: PositionHotspot[]
@@ -115,13 +116,22 @@ function setupFetch(options: {
       assemblies: [{ source_id: FALCH_SOURCE_ID, family: 'FALCH_500', assembly: 'TEST_ASSEMBLY', title: 'Test-only Falch assembly',
         name_bg: options.builder ? 'Тестов възел' : null, name_en: options.builder ? 'Test assembly' : null,
         name_ru: options.builder ? 'Тестовый узел' : null,
-        part_count: falchParts.length, diagram_count: falchDiagrams.length, verified_hotspot_count: hotspots.length, diagrams: falchDiagrams }],
+        part_count: falchParts.length, diagram_count: falchDiagrams.length, verified_hotspot_count: hotspots.length, diagrams: falchDiagrams, pages: options.guided ? [1, 2].map(number => ({ id: number, stable_key: `qa-${number}`, number, title: null, source_id: `${FALCH_SOURCE_ID}P${number}`, part_count: 1, diagram_count: number === 1 ? 2 : 1, verified_hotspot_count: 1, diagrams: number === 1 ? [diagram(991), diagram(992)] : [diagram(993)] })) : [] }],
     })
     if (path.endsWith(`/api/catalog/v2/machines/${HYDWIN_MACHINE_ID}`)) return jsonResponse({
       dataset_version: 'PARTS_CATALOG_V2', supported: true, message: '', machine_id: HYDWIN_MACHINE_ID,
       machine_number: '20', brand: 'HYDWIN/Fussen', model: 'Test fixture', family: 'HYDWIN_FUSSEN_500',
       assemblies: [{ source_id: HYDWIN_SOURCE_ID, family: 'HYDWIN_FUSSEN_500', assembly: 'TEST_ASSEMBLY', title: 'Test-only HYDWIN assembly', part_count: 1, diagram_count: 0, verified_hotspot_count: 0, diagrams: [] }],
     })
+    if (options.guided && path.includes(`/api/catalog/v2/assemblies/${FALCH_SOURCE_ID}P`)) {
+      const number = path.includes(`${FALCH_SOURCE_ID}P1?`) ? 1 : 2
+      return jsonResponse({ dataset_version: datasetVersion, machine_id: FALCH_MACHINE_ID, machine_number: '9', family: 'FALCH_500',
+        source_id: `${FALCH_SOURCE_ID}P${number}`, assembly: 'TEST_ASSEMBLY', title: 'QA reference',
+        diagrams: number === 1 ? [diagram(991), diagram(992)] : [diagram(993)],
+        parts: [part({ id: number, source_record_key: `qa-guided-${number}`, source_id: `${FALCH_SOURCE_ID}P${number}`, position: '1', part_number: `QA-PAGE-${number}`, description_bg: `QA page ${number}` })] })
+    }
+    if (options.guided && path.includes('/hotspots?')) return jsonResponse([])
+    if (options.guided && path.includes('/technical-library/991/preview')) return new Response(new Blob(['qa'], { type: 'image/png' }))
     if (path.includes(`/api/catalog/v2/assemblies/${FALCH_SOURCE_ID}?machine_id=${FALCH_MACHINE_ID}`)) return jsonResponse({
       dataset_version: datasetVersion, machine_id: FALCH_MACHINE_ID, machine_number: '9', family: 'FALCH_500',
       source_id: FALCH_SOURCE_ID, assembly: 'TEST_ASSEMBLY', title: 'Test-only Falch assembly', diagrams: falchDiagrams, parts: falchParts,
@@ -484,4 +494,21 @@ describe('machine-bound catalog request cart', () => {
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/api/catalog/v2/hotspots/991') && init?.method === 'PATCH')).toBe(true)
     expect(await screen.findByText('Ръчно потвърдена')).toBeInTheDocument()
   })
+
+  it('shows independent logical page tabs and multiple scheme tabs for repeated positions', async () => {
+    const fetchMock = setupFetch({ builder: true, guided: true })
+    const user = userEvent.setup()
+    render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
+    expect(await screen.findByText('QA-PAGE-1')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Страница 1' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Схема 1' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Схема 2' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Страница 2' }))
+    expect(await screen.findByText('QA-PAGE-2')).toBeVisible()
+    expect(screen.queryByText('QA-PAGE-1')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Схема 2' })).toBeNull()
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`${FALCH_SOURCE_ID}P2?machine_id=9`))).toBe(true)
+    expect(screen.getByText('Избрани части: 0')).toBeVisible()
+  })
+
 })

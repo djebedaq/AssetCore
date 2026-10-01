@@ -184,7 +184,7 @@ def test_maximum_names_and_position_publish_without_truncation_and_guard_downgra
     config.set_main_option("script_location", str(ROOT / "backend/alembic"))
     with pg_factory.kw["bind"].begin() as connection:
         config.attributes["connection"] = connection
-        with pytest.raises(RuntimeError, match="shared source evidence"):
+        with pytest.raises(RuntimeError, match="shared or guided source evidence"):
             command.downgrade(config, "20260929_0029")
         # Retain the preceding migration's PostgreSQL truncation assertion too.
         import importlib.util

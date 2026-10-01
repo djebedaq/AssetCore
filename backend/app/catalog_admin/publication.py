@@ -19,8 +19,6 @@ from ..models import (
     CatalogAssetBinding,
     CatalogDefinition,
     CatalogDiagram,
-    CatalogIngestCandidate,
-    CatalogIngestRun,
     CatalogPositionHotspot,
     CatalogRevision,
     CatalogRevisionArtifact,
@@ -28,6 +26,7 @@ from ..models import (
     CatalogRevisionPart,
     CatalogRevisionPartPageMap,
     CatalogRevisionPositionHotspot,
+    CatalogRevisionReferencePage,
     CatalogRevisionRepairKit,
     CatalogRevisionRepairKitComponent,
     CatalogRevisionVisualPage,
@@ -46,8 +45,8 @@ from .source_storage import shared_blob
 from .visual_sources import ROLES
 
 
-def source_id(assembly: CatalogRevisionAssembly) -> str:
-    return f"CBR{assembly.revision_id}A{assembly.id}"
+def source_id(assembly: CatalogRevisionAssembly, reference_page_id: int | None = None) -> str:
+    return f"CBR{assembly.revision_id}A{assembly.id}" + (f"P{reference_page_id}" if reference_page_id is not None else "")
 
 
 def source_version(revision: CatalogRevision) -> str:
@@ -68,20 +67,17 @@ def graph(db: Session, revision: CatalogRevision) -> dict:
     hotspots = _rows(db, CatalogRevisionPositionHotspot, CatalogRevisionPositionHotspot.visual_page_id, [x.id for x in pages])
     kits = _rows(db, CatalogRevisionRepairKit, CatalogRevisionRepairKit.assembly_id, [x.id for x in assemblies])
     components = _rows(db, CatalogRevisionRepairKitComponent, CatalogRevisionRepairKitComponent.kit_id, [x.id for x in kits])
-    ingest_runs = _rows(db, CatalogIngestRun, CatalogIngestRun.revision_id, [revision.id])
-    ingest_candidates = _rows(db, CatalogIngestCandidate, CatalogIngestCandidate.run_id, [x.id for x in ingest_runs])
+    reference_pages = _rows(db, CatalogRevisionReferencePage, CatalogRevisionReferencePage.assembly_id, [x.id for x in assemblies])
     return dict(assemblies=assemblies, artifacts=artifacts, pages=pages, parts=parts,
-                maps=maps, hotspots=hotspots, kits=kits, components=components,
-                ingest_runs=ingest_runs, ingest_candidates=ingest_candidates)
+                maps=maps, hotspots=hotspots, kits=kits, components=components, reference_pages=reference_pages)
 
 
 PUBLISH_FIELDS = {
-    "ingest_runs": ("id", "sha256", "extractor_version", "status", "next_page"),
-    "ingest_candidates": ("id", "run_id", "kind", "state", "version", "target_id"),
+    "reference_pages": ("id", "assembly_id", "stable_key", "sort_order", "title", "version"),
     "assemblies": ("id", "revision_id", "code", "name_bg", "name_en", "name_ru", "description", "sort_order"),
     "artifacts": ("id", "assembly_id", "title", "filename", "media_type", "sha256", "page_count", "document_reference", "document_date", "language"),
-    "pages": ("id", "artifact_id", "page_number", "role"),
-    "parts": ("id", "assembly_id", "position", "part_number", "name_bg", "name_en", "name_ru", "description", "description_2", "quantity", "quantity_raw", "unit", "manufacturer", "category", "replaced_by_part_number", "alternative_part_number", "technical_specification", "technical_notes", "supplier", "supplier_code", "sort_order"),
+    "pages": ("id", "artifact_id", "page_number", "role", "reference_page_id", "sort_order"),
+    "parts": ("id", "assembly_id", "reference_page_id", "extraction_key", "extraction_evidence", "position", "part_number", "name_bg", "name_en", "name_ru", "description", "description_2", "quantity", "quantity_raw", "unit", "manufacturer", "category", "replaced_by_part_number", "alternative_part_number", "technical_specification", "technical_notes", "supplier", "supplier_code", "sort_order"),
     "maps": ("id", "part_id", "visual_page_id"),
     "hotspots": ("id", "visual_page_id", "position", "x", "y", "width", "height", "provenance", "is_verified", "verified_by_id", "verified_at", "version"),
     "kits": ("id", "assembly_id", "code", "name_bg", "name_en", "name_ru", "description", "source_visual_page_id", "sort_order"),
@@ -105,7 +101,7 @@ def digest(catalog: CatalogDefinition, revision: CatalogRevision, content: dict)
                     ("id", "code", "asset_category_id", "name_bg", "name_en", "name_ru", "description", "manufacturer", "model_reference", "is_active")},
         "revision": {"id": revision.id, "catalog_id": revision.catalog_id, "revision_code": revision.revision_code},
         **{kind: [{key: _value(getattr(row, key)) for key in fields} for row in content[kind]]
-           for kind, fields in PUBLISH_FIELDS.items() if not kind.startswith("ingest_") or content[kind]},
+           for kind, fields in PUBLISH_FIELDS.items() if kind != "reference_pages" or content[kind]},
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False,
                                      separators=(",", ":"), allow_nan=False).encode()).hexdigest()
@@ -141,30 +137,23 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         errors.append(_error("catalog_category_not_supported"))
     if revision.status != "DRAFT":
         errors.append(_error("catalog_revision_not_draft"))
-    for run in content["ingest_runs"]:
-        if run.status not in {"COMPLETED", "DISMISSED"}:
-            errors.append(_error("catalog_ingest_not_completed", run_id=run.id, step="documents"))
-    pending = {row.kind for row in content["ingest_candidates"] if row.state in {"PROPOSED", "NEEDS_REVIEW"}}
-    for kind in sorted(pending):
-        errors.append(_error("catalog_ingest_review_required", candidate_kind=kind,
-            step="parts" if kind == "PART" else "hotspots" if kind == "HOTSPOT" else "documents"))
     if not content["assemblies"]:
         errors.append(_error("catalog_publication_no_assemblies"))
     assembly_by_id = {x.id: x for x in content["assemblies"]}
     artifact_by_id = {x.id: x for x in content["artifacts"]}
     page_by_id = {x.id: x for x in content["pages"]}
+    reference_by_id = {x.id: x for x in content["reference_pages"]}
     part_by_id = {x.id: x for x in content["parts"]}
     kit_by_id = {x.id: x for x in content["kits"]}
     mapped = defaultdict(list)
     for item in content["maps"]:
         part, page = part_by_id.get(item.part_id), page_by_id.get(item.visual_page_id)
         artifact = artifact_by_id.get(page.artifact_id) if page else None
-        if part is None or artifact is None or artifact.assembly_id != part.assembly_id or page.role != "SPARE_PARTS_LIST":
+        if part is None or artifact is None or artifact.assembly_id != part.assembly_id or page.role != "SPARE_PARTS_LIST" or part.reference_page_id != page.reference_page_id:
             errors.append(_error("catalog_publication_part_mapping_invalid", mapping_id=item.id))
         else:
             mapped[part.id].append(page)
     validated = {}
-    analyzed = {run.sha256: run.page_count for run in content["ingest_runs"] if run.status == "COMPLETED"}
     for artifact in content["artifacts"]:
         try:
             raw = artifact.content
@@ -173,16 +162,17 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
                 raise ValueError("hash or media type")
             if artifact.sha256 not in validated:
                 from .source_storage import validate_pdf
-                # Completed isolated analysis is bound to the exact SHA. Manual
-                # sources are validated once per PDF, never once per assembly.
-                validated[artifact.sha256] = analyzed.get(artifact.sha256) or validate_pdf(raw)
+                # Validate once per original PDF, regardless of logical assignments.
+                validated[artifact.sha256] = validate_pdf(raw)
             if validated[artifact.sha256] != artifact.page_count:
                 raise ValueError("invalid page count")
         except Exception:
             errors.append(_error("catalog_publication_source_invalid", artifact_id=artifact.id))
     for page in content["pages"]:
         artifact = artifact_by_id.get(page.artifact_id)
-        if artifact is None or page.role not in ROLES or not 1 <= page.page_number <= artifact.page_count:
+        if (artifact is None or page.role not in ROLES or not 1 <= page.page_number <= artifact.page_count
+                or page.reference_page_id is not None and (page.reference_page_id not in reference_by_id
+                    or reference_by_id[page.reference_page_id].assembly_id != artifact.assembly_id)):
             errors.append(_error("catalog_publication_visual_page_invalid", visual_page_id=page.id))
     positions = defaultdict(set)
     assemblies_with_parts = {part.assembly_id for part in content["parts"]}
@@ -190,8 +180,9 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         if assembly.id not in assemblies_with_parts:
             errors.append(_error("catalog_publication_empty_assembly", assembly_id=assembly.id))
     for part in content["parts"]:
-        positions[part.assembly_id].add(part.position)
-        if (part.assembly_id not in assembly_by_id or not part.position.strip()
+        positions[(part.assembly_id, part.reference_page_id)].add(part.position)
+        if (part.assembly_id not in assembly_by_id or part.reference_page_id is not None and (
+                part.reference_page_id not in reference_by_id or reference_by_id[part.reference_page_id].assembly_id != part.assembly_id) or not part.position.strip()
                 or len(part.position) > 80 or not part.part_number.strip()
                 or not any((part.name_bg, part.name_en, part.name_ru, part.description))
                 or part.quantity is not None and part.quantity < 0 or not mapped[part.id]):
@@ -202,7 +193,7 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         artifact = artifact_by_id.get(page.artifact_id) if page else None
         geometry = (hotspot.x, hotspot.y, hotspot.width, hotspot.height)
         if (artifact is None or page.role != "EXPLODED_SCHEME"
-                or hotspot.position not in positions[artifact.assembly_id]
+                or hotspot.position not in positions[(artifact.assembly_id, page.reference_page_id)]
                 or not all(math.isfinite(value) for value in geometry)
                 or not 0 <= hotspot.x <= 1 or not 0 <= hotspot.y <= 1
                 or hotspot.width < .002 or hotspot.height < .002
@@ -211,11 +202,18 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         elif not hotspot.is_verified or hotspot.verified_by_id is None or hotspot.verified_at is None:
             errors.append(_error("catalog_publication_hotspot_unverified", hotspot_id=hotspot.id))
         else:
-            hotspot_positions[artifact.assembly_id].add(hotspot.position)
-    for assembly_id, values in positions.items():
-        if values - hotspot_positions[assembly_id]:
-            warnings.append(_error("catalog_publication_hotspot_coverage", assembly_id=assembly_id,
-                                   missing_positions=len(values - hotspot_positions[assembly_id])))
+            hotspot_positions[(artifact.assembly_id, page.reference_page_id)].add(hotspot.position)
+    for (assembly_id, reference_page_id), values in positions.items():
+        missing = values - hotspot_positions[(assembly_id, reference_page_id)]
+        if missing:
+            item = _error("catalog_publication_hotspot_coverage", assembly_id=assembly_id,
+                          reference_page_id=reference_page_id, missing_positions=len(missing))
+            (errors if reference_page_id is not None else warnings).append(item)
+    for reference in content["reference_pages"]:
+        owned = [page for page in content["pages"] if page.reference_page_id == reference.id]
+        owned_parts = [part for part in content["parts"] if part.reference_page_id == reference.id]
+        if (not owned_parts or {"EXPLODED_SCHEME", "SPARE_PARTS_LIST"} - {page.role for page in owned}):
+            errors.append(_error("catalog_publication_reference_page_incomplete", reference_page_id=reference.id))
     components_by_kit = defaultdict(list)
     for component in content["components"]:
         components_by_kit[component.kit_id].append(component)
@@ -279,7 +277,7 @@ def _materialize(db: Session, actor: User, catalog: CatalogDefinition,
     for page in content["pages"]:
         artifact = artifacts[page.artifact_id]
         assembly = assemblies[artifact.assembly_id]
-        sid = source_id(assembly)
+        sid = source_id(assembly, page.reference_page_id)
         visual = CatalogVisualSource(
             builder_revision_id=revision.id, builder_visual_page_id=page.id,
             source_id=sid, catalog_revision=version, technical_document_id=documents[artifact.id].id,
@@ -309,7 +307,7 @@ def _materialize(db: Session, actor: User, catalog: CatalogDefinition,
         artifact = artifacts[page.artifact_id]
         part = PartCatalog(
             builder_revision_id=revision.id, builder_part_id=item.id,
-            source_record_key=f"CBP{item.id}", source_id=source_id(assembly),
+            source_record_key=f"CBP{item.id}", source_id=source_id(assembly, item.reference_page_id),
             source_row_index=item.sort_order, family=catalog.code, brand="", model="",
             assembly=assembly.name_bg, position=item.position, part_number=item.part_number,
             description=item.description or item.name_bg or item.name_en or item.name_ru,
@@ -443,7 +441,7 @@ def clone(db: Session, actor: User, revision_id: int,
                                  status="DRAFT", change_note=change_note, created_by_id=actor.id)
         db.add(target)
         db.flush()
-        assembly_ids, artifact_ids, page_ids, part_ids, kit_ids = {}, {}, {}, {}, {}
+        assembly_ids, artifact_ids, page_ids, part_ids, kit_ids, reference_ids = {}, {}, {}, {}, {}, {}
         for item in content["assemblies"]:
             values = {key: getattr(item, key) for key in PUBLISH_FIELDS["assemblies"]
                       if key not in {"id", "revision_id"}}
@@ -451,6 +449,13 @@ def clone(db: Session, actor: User, revision_id: int,
             db.add(new)
             db.flush()
             assembly_ids[item.id] = new.id
+        for item in content["reference_pages"]:
+            new = CatalogRevisionReferencePage(assembly_id=assembly_ids[item.assembly_id],
+                stable_key=item.stable_key, sort_order=item.sort_order, title=item.title,
+                version=1, created_by_id=actor.id)
+            db.add(new)
+            db.flush()
+            reference_ids[item.id] = new.id
         for item in content["artifacts"]:
             values = {key: getattr(item, key) for key in PUBLISH_FIELDS["artifacts"]
                       if key not in {"id", "assembly_id"}}
@@ -463,14 +468,21 @@ def clone(db: Session, actor: User, revision_id: int,
         for item in content["pages"]:
             new = CatalogRevisionVisualPage(artifact_id=artifact_ids[item.artifact_id],
                                             page_number=item.page_number, role=item.role,
-                                            created_by_id=actor.id)
+                                            reference_page_id=reference_ids.get(item.reference_page_id),
+                                            sort_order=item.sort_order, created_by_id=actor.id)
             db.add(new)
             db.flush()
             page_ids[item.id] = new.id
         for item in content["parts"]:
             values = {key: getattr(item, key) for key in PUBLISH_FIELDS["parts"]
-                      if key not in {"id", "assembly_id"}}
+                      if key not in {"id", "assembly_id", "reference_page_id"}}
+            if values.get("extraction_evidence"):
+                evidence = json.loads(json.dumps(values["extraction_evidence"]))
+                evidence["source"]["visual_page_id"] = page_ids[evidence["source"]["visual_page_id"]]
+                evidence["source"]["artifact_id"] = artifact_ids[evidence["source"]["artifact_id"]]
+                values["extraction_evidence"] = evidence
             new = CatalogRevisionPart(assembly_id=assembly_ids[item.assembly_id],
+                                      reference_page_id=reference_ids.get(item.reference_page_id),
                                       created_by_id=actor.id, **values)
             db.add(new)
             db.flush()

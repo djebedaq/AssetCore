@@ -3,11 +3,7 @@ import { api, ApiError } from '../../api'
 import { Modal } from '../../industrialUi'
 import { useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
-import RevisionHotspotEditor from './RevisionHotspotEditor'
-import RevisionRepairKits from './RevisionRepairKits'
-import WizardDocuments from './WizardDocuments'
-import WizardParts from './WizardParts'
-import IngestReview from './IngestReview'
+import GuidedWorkspace from './GuidedWorkspace'
 import WizardReview from './WizardReview'
 import WizardMachines from './WizardMachines'
 import useDraftGuard from './useDraftGuard'
@@ -21,17 +17,14 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   const [revisions, setRevisions] = useState<Revision[]>([])
   const [revisionId, setRevisionId] = useState<number | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
-  const [groupId, setGroupId] = useState<number | null>(null)
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
+  const [target, setTarget] = useState<Issue | undefined>()
   const [step, setStep] = useState<Step>('catalog')
-  const [visited, setVisited] = useState<Step[]>([])
   const [creating, setCreating] = useState(false)
   const [editingMetadata, setEditingMetadata] = useState(false)
   const [metadata, setMetadata] = useState({ name: '', manufacturer: '', model_reference: '' })
   const [form, setForm] = useState({ name: '', asset_category_id: '', manufacturer: '', model_reference: '' })
   const [dirtyChildren, setDirtyChildren] = useState<Record<string, boolean>>({})
-  const [fix, setFix] = useState<Issue | null>(null)
-  const [kits, setKits] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const selected = catalogs.find(catalog => catalog.id === selectedId)
@@ -40,11 +33,6 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   const dirty = busy || editingMetadata || creating && !!form.name || Object.values(dirtyChildren).some(Boolean)
   useDraftGuard(dirty, onDirtyChange)
   const documentsDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, documents: value })), [])
-  const importDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, import: value })), [])
-  const partsDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, parts: value })), [])
-  const hotspotsDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, hotspots: value })), [])
-  const hotspotReviewDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, hotspotReview: value })), [])
-  const kitsDirty = useCallback((value: boolean) => setDirtyChildren(current => ({ ...current, kits: value })), [])
   const label = (value: { name_bg: string; name_en: string; name_ru: string }) => value[`name_${locale}`] || value.name_bg
   const report = (caught: unknown) => setError(t(caught instanceof ApiError && caught.code ? problemKeys[caught.code] || 'builder.error.generic' : 'builder.error.generic'))
   async function load() {
@@ -66,13 +54,13 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   useEffect(() => {
     if (!revisionId) return
     let active = true
-    setWorkflow(null); setGroups([]); setVisited([]); setFix(null); setKits(false); setEditingMetadata(false)
+    setWorkflow(null); setGroups([]); setEditingMetadata(false)
     void Promise.all([api<Group[]>(`${builderBase}/revisions/${revisionId}/assemblies`),
       api<Workflow>(`${builderBase}/revisions/${revisionId}/workflow`)]).then(([rows, summary]) => {
       if (!active) return
-      setGroups(rows); setGroupId(rows[0]?.id || null); setWorkflow(summary)
+      setGroups(rows); setWorkflow(summary)
       const next = revision?.status === 'DRAFT' ? summary.resume_step : 'review'
-      setStep(next); setVisited([next])
+      setStep(next);
     }).catch(report)
     return () => { active = false }
   }, [revisionId])
@@ -80,20 +68,16 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
     if (!revisionId) return
     const [rows, summary] = await Promise.all([api<Group[]>(`${builderBase}/revisions/${revisionId}/assemblies`),
       api<Workflow>(`${builderBase}/revisions/${revisionId}/workflow`)])
-    setGroups(rows); setWorkflow(summary); setGroupId(id => rows.some(row => row.id === id) ? id : rows[0]?.id || null)
+    setGroups(rows); setWorkflow(summary);
   }
   function navigate(next: Step) {
-    setStep(next); setVisited(values => values.includes(next) ? values : [...values, next])
+    if (Object.values(dirtyChildren).some(Boolean) && !window.confirm(t('wizard.unsaved'))) return
+    setStep(next);
     if (next === 'review') void refresh().catch(report)
-  }
-  function changeGroup(id: number) {
-    if ((dirtyChildren.parts || dirtyChildren.hotspots || dirtyChildren.kits) && !window.confirm(t('wizard.unsaved'))) return false
-    setGroupId(id)
-    return true
   }
   function close() {
     if (dirty && !window.confirm(t('wizard.unsaved'))) return
-    setSelectedId(null); setRevisionId(null); setVisited([]); setDirtyChildren({}); setError(''); setEditingMetadata(false)
+    setSelectedId(null); setRevisionId(null); setDirtyChildren({}); setError(''); setEditingMetadata(false)
   }
   async function create(event: FormEvent) {
     event.preventDefault()
@@ -143,10 +127,8 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
     } catch (caught) { report(caught); await refresh().catch(report) } finally { setBusy(false) }
   }
   function fixIssue(issue: Issue) {
-    if (issue.assembly_id && !changeGroup(issue.assembly_id)) return
-    setFix(issue)
-    if (issue.step === 'kits') { setKits(true); navigate('hotspots') }
-    else navigate(issue.step || 'documents')
+    setTarget(issue)
+    navigate(issue.step === 'kits' ? 'hotspots' : issue.step || 'review')
   }
   if (!hasPermission('parts.manage')) return null
   return <div className="builder-page">
@@ -166,9 +148,9 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
     {selected && <section className="panel"><div className="panel-title"><h3>{label(selected)}</h3>
       <button className="secondary" disabled={busy} onClick={close}>{t('common.close')}</button></div>
       <nav aria-label={t('wizard.title')} className="wizard-progress">{steps.map((value, index) => <button key={value}
-        aria-label={`${index + 1} ${t(`wizard.${value}`)}`} className={step === value ? 'primary' : 'secondary'} aria-current={step === value ? 'step' : undefined}
+        aria-label={`${index + 1} ${t(value === 'references' ? 'guided.references' : value === 'documents' ? 'guided.pages' : `wizard.${value}`)}`} className={step === value ? 'primary' : 'secondary'} aria-current={step === value ? 'step' : undefined}
         disabled={!revision || busy || !editable && value !== 'catalog' && value !== 'review'} onClick={() => navigate(value)}>
-        <span>{index + 1}</span>{t(`wizard.${value}`)}
+        <span>{index + 1}</span>{t(value === 'references' ? 'guided.references' : value === 'documents' ? 'guided.pages' : `wizard.${value}`)}
       </button>)}</nav>
       {dirty && <p className="muted" role="status">{t('wizard.unsavedNotice')}</p>}
       {!workflow && <p>{t('wizard.loading')}</p>}
@@ -190,27 +172,11 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
         </form>}
         {!revision && <button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>}
       </div>
-      {editable && revision && <>
-        {visited.includes('documents') && <div hidden={step !== 'documents'}><WizardDocuments revisionId={revision.id} groups={groups} onChanged={refresh} onDirtyChange={documentsDirty}
-          beforeDelete={() => !(dirtyChildren.parts || dirtyChildren.hotspots || dirtyChildren.kits) || window.confirm(t('wizard.unsaved'))}
-          targetPage={fix?.step === 'documents' && fix.code === '' ? fix.visual_page_id : undefined}
-          targetArtifactId={fix?.step === 'documents' ? fix.artifact_id : undefined} /></div>}
-        {visited.includes('parts') && <div hidden={step !== 'parts'}><WizardParts revisionId={revision.id} groups={groups} groupId={groupId} setGroupId={changeGroup}
-          onChanged={refresh} incompleteOnly={fix?.step === 'parts'} onDirtyChange={importDirty} onEditorDirtyChange={partsDirty} editorDirty={!!dirtyChildren.parts}
-          onDocumentProblem={page => { setFix({ code: '', step: 'documents', visual_page_id: page }); navigate('documents') }} /></div>}
-        {visited.includes('hotspots') && <div hidden={step !== 'hotspots'}>
-          <IngestReview revisionId={revision.id} kind="HOTSPOT" groups={groups} onChanged={refresh} onDirtyChange={hotspotReviewDirty} blocked={!!dirtyChildren.hotspots} />
-          <label>{t('wizard.group')}<select value={groupId ?? ''} onChange={event => changeGroup(Number(event.target.value))}>{groups.map(group => <option key={group.id} value={group.id}>{label(group)}</option>)}</select></label>
-          {groupId && <RevisionHotspotEditor key={`${groupId}-${groups.find(group => group.id === groupId)?.hotspot_count}`} assemblyId={groupId} editable simple
-            initialFilter={fix?.step === 'hotspots' ? fix.code.includes('coverage') ? 'unmarked' : 'unverified' : 'all'}
-            initialPageId={fix?.visual_page_id} initialPosition={fix?.position} onDirtyChange={hotspotsDirty} />}
-          <button className="secondary" onClick={() => { if (kits && dirtyChildren.kits && !window.confirm(t('wizard.unsaved'))) return; setKits(value => !value) }}>{t('wizard.optionalKits')}</button>
-          {kits && groupId && <RevisionRepairKits key={groupId} assemblyId={groupId} editable onDirtyChange={kitsDirty} />}
-        </div>}
-      </>}
+      {editable && revision && !['catalog', 'review'].includes(step) && <GuidedWorkspace
+        target={target} revisionId={revision.id} groups={groups} task={step} changed={refresh} onDirtyChange={documentsDirty} />}
       <div hidden={step !== 'review'}><WizardReview workflow={workflow} editable={!!editable} busy={busy || editingMetadata || Object.values(dirtyChildren).some(Boolean)} onFix={fixIssue} onPublish={() => void publish()} /></div>
       {editable && <div className="actions wizard-navigation"><button className="secondary" disabled={steps.indexOf(step) === 0} onClick={() => navigate(steps[steps.indexOf(step) - 1])}>{t('wizard.back')}</button>
-        <button className="primary" disabled={step === 'review'} onClick={() => { setFix(null); navigate(steps[steps.indexOf(step) + 1]) }}>{t('wizard.continue')}</button></div>}
+        <button className="primary" disabled={step === 'review'} onClick={() => { navigate(steps[steps.indexOf(step) + 1]) }}>{t('wizard.continue')}</button></div>}
       {revision?.status === 'PUBLISHED' && <><p role="status">{t('wizard.published')}</p><button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>
         <WizardMachines catalogId={selected.id} onChanged={load} /></>}
       <details><summary>{t('wizard.history')}</summary>{revisions.map((row, index) => <p key={row.id}>

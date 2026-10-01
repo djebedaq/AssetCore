@@ -1,4 +1,4 @@
-"""Shared source bytes and reviewable, checkpointed catalog ingestion.
+"""Shared source bytes and human-defined logical reference pages.
 
 Revision ID: 20261001_0031
 Revises: 20260930_0030
@@ -42,65 +42,74 @@ def upgrade() -> None:
             batch.add_column(sa.Column("source_blob_id", sa.Integer(), nullable=True))
             batch.create_foreign_key(f"fk_{table}_source_blob", "catalog_source_blobs", ["source_blob_id"], ["id"])
             batch.create_index(f"ix_{table}_source_blob_id", ["source_blob_id"])
-    create_table("catalog_ingest_runs",
+    create_table("catalog_revision_reference_pages",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("revision_id", sa.Integer(), sa.ForeignKey("catalog_revisions.id"), nullable=False),
-        sa.Column("source_blob_id", sa.Integer(), sa.ForeignKey("catalog_source_blobs.id"), nullable=False),
-        sa.Column("artifact_id", sa.Integer(), nullable=False),
-        sa.Column("sha256", sa.String(64), nullable=False),
-        sa.Column("extractor_version", sa.String(80), nullable=False),
-        sa.Column("status", sa.String(20), nullable=False),
-        sa.Column("next_page", sa.Integer(), nullable=False),
-        sa.Column("page_count", sa.Integer(), nullable=False),
-        sa.Column("context", sa.JSON(), nullable=False),
-        sa.Column("error_code", sa.String(80)),
-        sa.Column("claim_token", sa.String(36)),
-        sa.Column("claim_expires_at", sa.DateTime()),
+        sa.Column("assembly_id", sa.Integer(), sa.ForeignKey("catalog_revision_assemblies.id"), nullable=False),
+        sa.Column("stable_key", sa.String(36), nullable=False),
+        sa.Column("sort_order", sa.Integer(), nullable=False),
+        sa.Column("title", sa.String(255)),
+        sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("created_by_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.UniqueConstraint("revision_id", "sha256", "extractor_version", name="uq_catalog_ingest_identity"),
-        sa.CheckConstraint("status IN ('RUNNING', 'COMPLETED', 'FAILED', 'DISMISSED')", name="ck_catalog_ingest_status"),
-        sa.CheckConstraint("next_page >= 1", name="ck_catalog_ingest_next_page"))
-    create_index("ix_catalog_ingest_runs_revision_id", "catalog_ingest_runs", ["revision_id"])
-    create_table("catalog_ingest_pages",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("run_id", sa.Integer(), sa.ForeignKey("catalog_ingest_runs.id"), nullable=False),
-        sa.Column("page_number", sa.Integer(), nullable=False),
-        sa.Column("evidence", sa.JSON(), nullable=False),
-        sa.UniqueConstraint("run_id", "page_number", name="uq_catalog_ingest_page"))
-    create_index("ix_catalog_ingest_pages_run_id", "catalog_ingest_pages", ["run_id"])
-    create_table("catalog_ingest_candidates",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("run_id", sa.Integer(), sa.ForeignKey("catalog_ingest_runs.id"), nullable=False),
-        sa.Column("source_key", sa.String(80), nullable=False),
-        sa.Column("kind", sa.String(16), nullable=False),
-        sa.Column("state", sa.String(20), nullable=False),
-        sa.Column("page_number", sa.Integer()),
-        sa.Column("confidence", sa.Float(), nullable=False),
-        sa.Column("payload", sa.JSON(), nullable=False),
-        sa.Column("evidence", sa.JSON(), nullable=False),
-        sa.Column("warnings", sa.JSON(), nullable=False),
-        sa.Column("version", sa.Integer(), nullable=False),
-        sa.Column("target_id", sa.Integer()),
-        sa.Column("reviewed_by_id", sa.Integer(), sa.ForeignKey("users.id")),
-        sa.Column("reviewed_at", sa.DateTime()),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.UniqueConstraint("run_id", "source_key", name="uq_catalog_ingest_candidate"),
-        sa.CheckConstraint("kind IN ('GROUP', 'PAGE', 'PART', 'HOTSPOT')", name="ck_catalog_candidate_kind"),
-        sa.CheckConstraint("state IN ('PROPOSED', 'NEEDS_REVIEW', 'ACCEPTED', 'REJECTED')", name="ck_catalog_candidate_state"),
-        sa.CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_catalog_candidate_confidence"),
-        sa.CheckConstraint("version >= 1", name="ck_catalog_candidate_version"))
-    create_index("ix_catalog_ingest_candidates_run_id", "catalog_ingest_candidates", ["run_id"])
-    create_index("ix_catalog_candidate_review", "catalog_ingest_candidates", ["run_id", "kind", "state", "id"])
+        sa.UniqueConstraint("assembly_id", "stable_key", name="uq_reference_page_identity"),
+        sa.CheckConstraint("sort_order >= 0", name="ck_reference_page_order"),
+        sa.CheckConstraint("version >= 1", name="ck_reference_page_version"))
+    create_index("ix_catalog_revision_reference_pages_assembly_id", "catalog_revision_reference_pages", ["assembly_id"])
+    for table in ("catalog_revision_visual_pages", "catalog_revision_parts"):
+        columns = {item["name"] for item in sa.inspect(op.get_bind()).get_columns(table)}
+        if "reference_page_id" not in columns:
+            with op.batch_alter_table(table) as batch:
+                batch.add_column(sa.Column("reference_page_id", sa.Integer(), nullable=True))
+                batch.create_foreign_key(f"fk_{table}_reference_page", "catalog_revision_reference_pages", ["reference_page_id"], ["id"])
+                batch.create_index(f"ix_{table}_reference_page_id", ["reference_page_id"])
+                if table == "catalog_revision_parts":
+                    batch.add_column(sa.Column("extraction_key", sa.String(64)))
+                    batch.add_column(sa.Column("extraction_evidence", sa.JSON()))
+                    batch.create_unique_constraint("uq_part_extraction_source", ["reference_page_id", "extraction_key"])
+                else:
+                    batch.add_column(sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"))
+        constraints = {item["name"] for item in sa.inspect(op.get_bind()).get_unique_constraints(table)}
+        old = "uq_catalog_revision_part_identity" if table.endswith("parts") else "uq_catalog_revision_visual_page_role"
+        if old in constraints:
+            with op.batch_alter_table(table) as batch:
+                batch.drop_constraint(old, type_="unique")
+        indexes = {item["name"] for item in sa.inspect(op.get_bind()).get_indexes(table)}
+        if table.endswith("parts"):
+            specs = [("uq_part_legacy", ["assembly_id", "position", "part_number"], "IS NULL"),
+                     ("uq_part_guided", ["reference_page_id", "position", "part_number"], "IS NOT NULL")]
+        else:
+            specs = [("uq_visual_page_legacy", ["artifact_id", "page_number", "role"], "IS NULL"),
+                     ("uq_visual_page_guided", ["reference_page_id", "artifact_id", "page_number", "role"], "IS NOT NULL")]
+        for name, fields, condition in specs:
+            if name not in indexes:
+                predicate = sa.text(f"reference_page_id {condition}")
+                op.create_index(name, table, fields, unique=True, sqlite_where=predicate, postgresql_where=predicate)
 
 
 def downgrade() -> None:
-    if op.get_bind().scalar(sa.text("SELECT count(*) FROM catalog_source_blobs")):
-        raise RuntimeError("Cannot downgrade with shared source evidence; export before downgrading")
-    op.drop_table("catalog_ingest_candidates")
-    op.drop_table("catalog_ingest_pages")
-    op.drop_table("catalog_ingest_runs")
+    if (op.get_bind().scalar(sa.text("SELECT count(*) FROM catalog_source_blobs"))
+            or op.get_bind().scalar(sa.text("SELECT count(*) FROM catalog_revision_reference_pages"))):
+        raise RuntimeError("Cannot downgrade with shared or guided source evidence")
+    for table in ("catalog_revision_parts", "catalog_revision_visual_pages"):
+        names = ("uq_part_legacy", "uq_part_guided") if table.endswith("parts") else ("uq_visual_page_legacy", "uq_visual_page_guided")
+        for name in names:
+            op.drop_index(name, table_name=table)
+        with op.batch_alter_table(table) as batch:
+            batch.drop_index(f"ix_{table}_reference_page_id")
+            fk = next(item["name"] for item in sa.inspect(op.get_bind()).get_foreign_keys(table)
+                      if item["constrained_columns"] == ["reference_page_id"])
+            batch.drop_constraint(fk, type_="foreignkey")
+            if table.endswith("parts"):
+                batch.drop_constraint("uq_part_extraction_source", type_="unique")
+                batch.drop_column("extraction_key")
+                batch.drop_column("extraction_evidence")
+                batch.create_unique_constraint("uq_catalog_revision_part_identity", ["assembly_id", "position", "part_number"])
+            else:
+                batch.drop_column("sort_order")
+                batch.create_unique_constraint("uq_catalog_revision_visual_page_role", ["artifact_id", "page_number", "role"])
+            batch.drop_column("reference_page_id")
+    op.drop_table("catalog_revision_reference_pages")
     for table in ("technical_document_revisions", "technical_documents", "catalog_revision_artifacts"):
         with op.batch_alter_table(table) as batch:
             batch.drop_index(f"ix_{table}_source_blob_id")

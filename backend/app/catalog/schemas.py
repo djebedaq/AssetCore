@@ -56,6 +56,17 @@ class CatalogDiagramOut(BaseModel):
     download_endpoint: str
 
 
+class CatalogReferencePageOut(BaseModel):
+    id: int
+    stable_key: str
+    number: int
+    title: str | None = None
+    source_id: str
+    diagrams: list[CatalogDiagramOut]
+    part_count: int
+    verified_hotspot_count: int
+
+
 class CatalogAssemblyOut(BaseModel):
     source_id: str
     family: str
@@ -69,6 +80,7 @@ class CatalogAssemblyOut(BaseModel):
     diagram_count: int
     verified_hotspot_count: int
     diagrams: list[CatalogDiagramOut]
+    pages: list[CatalogReferencePageOut] = Field(default_factory=list)
 
 
 class MachineCatalogOut(BaseModel):
@@ -116,6 +128,7 @@ class PositionHotspotOut(BaseModel):
 
 
 class RepairKitComponentOut(BaseModel):
+    source_id: str | None = None
     id: int
     part_id: int
     source_record_key: str

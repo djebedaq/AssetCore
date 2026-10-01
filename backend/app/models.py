@@ -1025,14 +1025,40 @@ class CatalogRevisionArtifact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
+class CatalogRevisionReferencePage(Base):
+    """Human-defined logical page; physical PDF assignments are separate evidence."""
+
+    __tablename__ = "catalog_revision_reference_pages"
+    __table_args__ = (
+        UniqueConstraint("assembly_id", "stable_key", name="uq_reference_page_identity"),
+        CheckConstraint("sort_order >= 0", name="ck_reference_page_order"),
+        CheckConstraint("version >= 1", name="ck_reference_page_version"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_assemblies.id"), index=True)
+    stable_key: Mapped[str] = mapped_column(String(36), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(255))
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    __mapper_args__ = {"version_id_col": version, "version_id_generator": False}
+
+
 class CatalogRevisionVisualPage(Base):
     __tablename__ = "catalog_revision_visual_pages"
     __table_args__ = (
-        UniqueConstraint("artifact_id", "page_number", "role", name="uq_catalog_revision_visual_page_role"),
+        Index("uq_visual_page_legacy", "artifact_id", "page_number", "role", unique=True,
+              sqlite_where=text("reference_page_id IS NULL"), postgresql_where=text("reference_page_id IS NULL")),
+        Index("uq_visual_page_guided", "reference_page_id", "artifact_id", "page_number", "role", unique=True,
+              sqlite_where=text("reference_page_id IS NOT NULL"), postgresql_where=text("reference_page_id IS NOT NULL")),
         CheckConstraint("page_number >= 1", name="ck_catalog_revision_visual_page_positive"),
         CheckConstraint("role IN ('EXPLODED_SCHEME', 'SPARE_PARTS_LIST')", name="ck_catalog_revision_visual_page_role"),
     )
 
+    reference_page_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_reference_pages.id", name="fk_catalog_revision_visual_pages_reference_page"), index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     id: Mapped[int] = mapped_column(primary_key=True)
     artifact_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_artifacts.id"), nullable=False, index=True)
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -1041,80 +1067,22 @@ class CatalogRevisionVisualPage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
-class CatalogIngestRun(Base):
-    __tablename__ = "catalog_ingest_runs"
-    __table_args__ = (
-        UniqueConstraint("revision_id", "sha256", "extractor_version", name="uq_catalog_ingest_identity"),
-        CheckConstraint("status IN ('RUNNING', 'COMPLETED', 'FAILED', 'DISMISSED')", name="ck_catalog_ingest_status"),
-        CheckConstraint("next_page >= 1", name="ck_catalog_ingest_next_page"),
-    )
-    id: Mapped[int] = mapped_column(primary_key=True)
-    revision_id: Mapped[int] = mapped_column(ForeignKey("catalog_revisions.id"), index=True)
-    source_blob_id: Mapped[int] = mapped_column(ForeignKey("catalog_source_blobs.id"))
-    # Snapshot identity: deleting an unused draft alias must not erase evidence.
-    artifact_id: Mapped[int] = mapped_column(Integer)
-    sha256: Mapped[str] = mapped_column(String(64))
-    extractor_version: Mapped[str] = mapped_column(String(80))
-    status: Mapped[str] = mapped_column(String(20), default="RUNNING")
-    next_page: Mapped[int] = mapped_column(Integer, default=1)
-    page_count: Mapped[int] = mapped_column(Integer)
-    context: Mapped[dict] = mapped_column(JSON, default=dict)
-    error_code: Mapped[str | None] = mapped_column(String(80))
-    claim_token: Mapped[str | None] = mapped_column(String(36))
-    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime)
-    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
-
-
-class CatalogIngestPage(Base):
-    __tablename__ = "catalog_ingest_pages"
-    __table_args__ = (UniqueConstraint("run_id", "page_number", name="uq_catalog_ingest_page"),)
-    id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("catalog_ingest_runs.id"), index=True)
-    page_number: Mapped[int] = mapped_column(Integer)
-    # Bounded layout, exact native/OCR words, raw text, headings, tables and warnings.
-    evidence: Mapped[dict] = mapped_column(JSON)
-
-
-class CatalogIngestCandidate(Base):
-    __tablename__ = "catalog_ingest_candidates"
-    __table_args__ = (
-        UniqueConstraint("run_id", "source_key", name="uq_catalog_ingest_candidate"),
-        CheckConstraint("kind IN ('GROUP', 'PAGE', 'PART', 'HOTSPOT')", name="ck_catalog_candidate_kind"),
-        CheckConstraint("state IN ('PROPOSED', 'NEEDS_REVIEW', 'ACCEPTED', 'REJECTED')", name="ck_catalog_candidate_state"),
-        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_catalog_candidate_confidence"),
-        CheckConstraint("version >= 1", name="ck_catalog_candidate_version"),
-        Index("ix_catalog_candidate_review", "run_id", "kind", "state", "id"),
-    )
-    id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(ForeignKey("catalog_ingest_runs.id"), index=True)
-    source_key: Mapped[str] = mapped_column(String(80))
-    kind: Mapped[str] = mapped_column(String(16))
-    state: Mapped[str] = mapped_column(String(20), default="PROPOSED")
-    page_number: Mapped[int | None] = mapped_column(Integer)
-    confidence: Mapped[float] = mapped_column(Float)
-    payload: Mapped[dict] = mapped_column(JSON)
-    evidence: Mapped[dict] = mapped_column(JSON)
-    warnings: Mapped[list] = mapped_column(JSON, default=list)
-    version: Mapped[int] = mapped_column(Integer, default=1)
-    # Draft record identity, never followed without checking revision ownership.
-    target_id: Mapped[int | None] = mapped_column(Integer)
-    reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    __mapper_args__ = {"version_id_col": version, "version_id_generator": False}
-
-
 class CatalogRevisionPart(Base):
     __tablename__ = "catalog_revision_parts"
     __table_args__ = (
-        UniqueConstraint("assembly_id", "position", "part_number", name="uq_catalog_revision_part_identity"),
+        Index("uq_part_legacy", "assembly_id", "position", "part_number", unique=True,
+              sqlite_where=text("reference_page_id IS NULL"), postgresql_where=text("reference_page_id IS NULL")),
+        Index("uq_part_guided", "reference_page_id", "position", "part_number", unique=True,
+              sqlite_where=text("reference_page_id IS NOT NULL"), postgresql_where=text("reference_page_id IS NOT NULL")),
+        UniqueConstraint("reference_page_id", "extraction_key", name="uq_part_extraction_source"),
         CheckConstraint("quantity IS NULL OR quantity >= 0", name="ck_catalog_revision_part_quantity"),
     )
 
+    reference_page_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_reference_pages.id", name="fk_catalog_revision_parts_reference_page"), index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     assembly_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_assemblies.id"), nullable=False, index=True)
+    extraction_key: Mapped[str | None] = mapped_column(String(64))
+    extraction_evidence: Mapped[dict | None] = mapped_column(JSON)
     position: Mapped[str] = mapped_column(String(80), nullable=False)
     part_number: Mapped[str] = mapped_column(String(120), nullable=False)
     name_bg: Mapped[str | None] = mapped_column(String(255))
