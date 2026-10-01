@@ -6,7 +6,13 @@ import io
 import fitz
 from app.documents import part_request_documents
 from app.documents.part_request_grouped_visuals import prepare_appendix
-from app.models import CatalogRevisionPart, CatalogSourceBlob, GeneratedDocument, Machine, PartVisualSnapshot
+from app.models import (
+    CatalogRevisionPart,
+    CatalogSourceBlob,
+    GeneratedDocument,
+    Machine,
+    PartVisualSnapshot,
+)
 from app.part_requests.service import load_request
 from catalog_extraction_fixtures import contextual_table
 from docx import Document
