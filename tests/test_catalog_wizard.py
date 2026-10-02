@@ -63,8 +63,6 @@ def simple_workspace(client, headers, factory):
     }), 201)
     initial = checked(client.get(f"{BASE}/revisions/{revisions[0]['id']}/assemblies", headers=headers))[0]
     assert initial["code"] == "INITIAL_GROUP"
-    hint = checked(client.get(f"{BASE}/artifacts/{artifact['id']}/suggestions", headers=headers))
-    assert hint["requires_confirmation"] and hint["pages"]
     renamed = checked(client.patch(f"{BASE}/assemblies/{initial['id']}", headers=headers,
                                    json={key: "QA group A" for key in ("name_bg", "name_en", "name_ru")}))
     assert renamed["code"] == initial["code"]
@@ -244,10 +242,8 @@ def test_whole_import_errors_are_atomic(client, auth_headers, session_factory, r
         assert db.scalar(select(func.count(CatalogRevisionPart.id))) == 0
 
 
-def test_document_roles_suggestions_protection_and_import_stale(client, auth_headers, viewer_headers, session_factory):
+def test_manual_document_roles_protection_and_import_stale(client, auth_headers, viewer_headers, session_factory):
     catalog, revision, groups, artifact = simple_workspace(client, auth_headers, session_factory)
-    hint = checked(client.get(f"{BASE}/artifacts/{artifact['id']}/suggestions", headers=auth_headers))
-    assert hint["requires_confirmation"] and hint["pages"][0]["suggested_role"] == "SPARE_PARTS_LIST"
     assert checked(client.get(f"{BASE}/revisions/{revision['id']}/documents", headers=auth_headers))[0]["assignments"] == []
     checked(classify(client, auth_headers, artifact, groups[0], [1, 2], ["EXPLODED_SCHEME", "SPARE_PARTS_LIST"]))
     assert len(checked(client.get(f"{BASE}/revisions/{revision['id']}/documents", headers=auth_headers))[0]["assignments"]) == 4
@@ -274,7 +270,7 @@ def test_document_roles_suggestions_protection_and_import_stale(client, auth_hea
     other_group = checked(client.post(f"{BASE}/revisions/{other_revision['id']}/groups", headers=auth_headers, json={"name": "QA"}), 201)
     assert classify(client, auth_headers, artifact, other_group, [1], ["SPARE_PARTS_LIST"]).status_code == 422
     for path in [f"/revisions/{revision['id']}/workflow", f"/revisions/{revision['id']}/documents",
-                 f"/artifacts/{artifact['id']}/suggestions", f"/revisions/{revision['id']}/parts/template"]:
+                 f"/revisions/{revision['id']}/parts/template"]:
         assert client.get(BASE + path, headers=viewer_headers).status_code == 403
     assert client.post(f"{BASE}/catalogs/{catalog['id']}/edit", headers=viewer_headers).status_code == 403
     assert client.post(f"{BASE}/simple/catalogs", headers=auth_headers, json={

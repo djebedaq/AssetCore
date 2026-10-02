@@ -64,8 +64,9 @@ function PagePreview({ page }: { page: Page }) {
     <span>{t(url === 'error' ? 'builder.previewError' : 'builder.previewPending')}</span>}</div>
 }
 
-export default function RevisionParts({ assemblyId, editable, simple = false, incompleteOnly = false, onDirtyChange, onChanged }: { assemblyId: number; editable: boolean; simple?: boolean; incompleteOnly?: boolean; onDirtyChange?: (dirty: boolean) => void; onChanged?: () => Promise<void> }) {
+export default function RevisionParts({ assemblyId, editable, simple = false, incompleteOnly = false, onDirtyChange, onChanged, referencePageId }: { assemblyId: number; referencePageId?: number; editable: boolean; simple?: boolean; incompleteOnly?: boolean; onDirtyChange?: (dirty: boolean) => void; onChanged?: () => Promise<void> }) {
   const { locale, t } = useI18n()
+  const scope = referencePageId ? `/admin/catalog-builder/reference-pages/${referencePageId}` : `/admin/catalog-builder/assemblies/${assemblyId}`
   const [parts, setParts] = useState<Part[]>([])
   const [pages, setPages] = useState<Page[]>([])
   const [editing, setEditing] = useState<Part | 'new' | null>(null)
@@ -84,12 +85,12 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
   const message = (caught: unknown) => problem(caught instanceof ApiError ? caught.code || '' : '')
   async function load() {
     const [rows, options] = await Promise.all([
-      api<Part[]>(`/admin/catalog-builder/assemblies/${assemblyId}/parts`),
-      api<Page[]>(`/admin/catalog-builder/assemblies/${assemblyId}/spare-list-pages`),
+      api<Part[]>(`${scope}/parts`),
+      api<Page[]>(`${scope}/spare-list-pages`),
     ])
     setParts(rows); setPages(options)
   }
-  useEffect(() => { void load().catch(caught => setError(message(caught))) }, [assemblyId])
+  useEffect(() => { void load().catch(caught => setError(message(caught))) }, [assemblyId, referencePageId])
   function openForm(part: Part | 'new') {
     setEditing(part)
     setForm(part === 'new' ? blank : Object.fromEntries(fields.map(key => [key, String(part[key] ?? '')])) as PartForm)
@@ -101,8 +102,8 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
     try {
       const name = form[`name_${locale}`]
       const payload = { ...form, quantity: form.quantity.trim() ? Number(form.quantity) : null,
-        ...(simple ? { name_bg: form.name_bg || name, name_en: form.name_en || name, name_ru: form.name_ru || name } : {}) }
-      await api(editing === 'new' ? `/admin/catalog-builder/assemblies/${assemblyId}/parts` :
+        ...(simple && !referencePageId ? { name_bg: form.name_bg || name, name_en: form.name_en || name, name_ru: form.name_ru || name } : {}) }
+      await api(editing === 'new' ? `${scope}/parts` :
         `/admin/catalog-builder/parts/${editing.id}`, { method: editing === 'new' ? 'POST' : 'PATCH', body: JSON.stringify(payload) })
       setEditing(null); setError(''); await load(); await onChanged?.()
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
@@ -130,7 +131,7 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
     setBusy(true)
     try {
       const payload = await filePayload(file)
-      const result = await api<Preview>(`/admin/catalog-builder/assemblies/${assemblyId}/parts/import-preview`,
+      const result = await api<Preview>(`${scope}/parts/import-preview`,
         { method: 'POST', body: JSON.stringify({ filename: payload.filename, content_base64: payload.content_base64 }) })
       setPreview(result); setError('')
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
@@ -139,7 +140,7 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
     if (!preview || preview.summary.error_rows || busy) return
     setBusy(true)
     try {
-      await api(`/admin/catalog-builder/assemblies/${assemblyId}/parts/import-confirm`,
+      await api(`${scope}/parts/import-confirm`,
         { method: 'POST', body: JSON.stringify({ token: preview.token, confirm_warnings: true }) })
       setImportOpen(false); setFile(null); setPreview(null); setError(''); await load()
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }

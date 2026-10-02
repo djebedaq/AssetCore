@@ -35,6 +35,7 @@ RUN apt-get update \
        > /etc/apt/sources.list.d/pgdg.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends fonts-dejavu-core libreoffice-writer postgresql-client-16 \
+       tesseract-ocr tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-bul tesseract-ocr-rus \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir -r backend/requirements.txt \
     && groupadd --system --gid 10001 assetcore \

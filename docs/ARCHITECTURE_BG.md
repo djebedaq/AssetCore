@@ -120,3 +120,7 @@ Document слоят получава canonical SQLAlchemy snapshot и връща
 ## CATALOG-ADMIN-01D
 
 Черновите зони върху изрични разглобени схеми сочат точна позиция в Builder, която може да има няколко варианта на част. Черновите ремонтни комплекти сочат точни Builder части и по избор една изходна страница от списъка. Геометрията и проверката са защитени при конкурентни записи; live каталогът и PARTS-DOC не четат тези таблици. Подробности: [CATALOG_ADMIN_01D_HOTSPOTS_REPAIR_KITS_BG.md](CATALOG_ADMIN_01D_HOTSPOTS_REPAIR_KITS_BG.md).
+
+## CATALOG-GUIDED-BUILDER-01
+
+Потребителят задава референциите и логическите страници и избира физическите схеми/списъци. Native layout, таблици и селективен локален OCR извличат части само от избраните списъци. Подписан преглед и ръчно column mapping предхождат атомичното потвърждение и exact source mapping. Позициите се поставят и проверяват ръчно. Logical-page scope изолира повторените позиции в parts, hotspots, publication и runtime; shared original PDF blob не се дублира. Старите bytes и PARTS-DOC snapshots не се променят. Whole-document inference и candidate/job orchestration са премахнати. Подробности: [CATALOG_GUIDED_BUILDER_01_BG.md](CATALOG_GUIDED_BUILDER_01_BG.md).

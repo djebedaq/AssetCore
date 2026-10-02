@@ -153,13 +153,16 @@ def test_explicit_roles_preview_and_isolation(client, auth_headers, viewer_heade
         assert json.loads(deleted.details)["artifacts"][0]["artifact_id"] == second_id
 
 
-def test_pdf_validation_and_draft_guards(client, auth_headers, session_factory):
+def test_pdf_validation_and_draft_guards(client, auth_headers, session_factory, monkeypatch):
     catalog_id, revision_id = _workspace(client, auth_headers, session_factory)
     assembly_id = _assembly(client, auth_headers, revision_id).json()["id"]
     assert _upload(client, auth_headers, assembly_id, b"not a pdf").json()["detail"]["code"] == "catalog_source_invalid_pdf"
     assert _upload(client, auth_headers, assembly_id, b"%PDF-broken").status_code == 422
     assert _upload(client, auth_headers, assembly_id, _pdf(), media_type="image/png").status_code == 422
-    too_large = _upload(client, auth_headers, assembly_id, b"%PDF-" + b"x" * (12 * 1024 * 1024))
+    from app.settings import settings
+    with monkeypatch.context() as limits:
+        limits.setattr(settings, "catalog_pdf_max_bytes", 12 * 1024 * 1024)
+        too_large = _upload(client, auth_headers, assembly_id, b"%PDF-" + b"x" * (12 * 1024 * 1024))
     assert too_large.json()["detail"]["code"] == "catalog_source_too_large"
     artifact_id = _upload(client, auth_headers, assembly_id, _pdf(1)).json()["id"]
     assignment_id = client.post(f"{BASE}/artifacts/{artifact_id}/visual-pages", headers=auth_headers,

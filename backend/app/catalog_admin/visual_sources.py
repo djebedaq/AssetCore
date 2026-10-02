@@ -5,9 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
-import math
 
-import fitz
 from fastapi import HTTPException
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -22,17 +20,20 @@ from ..models import (
     CatalogRevisionPart,
     CatalogRevisionPartPageMap,
     CatalogRevisionPositionHotspot,
+    CatalogRevisionReferencePage,
     CatalogRevisionRepairKit,
     CatalogRevisionRepairKitComponent,
     CatalogRevisionVisualPage,
     User,
     utcnow,
 )
+from ..settings import settings
+from . import source_storage
 from .schemas import ArtifactUpload, AssemblyCreate, AssemblyUpdate, VisualPageCreate
 from .service import fail
 
-MAX_PDF_BYTES = 12 * 1024 * 1024
-MAX_PDF_PAGES = 1000
+MAX_PDF_BYTES = settings.catalog_pdf_max_bytes
+MAX_PDF_PAGES = settings.catalog_pdf_max_pages
 ROLES = {"EXPLODED_SCHEME", "SPARE_PARTS_LIST"}
 
 
@@ -177,6 +178,9 @@ def delete_assembly(db: Session, actor: User, assembly_id: int) -> None:
     from .repair_kits import remove_assembly_kits
 
     item, revision, catalog = _assembly(db, assembly_id, mutate=True)
+    if db.scalar(select(CatalogRevisionReferencePage.id).where(
+            CatalogRevisionReferencePage.assembly_id == item.id).limit(1)):
+        raise fail("catalog_reference_page_in_use")
     artifacts = db.scalars(select(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == item.id)).all()
     artifact_audit = [{"artifact_id": artifact.id, "filename": artifact.filename,
                        "sha256": artifact.sha256, "visual_pages": _role_pages(db, artifact.id)}
@@ -221,45 +225,39 @@ def get_artifact(db: Session, artifact_id: int) -> dict:
 
 
 def upload_artifact(db: Session, actor: User, assembly_id: int, data: ArtifactUpload) -> dict:
-    assembly, revision, catalog = _assembly(db, assembly_id, mutate=True)
+    # Legacy compatibility endpoint. The primary UI uses binary UploadFile.
     if data.media_type != "application/pdf" or not data.filename.lower().endswith(".pdf"):
         raise fail("catalog_source_invalid_pdf", 422)
-    if (any(ch in data.filename for ch in ("/", "\\", '"'))
-            or any(ord(ch) < 32 or ord(ch) == 127 for ch in data.filename)
-            or data.filename in {".", ".."} or not data.title.strip()):
-        raise fail("catalog_source_invalid_pdf", 422)
-    if len(data.content_base64) > ((MAX_PDF_BYTES + 2) // 3) * 4:
+    if len(data.content_base64) > ((settings.catalog_pdf_max_bytes + 2) // 3) * 4:
         raise fail("catalog_source_too_large", 413)
     try:
         content = base64.b64decode(data.content_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
         raise fail("catalog_source_invalid_pdf", 422) from exc
-    if len(content) > MAX_PDF_BYTES:
-        raise fail("catalog_source_too_large", 413)
-    if not content.startswith(b"%PDF-"):
+    return store_artifact(db, actor, assembly_id, content, data.filename, data.title,
+                          document_reference=data.document_reference, document_date=data.document_date,
+                          language=data.language)
+
+
+def store_artifact(db: Session, actor: User, assembly_id: int, content: bytes,
+                   filename: str, title: str, **metadata) -> dict:
+    assembly, revision, catalog = _assembly(db, assembly_id, mutate=True)
+    if (not 1 <= len(filename) <= 255 or not 1 <= len(title.strip()) <= 255
+            or any(ch in filename for ch in ("/", "\\", '"'))
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in filename)
+            or filename in {".", ".."}):
         raise fail("catalog_source_invalid_pdf", 422)
-    try:
-        with fitz.open(stream=content, filetype="pdf") as document:
-            if document.needs_pass or document.is_repaired or not 1 <= document.page_count <= MAX_PDF_PAGES:
-                raise ValueError("unsupported PDF")
-            page_count = document.page_count
-            for page in document:
-                if (not all(math.isfinite(value) for value in (page.rect.x0, page.rect.y0,
-                                                               page.rect.x1, page.rect.y1))
-                        or page.rect.width <= 0 or page.rect.height <= 0):
-                    raise ValueError("invalid page")
-    except Exception as exc:
-        raise fail("catalog_source_invalid_pdf", 422) from exc
+    page_count = source_storage.validate_pdf(content)
     digest = hashlib.sha256(content).hexdigest()
     existing = db.scalar(select(CatalogRevisionArtifact).where(
         CatalogRevisionArtifact.assembly_id == assembly.id, CatalogRevisionArtifact.sha256 == digest))
     if existing:
         raise HTTPException(409, detail={"code": "catalog_source_duplicate", "artifact_id": existing.id})
-    item = CatalogRevisionArtifact(assembly_id=assembly.id, title=data.title.strip(),
-                                   filename=data.filename, media_type="application/pdf", content=content,
+    item = CatalogRevisionArtifact(assembly_id=assembly.id, title=title.strip(),
+                                   filename=filename, media_type="application/pdf",
+                                   source_blob=source_storage.shared_blob(db, content, digest), stored_content=b"",
                                    sha256=digest, page_count=page_count,
-                                   document_reference=data.document_reference, document_date=data.document_date,
-                                   language=data.language, created_by_id=actor.id)
+                                   created_by_id=actor.id, **metadata)
     db.add(item)
     try:
         db.flush()
@@ -282,6 +280,12 @@ def delete_artifact(db: Session, actor: User, artifact_id: int) -> None:
 
     item, assembly, revision, catalog = _artifact(db, artifact_id, mutate=True)
     page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id == item.id)
+    # Explicit logical-page assignments cannot be silently erased via the legacy
+    # artifact endpoint. Remove them through their versioned page workflow first.
+    if db.scalar(select(CatalogRevisionVisualPage.id).where(
+            CatalogRevisionVisualPage.artifact_id == item.id,
+            CatalogRevisionVisualPage.reference_page_id.is_not(None)).limit(1)):
+        raise fail("catalog_reference_page_in_use")
     if source_page_reference_count(db, page_ids):
         raise fail("catalog_repair_kit_source_page_in_use")
     mapped = db.execute(select(CatalogRevisionPartPageMap.part_id, CatalogRevisionPartPageMap.visual_page_id)
@@ -299,7 +303,7 @@ def delete_artifact(db: Session, actor: User, artifact_id: int) -> None:
 
 def _page_dict(item: CatalogRevisionVisualPage) -> dict:
     return {"id": item.id, "artifact_id": item.artifact_id, "page_number": item.page_number,
-            "role": item.role, "created_at": item.created_at}
+            "role": item.role, "reference_page_id": item.reference_page_id, "sort_order": item.sort_order, "created_at": item.created_at}
 
 
 def list_visual_pages(db: Session, artifact_id: int) -> list[dict]:
@@ -344,6 +348,12 @@ def remove_visual_page(db: Session, actor: User, assignment_id: int) -> None:
     if page is None:
         raise fail("catalog_visual_page_invalid", 404)
     item, assembly, revision, catalog = _artifact(db, page.artifact_id, mutate=True)
+    if page.reference_page_id is not None:
+        from .reference_pages import load, sources_in_use, touch
+        reference, _, _, _ = load(db, page.reference_page_id, mutate=True)
+        if sources_in_use(db, [page.id]):
+            raise fail("catalog_reference_source_in_use")
+        touch(reference)
     if source_page_reference_count(db, [page.id]):
         raise fail("catalog_repair_kit_source_page_in_use")
     mapped_parts = db.scalars(select(CatalogRevisionPartPageMap.part_id).where(
@@ -361,15 +371,11 @@ def preview_page(db: Session, artifact_id: int, page_number: int, *, thumbnail: 
     item, _, _, _ = _artifact(db, artifact_id)
     if page_number < 1 or page_number > item.page_count:
         raise fail("catalog_visual_page_invalid", 404)
-    try:
-        with fitz.open(stream=item.content, filetype="pdf") as document:
-            page = document.load_page(page_number - 1)
-            pixels = 160_000 if thumbnail else 4_000_000
-            scale = min(1.0, (pixels / max(1, page.rect.width * page.rect.height)) ** 0.5)
-            return page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False,
-                                   colorspace=fitz.csRGB).tobytes("png")
-    except Exception as exc:
-        raise fail("catalog_source_invalid_pdf", 422) from exc
+    from .parts_extraction.process import configuration, extract
+    result = extract(item.content, "thumbnail" if thumbnail else "preview", page_number, configuration(settings))
+    if result.get("error"):
+        raise fail("catalog_source_invalid_pdf", 422)
+    return base64.b64decode(result["image"])
 
 
 def download_artifact(db: Session, artifact_id: int) -> tuple[bytes, str]:

@@ -49,6 +49,9 @@ export type CatalogDiagram = {
   download_endpoint: string
 }
 
+export type CatalogReferencePage = { id: number; stable_key: string; number: number; title: string | null;
+  source_id: string; diagrams: CatalogDiagram[]; part_count: number; verified_hotspot_count: number }
+
 export type CatalogAssembly = {
   source_id: string
   family: string
@@ -59,6 +62,7 @@ export type CatalogAssembly = {
   name_ru?: string | null
   document_reference?: string | null
   part_count: number
+  pages?: CatalogReferencePage[]
   diagram_count: number
   verified_hotspot_count: number
   diagrams: CatalogDiagram[]
@@ -128,6 +132,7 @@ export type PositionMappingCoverage = {
 }
 
 export type RepairKitComponent = {
+  source_id?: string | null
   id: number
   part_id: number
   source_record_key: string

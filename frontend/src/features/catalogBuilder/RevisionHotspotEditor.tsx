@@ -6,7 +6,7 @@ import useDraftGuard from './useDraftGuard'
 type Page = { visual_page_id: number; artifact_id: number; artifact_title: string; filename: string;
   sha256: string; page_number: number; hotspot_count: number; verified_hotspot_count: number }
 type Coverage = { position: string; part_count: number; part_numbers: string[];
-  names?: Array<{ name_bg: string | null; name_en: string | null; name_ru: string | null }>;
+  names?: Array<{ name_bg: string | null; name_en: string | null; name_ru: string | null; description?: string | null }>;
   hotspot_count: number; verified_hotspot_count: number; state: 'NO_HOTSPOT' | 'UNVERIFIED' | 'VERIFIED' }
 type Geometry = { x: number; y: number; width: number; height: number }
 type Hotspot = Geometry & { id: number; visual_page_id: number; position: string; version: number;
@@ -29,8 +29,8 @@ const errorKeys: Record<string, TranslationKey> = {
 type PositionFilter = 'all' | 'unmarked' | 'unverified' | 'completed'
 
 export default function RevisionHotspotEditor({ assemblyId, editable, highlightPositions = [], simple = false,
-  initialFilter = 'all', initialPageId, initialPosition, onDirtyChange }: {
-  assemblyId: number; editable: boolean; highlightPositions?: string[]; simple?: boolean;
+  initialFilter = 'all', initialPageId, initialPosition, referencePageId, onChanged, onDirtyChange }: {
+  assemblyId: number; referencePageId?: number; onChanged?: () => Promise<void>; editable: boolean; highlightPositions?: string[]; simple?: boolean;
   initialFilter?: PositionFilter; initialPageId?: number; initialPosition?: string; onDirtyChange?: (dirty: boolean) => void
 }) {
   const { locale, t } = useI18n()
@@ -45,11 +45,12 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   const [pointSize, setPointSize] = useState(3)
   const [filter, setFilter] = useState<PositionFilter>(initialFilter)
   const [search, setSearch] = useState('')
+  const [lastPlaced, setLastPlaced] = useState<Hotspot | null>(null)
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'retry' | null>(null)
   const saving = useRef(false)
   const pageRequest = useRef(0)
-  const currentAssembly = useRef(assemblyId)
-  currentAssembly.current = assemblyId
+  const currentAssembly = useRef(`${assemblyId}/${referencePageId ?? "legacy"}`)
+  currentAssembly.current = `${assemblyId}/${referencePageId ?? "legacy"}`
   const [zoom, setZoom] = useState(100)
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
@@ -77,10 +78,10 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   }
   async function loadPages() {
     const [pageRows, positionRows] = await Promise.all([
-      api<Page[]>(`/admin/catalog-builder/assemblies/${assemblyId}/exploded-pages`),
-      api<Coverage[]>(`/admin/catalog-builder/assemblies/${assemblyId}/hotspot-coverage`),
+      api<Page[]>(referencePageId ? `/admin/catalog-builder/reference-pages/${referencePageId}/exploded-pages` : `/admin/catalog-builder/assemblies/${assemblyId}/exploded-pages`),
+      api<Coverage[]>(referencePageId ? `/admin/catalog-builder/reference-pages/${referencePageId}/coverage` : `/admin/catalog-builder/assemblies/${assemblyId}/hotspot-coverage`),
     ])
-    if (currentAssembly.current !== assemblyId) return positionRows
+    if (currentAssembly.current !== `${assemblyId}/${referencePageId ?? "legacy"}`) return positionRows
     setPages(pageRows); setCoverage(positionRows)
     setPageId(current => pageRows.some(item => item.visual_page_id === current) ? current : pageRows.find(item => item.visual_page_id === initialPageId)?.visual_page_id ?? pageRows[0]?.visual_page_id ?? null)
     setPosition(current => positionRows.some(item => item.position === current) ? current : initialPosition && positionRows.some(item => item.position === initialPosition) ? initialPosition : positionRows.find(item => item.hotspot_count === 0)?.position ?? positionRows[0]?.position ?? '')
@@ -91,9 +92,9 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     const rows = await api<Hotspot[]>(`/admin/catalog-builder/visual-pages/${id}/hotspots`)
     if (request === pageRequest.current) setHotspots(rows)
   }
-  useEffect(() => { setPageId(null); setDraft(null); void loadPages().catch(caught => setError(message(caught))) }, [assemblyId])
+  useEffect(() => { setPageId(null); setDraft(null); void loadPages().catch(caught => setError(message(caught))) }, [assemblyId, referencePageId])
   useEffect(() => {
-    setDraft(null); setHotspots([])
+    setDraft(null); setHotspots([]); setLastPlaced(null)
     if (pageId) void loadHotspots(pageId).catch(caught => setError(message(caught)))
     return () => {
       pageRequest.current += 1; cancelGesture(); touchPointers.current.clear()
@@ -117,7 +118,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       y: clamp((event.clientY - rect.top) / rect.height, 0, 1) }
   }
   function begin(event: PointerEvent, kind: Gesture['kind'], base: Draft) {
-    if (!editable || saving.current || busy || !url || mode === 'pan' || navigationGesture.current || event.button !== 0) return
+    if (!editable || saving.current || busy || !url || mode === 'pan' || navigationGesture.current || event.pointerType !== 'touch' && event.button !== 0) return
     event.preventDefault(); event.stopPropagation()
     const start = point(event)
     gesture.current = { kind, pointerId: event.pointerId, startX: start.x, startY: start.y, base, latest: base, clientX: event.clientX, clientY: event.clientY, previousDraft: draft }
@@ -147,7 +148,11 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       event.preventDefault()
       return
     }
-    if (!editable || (mode !== 'draw' && mode !== 'point') || !position || event.target !== event.currentTarget && event.target !== canvas.current?.querySelector('img')) return
+    if (!editable || (mode !== 'draw' && mode !== 'point')) return
+    if (!position) { setError(t('guided.noPositions')); return }
+    // Overlays own selection gestures; image/background descendants are valid
+    // placement targets, including pointer events delivered through wrappers.
+    if ((event.target as Element).closest('[data-hotspot-overlay]')) return
     const start = point(event)
     const size = clamp(pointSize / 100, .004, .12)
     begin(event, mode === 'point' ? 'point' : 'draw', { id: null, position, version: 0,
@@ -210,7 +215,9 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   }
   async function refresh() {
     if (pageId) await loadHotspots(pageId)
-    return loadPages()
+    const rows = await loadPages()
+    await onChanged?.()
+    return rows
   }
   async function save(candidate = draft) {
     if (!candidate || !pageId || saving.current || busy || !editable) return
@@ -226,6 +233,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       if (simple && autoVerify) saved = await api<Hotspot>(`/admin/catalog-builder/hotspots/${saved.id}/verify`, {
         method: 'POST', body: JSON.stringify({ expected_version: saved.version }),
       })
+      if (candidate.id === null) setLastPlaced(saved)
       const rows = await refresh()
       setDraft({ ...saved, id: saved.id }); setSaveState('saved')
       if (simple) {
@@ -265,7 +273,20 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       setDraft(null); await refresh(); setError('')
     } catch (caught) { setError(message(caught)); setDraft(null); await refresh() } finally { setBusy(false) }
   }
-  const filtered = coverage.filter(row => (filter === 'all' || filter === 'unmarked' && row.hotspot_count === 0 || filter === 'unverified' && row.state === 'UNVERIFIED' || filter === 'completed' && row.state === 'VERIFIED') && [row.position, ...row.part_numbers, ...(row.names || []).flatMap(name => [name.name_bg, name.name_en, name.name_ru])].some(value => (value || '').toLocaleLowerCase().includes(search.toLocaleLowerCase())))
+  function nextPosition(direction: number) {
+    if (busy || dirty || !coverage.length) return
+    const index = coverage.findIndex(row => row.position === position)
+    setPosition(coverage[(index + direction + coverage.length) % coverage.length].position); setDraft(null)
+  }
+  async function undoPlacement() {
+    if (!lastPlaced || busy || dirty) return
+    setBusy(true)
+    try {
+      await api(`/admin/catalog-builder/hotspots/${lastPlaced.id}?expected_version=${lastPlaced.version}`, { method: 'DELETE' })
+      setPosition(lastPlaced.position); setDraft(null); setLastPlaced(null); await refresh()
+    } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
+  }
+  const filtered = coverage.filter(row => (filter === 'all' || filter === 'unmarked' && row.hotspot_count === 0 || filter === 'unverified' && row.state === 'UNVERIFIED' || filter === 'completed' && row.state === 'VERIFIED') && [row.position, ...row.part_numbers, ...(row.names || []).flatMap(name => [name.name_bg, name.name_en, name.name_ru, name.description])].some(value => (value || '').toLocaleLowerCase().includes(search.toLocaleLowerCase())))
   const changePage = (id: number) => { if (!dirty || simple || window.confirm(t('wizard.unsaved'))) setPageId(id) }
   const shown = draft ? hotspots.filter(item => item.id !== draft.id) : hotspots
   return <div className="builder-workspace">
@@ -273,6 +294,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     {saveState && <p role="status">{t(`wizard.${saveState}`)}</p>}
     {error && <p className="error" role="alert">{error}</p>}
     {!pages.length && <p>{t('builder.mapping.noPages')}</p>}
+    {editable && !coverage.length && <p role="status">{t('guided.noPositions')}</p>}
     {!!pages.length && <>
       <label>{t('builder.mapping.page')}<select disabled={busy || simple && dirty} value={pageId ?? ''} onChange={event => changePage(Number(event.target.value))}>
         {pages.map(item => <option key={item.visual_page_id} value={item.visual_page_id}>{item.artifact_title} · {t('builder.pageNumber', { count: item.page_number })}</option>)}
@@ -287,6 +309,13 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
         <span>{zoom}%</span>
         <button className="secondary compact" onClick={() => setZoom(value => Math.min(300, value + 25))}>{t('builder.mapping.zoomIn')}</button>
       </div>
+      {simple && editable && position && <p role="status">{t('guided.clickPosition', { position })}</p>}
+      {simple && editable && <div className="actions">
+        <button className="secondary" disabled={busy || dirty || !coverage.length} onClick={() => nextPosition(-1)}>{t('wizard.back')}</button>
+        <button className="secondary" disabled={busy || dirty || !coverage.length} onClick={() => nextPosition(1)}>{t('guided.skip')}</button>
+        <button className="secondary" disabled={busy || dirty || !position} onClick={() => { setMode('point'); setDraft(null) }}>{t('guided.another')}</button>
+        <button className="secondary" disabled={busy || dirty || !lastPlaced} onClick={() => void undoPlacement()}>{t('guided.undo')}</button>
+      </div>}
       {simple && editable && <div className="actions"><label>{t('wizard.pointSize')}<input type="number" min="0.4" max="12" step="0.5" value={pointSize} disabled={busy} onChange={event => setPointSize(Number(event.target.value))} /></label>
         <label><input type="checkbox" checked={autoVerify} disabled={busy} onChange={event => setAutoVerify(event.target.checked)} />{t('wizard.autoVerify')}</label></div>}
       <div className="builder-scheme-layout">
@@ -295,6 +324,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
             onPointerDownCapture={trackPointer} onPointerDown={beginDraw} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
             {url ? <img src={url} draggable={false} alt={t('builder.mapping.page')} /> : <div className="builder-scheme-loading">{t('builder.previewPending')}</div>}
             {shown.map(item => <button key={item.id} type="button"
+              data-hotspot-overlay
               className={`builder-hotspot ${item.is_verified ? 'verified' : 'unverified'} ${highlightPositions.includes(item.position) ? 'highlight' : ''}`}
               style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%` }}
               aria-label={t('builder.mapping.hotspotLabel', { position: item.position })}
@@ -303,6 +333,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
                 <span className="builder-hotspot-handle" onPointerDown={event => select(item, event, 'resize')} />}
             </button>)}
             {draft && <button type="button" className="builder-hotspot draft"
+              data-hotspot-overlay
               aria-label={t('builder.mapping.hotspotLabel', { position: draft.position })}
               style={{ left: `${draft.x * 100}%`, top: `${draft.y * 100}%`,
                 width: `${draft.width * 100}%`, height: `${draft.height * 100}%` }}
@@ -317,7 +348,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
             {!filtered.length && <p>{t('wizard.noPositions')}</p>}
             <div className="wizard-position-list">{filtered.map(row => <button type="button" key={row.position} disabled={busy || dirty} aria-pressed={position === row.position} className={position === row.position ? 'primary' : 'secondary'} onClick={() => { setPosition(row.position); setDraft(null) }}>
               <b>{t('builder.mapping.hotspotLabel', { position: row.position })}</b><span>{row.part_numbers.join(', ')}</span>
-              <span>{(row.names || []).map(name => name[`name_${locale}`] || name.name_bg || name.name_en || name.name_ru).filter(Boolean).join(', ')}</span>
+              <span>{(row.names || []).map(name => name[`name_${locale}`] || name.name_bg || name.name_en || name.name_ru || name.description).filter(Boolean).join(', ')}</span>
               <small>{t(`builder.mapping.state.${row.state}`)}</small></button>)}</div></>}
           <label>{t('builder.mapping.position')}<select value={position} onChange={event => {
             setPosition(event.target.value); if (simple) setDraft(null); else if (draft) setDraft({ ...draft, position: event.target.value })

@@ -43,7 +43,9 @@ from .auth_throttle import (
 )
 from .catalog import router as catalog_router
 from .catalog.runtime_context import published_binding
+from .catalog_admin.guided_routes import router as catalog_guided_router
 from .catalog_admin.routes import router as catalog_builder_router
+from .catalog_admin.upload_guard import CatalogUploadGuard
 from .database import SessionLocal, engine, get_db
 from .document_generation import (
     build_daily_report_pdf,
@@ -181,11 +183,13 @@ app.add_middleware(
     allow_headers=list(ALLOWED_CORS_HEADERS),
     expose_headers=list(EXPOSED_CORS_HEADERS),
 )
+app.add_middleware(CatalogUploadGuard)
 app.include_router(industrial_router)
 app.include_router(user_router)
 app.include_router(hardening_router)
 app.include_router(catalog_router)
 app.include_router(catalog_builder_router)
+app.include_router(catalog_guided_router)
 
 
 @app.middleware("http")

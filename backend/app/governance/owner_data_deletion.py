@@ -31,6 +31,7 @@ from ..models import (
     CatalogRevisionPart,
     CatalogRevisionPartPageMap,
     CatalogRevisionPositionHotspot,
+    CatalogRevisionReferencePage,
     CatalogRevisionRepairKit,
     CatalogRevisionRepairKitComponent,
     CatalogRevisionVisualPage,
@@ -122,6 +123,7 @@ REFERENCE_LABELS = {
     "catalog_definitions": "builderCatalogs",
     "catalog_revisions": "builderRevisions",
     "catalog_asset_bindings": "builderBindings",
+    "catalog_revision_reference_pages": "builderPages",
     "catalog_revision_assemblies": "builderAssemblies",
     "catalog_revision_artifacts": "builderArtifacts",
     "catalog_revision_visual_pages": "builderVisualPages",
@@ -334,6 +336,7 @@ def _analyze(db, actor, kind, target) -> dict:
             blockers.append(_dependency("official_documents", count))
     elif kind == ResourceType.CATALOG_DEFINITION:
         owned = {CatalogRevision.__tablename__, CatalogAssetBinding.__tablename__,
+                 CatalogRevisionReferencePage.__tablename__,
                  CatalogRevisionAssembly.__tablename__, CatalogRevisionArtifact.__tablename__,
                  CatalogRevisionVisualPage.__tablename__, CatalogRevisionPart.__tablename__,
                  CatalogRevisionPartPageMap.__tablename__, CatalogRevisionPositionHotspot.__tablename__,
@@ -351,6 +354,7 @@ def _analyze(db, actor, kind, target) -> dict:
         kit_ids = select(CatalogRevisionRepairKit.id).where(CatalogRevisionRepairKit.assembly_id.in_(assembly_ids))
         for model, condition in (
             (CatalogRevisionAssembly, CatalogRevisionAssembly.revision_id.in_(revision_ids)),
+            (CatalogRevisionReferencePage, CatalogRevisionReferencePage.assembly_id.in_(assembly_ids)),
             (CatalogRevisionArtifact, CatalogRevisionArtifact.assembly_id.in_(assembly_ids)),
             (CatalogRevisionVisualPage, CatalogRevisionVisualPage.artifact_id.in_(artifact_ids)),
             (CatalogRevisionPart, CatalogRevisionPart.assembly_id.in_(assembly_ids)),
@@ -413,6 +417,7 @@ def _lock_dependencies(db: Session, kind: ResourceType) -> None:
         tables.update({"document_participants", "official_documents", "official_document_versions"})
     if kind == ResourceType.CATALOG_DEFINITION:
         tables.update({"catalog_revisions", "catalog_asset_bindings", "catalog_revision_assemblies",
+                       "catalog_revision_reference_pages",
                        "catalog_revision_artifacts", "catalog_revision_visual_pages",
                        "catalog_revision_parts", "catalog_revision_part_page_maps",
                        "catalog_revision_position_hotspots", "catalog_revision_repair_kits",
@@ -524,6 +529,7 @@ def execute(
             db.execute(delete(CatalogRevisionPart).where(CatalogRevisionPart.assembly_id.in_(assembly_ids)))
             db.execute(delete(CatalogRevisionVisualPage).where(CatalogRevisionVisualPage.artifact_id.in_(artifact_ids)))
             db.execute(delete(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id.in_(assembly_ids)))
+            db.execute(delete(CatalogRevisionReferencePage).where(CatalogRevisionReferencePage.assembly_id.in_(assembly_ids)))
             db.execute(delete(CatalogRevisionAssembly).where(CatalogRevisionAssembly.revision_id.in_(revision_ids)))
             db.execute(delete(CatalogAssetBinding).where(CatalogAssetBinding.catalog_id == identifier))
             db.execute(delete(CatalogRevision).where(CatalogRevision.catalog_id == identifier))

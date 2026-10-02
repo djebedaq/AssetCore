@@ -134,3 +134,67 @@ it('draws normalized draft geometry, verifies explicitly, invalidates on edit an
   await actor.click(screen.getByRole('button', { name: 'Премахни' }))
   await waitFor(() => expect(rows).toHaveLength(0))
 })
+
+
+it('places a scoped point by clicking the rendered image, verifies, advances and undoes it', async () => {
+  const user = userEvent.setup()
+  const NativeURL = URL
+  vi.stubGlobal('URL', class extends NativeURL { static createObjectURL = vi.fn(() => 'blob:guided-scheme'); static revokeObjectURL = vi.fn() })
+  vi.stubGlobal('PointerEvent', class extends MouseEvent {
+    pointerId: number; pointerType: string
+    constructor(type: string, init: PointerEventInit = {}) { super(type, init); this.pointerId = init.pointerId || 0; this.pointerType = init.pointerType || 'mouse' }
+  })
+  let rows: Array<Record<string, unknown>> = []
+  const writes: Array<{ path: string; body: Record<string, unknown> }> = []
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input); const method = init?.method || 'GET'
+    const body = init?.body ? JSON.parse(String(init.body)) : {}
+    if (method !== 'GET') writes.push({ path, body })
+    if (path.endsWith('/reference-pages/9/exploded-pages')) return json([{ visual_page_id: 5, artifact_id: 8, artifact_title: 'QA', filename: 'qa.pdf', page_number: 1 }])
+    if (path.endsWith('/reference-pages/9/coverage')) return json(['1', '2'].map(position => ({ position, part_count: 1, part_numbers: [`QA-PAGE9-${position}`], hotspot_count: rows.filter(row => row.position === position).length,
+      state: rows.some(row => row.position === position && row.is_verified) ? 'VERIFIED' : 'NO_HOTSPOT' })))
+    if (path.endsWith('/preview')) return new Response(new Blob(['qa']), { headers: { 'Content-Type': 'image/png' } })
+    if (path.endsWith('/visual-pages/5/hotspots')) {
+      if (method === 'POST') { const row = { ...body, id: 1, version: 1, is_verified: false }; rows.push(row); return json(row, 201) }
+      return json(rows)
+    }
+    if (path.endsWith('/hotspots/1/verify')) { rows[0] = { ...rows[0], is_verified: true, version: 2 }; return json(rows[0]) }
+    if (path.endsWith('/hotspots/1?expected_version=2') && method === 'DELETE') { rows = []; return new Response(null, { status: 204 }) }
+    return json({}, 404)
+  }))
+  render(<I18nProvider><RevisionHotspotEditor assemblyId={7} referencePageId={9} editable simple /></I18nProvider>)
+  const image = await screen.findByRole('img')
+  const canvas = document.querySelector('.builder-scheme-canvas') as HTMLElement
+  vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 100, height: 100 } as DOMRect)
+  await user.click(screen.getByRole('button', { name: 'Точка' }))
+  fireEvent.pointerDown(image, { pointerId: 1, clientX: 40, clientY: 30 })
+  fireEvent.pointerUp(image, { pointerId: 1, clientX: 40, clientY: 30 })
+  expect(canvas.querySelector('.builder-hotspot.draft')).toBeVisible()
+  await waitFor(() => expect(rows[0]?.is_verified).toBe(true))
+  expect(writes[0].body.position).toBe('1')
+  expect(canvas.querySelector('.builder-hotspot.verified')).toBeVisible()
+  await waitFor(() => expect(screen.getByLabelText('Позиция')).toHaveValue('2'))
+  expect(screen.queryByText('QA-PAGE8-1')).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Отмени последното поставяне' }))
+  await waitFor(() => expect(rows).toHaveLength(0))
+  expect(screen.getByLabelText('Позиция')).toHaveValue('1')
+})
+
+it('explains why point placement is unavailable when this logical page has no positions', async () => {
+  const NativeURL = URL
+  vi.stubGlobal('URL', class extends NativeURL { static createObjectURL = vi.fn(() => 'blob:empty-scheme'); static revokeObjectURL = vi.fn() })
+  const writes = vi.fn()
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (init?.method) writes(path)
+    if (path.endsWith('/exploded-pages')) return json([{ visual_page_id: 5, artifact_id: 8, artifact_title: 'QA', page_number: 1 }])
+    if (path.endsWith('/preview')) return new Response(new Blob(['qa']), { headers: { 'Content-Type': 'image/png' } })
+    return json([])
+  }))
+  render(<I18nProvider><RevisionHotspotEditor assemblyId={7} referencePageId={9} editable simple /></I18nProvider>)
+  const image = await screen.findByRole('img')
+  expect(screen.getByText('Все още няма части/позиции за тази страница. Прегледайте или добавете части първо.')).toBeVisible()
+  fireEvent.pointerDown(image, { pointerId: 1, clientX: 40, clientY: 30 }); fireEvent.pointerUp(image, { pointerId: 1, clientX: 40, clientY: 30 })
+  expect(document.querySelector('.builder-hotspot')).toBeNull()
+  expect(writes).not.toHaveBeenCalled()
+})

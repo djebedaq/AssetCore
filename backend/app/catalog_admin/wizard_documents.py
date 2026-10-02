@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import re
-
-import fitz
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,6 +17,7 @@ from ..models import (
 )
 from . import service, visual_sources
 from .schemas import ArtifactUpload, AssemblyCreate, ClassifyDocumentPages
+from .source_storage import shared_blob
 
 
 def upload(db: Session, actor: User, revision_id: int, data: ArtifactUpload) -> dict:
@@ -62,31 +60,7 @@ def documents(db: Session, revision_id: int) -> list[dict]:
     return list(grouped.values())
 
 
-def suggestions(db: Session, artifact_id: int) -> dict:
-    artifact, _, _, _ = visual_sources._artifact(db, artifact_id)
-    output, headings = [], []
-    with fitz.open(stream=artifact.content, filetype="pdf") as pdf:
-        for number, page in enumerate(pdf, 1):
-            text = page.get_text()[:16000]
-            normalized = text.casefold()
-            role = None
-            # Conservative text-only hints; never create pages, groups or parts.
-            if (re.search(r"part\s*(no|number|№)|номер.*част|номер.*детал", normalized)
-                    and re.search(r"\bqty\b|quantity|количество|количество", normalized)):
-                role = "SPARE_PARTS_LIST"
-            elif re.search(r"exploded\s+(view|scheme)|разглобена\s+схема|взрыв.?схема", normalized):
-                role = "EXPLODED_SCHEME"
-            candidates = [line.strip() for line in text.splitlines() if 3 <= len(line.strip()) <= 100
-                          and re.search(r"\b(assembly|system)\b|възел|система|узел", line, re.I)]
-            heading = candidates[0] if candidates else None
-            if heading and heading not in headings and len(headings) < 50:
-                headings.append(heading)
-            if role or heading:
-                output.append({"page_number": number, "suggested_role": role, "suggested_group_name": heading})
-    return {"pages": output, "group_names": headings, "requires_confirmation": True}
-
-
-def classify(db: Session, actor: User, artifact_id: int, data: ClassifyDocumentPages) -> list[dict]:
+def classify(db: Session, actor: User, artifact_id: int, data: ClassifyDocumentPages, *, commit: bool = True) -> list[dict]:
     source, _, revision, catalog = visual_sources._artifact(db, artifact_id, mutate=True)
     owned_group = db.scalar(select(CatalogRevisionAssembly.id).where(
         CatalogRevisionAssembly.id == data.assembly_id, CatalogRevisionAssembly.revision_id == revision.id))
@@ -121,9 +95,11 @@ def classify(db: Session, actor: User, artifact_id: int, data: ClassifyDocumentP
         if data.roles and target_artifact is None:
             # Keep the established assembly ownership contract and original byte/hash provenance.
             values = {key: getattr(source, key) for key in (
-                "title", "filename", "media_type", "content", "sha256", "page_count",
+                "title", "filename", "media_type", "sha256", "page_count",
                 "document_reference", "document_date", "language")}
-            target_artifact = CatalogRevisionArtifact(assembly_id=target.id, created_by_id=actor.id, **values)
+            blob = source.source_blob or shared_blob(db, source.content, source.sha256)
+            target_artifact = CatalogRevisionArtifact(assembly_id=target.id, created_by_id=actor.id,
+                                                      source_blob=blob, stored_content=b"", **values)
             db.add(target_artifact)
             db.flush()
             add_audit_log(db, actor, "catalog_revision_artifact", target_artifact.id, "CATALOG_SOURCE_LINKED",
@@ -142,7 +118,8 @@ def classify(db: Session, actor: User, artifact_id: int, data: ClassifyDocumentP
                       visual_sources._meta(catalog, revision, target, source,
                           page_numbers=numbers, roles=data.roles, removed_visual_page_ids=removed_ids))
         db.flush()
-        db.commit()
+        if commit:
+            db.commit()
     except IntegrityError as exc:
         db.rollback()
         raise service.fail("catalog_visual_page_duplicate") from exc

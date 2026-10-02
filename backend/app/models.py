@@ -22,6 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -853,7 +854,19 @@ class TechnicalDocument(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=text("true"), nullable=False, index=True
     )
-    uploaded_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    uploaded_bytes: Mapped[bytes | None] = mapped_column("uploaded_content", LargeBinary, nullable=True, deferred=True)
+    source_blob_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_source_blobs.id", name="fk_technical_documents_source_blob"), nullable=True, index=True)
+    source_blob: Mapped[CatalogSourceBlob | None] = relationship()
+
+    @property
+    def uploaded_content(self) -> bytes | None:
+        return self.source_blob.content if self.source_blob is not None else self.uploaded_bytes
+
+    @uploaded_content.setter
+    def uploaded_content(self, value: bytes | None) -> None:
+        self.source_blob = None
+        self.source_blob_id = None
+        self.uploaded_bytes = value
     uploaded_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     media_type: Mapped[str | None] = mapped_column(String(150), nullable=True)
     uploaded_by_id: Mapped[int | None] = mapped_column(
@@ -963,6 +976,18 @@ class CatalogRevisionAssembly(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 
+class CatalogSourceBlob(Base):
+    """Exact immutable source bytes shared by new aliases and publications."""
+
+    __tablename__ = "catalog_source_blobs"
+    __table_args__ = (CheckConstraint("byte_length > 0", name="ck_catalog_blob_length"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    byte_length: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
 class CatalogRevisionArtifact(Base):
     __tablename__ = "catalog_revision_artifacts"
     __table_args__ = (UniqueConstraint("assembly_id", "sha256", name="uq_catalog_revision_artifact_sha"),)
@@ -972,7 +997,25 @@ class CatalogRevisionArtifact(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     media_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    stored_content: Mapped[bytes] = mapped_column("content", LargeBinary, nullable=False, deferred=True, default=b"")
+    source_blob_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_source_blobs.id", name="fk_catalog_revision_artifacts_source_blob"), nullable=True, index=True)
+    source_blob: Mapped[CatalogSourceBlob | None] = relationship()
+
+    @hybrid_property
+    def content(self) -> bytes:
+        return self.source_blob.content if self.source_blob is not None else self.stored_content
+
+    @content.setter
+    def content(self, value: bytes) -> None:
+        self.source_blob = None
+        self.source_blob_id = None
+        self.stored_content = value
+
+    @content.expression
+    def content(cls):
+        from sqlalchemy import func, select
+        return func.coalesce(select(CatalogSourceBlob.content).where(
+            CatalogSourceBlob.id == cls.source_blob_id).scalar_subquery(), cls.stored_content)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     page_count: Mapped[int] = mapped_column(Integer, nullable=False)
     document_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -982,14 +1025,40 @@ class CatalogRevisionArtifact(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
+class CatalogRevisionReferencePage(Base):
+    """Human-defined logical page; physical PDF assignments are separate evidence."""
+
+    __tablename__ = "catalog_revision_reference_pages"
+    __table_args__ = (
+        UniqueConstraint("assembly_id", "stable_key", name="uq_reference_page_identity"),
+        CheckConstraint("sort_order >= 0", name="ck_reference_page_order"),
+        CheckConstraint("version >= 1", name="ck_reference_page_version"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    assembly_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_assemblies.id"), index=True)
+    stable_key: Mapped[str] = mapped_column(String(36), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(255))
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    __mapper_args__ = {"version_id_col": version, "version_id_generator": False}
+
+
 class CatalogRevisionVisualPage(Base):
     __tablename__ = "catalog_revision_visual_pages"
     __table_args__ = (
-        UniqueConstraint("artifact_id", "page_number", "role", name="uq_catalog_revision_visual_page_role"),
+        Index("uq_visual_page_legacy", "artifact_id", "page_number", "role", unique=True,
+              sqlite_where=text("reference_page_id IS NULL"), postgresql_where=text("reference_page_id IS NULL")),
+        Index("uq_visual_page_guided", "reference_page_id", "artifact_id", "page_number", "role", unique=True,
+              sqlite_where=text("reference_page_id IS NOT NULL"), postgresql_where=text("reference_page_id IS NOT NULL")),
         CheckConstraint("page_number >= 1", name="ck_catalog_revision_visual_page_positive"),
         CheckConstraint("role IN ('EXPLODED_SCHEME', 'SPARE_PARTS_LIST')", name="ck_catalog_revision_visual_page_role"),
     )
 
+    reference_page_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_reference_pages.id", name="fk_catalog_revision_visual_pages_reference_page"), index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     id: Mapped[int] = mapped_column(primary_key=True)
     artifact_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_artifacts.id"), nullable=False, index=True)
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -1001,12 +1070,19 @@ class CatalogRevisionVisualPage(Base):
 class CatalogRevisionPart(Base):
     __tablename__ = "catalog_revision_parts"
     __table_args__ = (
-        UniqueConstraint("assembly_id", "position", "part_number", name="uq_catalog_revision_part_identity"),
+        Index("uq_part_legacy", "assembly_id", "position", "part_number", unique=True,
+              sqlite_where=text("reference_page_id IS NULL"), postgresql_where=text("reference_page_id IS NULL")),
+        Index("uq_part_guided", "reference_page_id", "position", "part_number", unique=True,
+              sqlite_where=text("reference_page_id IS NOT NULL"), postgresql_where=text("reference_page_id IS NOT NULL")),
+        UniqueConstraint("reference_page_id", "extraction_key", name="uq_part_extraction_source"),
         CheckConstraint("quantity IS NULL OR quantity >= 0", name="ck_catalog_revision_part_quantity"),
     )
 
+    reference_page_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revision_reference_pages.id", name="fk_catalog_revision_parts_reference_page"), index=True)
     id: Mapped[int] = mapped_column(primary_key=True)
     assembly_id: Mapped[int] = mapped_column(ForeignKey("catalog_revision_assemblies.id"), nullable=False, index=True)
+    extraction_key: Mapped[str | None] = mapped_column(String(64))
+    extraction_evidence: Mapped[dict | None] = mapped_column(JSON)
     position: Mapped[str] = mapped_column(String(80), nullable=False)
     part_number: Mapped[str] = mapped_column(String(120), nullable=False)
     name_bg: Mapped[str | None] = mapped_column(String(255))
@@ -1814,7 +1890,19 @@ class TechnicalDocumentRevision(Base):
     revision_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
     filename: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[str] = mapped_column(String(150))
-    content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    stored_content: Mapped[bytes | None] = mapped_column("content", LargeBinary, nullable=True, deferred=True)
+    source_blob_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_source_blobs.id", name="fk_technical_document_revisions_source_blob"), nullable=True, index=True)
+    source_blob: Mapped[CatalogSourceBlob | None] = relationship()
+
+    @property
+    def content(self) -> bytes | None:
+        return self.source_blob.content if self.source_blob is not None else self.stored_content
+
+    @content.setter
+    def content(self, value: bytes | None) -> None:
+        self.source_blob = None
+        self.source_blob_id = None
+        self.stored_content = value
     file_path: Mapped[str | None] = mapped_column(String(700), nullable=True)
     sha256: Mapped[str] = mapped_column(String(64))
     change_note: Mapped[str | None] = mapped_column(Text, nullable=True)

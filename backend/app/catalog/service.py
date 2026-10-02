@@ -14,6 +14,7 @@ from ..models import (
     CatalogDiagram,
     CatalogRevisionArtifact,
     CatalogRevisionAssembly,
+    CatalogRevisionReferencePage,
     CatalogVisualSource,
     Machine,
     PartCatalog,
@@ -195,11 +196,31 @@ def _builder_integrity(db: Session, revision_id: int) -> None:
 
 
 def _builder_assembly(db: Session, revision_id: int, source_id: str) -> CatalogRevisionAssembly | None:
+    from ..catalog_admin.publication import source_id as runtime_source
     for assembly in db.scalars(select(CatalogRevisionAssembly).where(
             CatalogRevisionAssembly.revision_id == revision_id)):
-        if source_id == f"CBR{revision_id}A{assembly.id}":
+        if source_id == runtime_source(assembly):
             return assembly
+        for page in db.scalars(select(CatalogRevisionReferencePage).where(
+                CatalogRevisionReferencePage.assembly_id == assembly.id)):
+            if source_id == runtime_source(assembly, page.id):
+                return assembly
     return None
+
+
+def _builder_pages(db: Session, assembly) -> list[dict]:
+    from ..catalog_admin.publication import source_id as runtime_source
+    result = []
+    for number, page in enumerate(db.scalars(select(CatalogRevisionReferencePage).where(
+            CatalogRevisionReferencePage.assembly_id == assembly.id).order_by(
+            CatalogRevisionReferencePage.sort_order, CatalogRevisionReferencePage.id)), 1):
+        sid = runtime_source(assembly, page.id)
+        diagrams = repository.diagrams_for_source(db, sid)
+        result.append({"id": page.id, "stable_key": page.stable_key, "number": number,
+            "title": page.title, "source_id": sid, "diagrams": [serialize_diagram(item) for item in diagrams],
+            "part_count": len(repository.parts_for_source(db, sid, builder_revision_id=assembly.revision_id)),
+            "verified_hotspot_count": repository.verified_hotspot_count(db, sid)})
+    return result
 
 
 def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
@@ -220,15 +241,17 @@ def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
                 CatalogRevisionAssembly.revision_id == binding.revision_id)
                 .order_by(CatalogRevisionAssembly.sort_order, CatalogRevisionAssembly.id)):
             sid = f"CBR{binding.revision_id}A{assembly.id}"
+            pages = _builder_pages(db, assembly)
             diagrams = repository.diagrams_for_source(db, sid)
             assemblies.append({
                 "source_id": sid, "family": catalog_code,
                 "assembly": assembly.name_bg, "title": assembly.name_bg,
                 "name_bg": assembly.name_bg, "name_en": assembly.name_en, "name_ru": assembly.name_ru,
                 "document_reference": None,
-                "part_count": len(repository.parts_for_source(db, sid, builder_revision_id=binding.revision_id)),
-                "diagram_count": len(diagrams),
-                "verified_hotspot_count": repository.verified_hotspot_count(db, sid),
+                "pages": pages,
+                "part_count": len(repository.parts_for_source(db, sid, builder_revision_id=binding.revision_id)) + sum(page["part_count"] for page in pages),
+                "diagram_count": len(diagrams) + sum(len(page["diagrams"]) for page in pages),
+                "verified_hotspot_count": repository.verified_hotspot_count(db, sid) + sum(page["verified_hotspot_count"] for page in pages),
                 "diagrams": [serialize_diagram(x) for x in diagrams],
             })
         return {**base, "dataset_version": f"CATALOG_BUILDER_R{binding.revision_id}",
@@ -467,6 +490,7 @@ def _serialize_kit_component(component: Any) -> dict[str, Any]:
     return {
         "id": component.id,
         "part_id": component.part_id,
+        "source_id": component.part.source_id,
         "source_record_key": component.source_record_key,
         "position": component.part.position,
         "part_number": component.part.part_number,
