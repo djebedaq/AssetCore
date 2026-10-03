@@ -9,11 +9,13 @@ import RevisionRepairKits from './RevisionRepairKits'
 import type { ReferencePage } from './guidedTypes'
 import { builderBase, type Group, type Step } from './wizardTypes'
 
+const localTask = (step: Step): Step => step === 'parts' || step === 'hotspots' ? step : 'documents'
+
 export default function GuidedWorkspace({ revisionId, groups, task: initialTask, changed, onDirtyChange, target }: {
   revisionId: number; groups: Group[]; task: Step; changed: () => Promise<void>; onDirtyChange: (dirty: boolean) => void; target?: { assembly_id?: number; reference_page_id?: number }
 }) {
   const { t, locale } = useI18n()
-  const [task, setTask] = useState<Step>(initialTask === 'references' ? 'documents' : initialTask)
+  const [task, setTask] = useState<Step>(localTask(initialTask))
   const [overview, setOverview] = useState<Record<number, ReferencePage[]>>({})
   const [assemblyId, setAssemblyId] = useState<number | null>(groups[0]?.id || null)
   const [pages, setPages] = useState<ReferencePage[]>([])
@@ -31,7 +33,7 @@ export default function GuidedWorkspace({ revisionId, groups, task: initialTask,
   const assembly = groups.find(item => item.id === assemblyId)
   const label = (group: Group) => group[`name_${locale}`] || group.name_bg
   useEffect(() => { onDirtyChange(busy || !!name || dirty || titleDirty || kitDirty); return () => onDirtyChange(false) }, [busy, name, dirty, titleDirty, kitDirty, onDirtyChange])
-  useEffect(() => { if (target) setTask(initialTask === 'references' ? 'documents' : initialTask) }, [target, initialTask])
+  useEffect(() => { if (target) setTask(localTask(initialTask)) }, [target, initialTask])
   useEffect(() => {
     let active = true
     void Promise.all(groups.map(async group => [group.id, await api<ReferencePage[]>(`${builderBase}/assemblies/${group.id}/reference-pages`)] as const))

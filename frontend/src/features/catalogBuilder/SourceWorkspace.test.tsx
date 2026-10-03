@@ -109,6 +109,13 @@ it('keeps complete workspace translation parity', () => {
   expect(Object.keys(workspaceRu).sort()).toEqual(Object.keys(workspaceBg).sort())
 })
 
+it.each(['catalog', 'review'] as const)('opens sources when a draft workspace mounts from the global %s view', async task => {
+  const groups = [{ id: 3, code: 'QA', name_bg: 'Reference', name_en: '', name_ru: '', part_count: 0, exploded_page_count: 0, spare_list_page_count: 0 }]
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/reference-pages') ? json([empty]) : json([])))
+  render(<I18nProvider><GuidedWorkspace revisionId={2} groups={groups} task={task} changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
+  expect(await screen.findByRole('button', { name: '+ Добави схема' })).toBeVisible()
+})
+
 it('prevents opening the previous page sources while a new logical page is still being created', async () => {
   const groups = [{ id: 3, code: 'QA', name_bg: 'Reference', name_en: '', name_ru: '', part_count: 0, exploded_page_count: 0, spare_list_page_count: 0 }]
   let pages = [empty]
