@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { api, createApiObjectUrl } from '../../api'
+import { api } from '../../api'
 import { useI18n } from '../../i18n'
 import { guidedError } from './guidedErrors'
+import usePagePreview from './usePagePreview'
 import RevisionParts from './RevisionParts'
 import { builderBase } from './wizardTypes'
 import type { PartValues, Preview, ReferencePage } from './guidedTypes'
@@ -13,17 +14,8 @@ const roles = ['unknown', ...fields] as const
 
 function Original({ artifactId, number }: { artifactId: number; number: number }) {
   const { t } = useI18n()
-  const [url, setUrl] = useState('')
-  const [error, setError] = useState(false)
-  useEffect(() => {
-    let active = true; let objectUrl = ''
-    void createApiObjectUrl(`${builderBase}/artifacts/${artifactId}/pages/${number}/preview`).then(result => {
-      if (!active) { URL.revokeObjectURL(result.url); return }
-      objectUrl = result.url; setUrl(result.url)
-    }).catch(() => { if (active) setError(true) })
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [artifactId, number])
-  return <div className="guided-original">{url ? <img src={url} alt={t('guided.physicalPage', { number })} /> : <p role="status">{t(error ? 'builder.previewError' : 'builder.previewPending')}</p>}</div>
+  const preview = usePagePreview(artifactId, number)
+  return <div className="guided-original">{preview.error ? <div role="alert"><p>{t('builder.previewError')}</p><button className="secondary" onClick={preview.retry}>{t('wizard.retry')}</button></div> : preview.url ? <img src={preview.url} onError={preview.failed} alt={t('guided.physicalPage', { number })} /> : <p role="status">{t('builder.previewPending')}</p>}</div>
 }
 
 function Mapping({ preview, tableIndex, apply, busy }: { preview: Preview; tableIndex: number;
@@ -48,7 +40,7 @@ export default function GuidedParts({ page, changed, onDirtyChange }: { page: Re
   const [accepted, setAccepted] = useState<Array<PartValues & { id: number }>>([])
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
-  const [filter, setFilter] = useState<'all' | 'attention' | 'errors' | 'rejected' | 'clean' | 'accepted'>('attention')
+  const [filter, setFilter] = useState<'all' | 'attention' | 'errors' | 'rejected' | 'clean' | 'accepted'>('all')
   const [search, setSearch] = useState('')
   const [sourceIndex, setSourceIndex] = useState<number | null>(null)
   const [error, setError] = useState('')
@@ -113,7 +105,7 @@ export default function GuidedParts({ page, changed, onDirtyChange }: { page: Re
       await load(); await changed()
     } catch (caught) { setError(t(guidedError(caught))) } finally { setBusy(false) }
   }
-  return <section>
+  return <section className="guided-parts">
     {error && <p role="alert" className="error">{error}</p>}
     {!page.spare_list_count && <p role="status">{t('guided.noLists')}</p>}
     <details><summary>{t('guided.advanced')}</summary><RevisionParts assemblyId={page.assembly_id} referencePageId={page.id} editable onChanged={async () => { await load(); await changed() }} onDirtyChange={setAdvancedDirty} /></details>
@@ -141,7 +133,7 @@ export default function GuidedParts({ page, changed, onDirtyChange }: { page: Re
         <button className="secondary" onClick={() => setSourceIndex(sourceIndex === source ? null : source)}>{t('guided.sourceView')}</button>
         {sourceIndex === source && <Original artifactId={item.preview.source.artifact_id} number={item.preview.source.page_number} />}
         <div className="table-wrap"><table><thead><tr><th>{t('guided.selected', { count: item.rows.filter(row => row.selected).length })}</th>
-          {fields.map(field => <th key={field}>{t(`guided.${field}`)}</th>)}<th>{t('guided.review')}</th></tr></thead>
+          {fields.slice(0, 4).map(field => <th key={field}>{t(`guided.${field}`)}</th>)}<th>{t('guided.review')}</th></tr></thead>
           <tbody>{item.rows.map((row, index) => {
             const warnings = item.preview.rows[index].warnings
             if ((filter === 'attention' && !warnings.length || filter === 'errors' && row.part.position && row.part.part_number && row.part.description
@@ -149,11 +141,11 @@ export default function GuidedParts({ page, changed, onDirtyChange }: { page: Re
               || filter === 'rejected' && !row.rejected || filter !== 'rejected' && row.rejected
               || filter !== 'accepted' && filter !== 'all' && row.confirmed)
               || !Object.values(row.part).join(' ').toLocaleLowerCase().includes(search.toLocaleLowerCase())) return null
-            return <tr key={index}><td><input type="checkbox" aria-label={t('guided.position') + ' ' + row.part.position} disabled={busy || row.rejected || row.confirmed}
+            return <tr key={index} className={warnings.length && !row.confirmed ? 'part-attention' : ''}><td><input type="checkbox" aria-label={t('guided.position') + ' ' + row.part.position} disabled={busy || row.rejected || row.confirmed}
               checked={row.selected} onChange={event => edit(source, index, { selected: event.target.checked })} /></td>
-              {fields.map(field => <td key={field}><input aria-label={t(`guided.${field}`) + ' ' + (index + 1)} disabled={busy || row.rejected || row.confirmed}
+              {fields.slice(0, 4).map(field => <td key={field}><input aria-label={t(`guided.${field}`) + ' ' + (index + 1)} disabled={busy || row.rejected || row.confirmed}
                 value={row.part[field] ?? ''} onChange={event => edit(source, index, { part: { ...row.part, [field]: event.target.value || null } })} /></td>)}
-              <td><span>{t(row.confirmed ? 'guided.accepted' : warnings.length ? 'guided.attention' : 'guided.clean')}</span>
+              <td><details><summary>{t('guided.advanced')}</summary>{fields.slice(4).map(field => <label key={field}>{t(`guided.${field}`)}<input aria-label={t(`guided.${field}`) + ' ' + (index + 1)} value={row.part[field] ?? ''} disabled={busy || row.confirmed || row.rejected} onChange={event => edit(source, index, { part: { ...row.part, [field]: event.target.value || null } })} /></label>)}</details><span>{t(row.confirmed ? 'guided.accepted' : warnings.length ? 'guided.attention' : 'guided.clean')}</span>
                 <button className="secondary" disabled={busy || row.confirmed} onClick={() => edit(source, index, { rejected: !row.rejected, selected: false })}>{t(row.rejected ? 'guided.restore' : 'guided.reject')}</button></td></tr>
           })}</tbody></table></div>
       </section>)}

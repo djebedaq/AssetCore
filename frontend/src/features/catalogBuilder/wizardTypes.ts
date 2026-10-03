@@ -2,7 +2,6 @@ import type { TranslationKey } from '../../i18n'
 
 export const builderBase = '/admin/catalog-builder'
 export type Step = 'catalog' | 'references' | 'documents' | 'parts' | 'hotspots' | 'review'
-export const steps: Step[] = ['catalog', 'references', 'documents', 'parts', 'hotspots', 'review']
 export type Names = { name_bg: string; name_en: string; name_ru: string }
 export type Category = Names & { id: number; code: string; is_active: boolean; capabilities: string[] }
 export type Catalog = Names & { id: number; code: string; asset_category_id: number; asset_category: Category;

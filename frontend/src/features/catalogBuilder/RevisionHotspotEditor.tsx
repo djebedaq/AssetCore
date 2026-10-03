@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
-import { api, ApiError, createApiObjectUrl } from '../../api'
+import { api, ApiError } from '../../api'
 import { useI18n, type TranslationKey } from '../../i18n'
 import useDraftGuard from './useDraftGuard'
+import usePagePreview from './usePagePreview'
 
 type Page = { visual_page_id: number; artifact_id: number; artifact_title: string; filename: string;
   sha256: string; page_number: number; hotspot_count: number; verified_hotspot_count: number }
@@ -15,6 +16,8 @@ type Draft = Geometry & { id: number | null; position: string; version: number }
 type Gesture = { kind: 'point' | 'draw' | 'move' | 'resize'; pointerId: number; startX: number; startY: number;
   base: Draft; latest: Draft; clientX: number; clientY: number; previousDraft: Draft | null }
 
+// Match the authoritative server/database geometry bound (0.2%). Visible
+// geometry no longer inherits the control's minimum interaction dimensions.
 const minimum = 0.002
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 const errorKeys: Record<string, TranslationKey> = {
@@ -29,8 +32,8 @@ const errorKeys: Record<string, TranslationKey> = {
 type PositionFilter = 'all' | 'unmarked' | 'unverified' | 'completed'
 
 export default function RevisionHotspotEditor({ assemblyId, editable, highlightPositions = [], simple = false,
-  initialFilter = 'all', initialPageId, initialPosition, referencePageId, onChanged, onDirtyChange }: {
-  assemblyId: number; referencePageId?: number; onChanged?: () => Promise<void>; editable: boolean; highlightPositions?: string[]; simple?: boolean;
+  initialFilter = 'all', initialPageId, initialPosition, referencePageId, onChanged, onDirtyChange, contextLabel }: {
+  contextLabel?: string; assemblyId: number; referencePageId?: number; onChanged?: () => Promise<void>; editable: boolean; highlightPositions?: string[]; simple?: boolean;
   initialFilter?: PositionFilter; initialPageId?: number; initialPosition?: string; onDirtyChange?: (dirty: boolean) => void
 }) {
   const { locale, t } = useI18n()
@@ -42,7 +45,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   const [draft, setDraft] = useState<Draft | null>(null)
   const [mode, setMode] = useState<'point' | 'select' | 'draw' | 'pan'>(simple ? 'point' : 'select')
   const [autoVerify, setAutoVerify] = useState(true)
-  const [pointSize, setPointSize] = useState(3)
+  const [pointSize, setPointSize] = useState(0.2)
   const [filter, setFilter] = useState<PositionFilter>(initialFilter)
   const [search, setSearch] = useState('')
   const [lastPlaced, setLastPlaced] = useState<Hotspot | null>(null)
@@ -52,7 +55,8 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   const currentAssembly = useRef(`${assemblyId}/${referencePageId ?? "legacy"}`)
   currentAssembly.current = `${assemblyId}/${referencePageId ?? "legacy"}`
   const [zoom, setZoom] = useState(100)
-  const [url, setUrl] = useState('')
+  const [expanded, setExpanded] = useState(simple)
+  const [showMarkers, setShowMarkers] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const canvas = useRef<HTMLDivElement>(null)
@@ -63,6 +67,8 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   const panGesture = useRef<{ pointerId: number; startX: number; startY: number;
     scrollLeft: number; scrollTop: number } | null>(null)
   const page = pages.find(item => item.visual_page_id === pageId)
+  const preview = usePagePreview(page?.artifact_id, page?.page_number)
+  const url = preview.url
   const chosen = coverage.find(item => item.position === position)
   const current = hotspots.find(item => item.id === draft?.id)
   const dirty = !!draft && (!current || draft.position !== current.position ||
@@ -101,15 +107,6 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       navigationGesture.current = false; panGesture.current = null
     }
   }, [pageId])
-  useEffect(() => {
-    let active = true
-    let objectUrl = ''
-    setUrl('')
-    if (page) void createApiObjectUrl(`/admin/catalog-builder/artifacts/${page.artifact_id}/pages/${page.page_number}/preview`)
-      .then(result => { if (!active) { URL.revokeObjectURL(result.url); return }; objectUrl = result.url; setUrl(result.url) })
-      .catch(caught => { if (active) setError(message(caught)) })
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [page?.artifact_id, page?.page_number])
 
   function point(event: PointerEvent) {
     const rect = canvas.current?.getBoundingClientRect()
@@ -154,7 +151,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     // placement targets, including pointer events delivered through wrappers.
     if ((event.target as Element).closest('[data-hotspot-overlay]')) return
     const start = point(event)
-    const size = clamp(pointSize / 100, .004, .12)
+    const size = clamp(pointSize / 100, minimum, .12)
     begin(event, mode === 'point' ? 'point' : 'draw', { id: null, position, version: 0,
       x: mode === 'point' ? clamp(start.x - size / 2, 0, 1 - size) : start.x,
       y: mode === 'point' ? clamp(start.y - size / 2, 0, 1 - size) : start.y,
@@ -201,6 +198,8 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     const completed = gesture.current
     gesture.current = null
     if (simple) {
+      if ((completed.kind === 'move' || completed.kind === 'resize') &&
+          (['x', 'y', 'width', 'height'] as const).every(key => completed.latest[key] === completed.base[key])) return
       if (completed.latest.width >= minimum && completed.latest.height >= minimum) void save(completed.latest)
       else setDraft(completed.previousDraft)
     }
@@ -210,7 +209,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       x: item.x, y: item.y, width: item.width, height: item.height }
     setPosition(item.position)
     if (simple && mode !== 'pan') setMode('select')
-    if (editable && mode === 'select') begin(event, kind, next)
+    if (editable && (mode === 'select' || simple && mode !== 'pan')) begin(event, kind, next)
     else { event.stopPropagation(); setDraft(next) }
   }
   async function refresh() {
@@ -273,6 +272,16 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       setDraft(null); await refresh(); setError('')
     } catch (caught) { setError(message(caught)); setDraft(null); await refresh() } finally { setBusy(false) }
   }
+  function fitPage() {
+    const img = canvas.current?.querySelector('img')
+    const view = viewport.current
+    if (!img || !view) return
+    setZoom(Math.max(10, Math.min(100, (view.clientHeight - 2) * img.naturalWidth / img.naturalHeight / view.clientWidth * 100)))
+  }
+  function keyboardSelect(item: Hotspot) {
+    if (busy || dirty) return
+    setPosition(item.position); setMode('select'); setDraft({ ...item, id: item.id })
+  }
   function nextPosition(direction: number) {
     if (busy || dirty || !coverage.length) return
     const index = coverage.findIndex(row => row.position === position)
@@ -289,8 +298,8 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   const filtered = coverage.filter(row => (filter === 'all' || filter === 'unmarked' && row.hotspot_count === 0 || filter === 'unverified' && row.state === 'UNVERIFIED' || filter === 'completed' && row.state === 'VERIFIED') && [row.position, ...row.part_numbers, ...(row.names || []).flatMap(name => [name.name_bg, name.name_en, name.name_ru, name.description])].some(value => (value || '').toLocaleLowerCase().includes(search.toLocaleLowerCase())))
   const changePage = (id: number) => { if (!dirty || simple || window.confirm(t('wizard.unsaved'))) setPageId(id) }
   const shown = draft ? hotspots.filter(item => item.id !== draft.id) : hotspots
-  return <div className="builder-workspace">
-    {simple && <p>{t('wizard.hotspotHelp')}</p>}
+  return <div className={`builder-workspace ${expanded ? 'mapping-expanded' : ''}`}>
+    {simple && <div className="source-heading"><strong>{contextLabel}</strong><button className="secondary" onClick={() => setExpanded(value => !value)}>{t(expanded ? 'workspace.collapse' : 'workspace.expand')}</button></div>}
     {saveState && <p role="status">{t(`wizard.${saveState}`)}</p>}
     {error && <p className="error" role="alert">{error}</p>}
     {!pages.length && <p>{t('builder.mapping.noPages')}</p>}
@@ -299,15 +308,17 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       <label>{t('builder.mapping.page')}<select disabled={busy || simple && dirty} value={pageId ?? ''} onChange={event => changePage(Number(event.target.value))}>
         {pages.map(item => <option key={item.visual_page_id} value={item.visual_page_id}>{item.artifact_title} · {t('builder.pageNumber', { count: item.page_number })}</option>)}
       </select></label>
-      {simple && <p>{t('wizard.schemeCount', { number: pages.findIndex(item => item.visual_page_id === pageId) + 1, count: pages.length })}</p>}
       {!simple && <small>{page?.filename} · {t('builder.mapping.sha', { hash: page?.sha256 || '' })}</small>}
       <div className="actions builder-tabs">
         {editable && <>{simple && <button disabled={busy || dirty} className={mode === 'point' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('point')}>{t('wizard.point')}</button>}<button disabled={busy || simple && dirty} className={mode === 'select' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('select')}>{t('builder.mapping.select')}</button>
           <button disabled={busy || simple && dirty} className={mode === 'draw' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('draw')}>{t(simple ? 'wizard.rectangle' : 'builder.mapping.draw')}</button></>}
         <button disabled={busy || simple && dirty} className={mode === 'pan' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('pan')}>{t('builder.mapping.pan')}</button>
-        <button className="secondary compact" onClick={() => setZoom(value => Math.max(100, value - 25))}>{t('builder.mapping.zoomOut')}</button>
-        <span>{zoom}%</span>
-        <button className="secondary compact" onClick={() => setZoom(value => Math.min(300, value + 25))}>{t('builder.mapping.zoomIn')}</button>
+        <button className="secondary compact" onClick={() => setZoom(value => Math.max(10, value - 25))}>{t('builder.mapping.zoomOut')}</button>
+        <span>{Math.round(zoom)}%</span>
+        <button className="secondary compact" onClick={() => setZoom(value => Math.min(800, value + 25))}>{t('builder.mapping.zoomIn')}</button>
+        <button className="secondary compact" onClick={fitPage}>{t('workspace.fitPage')}</button>
+        <button className="secondary compact" onClick={() => setZoom(100)}>{t('workspace.fitWidth')}</button>
+        <label><input type="checkbox" checked={showMarkers} onChange={event => setShowMarkers(event.target.checked)} />{t('workspace.overlayVisibility')}</label>
       </div>
       {simple && editable && position && <p role="status">{t('guided.clickPosition', { position })}</p>}
       {simple && editable && <div className="actions">
@@ -316,20 +327,22 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
         <button className="secondary" disabled={busy || dirty || !position} onClick={() => { setMode('point'); setDraft(null) }}>{t('guided.another')}</button>
         <button className="secondary" disabled={busy || dirty || !lastPlaced} onClick={() => void undoPlacement()}>{t('guided.undo')}</button>
       </div>}
-      {simple && editable && <div className="actions"><label>{t('wizard.pointSize')}<input type="number" min="0.4" max="12" step="0.5" value={pointSize} disabled={busy} onChange={event => setPointSize(Number(event.target.value))} /></label>
+      {simple && editable && <div className="actions"><label>{t('wizard.pointSize')}<input type="number" min="0.2" max="12" step="0.05" value={pointSize} disabled={busy} onChange={event => setPointSize(Number(event.target.value))} /></label>
         <label><input type="checkbox" checked={autoVerify} disabled={busy} onChange={event => setAutoVerify(event.target.checked)} />{t('wizard.autoVerify')}</label></div>}
       <div className="builder-scheme-layout">
         <div ref={viewport} className="builder-scheme-viewport">
-          <div ref={canvas} className={`builder-scheme-canvas mode-${mode}`} style={{ width: `${zoom}%` }}
+          <div ref={canvas} className={`builder-scheme-canvas mode-${mode} ${showMarkers ? '' : 'markers-hidden'}`} style={{ width: `${zoom}%` }}
             onPointerDownCapture={trackPointer} onPointerDown={beginDraw} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}>
-            {url ? <img src={url} draggable={false} alt={t('builder.mapping.page')} /> : <div className="builder-scheme-loading">{t('builder.previewPending')}</div>}
+            {preview.error ? <div role="alert"><p>{t('builder.previewError')}</p><button className="secondary" onClick={preview.retry}>{t('wizard.retry')}</button></div> : url ? <img src={url} draggable={false} onError={preview.failed} alt={t('builder.mapping.page')} /> : <div className="builder-scheme-loading">{t('builder.previewPending')}</div>}
             {shown.map(item => <button key={item.id} type="button"
               data-hotspot-overlay
               className={`builder-hotspot ${item.is_verified ? 'verified' : 'unverified'} ${highlightPositions.includes(item.position) ? 'highlight' : ''}`}
               style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%` }}
               aria-label={t('builder.mapping.hotspotLabel', { position: item.position })}
+              title={t('builder.mapping.hotspotLabel', { position: item.position })}
+              onClick={event => { if (event.detail === 0) keyboardSelect(item) }}
               onPointerDown={event => select(item, event, 'move')}>
-              <span>{item.position}</span>{editable && mode === 'select' && draft?.id === item.id &&
+              <span className="hotspot-hit-target" aria-hidden="true" />{editable && mode === 'select' && draft?.id === item.id &&
                 <span className="builder-hotspot-handle" onPointerDown={event => select(item, event, 'resize')} />}
             </button>)}
             {draft && <button type="button" className="builder-hotspot draft"
@@ -337,8 +350,14 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
               aria-label={t('builder.mapping.hotspotLabel', { position: draft.position })}
               style={{ left: `${draft.x * 100}%`, top: `${draft.y * 100}%`,
                 width: `${draft.width * 100}%`, height: `${draft.height * 100}%` }}
+              onKeyDown={event => {
+                const delta = event.shiftKey ? .001 : .0001
+                if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+                  event.preventDefault(); setDraft({ ...draft, x: clamp(draft.x + (event.key === 'ArrowLeft' ? -delta : event.key === 'ArrowRight' ? delta : 0), 0, 1 - draft.width), y: clamp(draft.y + (event.key === 'ArrowUp' ? -delta : event.key === 'ArrowDown' ? delta : 0), 0, 1 - draft.height) })
+                }
+              }}
               onPointerDown={event => { if (mode === 'select') begin(event, 'move', draft) }}>
-              <span>{draft.position}</span>{editable && mode === 'select' &&
+              <span className="hotspot-hit-target" aria-hidden="true" />{editable && mode === 'select' &&
                 <span className="builder-hotspot-handle" onPointerDown={event => begin(event, 'resize', draft)} />}</button>}
           </div>
         </div>
@@ -359,11 +378,11 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
             <ul>{chosen.part_numbers.map(number => <li key={number}>{number}</li>)}</ul>
             <p>{t(`builder.mapping.state.${chosen.state}`)}</p></>}
           {draft && editable && <>
-            {!simple && <div className="builder-geometry-fields">{(['x', 'y', 'width', 'height'] as const).map(key =>
-              <label key={key}>{t(`builder.mapping.${key}`)}<input type="number" min="0" max="1" step="0.001"
-                value={draft[key]} onChange={event => setDraft({ ...draft, [key]: Number(event.target.value) })} /></label>)}</div>}
+            <div className="builder-geometry-fields">{(['x', 'y', 'width', 'height'] as const).map(key =>
+              <label key={key}>{t(`builder.mapping.${key}`)}<input type="number" min="0" max="1" step="0.0001"
+                value={draft[key]} onChange={event => setDraft({ ...draft, [key]: Number(event.target.value) })} /></label>)}</div>
             <div className="actions"><button className="primary compact" disabled={busy || !dirty || draft.width < minimum || draft.height < minimum}
-              onClick={() => void save()}>{t(simple ? 'wizard.retry' : 'common.save')}</button>
+              onClick={() => void save()}>{t(simple ? saveState === 'retry' ? 'wizard.retry' : 'workspace.saveGeometry' : 'common.save')}</button>
               {current && <><button className="secondary compact" disabled={busy || dirty} onClick={() => void verify(!current.is_verified)}>
                 {t(current.is_verified ? 'builder.mapping.unverify' : 'builder.mapping.verify')}</button>
                 <button className="secondary compact" disabled={busy} onClick={() => void remove()}>{t('common.remove')}</button></>}</div>
