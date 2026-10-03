@@ -44,7 +44,11 @@ def main() -> None:
                 if not 0 < page.rect.width <= 14400 or not 0 < page.rect.height <= 14400:
                     raise ValueError("invalid page")
                 pixels = 160_000 if operation == "thumbnail" else 4_000_000
-                scale = min(1.0, (pixels / max(1, page.rect.width * page.rect.height)) ** .5)
+                # Reading a technical table at 72 DPI loses small callouts when
+                # zoomed. Render previews at up to 144 DPI, still bounded by the
+                # same pixel/memory budget; navigation thumbnails stay small.
+                scale = min(1.0 if operation == "thumbnail" else 2.0,
+                            (pixels / max(1, page.rect.width * page.rect.height)) ** .5)
                 png = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False,
                                      colorspace=fitz.csRGB).tobytes("png")
                 result = {"image": base64.b64encode(png).decode("ascii")}

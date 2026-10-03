@@ -7,7 +7,7 @@ import GuidedWorkspace from './GuidedWorkspace'
 import WizardReview from './WizardReview'
 import WizardMachines from './WizardMachines'
 import useDraftGuard from './useDraftGuard'
-import { builderBase, problemKeys, steps, type Catalog, type Category, type Group, type Issue, type Revision, type Step, type Workflow } from './wizardTypes'
+import { builderBase, problemKeys, type Catalog, type Category, type Group, type Issue, type Revision, type Step, type Workflow } from './wizardTypes'
 
 export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { locale, t, date } = useI18n()
@@ -59,7 +59,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
       api<Workflow>(`${builderBase}/revisions/${revisionId}/workflow`)]).then(([rows, summary]) => {
       if (!active) return
       setGroups(rows); setWorkflow(summary)
-      const next = revision?.status === 'DRAFT' ? summary.resume_step : 'review'
+      const next = revision?.status === 'DRAFT' ? 'references' : 'review'
       setStep(next);
     }).catch(report)
     return () => { active = false }
@@ -131,9 +131,9 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
     navigate(issue.step === 'kits' ? 'hotspots' : issue.step || 'review')
   }
   if (!hasPermission('parts.manage')) return null
-  return <div className="builder-page">
+  return <div className="builder-page catalog-workbench">
     {error && <p className="error" role="alert">{error}</p>}
-    <section className="panel"><div className="panel-title"><h3>{t('builder.catalogs')}</h3>
+    <section className={`panel catalog-picker ${selected ? 'catalog-picker-open' : ''}`}><div className="panel-title"><h3>{t('builder.catalogs')}</h3>
       <button className="primary" disabled={!!selected} onClick={() => { setCreating(true); setForm({ name: '', asset_category_id: '', manufacturer: '', model_reference: '' }) }}>{t('builder.create')}</button></div>
       {!catalogs.length && <p>{t('builder.empty')}</p>}
       <div className="builder-list">{catalogs.map(catalog => <article className="builder-list-item" key={catalog.id}>
@@ -147,15 +147,13 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
     </section>
     {selected && <section className="panel"><div className="panel-title"><h3>{label(selected)}</h3>
       <button className="secondary" disabled={busy} onClick={close}>{t('common.close')}</button></div>
-      <nav aria-label={t('wizard.title')} className="wizard-progress">{steps.map((value, index) => <button key={value}
-        aria-label={`${index + 1} ${t(value === 'references' ? 'guided.references' : value === 'documents' ? 'guided.pages' : `wizard.${value}`)}`} className={step === value ? 'primary' : 'secondary'} aria-current={step === value ? 'step' : undefined}
-        disabled={!revision || busy || !editable && value !== 'catalog' && value !== 'review'} onClick={() => navigate(value)}>
-        <span>{index + 1}</span>{t(value === 'references' ? 'guided.references' : value === 'documents' ? 'guided.pages' : `wizard.${value}`)}
+      <nav aria-label={t('wizard.title')} className="catalog-navigation">{(['references', 'catalog', 'review'] as const).map(value => <button key={value}
+        className="secondary" aria-current={(value === 'references' ? !['catalog', 'review'].includes(step) : step === value) ? 'page' : undefined}
+        disabled={!revision || busy || !editable && value === 'references'} onClick={() => navigate(value)}>
+        {t(value === 'references' ? 'workspace.work' : `wizard.${value}`)}
       </button>)}</nav>
       {dirty && <p className="muted" role="status">{t('wizard.unsavedNotice')}</p>}
       {!workflow && <p>{t('wizard.loading')}</p>}
-      {workflow && <div><p>{t('wizard.progress', workflow.progress)}</p>
-        <progress aria-label={t('wizard.hotspots')} value={workflow.progress.completed_positions} max={Math.max(1, workflow.progress.position_count)} /></div>}
       <div hidden={step !== 'catalog'}><p><b>{t('builder.category')}:</b> {label(selected.asset_category)}</p>
         <p className="muted">{t('wizard.categoryLocked')}</p>
         <p><b>{t('builder.manufacturer')}:</b> {selected.manufacturer || t('common.noValue')}</p>
@@ -172,11 +170,9 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
         </form>}
         {!revision && <button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>}
       </div>
-      {editable && revision && !['catalog', 'review'].includes(step) && <GuidedWorkspace
-        target={target} revisionId={revision.id} groups={groups} task={step} changed={refresh} onDirtyChange={documentsDirty} />}
+      {editable && revision && <div hidden={['catalog', 'review'].includes(step)}><GuidedWorkspace
+        target={target} revisionId={revision.id} groups={groups} task={step} changed={refresh} onDirtyChange={documentsDirty} /></div>}
       <div hidden={step !== 'review'}><WizardReview workflow={workflow} editable={!!editable} busy={busy || editingMetadata || Object.values(dirtyChildren).some(Boolean)} onFix={fixIssue} onPublish={() => void publish()} /></div>
-      {editable && <div className="actions wizard-navigation"><button className="secondary" disabled={steps.indexOf(step) === 0} onClick={() => navigate(steps[steps.indexOf(step) - 1])}>{t('wizard.back')}</button>
-        <button className="primary" disabled={step === 'review'} onClick={() => { navigate(steps[steps.indexOf(step) + 1]) }}>{t('wizard.continue')}</button></div>}
       {revision?.status === 'PUBLISHED' && <><p role="status">{t('wizard.published')}</p><button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>
         <WizardMachines catalogId={selected.id} onChanged={load} /></>}
       <details><summary>{t('wizard.history')}</summary>{revisions.map((row, index) => <p key={row.id}>

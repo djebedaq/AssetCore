@@ -94,7 +94,7 @@ it('point mode cancels touch navigation, saves once, advances and retains verifi
   fireEvent.pointerDown(surface, { pointerId: 1, pointerType: 'pen', clientX: 0, clientY: 0 }); fireEvent.pointerUp(surface, { pointerId: 1, pointerType: 'pen', clientX: 0, clientY: 0 })
   await waitFor(() => expect(hotspots[0]?.is_verified).toBe(true))
   await waitFor(() => expect(screen.getByLabelText('Позиция')).toHaveValue('2'))
-  expect(hotspots[0]).toMatchObject({ x: 0, y: 0, width: .03, height: .03 })
+  expect(hotspots[0]).toMatchObject({ x: 0, y: 0, width: .002, height: .002 })
   failVerify = true
   fireEvent.pointerDown(surface, { pointerId: 2, clientX: 50, clientY: 50 }); fireEvent.pointerUp(surface, { pointerId: 2, clientX: 50, clientY: 50 })
   expect(await screen.findByRole('alert')).toHaveTextContent('Зоната е запазена, но потвърждението не успя')

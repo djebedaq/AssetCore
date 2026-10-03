@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n'
@@ -78,31 +78,37 @@ it('keeps exact BG/EN/RU guided terminology parity without obsolete inference co
   expect(Object.keys(guidedEn).some(key => /candidate|group_key|extractor_version/.test(key))).toBe(false)
 })
 
-it('uploads a large binary file, visually selects physical pages and explicitly assigns both roles', async () => {
+it('uploads a large PDF in Scheme mode and assigns the current readable page without role checkboxes', async () => {
   vi.stubGlobal('XMLHttpRequest', UploadTestTransport)
-  vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} })
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const NativeURL = URL
+  vi.stubGlobal('URL', class extends NativeURL { static createObjectURL = vi.fn(() => 'blob:pdf-page'); static revokeObjectURL = vi.fn() })
   let assigned: Record<string, unknown> | undefined
   let uploaded: File | undefined
   const document = { id: 20, filename: 'qa-large.pdf', page_count: 16, assignments: [] }
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
     if (path.endsWith('/pdf')) { uploaded = (init?.body as FormData).get('file') as File; return json(document) }
+    if (path.includes('/preview')) return new Response(new Uint8Array([137]), { headers: { 'Content-Type': 'image/png' } })
     if (path.endsWith('/sources')) { assigned = JSON.parse(String(init?.body)); return json(page) }
     return json([document])
   }))
   const changed = vi.fn(async () => {})
   render(<I18nProvider><GuidedSources revisionId={2} page={page} changed={changed} onDirtyChange={vi.fn()} /></I18nProvider>)
   const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: '+ Добави схема' }))
   await user.upload(screen.getByLabelText('Качи PDF'), new File([new Uint8Array(16 * 1024 * 1024)], 'qa-large.pdf', { type: 'application/pdf' }))
   await waitFor(() => expect(uploaded?.size).toBe(16 * 1024 * 1024))
   expect(uploaded?.name).toBe('qa-large.pdf')
-  expect(await screen.findByLabelText('PDF страница 5')).toBeVisible()
-  expect(screen.queryByLabelText('PDF страница 9')).toBeNull()
-  await user.click(screen.getByLabelText('PDF страница 5'))
-  await user.click(screen.getByRole('checkbox', { name: 'Списъци с резервни части' }))
-  await user.click(screen.getByRole('button', { name: 'Добави избраните страници' }))
-  await waitFor(() => expect(assigned).toEqual({ expected_version: 1, artifact_id: 20, page_numbers: [5], roles: ['EXPLODED_SCHEME', 'SPARE_PARTS_LIST'] }))
+  await screen.findByRole('img', { name: 'PDF страница 1' })
+  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } })
+  fireEvent.keyDown(screen.getByRole('spinbutton'), { key: 'Enter' })
+  await screen.findByRole('img', { name: 'PDF страница 5' })
+  expect(screen.queryByRole('checkbox')).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Добави тази страница като схема' }))
+  await waitFor(() => expect(assigned).toEqual({ expected_version: 1, artifact_id: 20, page_numbers: [5], roles: ['EXPLODED_SCHEME'] }))
   expect(changed).toHaveBeenCalled()
+  expect(screen.getByLabelText('Избор на PDF страници')).toBeVisible()
 })
 
 

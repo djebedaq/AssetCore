@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-03",
+  "code_commit": "cb7e3349e3c1fc59c691d90e8ad23fcceed84a35",
+  "completion": {
+    "parts": 33,
+    "logicalPages": 5,
+    "references": 3,
+    "densePositions": 19,
+    "rectangleSize": 0.002
+  },
+  "geometry": {
+    "width": 0.2,
+    "height": 0.2,
+    "visible": 2
+  },
+  "large_manual": {
+    "pages": 116,
+    "decoded": [
+      1,
+      58,
+      116
+    ]
+  },
+  "preview_response_count": 40,
+  "all_previews_http_200_image_png": true,
+  "docker_runtime": {
+    "code_commit": "cb7e3349e3c1fc59c691d90e8ad23fcceed84a35",
+    "completion": {
+      "parts": 33,
+      "logicalPages": 5,
+      "references": 3,
+      "densePositions": 19,
+      "rectangleSize": 0.002
+    },
+    "responsive": [
+      {
+        "width": 1280,
+        "height": 800,
+        "viewerHeight": 405,
+        "horizontalOverflow": false
+      },
+      {
+        "width": 900,
+        "height": 900,
+        "viewerHeight": 521,
+        "horizontalOverflow": false
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "viewerHeight": 219.328125,
+        "horizontalOverflow": false
+      }
+    ]
+  },
+  "followup_compiled_ui": {
+    "code_commit": "fb6b394bdea07cc23ef83cce64d2fb56a175f730",
+    "published_qa_only": true,
+    "reopened_draft_shows_sources": true,
+    "preview_response_count": 30,
+    "all_previews_http_200_image_png": true
+  }
+}
