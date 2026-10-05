@@ -20,6 +20,7 @@ from app.models import (
     RepairKit,
     User,
 )
+from PIL import Image
 from reportlab.pdfgen import canvas
 from sqlalchemy import func, select
 
@@ -97,6 +98,16 @@ def test_explicit_roles_preview_and_isolation(client, auth_headers, viewer_heade
     preview_response = client.get(f"{BASE}/artifacts/{artifact_id}/pages/1/preview", headers=auth_headers)
     assert preview_response.status_code == 200 and preview_response.content.startswith(b"\x89PNG")
     assert "no-store" in preview_response.headers["cache-control"]
+    assert preview_response.headers["content-type"] == "image/png"
+    with Image.open(io.BytesIO(preview_response.content)) as image:
+        # Actual subprocess-rendered response, not a mocked PNG signature.
+        assert image.width >= 1100 and image.height >= 1500
+        assert image.width * image.height <= 4_000_000 + image.width + image.height
+    for number in [2, 3]:
+        response = client.get(f"{BASE}/artifacts/{artifact_id}/pages/{number}/preview", headers=auth_headers)
+        assert response.status_code == 200
+        with Image.open(io.BytesIO(response.content)) as image:
+            image.verify()
     assert client.get(f"{BASE}/artifacts/{artifact_id}/pages/4/preview", headers=auth_headers).status_code == 404
     assert client.get(f"{BASE}/artifacts/{artifact_id}/download", headers=viewer_headers).status_code == 403
     assert client.get(f"{BASE}/artifacts/{artifact_id}/pages/1/preview", headers=viewer_headers).status_code == 403

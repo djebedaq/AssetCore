@@ -1,3 +1,4 @@
+import { workspaceBg, workspaceEn, workspaceRu } from './features/catalogBuilder/workspaceTranslations'
 import { wizardBg, wizardEn, wizardRu } from './features/catalogBuilder/wizardTranslations'
 import { guidedBg, guidedEn, guidedRu } from './features/catalogBuilder/guidedTranslations'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
@@ -13,6 +14,7 @@ import {
 } from './locale'
 
 export const bg = {
+  ...workspaceBg,
   ...guidedBg,
   ...wizardBg,
   "ownerDeletion.action": "Изтрий окончателно",
@@ -1304,6 +1306,7 @@ export const en: Catalog = Object.fromEntries(
 
 Object.assign(en, {
   ...wizardEn,
+  ...workspaceEn,
   ...guidedEn,
   "ownerDeletion.action": "Delete permanently",
   "ownerDeletion.actionFor": "Delete permanently: {{identity}}",
@@ -1965,6 +1968,7 @@ export const ru: Catalog = Object.fromEntries(
 
 Object.assign(ru, {
   ...wizardRu,
+  ...workspaceRu,
   ...guidedRu,
   "ownerDeletion.action": "Удалить навсегда",
   "ownerDeletion.actionFor": "Удалить навсегда: {{identity}}",
