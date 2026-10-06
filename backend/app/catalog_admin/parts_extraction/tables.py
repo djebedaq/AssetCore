@@ -282,6 +282,7 @@ def layout_rows(words: list[dict], width: float, *, continuation: list[dict] | N
             table["human_mapping"] = True
         if region.get("inferred"):
             table["continuation_inferred"] = True
+            table["schema"]["method"] = "CONTINUATION_SCHEMA"
             warnings.append("CONTINUATION_INFERRED")
         for part in parts:
             part["column_geometry"] = {"table_bbox": bbox, "header_geometry": headers,

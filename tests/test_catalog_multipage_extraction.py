@@ -50,6 +50,8 @@ def test_all_selected_sources_confirm_with_exact_evidence(client, auth_headers, 
         result = checked(client.post(f"{BASE}/reference-pages/{page['id']}/extract", headers=auth_headers,
             json={"visual_page_id": source["id"], "continuation_token": previous}))
         assert len(result["rows"]) == 5
+        if headerless and source["page_number"] > 2:
+            assert result["tables"][0]["schema"]["method"] == "CONTINUATION_SCHEMA"
         previews.append(result)
         previous = result["token"]
     assert [row["payload"]["position"] for result in previews for row in result["rows"]] == [str(i) for i in range(1, count * 5 + 1)]
