@@ -1,6 +1,7 @@
 # Catalog Builder: извличане от няколко физически страници
 
-PR: https://github.com/djebedaq/AssetCore/pull/98 — отворен draft, без merge/deploy.
+PR: https://github.com/djebedaq/AssetCore/pull/98 — отворен, без merge/deploy.
+Статусът на dependency follow-up и финалния Build check е в PR; първоначалният QA run е описан по-долу.
 
 База: `fd89684ee348bd3724af8ff6dbeb01eaec5ead96` (`origin/main` при започване).
 Последен implementation commit: `1bacd5d5362d1fb9f235fa5c01e896418e5616cc`.
@@ -111,11 +112,12 @@ SQLite база. Схемата и двата списъка са зададен
 Docker CI job също минава: изолирани encrypted backup/restore проверки,
 offline OCR, официален visual appendix и Builder document renderer.
 
-CI frontend job спира преди тестовете върху непроменени зависимости:
+Първоначалният CI frontend job спира преди тестовете върху тогава непроменени зависимости:
 `source-map-js@1.2.1` (HIGH, `GHSA-68fv-2mgg-jv7q`) и `tinypool@1.1.1`
 (CRITICAL, `GHSA-5gmw-xhrv-c9v3` / `GHSA-85c8-ppgw-ccpr`).
-Няма промяна в `package.json` или `pnpm-lock.yaml`. Това ограничение е извън
-фокусирания bugfix; PR остава draft, без заобикаляне на security gate.
+При първоначалния functional fix няма промяна в `package.json` или `pnpm-lock.yaml`;
+PR е оставен draft. Последващата разрешена dependency корекция е описана в
+[DEPENDENCY_SECURITY_BG.md](DEPENDENCY_SECURITY_BG.md), без промяна на security gate.
 
 ## Променени файлове и граници
 
