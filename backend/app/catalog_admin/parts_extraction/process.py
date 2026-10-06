@@ -69,7 +69,8 @@ def configuration(settings) -> dict:
 
 def continuation_configuration(tables: list[dict]) -> list[dict]:
     """Small geometry-only worker configuration; raw rows stay in signed evidence."""
-    return [{"page_width": table.get("page_width"), "header_geometry": table.get("header_geometry", []),
+    return [{"page_width": table.get("page_width"), "headers": table["headers"],
+        "header_geometry": table.get("header_geometry", []),
         "schema": table["schema"], "human_mapping": table.get("human_mapping", False),
         "geometry": {"normalized_boundaries": table.get("geometry", {}).get("normalized_boundaries")},
     } for table in tables[:4]]

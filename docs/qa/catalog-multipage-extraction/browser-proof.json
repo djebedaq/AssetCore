@@ -1,0 +1,41 @@
+[
+  {
+    "scenario": "repeated",
+    "physicalPages": [
+      2,
+      3
+    ],
+    "rowsPerPage": [
+      5,
+      5
+    ],
+    "accepted": 10,
+    "manualMap": false
+  },
+  {
+    "scenario": "continuation",
+    "physicalPages": [
+      2,
+      3
+    ],
+    "rowsPerPage": [
+      5,
+      5
+    ],
+    "accepted": 10,
+    "manualMap": false
+  },
+  {
+    "scenario": "mapping",
+    "physicalPages": [
+      2,
+      3
+    ],
+    "rowsPerPage": [
+      5,
+      0
+    ],
+    "accepted": 10,
+    "manualMap": true
+  }
+]

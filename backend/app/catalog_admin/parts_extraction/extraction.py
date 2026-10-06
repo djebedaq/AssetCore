@@ -44,7 +44,7 @@ def extract_page(page, config: dict) -> dict:
     rows, tables = [], []
     if method == "NATIVE":
         try:
-            rows, tables = ruled_rows(page)
+            rows, tables = ruled_rows(page, continuation=config.get("continuation_tables"))
         except Exception:
             warnings.append("TABLE_DETECTION_FAILED")
     if not tables:

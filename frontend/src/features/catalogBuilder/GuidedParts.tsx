@@ -5,10 +5,11 @@ import { guidedError } from './guidedErrors'
 import usePagePreview from './usePagePreview'
 import RevisionParts from './RevisionParts'
 import { builderBase } from './wizardTypes'
-import type { PartValues, Preview, ReferencePage } from './guidedTypes'
+import type { PartValues, Preview, ReferencePage, Source } from './guidedTypes'
 
 type ReviewRow = { part: PartValues; selected: boolean; rejected: boolean; confirmed: boolean }
 type Review = { preview: Preview; rows: ReviewRow[] }
+type SourceResult = { source: Source; state: 'pending' | 'processed' | 'failed'; error?: ReturnType<typeof guidedError> }
 const fields = ['position', 'part_number', 'description', 'quantity', 'technical_notes', 'technical_specification'] as const
 const roles = ['unknown', ...fields] as const
 
@@ -37,6 +38,7 @@ export default function GuidedParts({ page, changed, onDirtyChange }: { page: Re
   changed: () => Promise<void>; onDirtyChange: (dirty: boolean) => void }) {
   const { t } = useI18n()
   const [reviews, setReviews] = useState<Review[]>([])
+  const [sourceResults, setSourceResults] = useState<SourceResult[]>([])
   const [accepted, setAccepted] = useState<Array<PartValues & { id: number }>>([])
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
@@ -51,19 +53,37 @@ export default function GuidedParts({ page, changed, onDirtyChange }: { page: Re
   async function load() { setAccepted(await api(`${builderBase}/reference-pages/${page.id}/parts`)) }
   useEffect(() => { void load().catch(() => setError(t('guided.error'))) }, [page.id])
   useEffect(() => { onDirtyChange(busy || reviews.length > 0 || advancedDirty); return () => onDirtyChange(false) }, [busy, reviews.length, advancedDirty, onDirtyChange])
+  const sources = page.sources.filter(source => source.role === 'SPARE_PARTS_LIST')
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+  async function extractSource(source: Source, previous: string | null): Promise<string | null> {
+    try {
+      const result = await api<Preview>(`${builderBase}/reference-pages/${page.id}/extract`, { method: 'POST', body: JSON.stringify({
+        visual_page_id: source.id, continuation_token: previous,
+      }) })
+      setReviews(current => [...current.filter(item => item.preview.source.visual_page_id !== source.id), review(result)]
+        .sort((a, b) => sources.findIndex(s => s.id === a.preview.source.visual_page_id) - sources.findIndex(s => s.id === b.preview.source.visual_page_id)))
+      setSourceResults(current => current.map(item => item.source.id === source.id ? { source, state: 'processed' } : item))
+      return result.token
+    } catch (caught) {
+      setSourceResults(current => current.map(item => item.source.id === source.id ? { source, state: 'failed', error: guidedError(caught) } : item))
+      return null
+    }
+  }
+  async function retrySource(source: Source) {
+    setBusy(true)
+    const prior = sources[sources.findIndex(item => item.id === source.id) - 1]
+    try { await extractSource(source, reviews.find(item => item.preview.source.visual_page_id === prior?.id)?.preview.token ?? null) }
+    finally { setBusy(false) }
+  }
   async function extract() {
-    const sources = page.sources.filter(source => source.role === 'SPARE_PARTS_LIST')
     if (busy || !sources.length) return
     setBusy(true); setError(''); setReviews([])
+    setSourceResults(sources.map(source => ({ source, state: 'pending' })))
     let previous: string | null = null
     try {
       for (const [index, source] of sources.entries()) {
         setProgress({ current: index + 1, total: sources.length })
-        const result: Preview = await api<Preview>(`${builderBase}/reference-pages/${page.id}/extract`, { method: 'POST', body: JSON.stringify({
-          visual_page_id: source.id, continuation_token: previous,
-        }) })
-        previous = result.token
-        setReviews(current => [...current, review(result)])
+        previous = await extractSource(source, previous)
       }
     } catch (caught) { setError(t(guidedError(caught))) } finally { setBusy(false); setProgress(null) }
   }
@@ -109,8 +129,24 @@ export default function GuidedParts({ page, changed, onDirtyChange }: { page: Re
     {error && <p role="alert" className="error">{error}</p>}
     {!page.spare_list_count && <p role="status">{t('guided.noLists')}</p>}
     <details><summary>{t('guided.advanced')}</summary><RevisionParts assemblyId={page.assembly_id} referencePageId={page.id} editable onChanged={async () => { await load(); await changed() }} onDirtyChange={setAdvancedDirty} /></details>
-    <button className="primary" disabled={busy || !!reviews.length || !page.spare_list_count} onClick={() => void extract()}>{t('guided.extract')}</button>
+    <button className="primary" disabled={busy || !!sourceResults.length || !page.spare_list_count} onClick={() => void extract()}>{t('guided.extract')}</button>
     {progress && <p role="status">{t('guided.extracting', progress)}</p>}
+    {!!sourceResults.length && <div className="guided-source-results" aria-label={t('guided.lists')}>
+      {sourceResults.map(result => {
+        const item = reviews.find(value => value.preview.source.visual_page_id === result.source.id)
+        const attention = result.state === 'failed' || !!item && (!item.rows.length || item.preview.warnings.length > 0
+          || item.preview.tables.some(table => table.schema.state !== 'RESOLVED') || item.preview.rows.some(row => row.warnings.length))
+        return <div key={result.source.id} role={attention ? 'alert' : 'status'}>
+          <b>{result.source.filename} · {t('guided.physicalPage', { number: result.source.page_number })}</b>
+          {' · '}{t(result.state === 'pending' ? 'builder.previewPending' : attention ? 'guided.NEEDS_ATTENTION' : 'guided.clean')}
+          {item && <> · {t('guided.sourceRows', { count: item.rows.length })}</>}
+          {result.error && <p>{t(result.error)}</p>}
+          {result.state === 'failed' && <button className="secondary" disabled={busy} onClick={() => void retrySource(result.source)}>{t('wizard.retry')}</button>}
+        </div>
+      })}
+      <p role="status">{t('guided.sourceTotal', { count: reviews.reduce((total, item) => total + item.rows.length, 0), processed: sourceResults.filter(item => item.state !== 'pending').length, total: sourceResults.length })}</p>
+      {!reviews.length && !busy && <button className="secondary" onClick={() => setSourceResults([])}>{t('common.close')}</button>}
+    </div>}
     {accepted.length > 0 && <details><summary>{t('guided.review')} ({accepted.length})</summary>
       {accepted.map(part => <p key={part.id}>{part.position} · {part.part_number} · {part.description} · {part.quantity}</p>)}</details>}
     {!!reviews.length && <>
@@ -125,7 +161,8 @@ export default function GuidedParts({ page, changed, onDirtyChange }: { page: Re
       </div>
       {reviews.map((item, source) => <section key={source}>
         <h4>{item.preview.source.filename} · {t('guided.physicalPage', { number: item.preview.source.page_number })} ({item.rows.length})</h4>
-        {item.preview.warnings.includes('OCR_UNAVAILABLE') && <p role="alert">{t('guided.OCR_UNAVAILABLE')}</p>}
+        {(['OCR_UNAVAILABLE', 'OCR_DISABLED', 'OCR_PIXEL_LIMIT', 'TABLE_DETECTION_FAILED', 'CONTINUATION_UNRESOLVED'] as const)
+          .filter(warning => item.preview.warnings.includes(warning)).map(warning => <p role="alert" key={warning}>{t(`guided.${warning}`)}</p>)}
         {!item.rows.length && <p role="status">{t('guided.noRows')}</p>}
         {item.preview.tables.map((table, tableIndex) => table.schema.state !== 'RESOLVED' ? <Mapping
           key={`${item.preview.token.slice(-12)}-${tableIndex}`} preview={item.preview} tableIndex={tableIndex} busy={busy} apply={mapping => void remap(source, tableIndex, mapping)} /> : <details key={`${item.preview.token.slice(-12)}-${tableIndex}`}><summary>{t('guided.mapping')}</summary><Mapping
@@ -150,7 +187,7 @@ export default function GuidedParts({ page, changed, onDirtyChange }: { page: Re
           })}</tbody></table></div>
       </section>)}
       <div className="actions"><button className="primary" disabled={busy || !reviews.some(item => item.rows.some(row => row.selected && !row.rejected))} onClick={() => void confirm()}>{t('guided.confirm')}</button>
-        <button className="secondary" disabled={busy} onClick={() => { setReviews([]); setSourceIndex(null) }}>{t('common.close')}</button></div>
+        <button className="secondary" disabled={busy} onClick={() => { setReviews([]); setSourceResults([]); setSourceIndex(null) }}>{t('common.close')}</button></div>
     </>}
   </section>
 }
