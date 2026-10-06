@@ -90,7 +90,7 @@ def parse_region(headers: list[str], cells: list[list[str]], boxes: list[list[fl
     return rows, table
 
 
-def ruled_rows(page) -> tuple[list[dict], list[dict]]:
+def ruled_rows(page, *, continuation: list[dict] | None = None) -> tuple[list[dict], list[dict]]:
     rows, tables = [], []
     for table in page.find_tables().tables[:80]:
         extracted = [[str(value or "").strip() for value in row] for row in table.extract()[:2000]]
@@ -98,8 +98,49 @@ def ruled_rows(page) -> tuple[list[dict], list[dict]]:
             continue
         headers = table.header.names if table.header.external else extracted[0]
         offset = 0 if table.header.external else 1
+        # MuPDF calls the first physical row a header even on headerless BOMs.
+        # Keep that row as evidence and require mapping unless the preceding
+        # selected page has one compatible, resolved column layout.
+        headerless = not table.header.external and (
+            any(POSITION.fullmatch(value) for value in extracted[0])
+            and sum(bool(header_candidates(value)) for value in extracted[0]) < 2
+        )
+        column_cells = table.rows[0].cells
+        boundaries = ([cell[0] for cell in column_cells] + [table.bbox[2]]
+                      if all(column_cells) else [])
+        normalized = [edge / page.cropbox.width for edge in boundaries]
+        mapping, inherited = None, None
+        if headerless:
+            offset = 0
+            headers = [""] * len(extracted[0])
+            matches = [old for old in continuation or []
+                if old["schema"]["state"] == "RESOLVED"
+                and len(old.get("headers", [])) == len(headers)
+                and normalized and len(old.get("geometry", {}).get("normalized_boundaries") or []) == len(normalized)
+                and all(abs(a - b) <= .01 for a, b in zip(
+                    normalized, old["geometry"]["normalized_boundaries"], strict=True))]
+            if len(matches) == 1:
+                candidate = matches[0]
+                roles = candidate["schema"]["mapping"]
+                pos = next((int(col) for col, role in roles.items() if role == "position"), None)
+                if pos is not None and all(POSITION.fullmatch(row[pos]) for row in extracted[:32]):
+                    inherited, headers, mapping = candidate, candidate["headers"], roles
         parts, region = parse_region([str(value or "") for value in headers], extracted[offset:],
-            [list(row.bbox) for row in table.rows[offset:offset + len(extracted) - offset]], list(table.bbox), "NATIVE_TABLE")
+            [list(row.bbox) for row in table.rows[offset:offset + len(extracted) - offset]], list(table.bbox), "NATIVE_TABLE", mapping=mapping)
+        region.update({"page_width": page.cropbox.width,
+            "geometry": {"state": "RESOLVED", "normalized_boundaries": normalized, "warnings": []},
+            "header_geometry": [header_geometry(str(header), [{"bbox": [left, table.bbox[1], right, table.rows[0].bbox[3]]}])
+                for header, left, right in zip(headers, boundaries, boundaries[1:], strict=False)]})
+        if headerless and inherited is None:
+            parts = []
+            region["schema"].update({"state": "NEEDS_REVIEW", "mapping": {}, "warnings": ["CONTINUATION_UNRESOLVED"]})
+        if inherited:
+            region["continuation_inferred"] = True
+            region["schema"]["method"] = "CONTINUATION_SCHEMA"
+            region["human_mapping"] = inherited.get("human_mapping", False)
+            for part in parts:
+                part["warnings"].append("CONTINUATION_INFERRED")
+                part["confidence"] = min(part["confidence"], .7)
         rows.extend(parts)
         tables.append(region)
     return rows, tables
@@ -187,7 +228,8 @@ def layout_rows(words: list[dict], width: float, *, continuation: list[dict] | N
                 for h in old["header_geometry"]]
             regions.append({"line": -1, "headers": headers, "left": bounds[0] * width, "right": bounds[-1] * width,
                             "inferred": True, "stored_boundaries": [b * width for b in bounds],
-                            "mapping": old["schema"]["mapping"] if old.get("human_mapping") else None})
+                            "mapping": old["schema"]["mapping"],
+                            "human_mapping": old.get("human_mapping", False)})
     for region in regions[:80]:
         headers = region["headers"]
         next_header = min((r["line"] for r in regions if r["line"] > region["line"]), default=len(lines))
@@ -236,7 +278,7 @@ def layout_rows(words: list[dict], width: float, *, continuation: list[dict] | N
             warnings.append("GEOMETRY_AMBIGUOUS")
             geometry["warnings"] = warnings
             geometry["state"] = "NEEDS_REVIEW"
-        if region.get("mapping"):
+        if region.get("human_mapping"):
             table["human_mapping"] = True
         if region.get("inferred"):
             table["continuation_inferred"] = True

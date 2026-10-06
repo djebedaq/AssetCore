@@ -129,7 +129,10 @@ def remap(db: Session, actor, page_id: int, data) -> dict:
         row["warnings"] = sorted(set(row["warnings"] + table.get("geometry", {}).get("warnings", [])
             + (["OCR_REQUIRES_REVIEW"] if claim["method"] == "OCR" else [])))
     claim["rows"].extend(rows)
+    schema_warnings = {warning for item in claim["tables"] for warning in item["schema"]["warnings"]}
     claim["tables"][data.table_index] = updated
+    claim["warnings"] = sorted((set(claim["warnings"]) - schema_warnings)
+        | {warning for item in claim["tables"] for warning in item["schema"]["warnings"]})
     add_audit_log(db, actor, "catalog_reference_page", page_id, "SPARE_PARTS_COLUMNS_MAPPED",
         _meta(context[3], context[2], context[1], table_index=data.table_index, mapping=mapping))
     db.commit()
