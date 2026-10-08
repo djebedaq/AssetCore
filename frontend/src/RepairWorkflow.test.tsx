@@ -1,3 +1,4 @@
+import { withWorkspaceRoutes } from './ui/workspaceTestFixtures'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -82,6 +83,7 @@ describe('ремонтен работен процес', () => {
       throw new Error(`Unexpected request: ${path}`)
     })
     vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
 
     render(<I18nProvider initialLocale="bg"><IndustrialRepairs /></I18nProvider>)
     await userEvent.click(await screen.findByRole('button', { name: /Falch 500 bar/ }))
@@ -148,6 +150,7 @@ describe('ремонтен работен процес', () => {
       throw new Error(`Unexpected request: ${path}`)
     })
     vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
 
     render(<I18nProvider initialLocale="bg"><IndustrialRepairs /></I18nProvider>)
     await userEvent.click(await screen.findByRole('button', { name: /Falch 500 bar/ }))
@@ -184,6 +187,7 @@ describe('ремонтен работен процес', () => {
       throw new Error(`Unexpected request: ${path}`)
     })
     vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
 
     render(<I18nProvider initialLocale="bg"><IndustrialRepairs /></I18nProvider>)
     await userEvent.click(await screen.findByRole('button', { name: /Test-only repair asset/ }))
@@ -236,6 +240,7 @@ describe('ремонтен работен процес', () => {
       throw new Error(`Unexpected request: ${path}`)
     })
     vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
 
     render(<I18nProvider initialLocale="bg"><IndustrialRepairs /></I18nProvider>)
     await userEvent.click(await screen.findByRole('button', { name: /Falch 500 bar/ }))
@@ -282,6 +287,7 @@ describe('ремонтен работен процес', () => {
     })
     const confirmMock = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
 
     render(<I18nProvider initialLocale="bg"><IndustrialRepairs /></I18nProvider>)
     await userEvent.click(await screen.findByRole('button', { name: /Falch 500 bar/ }))

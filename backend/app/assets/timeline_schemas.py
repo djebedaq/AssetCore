@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -22,6 +23,11 @@ class TimelineRelated(BaseModel):
     official_document_id: int | None = None
 
 
+class TimelineFile(BaseModel):
+    format: Literal["docx", "pdf"]
+    download_endpoint: str
+
+
 class MachineTimelineItem(BaseModel):
     event_key: str
     category: TimelineCategory
@@ -35,6 +41,7 @@ class MachineTimelineItem(BaseModel):
     description: str | None = None
     machine_id: int
     related: TimelineRelated = Field(default_factory=TimelineRelated)
+    files: list[TimelineFile] = Field(default_factory=list)
     # Only explicit per-event projections populate this field, never raw JSON.
     details: dict[str, str | int | float | bool | None | list[str | int]] = Field(
         default_factory=dict

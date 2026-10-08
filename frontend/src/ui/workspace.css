@@ -1,0 +1,92 @@
+/* Shared operational controls preserve AssetCore's navy/orange identity. */
+:root { --ac-focus: #bc7611; --ac-line: #ccd8e1; --ac-muted: #536779; }
+.ac-select { min-width: 0; width: 100%; }
+.ac-select > button, select.ac-native-select { width: 100%; min-height: 36px; padding: 7px 10px; border: 1px solid var(--ac-line); border-radius: 7px; background: #fff; color: #173e63; font: inherit; text-align: left; }
+.ac-select > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Native form controls keep browser validation, labels and keyboard behavior. */
+select.ac-native-select { min-width: 0; max-width: 100%; cursor: pointer; }
+.ac-select > button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-select svg { flex: none; }
+.ac-select > button:hover, select.ac-native-select:hover { border-color: #68849b; background: #f7fafc; }
+.ac-select > button:disabled, select.ac-native-select:disabled { background: #eef2f5; color: #687789; cursor: not-allowed; }
+.ac-select > button[aria-invalid=true], select.ac-native-select[aria-invalid=true], select.ac-native-select:user-invalid { border-color: #b32832; }
+.ac-select > button:focus-visible, select.ac-native-select:focus-visible, .ac-select-menu input:focus-visible, .ac-filter-toolbar input:focus-visible { outline: 2px solid var(--ac-focus); outline-offset: 2px; }
+.ac-select-menu { position: fixed; z-index: 3500; display: flex; flex-direction: column; overflow: hidden; padding: 4px; border: 1px solid #bccbd7; border-radius: 9px; background: #fff; box-shadow: 0 8px 24px #102f492b; color: #173e63; font-size: 13px; }
+.ac-select-search { display: flex; align-items: center; gap: 7px; padding: 5px 6px 8px; border-bottom: 1px solid #e1e7ed; }
+.ac-select-search input { min-width: 0; width: 100%; min-height: 32px; padding: 5px 7px; border: 1px solid var(--ac-line); border-radius: 5px; font: inherit; }
+.ac-select-menu [role=listbox] { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.ac-select-menu [role=option] { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 34px; padding: 7px 9px; border-radius: 5px; cursor: pointer; overflow-wrap: anywhere; }
+.ac-select-menu [role=option].active { background: #edf3f8; }
+.ac-select-menu [role=option][aria-selected=true] { background: #e7f1f9; font-weight: 700; }
+.ac-select-menu [role=option][aria-disabled=true] { color: #74818b; cursor: not-allowed; }
+.ac-select-empty { margin: 0; padding: 10px; color: var(--ac-muted); }
+.ac-filter-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 12px 0; padding: 10px; border: 1px solid #dce5ec; border-radius: 10px; background: #f8fafc; min-width: 0; }
+.ac-filter { display: grid; gap: 4px; flex: 1 1 150px; min-width: 0; max-width: 280px; font-size: 12px; color: var(--ac-muted); }
+.ac-filter > span { font-weight: 600; }
+.ac-filter-search { flex: 2 1 240px; max-width: none; }
+.ac-filter .search { min-width: 0; width: 100%; min-height: 36px; padding: 0 9px; border-radius: 7px; }
+.ac-filter .search input { min-width: 0; width: 100%; padding: 7px 3px; font-size: 13px; }
+.ac-filter-date { flex: 0 1 135px; }
+.ac-filter-date input { min-width: 0; min-height: 36px; padding: 6px 8px; width: 100%; border: 1px solid var(--ac-line); border-radius: 7px; background: #fff; font: inherit; color: #173e63; }
+.ac-reset { min-height: 36px; }
+.ac-pagination { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; margin: 12px 0; color: var(--ac-muted); font-size: 12px; }
+.ac-pagination > div { display: flex; align-items: center; gap: 10px; }
+.ac-status { display: inline-flex; gap: 5px; align-items: center; min-height: 24px; padding: 3px 7px; font-size: 12px; line-height: 1.3; font-weight: 600; white-space: normal; text-transform: none; border: 1px solid transparent; }
+.ac-status svg { flex: none; }
+.ac-status-success { background: #e8f4ee; color: #1d6543; border-color: #c0ddcd; }
+.ac-status-info { background: #eaf2fc; color: #215c96; border-color: #c4d9f0; }
+.ac-status-attention { background: #fff3df; color: #82500b; border-color: #e9ce9e; }
+.ac-status-neutral { background: #f0f3f5; color: #4d5f6d; border-color: #d4dce2; }
+.ac-status-error { background: #fcecee; color: #a52230; border-color: #e6bcc3; }
+.ac-context-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.ac-context-tabs button { min-height: 36px; border: 1px solid var(--ac-line); border-radius: 7px; padding: 7px 11px; background: #fff; color: #173e63; }
+.ac-context-tabs button[aria-pressed=true] { background: #173e63; color: #fff; border-color: #173e63; }
+.ac-history-note { font-size: 11px; color: var(--ac-muted); margin: 8px 0; }
+.ac-batch-category { display: block; margin-top: 5px; color: var(--ac-muted); }
+.ac-dashboard .stat-card, .ac-dashboard .panel { animation: ac-enter 480ms ease both; animation-delay: var(--ac-delay, 0ms); transition: border-color 180ms, box-shadow 180ms; }
+.ac-dashboard .stat-card:hover { border-color: #95afc3; box-shadow: 0 4px 12px #173e6310; }
+.ac-dashboard .panel-grid { gap: 16px; align-items: start; }
+.ac-dashboard .stat-card strong > span[aria-hidden=true] { font-size: 25px; line-height: 1.2; color: #173e63; font-weight: 750; }
+.ac-dashboard .activity-list .link { text-align: left; align-self: start; padding: 0; }
+.ac-dashboard .activity-list .ac-status { width: fit-content; grid-column: 2; grid-row: 1 / 3; align-self: center; }
+.ac-dashboard .activity-list .ac-status > span { color: inherit; font-size: inherit; }
+.ac-dashboard .bar i { transition: width 600ms ease; min-width: 0; }
+.ac-category-counts { display: grid; gap: 0; max-height: 300px; overflow-y: auto; }
+.ac-category-counts > div { display: flex; align-items: center; gap: 12px; justify-content: space-between; border-bottom: 1px solid #e5ebf0; padding: 9px 0; font-size: 13px; }
+.ac-category-counts > div > span { min-width: 0; overflow-wrap: anywhere; }
+.ac-category-counts > .ac-category-total { font-weight: 700; border-bottom: 0; }
+.ac-activity { list-style: none; padding: 0; margin: 0; }
+.ac-activity > li { border-bottom: 1px solid #e5ebf0; }
+.ac-activity > li:last-child { border-bottom: 0; }
+.ac-activity button { display: flex; gap: 12px; text-align: left; width: 100%; border: 0; padding: 9px 0; background: transparent; color: #173e63; font: inherit; }
+.ac-activity button:hover { background: #f4f8fb; }
+.ac-activity time { font-size: 11px; color: var(--ac-muted); flex: 0 0 118px; }
+.ac-activity strong { display: block; font-size: 13px; font-weight: 600; }
+.ac-activity small { display: block; margin-top: 3px; color: var(--ac-muted); overflow-wrap: anywhere; }
+.language-switch .ac-select { width: 140px; }
+.compact-language .ac-select { width: 140px; }
+.catalog-v2-machine .ac-select { max-width: 100%; }
+:where(.sidebar, .table-card, .machine-category-pills, .ac-select-menu [role=listbox], .ac-category-counts, .modal, .passport-tabs, .catalog-v2-workspace) { scrollbar-color: #879eaf #edf2f6; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #edf2f6; }
+::-webkit-scrollbar-thumb { background: #879eaf; border: 2px solid #edf2f6; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #587991; }
+@keyframes ac-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 760px) {
+  .ac-filter { flex-basis: 140px; max-width: none; }
+  .ac-filter-search { flex-basis: 100%; }
+  .ac-filter-date { flex: 1 1 130px; }
+  .ac-select > button, select.ac-native-select, .ac-select-menu [role=option], .ac-context-tabs button, .ac-reset { min-height: 44px; }
+  .ac-activity button { flex-direction: column; gap: 4px; }
+  .ac-activity time { flex-basis: auto; }
+  .ac-pagination > div { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ac-dashboard .stat-card, .ac-dashboard .panel { animation: none; }
+  .ac-dashboard .bar i, .ac-dashboard .stat-card { transition: none; }
+}
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; }
+  .ac-status, .ac-select > button, select.ac-native-select, .ac-select-menu { border: 1px solid CanvasText; }
+  .ac-select-menu [role=option].active { outline: 1px solid Highlight; }
+}

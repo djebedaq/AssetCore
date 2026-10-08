@@ -9,7 +9,7 @@ from threading import RLock
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import bindparam, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -841,9 +841,32 @@ def _return_operations(db: Session, issue_batch_ids: set[int]) -> dict[int, list
     result: dict[int, list[dict]] = {batch_id: [] for batch_id in issue_batch_ids}
     if not result:
         return result
+    # Filter the JSON manifest in the database before hydrating return operations.
+    # Membership still comes exclusively from the original transfer's real FK.
+    if db.bind.dialect.name == "postgresql":
+        membership = text("""EXISTS (
+            SELECT 1 FROM json_array_elements(CASE
+                WHEN json_typeof(transfer_batches.return_manifest->'machines') = 'array'
+                THEN transfer_batches.return_manifest->'machines' ELSE '[]'::json END) item
+            JOIN transfer_protocols original
+              ON item->>'transfer_id' = CAST(original.id AS TEXT)
+            WHERE json_typeof(item->'transfer_id') = 'number'
+              AND original.batch_id IN :issue_ids
+        )""")
+    else:
+        membership = text("""EXISTS (
+            SELECT 1 FROM json_each(CASE
+                WHEN json_type(transfer_batches.return_manifest, '$.machines') = 'array'
+                THEN json_extract(transfer_batches.return_manifest, '$.machines') ELSE '[]' END) item
+            JOIN transfer_protocols original ON original.id = json_extract(
+                CASE WHEN item.type = 'object' THEN item.value ELSE '{}' END, '$.transfer_id')
+            WHERE json_type(CASE WHEN item.type = 'object' THEN item.value ELSE '{}' END,
+                '$.transfer_id') = 'integer' AND original.batch_id IN :issue_ids
+        )""")
+    membership = membership.bindparams(bindparam("issue_ids", sorted(issue_batch_ids), expanding=True))
     batches = db.scalars(
         select(TransferBatch)
-        .where(TransferBatch.return_manifest.is_not(None))
+        .where(TransferBatch.return_manifest.is_not(None), membership)
         .order_by(TransferBatch.created_at.desc(), TransferBatch.id.desc())
     ).all()
     manifests = {

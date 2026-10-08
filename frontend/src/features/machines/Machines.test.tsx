@@ -1,3 +1,4 @@
+import { withWorkspaceRoutes } from '../../ui/workspaceTestFixtures'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
@@ -38,6 +39,7 @@ function mockRegistry(categories = navigation) {
     throw new Error(`Unexpected registry request: ${path}`)
   })
   vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
   return fetchMock
 }
 
@@ -53,16 +55,16 @@ describe('category-driven machine registry', () => {
     mount()
     expect(await screen.findByRole('button', { name: /Бояджийски машини.*1/ })).toBeVisible()
     expect(screen.queryByText('QA water jet')).not.toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/machines')).toBe(false)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/workspace/machines?') && !String(url).includes('category_id='))).toBe(false)
     await actor.click(screen.getByRole('button', { name: /Бояджийски машини.*1/ }))
     expect(await screen.findByText('QA paint machine')).toBeVisible()
     expect(screen.queryByText('QA water jet')).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: 'Налягане' })).not.toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/machines?category_id=2')).toBe(true)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/workspace/machines?category_id=2&'))).toBe(true)
     expect(window.location.pathname + window.location.search).toBe('/machines?category=QA_PAINT')
     await actor.type(screen.getByRole('textbox'), 'water')
     expect(screen.queryByText('QA water jet')).not.toBeInTheDocument()
-    expect(screen.queryByText('QA paint machine')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('QA paint machine')).not.toBeInTheDocument())
     await actor.clear(screen.getByRole('textbox'))
     await actor.click(screen.getByRole('button', { name: 'Нова машина' }))
     expect(screen.getByRole('dialog')).toBeVisible()
@@ -80,7 +82,7 @@ describe('category-driven machine registry', () => {
     expect(await screen.findByText('QA paint machine')).toBeVisible()
     expect(screen.getByRole('columnheader', { name: 'Категория' })).toBeVisible()
     expect(screen.queryByRole('columnheader', { name: 'Налягане' })).not.toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/machines')).toBe(true)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/workspace/machines?') && !String(url).includes('category_id='))).toBe(true)
     await actor.click(screen.getByRole('button', { name: 'Нова машина' }))
     expect(within(screen.getByRole('dialog')).getByLabelText('Категория')).toHaveValue('')
   })
@@ -118,7 +120,7 @@ describe('category-driven machine registry', () => {
     const fetchMock = mockRegistry([navigation[0]])
     mount()
     expect(await screen.findByText('QA water jet')).toBeVisible()
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/machines?category_id=1')).toBe(true)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/workspace/machines?category_id=1&'))).toBe(true)
   })
 
   it('keeps the compact selector usable with more than thirty dynamic categories', async () => {
@@ -130,11 +132,12 @@ describe('category-driven machine registry', () => {
     const actor = userEvent.setup()
     mount()
     const selector = await screen.findByRole('combobox', { name: 'Категории активи' })
-    expect(within(selector).getAllByRole('option')).toHaveLength(34)
-    await actor.selectOptions(selector, 'QA_CAT_31')
+    await actor.click(selector)
+    expect(screen.getAllByRole('option')).toHaveLength(33)
+    await actor.click(screen.getByRole('option', { name: /^Тестова категория 31/ }))
     expect(await screen.findByText('В тази категория няма активи.')).toBeVisible()
     expect(window.location.search).toBe('?category=QA_CAT_31')
-    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/machines?category_id=32')).toBe(true)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/workspace/machines?category_id=32&'))).toBe(true)
   })
 
   it('lets an asset-only observer navigate without loading administrative metadata', async () => {
@@ -160,6 +163,7 @@ describe('asset form capabilities', () => {
       String(input).includes('/form-definition')
         ? json({ id: 2, capabilities: [], fields: [] }) : json({ id: 99 }))
     vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
     render(<I18nProvider initialLocale="bg"><MachineModal locations={[]} departments={[]} categories={categories} onClose={vi.fn()} onSaved={vi.fn()} /></I18nProvider>)
     const actor = userEvent.setup()
     const category = screen.getByLabelText('Категория') as HTMLSelectElement
@@ -195,6 +199,7 @@ describe('asset form capabilities', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => String(input).includes('/form-definition')
       ? json({ id: 2, capabilities: [], fields }) : json({ id: 100 }))
     vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
     render(<I18nProvider initialLocale="bg"><MachineModal initialCategoryId={2} locations={[]} departments={[]} categories={categories} onClose={vi.fn()} onSaved={vi.fn()} /></I18nProvider>)
     const actor = userEvent.setup()
     await actor.type(await screen.findByRole('textbox', { name: 'Текст' }), 'AB')
@@ -226,6 +231,7 @@ describe('asset form capabilities', () => {
       return json({ id: 7 })
     })
     vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
     render(<I18nProvider initialLocale="bg"><MachineModal machine={{ id: 7, inventory_number: '7', name: 'QA HPWJ', category: 'HPWJ', category_id: 1, brand: 'QA', pressure_bar: 1000, status: 'READY', created_at: '', updated_at: '' }} locations={[]} departments={[]} categories={categories} onClose={vi.fn()} onSaved={vi.fn()} /></I18nProvider>)
     const actor = userEvent.setup()
     await actor.selectOptions(screen.getByLabelText('Категория'), '2')

@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { bg, formatDate, I18nProvider } from '../../i18n'
-import { clearSessionUser } from '../../permissions'
-import type { MachineTimelinePage, TimelineCategory } from '../../types'
+import { clearSessionUser, setSessionUser } from '../../permissions'
+import type { MachineTimelinePage, TimelineCategory, UserSession } from '../../types'
 import { MachinePassportModal } from './MachinePassportModal'
 import { passport } from './passportTestFixtures'
 import { TIMELINE_CATEGORIES, CATEGORY_KEYS } from './timelinePresentation'
@@ -54,6 +54,23 @@ beforeEach(() => {
   URL.revokeObjectURL = vi.fn()
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+it('opens the original request instead of its associated repair and shows only available document formats', async () => {
+  setSessionUser({ permissions: ['requests.view', 'repairs.view', 'documents.view'] } as UserSession)
+  const navigate = vi.fn()
+  window.addEventListener('assetcore:operation', navigate)
+  mount(async () => timelinePage({ items: [timelineItem({
+    category: 'parts', source_type: 'part_request', event_type: 'PART_REQUEST_CREATED',
+    related: { part_request_id: 42, repair_id: 9, transfer_id: null, official_document_id: null },
+    files: [{ format: 'docx', download_endpoint: '/generated-documents/91/download' }],
+  })] }))
+  await history()
+  await userEvent.click(await panel().findByRole('button', { name: bg['ux.openRecord'] }))
+  expect((navigate.mock.calls[0][0] as CustomEvent).detail).toEqual({ module: 'parts', recordId: 42, machineId: 13 })
+  expect(panel().getByRole('button', { name: 'DOCX' })).toBeVisible()
+  expect(panel().queryByRole('button', { name: 'PDF' })).not.toBeInTheDocument()
+  window.removeEventListener('assetcore:operation', navigate)
+})
 
 describe('canonical passport timeline requests', () => {
   it('is lazy, fetches once on first History and caches the current filter/page across tabs and rerenders', async () => {

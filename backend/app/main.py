@@ -453,8 +453,11 @@ def update_user_preferences(
 
 @app.get("/api/dashboard")
 def dashboard(
-    _: User = Depends(require_repair_viewer), db: Session = Depends(get_db)
+    user: User = Depends(require_repair_viewer), db: Session = Depends(get_db)
 ) -> dict:
+    from .assets.service import category_navigation
+    from .workspace import recent_activity
+
     total = db.scalar(select(func.count(Machine.id))) or 0
     by_status = dict(
         db.execute(select(Machine.status, func.count(Machine.id)).group_by(Machine.status)).all()
@@ -482,6 +485,9 @@ def dashboard(
         "protocols": db.scalar(select(func.count(TransferProtocol.id))) or 0,
         "documents": db.scalar(select(func.count(TechnicalDocument.id))) or 0,
         "status_breakdown": by_status,
+        "categories": category_navigation(user, db),
+        "uncategorized_assets": db.scalar(select(func.count(Machine.id)).where(Machine.category_id.is_(None))) or 0,
+        "recent_activity": recent_activity(db, user),
         "recent_repairs": [
             {
                 "id": repair.id,
@@ -504,6 +510,10 @@ app.include_router(master_data_legacy_router)
 
 
 app.include_router(assets_legacy_router)
+
+from .workspace import router as workspace_router  # noqa: E402
+
+app.include_router(workspace_router)
 
 
 @app.get("/api/repairs", response_model=list[RepairOut])

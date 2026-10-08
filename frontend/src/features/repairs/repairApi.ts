@@ -34,6 +34,7 @@ export type RepairParticipantInput = {
 export const repairApi = {
   list: () => api<RepairCase[]>('/repair-cases'),
   machines: () => api<Machine[]>('/machines'),
+  machine: (machineId: number) => api<Machine>(`/machines/${machineId}`),
   get: (repairId: number) => api<RepairCase>(`/repair-cases/${repairId}`),
   verifiedParts: (machineId: number) => api<CatalogPartEnhanced[]>(`/catalog/parts?verified_only=true&machine_id=${machineId}`),
   create: (input: RepairCreateInput) => api<RepairCase>('/repair-cases', { method: 'POST', body: JSON.stringify(input) }),

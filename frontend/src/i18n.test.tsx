@@ -35,8 +35,9 @@ describe('многоезична архитектура', () => {
   it('превключва езика и запазва избора локално', async () => {
     render(<I18nProvider initialLocale="bg"><LanguageSwitcher /></I18nProvider>)
     const select = screen.getByLabelText('Език')
-    await userEvent.selectOptions(select, 'en')
-    expect(screen.getByLabelText('Language')).toHaveValue('en')
+    await userEvent.click(select)
+    await userEvent.click(screen.getByRole('option', { name: 'English' }))
+    expect(screen.getByLabelText('Language')).toHaveTextContent('English')
     expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('en')
     expect(document.documentElement.lang).toBe('en')
   })
@@ -61,6 +62,12 @@ describe('многоезична архитектура', () => {
     const value = new Date('2026-07-31T12:30:00Z')
     expect(formatDate('bg', value)).not.toEqual(formatDate('en', value))
     expect(formatNumber('bg', 1234.5)).not.toEqual(formatNumber('en', 1234.5))
+  })
+
+  it('показва един и същ UTC момент от старите записи и новата активност', () => {
+    for (const locale of ['bg', 'en', 'ru'] as const) {
+      expect(formatDate(locale, '2026-10-08T09:32:00')).toBe(formatDate(locale, '2026-10-08T09:32:00Z'))
+    }
   })
 
   it('съдържа професионални основни термини и на трите езика', () => {

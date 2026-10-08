@@ -13,6 +13,8 @@ import { catalogApi } from './catalogApi'
 import { catalogDisplayName, catalogSourceDescription } from './catalogNames'
 import { addPart, addRepairKit } from './catalogState'
 import type { AssemblyDetails, CatalogCartLine, CatalogPart, CatalogRepairKit, MachineCatalog, PositionHotspot } from './catalogTypes'
+import { Select } from '../../ui/Select'
+import { CategorySelect, MachineSelect, useCategories } from '../../ui/workspace'
 
 type Props = { defaultMachineId?: number }
 type MachineCartState = { machineId: number | null; lines: CatalogCartLine[] }
@@ -22,6 +24,9 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
   const { t, locale } = useI18n()
   const [machines, setMachines] = useState<Machine[]>([])
   const [machineId, setMachineId] = useState<number | ''>(defaultMachineId || '')
+  const [categoryId, setCategoryId] = useState('')
+  const { categories, error: categoryError } = useCategories('catalog')
+  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null)
   const currentMachine = useRef(machineId)
   currentMachine.current = machineId
   const previousDefaultMachineId = useRef(defaultMachineId)
@@ -57,8 +62,14 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
   }, [])
 
   useEffect(() => {
-    void api<Machine[]>('/machines').then(setMachines).catch((caught) => setError(friendlyError(caught, t('catalog.loadError'))))
-  }, [t])
+    let active = true
+    setMachines([])
+    if (!machineId) return
+    void api<Machine>(`/machines/${machineId}`).then(machine => {
+      if (active) { setMachines([machine]); setCategoryId(String(machine.category_id || '')) }
+    }).catch(caught => { if (active) setError(friendlyError(caught, t('catalog.loadError'))) })
+    return () => { active = false }
+  }, [machineId, t])
   useEffect(() => {
     const previous = previousDefaultMachineId.current
     previousDefaultMachineId.current = defaultMachineId
@@ -163,17 +174,24 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
     if (nextMachineId === machineId) return
     if (cart.lines.length > 0) setPendingMachineId(nextMachineId); else applyMachineSelection(nextMachineId)
   }
+  function requestCategorySelection(nextCategory: string) {
+    if (nextCategory === categoryId) return
+    if (cart.lines.length) { setPendingCategoryId(nextCategory); setPendingMachineId(''); return }
+    applyMachineSelection(''); setCategoryId(nextCategory)
+  }
 
   return <>
-    <div className="toolbar"><div><h3>{t('catalog.title')}</h3><p className="muted">{t('catalog.machineFirstHint')}</p></div></div>
+    <div className="toolbar"><div><h3>{t('catalog.title')}</h3><p className="muted">{t('ux.catalogHint')}</p></div></div>
     {toast && <div className="success catalog-v2-toast" role="status"><CheckCircle2 size={18} />{toast}<button className="link" onClick={() => setToast('')}>{t('common.close')}</button></div>}
     {error && <div className="error">{error}</div>}
+    {categoryError && <div className="error" role="alert">{t('catalog.loadError')}</div>}
     <section className="catalog-v2-machine panel">
-      <label>{t('catalog.chooseMachine')}<select value={machineId} onChange={(event) => requestMachineSelection(event.target.value ? Number(event.target.value) : '')}><option value="">{t('catalog.chooseMachinePlaceholder')}</option>{machines.filter(item => item.category_capabilities?.includes('HAS_PARTS_CATALOG') !== false).map((item) => <option value={item.id} key={item.id}>№{item.inventory_number} · {item.brand} {item.model || ''}</option>)}</select></label>
+      <CategorySelect categories={categories} value={categoryId} onChange={requestCategorySelection} all={false} />
+      <MachineSelect module="catalog" label={t('catalog.chooseMachine')} category={categoryId} value={String(machineId)} onChange={value => requestMachineSelection(value ? Number(value) : '')} disabled={!categoryId} />
       {machine && <div><b>№{machine.inventory_number} · {machine.brand}</b><span>{machine.model || t('common.noValue')}</span><small>{machine.pressure_bar != null && <>{t('machines.pressure')}: {machine.pressure_bar} · </>}{t('common.status')}: {statusText(t, machine.status)} · {t('common.location')}: {machine.location?.name || t('common.noValue')}</small></div>}
-      {context?.supported && <label>{t('catalog.chooseAssembly')}<select value={reference?.source_id || sourceId} onChange={(event) => { const item = context.assemblies.find(assembly => assembly.source_id === event.target.value); setSourceId(item?.pages?.[0]?.source_id || event.target.value) }}>{context.assemblies.map((assembly) => <option key={assembly.source_id} value={assembly.source_id}>{assembly[`name_${locale}`] || assembly.title} · {assembly.part_count}</option>)}</select></label>}
+      {context?.supported && <label>{t('catalog.chooseAssembly')}<Select label={t('catalog.chooseAssembly')} value={reference?.source_id || sourceId} onChange={value => { const item = context.assemblies.find(assembly => assembly.source_id === value); setSourceId(item?.pages?.[0]?.source_id || value) }} options={context.assemblies.map(assembly => ({ value: assembly.source_id, label: `${assembly[`name_${locale}`] || assembly.title} · ${assembly.part_count}` }))} /></label>}
     </section>
-    {pendingMachineId !== null && <div className="catalog-v2-machine-switch panel" role="dialog" aria-modal="true" aria-labelledby="catalog-machine-switch-title"><h3 id="catalog-machine-switch-title">{t('catalog.changeMachineTitle')}</h3><p>{t('catalog.changeMachineWarning')}</p><div className="actions"><button className="secondary" onClick={() => setPendingMachineId(null)}>{t('common.cancel')}</button><button className="primary" onClick={() => applyMachineSelection(pendingMachineId)}>{t('catalog.changeMachineConfirm')}</button></div></div>}
+    {pendingMachineId !== null && <div className="catalog-v2-machine-switch panel" role="dialog" aria-modal="true" aria-labelledby="catalog-machine-switch-title"><h3 id="catalog-machine-switch-title">{t('catalog.changeMachineTitle')}</h3><p>{t('catalog.changeMachineWarning')}</p><div className="actions"><button className="secondary" onClick={() => { setPendingMachineId(null); setPendingCategoryId(null) }}>{t('common.cancel')}</button><button className="primary" onClick={() => { applyMachineSelection(pendingMachineId); if (pendingCategoryId !== null) setCategoryId(pendingCategoryId); setPendingCategoryId(null) }}>{t('catalog.changeMachineConfirm')}</button></div></div>}
     {loading && <div className="empty-state">{t('common.loading')}</div>}
     {!machineId && !loading && <div className="empty-state visual-catalog-empty"><BookOpen size={36} /><h3>{t('catalog.chooseMachineTitle')}</h3><p>{t('catalog.chooseMachineExplanation')}</p></div>}
     {context && !context.supported && <div className="empty-state visual-catalog-empty"><BookOpen size={36} /><h3>{context.message}</h3></div>}

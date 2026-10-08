@@ -510,6 +510,7 @@ def _candidate_document_records(
     *,
     machine_id: int | None = None,
     linked_request_ids: Collection[int] = (),
+    include_files: bool = False,
 ) -> list[_DocumentRecord]:
     """Load selected-category identity metadata without signatures or file payloads."""
     document_types = _DOCUMENT_TYPES_BY_CATEGORY[category]
@@ -518,18 +519,18 @@ def _candidate_document_records(
         document_types=document_types,
         machine_id=machine_id,
         include_signatures=False,
-        include_files=False,
+        include_files=include_files,
     )
     legacy = _legacy_generated_records(
         db,
         document_types=document_types,
         machine_id=machine_id,
-        include_files=False,
+        include_files=include_files,
         linked_request_ids=linked_request_ids,
     )
     if category == OfficialRegistryCategory.TRANSFERS:
         legacy += _legacy_issue_records(
-            db, machine_id=machine_id, include_files=False
+            db, machine_id=machine_id, include_files=include_files
         )
     if machine_id is not None:
         scoped_records = _machine_linked_document_records(
@@ -911,9 +912,11 @@ def _registry_candidates(
     *,
     machine_id: int | None = None,
     linked_request_ids: Collection[int] = (),
+    include_files: bool = False,
 ) -> list[_RegistryCandidate]:
     records = _candidate_document_records(
-        db, category, machine_id=machine_id, linked_request_ids=linked_request_ids
+        db, category, machine_id=machine_id, linked_request_ids=linked_request_ids,
+        include_files=include_files,
     )
     if category == OfficialRegistryCategory.TRANSFERS:
         candidates = _transfer_candidates(db, records)
@@ -1332,7 +1335,8 @@ def machine_official_document_metadata(db: Session, machine_id: int) -> list[dic
     items = []
     for category in OfficialRegistryCategory:
         for candidate in _registry_candidates(
-            db, category, machine_id=machine_id, linked_request_ids=linked_request_ids
+            db, category, machine_id=machine_id, linked_request_ids=linked_request_ids,
+            include_files=True,
         ):
             for record in candidate.records:
                 items.append({
@@ -1352,6 +1356,7 @@ def machine_official_document_metadata(db: Session, machine_id: int) -> list[dic
                     "registry_category": category.value,
                     "registry_key": candidate.registry_key,
                     "domain_id": candidate.domain_id,
+                    "files": list(record.files),
                 })
     return items
 

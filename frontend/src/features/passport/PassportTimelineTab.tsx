@@ -1,7 +1,10 @@
 import { ArrowLeft, ArrowRight, Boxes, FileText, History, Truck, Wrench } from 'lucide-react'
 
-import { translatedEventCode } from '../../industrialUi'
+import { DocumentButtons, translatedEventCode } from '../../industrialUi'
 import { useI18n } from '../../i18n'
+import { hasPermission } from '../../permissions'
+import { StatusBadge } from '../../ui/StatusBadge'
+import { openOperation } from '../../ui/workspace'
 import type { TimelineCategory } from '../../types'
 import { CATEGORY_KEYS, TIMELINE_CATEGORIES, timelineDetails, timelineSource, timelineStatus } from './timelinePresentation'
 import type { usePassportTimeline } from './usePassportTimeline'
@@ -38,12 +41,18 @@ export function PassportTimelineTab({ timeline }: { timeline: ReturnType<typeof 
               <h4>{translatedEventCode(t, item.event_type)}</h4>
               {item.reference && <strong className="passport-timeline-reference">{item.reference}</strong>}
               {(item.status_before || item.status_after) && <dl className="passport-timeline-status">
-                {item.status_before && <div><dt>{t('timeline.before')}</dt><dd>{timelineStatus(t, item, item.status_before)}</dd></div>}
-                {item.status_after && <div><dt>{t('timeline.after')}</dt><dd>{timelineStatus(t, item, item.status_after)}</dd></div>}
+                {item.status_before && <div><dt>{t('timeline.before')}</dt><dd><StatusBadge status={item.status_before} domain={item.source_type.startsWith('part_request') ? 'part' : ['repair', 'repair_event'].includes(item.source_type) ? 'repair' : 'machine'} label={timelineStatus(t, item, item.status_before)} /></dd></div>}
+                {item.status_after && <div><dt>{t('timeline.after')}</dt><dd><StatusBadge status={item.status_after} domain={item.source_type.startsWith('part_request') ? 'part' : ['repair', 'repair_event'].includes(item.source_type) ? 'repair' : 'machine'} label={timelineStatus(t, item, item.status_after)} /></dd></div>}
               </dl>}
               {item.description && <p className="passport-timeline-description">{item.description}</p>}
               {detailRows.length > 0 && <dl className="passport-timeline-details">{detailRows.map(({ field, label, text }) => <div key={field}><dt>{label}</dt><dd>{text}</dd></div>)}</dl>}
               <small className="passport-timeline-source">{t('catalog.source')}: {timelineSource(t, item.source_type)}</small>
+              {item.related.part_request_id && hasPermission('requests.view') ? <button className="link" onClick={() => openOperation({ module: 'parts', recordId: item.related.part_request_id!, machineId: item.machine_id })}>{t('ux.openRecord')}</button>
+                : item.related.repair_id && hasPermission('repairs.view') ? <button className="link" onClick={() => openOperation({ module: 'repairs', recordId: item.related.repair_id!, machineId: item.machine_id })}>{t('ux.openRecord')}</button>
+                  : item.related.transfer_id && hasPermission('transfers.view') ? <button className="link" onClick={() => openOperation({ module: 'transfers', recordId: item.related.transfer_id!, machineId: item.machine_id })}>{t('ux.openRecord')}</button> : null}
+              {!!item.files?.length && hasPermission('documents.view') && <div className="document-actions-inline">
+                {item.files.map(file => <DocumentButtons key={file.download_endpoint} path={file.download_endpoint} filename={`${item.reference || item.source_id}.${file.format}`} format={file.format} />)}
+              </div>}
             </article>
           </li>
         })}

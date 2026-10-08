@@ -1,3 +1,4 @@
+import { withWorkspaceRoutes } from '../../ui/workspaceTestFixtures'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -40,6 +41,7 @@ it('loads preview, requires password and exact phrase, and refreshes after succe
   const onDeleted = vi.fn()
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => json(init?.method === 'POST' ? { deleted: true } : data))
   vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
   mount(button(onDeleted))
   await userEvent.click(screen.getByRole('button'))
   const dialog = within(screen.getByRole('dialog'))
@@ -64,6 +66,7 @@ it('loads preview, requires password and exact phrase, and refreshes after succe
 it('renders blockers and does not permit submitting a blocked target', async () => {
   const fetchMock = vi.fn(async () => json({ ...data, can_delete: false, blockers: [{ code: 'repairs', count: 4, label_key: 'ownerDeletion.references.repairs' }] }))
   vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
   mount(button())
   await userEvent.click(screen.getByRole('button'))
   const dialog = within(screen.getByRole('dialog'))
@@ -76,6 +79,7 @@ it('renders blockers and does not permit submitting a blocked target', async () 
 it('shows recomputed blockers from execution and clears the password', async () => {
   vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === 'POST'
     ? json({ detail: { code: 'deletion_blocked', blockers: [{ code: 'repairs', count: 1, label_key: 'ownerDeletion.references.repairs' }] } }, 409) : json(data)))
+    withWorkspaceRoutes(vi.mocked(fetch))
   mount(button())
   await userEvent.click(screen.getByRole('button'))
   await completeDialog()
@@ -86,6 +90,7 @@ it('shows recomputed blockers from execution and clears the password', async () 
 
 it('keeps rejected deletion open, translates errors, and clears rejected password', async () => {
   vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === 'POST' ? json({ detail: { code: 'reauthentication_failed', message: 'RAW DATABASE DETAIL' } }, 403) : json(data)))
+    withWorkspaceRoutes(vi.mocked(fetch))
   mount(button())
   await userEvent.click(screen.getByRole('button'))
   await completeDialog()
@@ -96,6 +101,7 @@ it('keeps rejected deletion open, translates errors, and clears rejected passwor
 
 it('supports keyboard close, focus trapping and focus restoration', async () => {
   vi.stubGlobal('fetch', vi.fn(async () => json(data)))
+    withWorkspaceRoutes(vi.mocked(fetch))
   mount(button())
   const trigger = screen.getByRole('button')
   trigger.focus()
@@ -140,6 +146,7 @@ it('owner deletes nonowner administrator and the refreshed user row disappears',
     if (path.includes('/execute')) { deleted = true; return json({ deleted: true }) }
     return json(path.includes('/departments') ? [] : deleted ? [owner] : [owner, other])
   }))
+    withWorkspaceRoutes(vi.mocked(fetch))
   mount(<UserAdministration />)
   const ownerRow = (await screen.findByText('QA Owner')).closest('tr')!
   expect(within(ownerRow).queryByRole('button')).not.toBeInTheDocument()
@@ -159,6 +166,7 @@ it.each(['asset_category', 'category_field'] as const)('refreshes %s after owner
     return json(deleted ? resource === 'asset_category' ? [] : [{ ...category, fields: [] }] : [category])
   })
   vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
   mount(<CategoryAdministration />)
   const identity = resource === 'asset_category' ? 'QA' : 'QA_FIELD'
   await userEvent.click(await screen.findByRole('button', { name: `Изтрий окончателно: ${identity}` }))
@@ -176,6 +184,7 @@ it.each(['department', 'location'] as const)('refreshes %s reference data after 
     if (path.includes('/admin/reference-data')) return json({ locations: deleted && resource === 'location' ? [] : [{ id: 3, name: 'QA Location', is_active: true }], departments: deleted && resource === 'department' ? [] : [{ id: 4, code: 'QA_DEPT', name_bg: 'QA Department', is_active: true }] })
     return json([])
   }))
+    withWorkspaceRoutes(vi.mocked(fetch))
   mount(<AdministrationPanel />)
   await userEvent.click(await screen.findByRole('button', { name: `Изтрий окончателно: ${resource === 'department' ? 'QA_DEPT' : 'QA Location'}` }))
   await completeDialog()
@@ -197,6 +206,7 @@ it('deletes from machine details and refreshes the empty registry and category c
     if (path.includes('/machines?')) return json(deleted ? [] : [machine])
     return json([])
   }))
+    withWorkspaceRoutes(vi.mocked(fetch))
   mount(<Machines onOpenCatalog={vi.fn()} />)
   await screen.findByText('QA Machine')
   expect(screen.queryByRole('button', { name: 'Изтрий окончателно: QA' })).not.toBeInTheDocument()

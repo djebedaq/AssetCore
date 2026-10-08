@@ -382,6 +382,7 @@ export type MachineTimelineItem = {
     official_document_id: number | null
   }
   details: Record<string, string | number | boolean | null | (string | number)[]>
+  files?: { format: 'docx' | 'pdf'; download_endpoint: string }[]
 }
 export type MachineTimelinePage = {
   machine_id: number
