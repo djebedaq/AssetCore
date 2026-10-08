@@ -9,6 +9,22 @@ export async function uxDashboard({page, browser, baseUrl, screenshotDir, creden
 let signatureSequence=0; const signatureSeed=Math.floor(Math.random()*40)+20;
 const errors=[]; page.on('pageerror',e=>errors.push(redact(e.message)));
 const nav=async name=>page.locator('.sidebar').getByRole('button',{name,exact:true}).click();
+const nativeFormStyle=async (control, screenshotName)=>{
+ for(const width of [1440,390]) {
+  await page.setViewportSize({width,height:1000});
+  const style=await control.evaluate(element=>{
+   const css=getComputedStyle(element);
+   return {radius:css.borderRadius,padding:css.padding,minHeight:css.minHeight,color:css.color};
+  });
+  assert.deepEqual(style,{radius:'7px',padding:'7px 10px',minHeight:width===390?'44px':'36px',color:'rgb(23, 62, 99)'});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+  await control.focus();await page.keyboard.press('Tab');await page.keyboard.press('Shift+Tab');
+  assert.equal(await control.evaluate(element=>document.activeElement===element),true);
+  assert.equal(await control.evaluate(element=>getComputedStyle(element).outlineWidth),'2px');
+  await page.screenshot({path:`${out}/${screenshotName}-${width}.png`,fullPage:true});
+ }
+ await page.setViewportSize({width:1440,height:1000});
+};
 try {
  await page.goto(baseUrl);
  await page.locator('input[type=email]').fill(credentials.email);
@@ -141,7 +157,14 @@ try {
  await repairModal.getByLabel('Извършена работа',{exact:true}).fill('Synthetic UX QA completed work');
  await repairModal.getByLabel('Реално време за ремонт (минути)',{exact:true}).fill('70');
  await repairModal.getByRole('button',{name:'Запази и продължи към Завършване',exact:true}).click();
+ const passed=repairModal.getByRole('combobox',{name:'Успешен тест',exact:true});
+ assert.equal(await passed.evaluate(element=>element.required&&!element.checkValidity()),true);
+ await nativeFormStyle(passed,'repair-native-selects');
+ const leaks=repairModal.getByRole('combobox',{name:'Установени течове',exact:true});
+ assert.equal(await leaks.evaluate(element=>element.required),false);
+ await leaks.selectOption('no');
  await repairModal.getByLabel('Успешен тест').selectOption('yes');
+ assert.equal(await passed.evaluate(element=>element.checkValidity()),true);
  await repairModal.getByLabel('Метод на тестване',{exact:true}).fill('Synthetic UX QA functional test');
  await repairModal.getByLabel('Реално време за тестване (минути)',{exact:true}).fill('25');
  await repairModal.getByLabel('Реален резултат от теста',{exact:true}).fill('Synthetic UX QA verified result');
@@ -168,6 +191,30 @@ try {
  }
  await page.screenshot({path:`${out}/completed-repair-original-protocols.png`,fullPage:true});
  await repairModal.getByRole('button',{name:'Затвори',exact:true}).click();
+ await nav('Заявени части');
+ const qaRequest=page.locator('.request-card').filter({hasText:'Synthetic UX QA part'});
+ await qaRequest.getByRole('button',{name:'Свържи с каталог',exact:true}).click();
+ const linkModal=page.getByRole('dialog',{name:'Свързване с потвърдена каталожна част',exact:true});
+ const verifiedPart=linkModal.getByRole('combobox',{name:'Потвърдена каталожна част',exact:true});
+ await nativeFormStyle(verifiedPart,'request-native-catalog-select');
+ assert.equal(await linkModal.getByRole('button',{name:'Свържи с каталог',exact:true}).isDisabled(),true);
+ await linkModal.getByRole('button',{name:'Отказ',exact:true}).click();
+ page.once('dialog',dialog=>dialog.accept());
+ await qaRequest.getByRole('button',{name:'Подай за одобрение',exact:true}).click();
+ await qaRequest.getByRole('button',{name:'Одобри',exact:true}).waitFor();
+ page.once('dialog',dialog=>dialog.accept());
+ await qaRequest.getByRole('button',{name:'Одобри',exact:true}).click();
+ await qaRequest.getByRole('button',{name:'Поръчка / доставка',exact:true}).click();
+ const fulfillment=page.getByRole('dialog',{name:'Изпълнение и доставка на заявката',exact:true});
+ const orderStatus=fulfillment.getByRole('combobox',{name:'Статус',exact:true});
+ await nativeFormStyle(orderStatus,'request-native-status-select');
+ await orderStatus.press('End');assert.equal(await orderStatus.inputValue(),'CANCELLED');
+ await orderStatus.press('Home');assert.equal(await orderStatus.inputValue(),'ORDERED');
+ page.once('dialog',dialog=>dialog.accept());
+ await fulfillment.getByRole('button',{name:'Запиши изпълнението',exact:true}).click();
+ await fulfillment.waitFor({state:'hidden'});
+ const ordered=await (await page.request.get(`${baseUrl}/api/workspace/requests?q=Synthetic+UX+QA+request`)).json();
+ assert.equal(ordered.items[0].status,'ORDERED');
  await nav('Каталог резервни части');
  const category=page.getByRole('combobox',{name:'Категория',exact:true});
  await category.click();await page.getByRole('option',{name:'QA',exact:true}).click();

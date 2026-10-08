@@ -65,7 +65,7 @@ function UnknownPartLinkModal({
     {error && <div className="error">{error}</div>}
     <div className="unknown-part-banner"><b>{t('unknownPart.label')}</b><span>{line.assembly} · {line.description}</span></div>
     <div className="form-grid">
-      <label className="wide">{t('unknownPart.verifiedCatalogPart')}<select value={catalogPartId} onChange={(event) => setCatalogPartId(event.target.value ? Number(event.target.value) : '')}><option value="">{t('unknownPart.chooseVerifiedPart')}</option>{compatible.map((part) => <option value={part.id} key={part.id}>{part.part_number} · {part.description}</option>)}</select></label>
+      <label className="wide">{t('unknownPart.verifiedCatalogPart')}<select className="ac-native-select" value={catalogPartId} onChange={(event) => setCatalogPartId(event.target.value ? Number(event.target.value) : '')}><option value="">{t('unknownPart.chooseVerifiedPart')}</option>{compatible.map((part) => <option value={part.id} key={part.id}>{part.part_number} · {part.description}</option>)}</select></label>
       <label className="wide">{t('unknownPart.linkNote')}<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label>
     </div>
     {!compatible.length && <div className="error">{t('unknownPart.noCompatibleVerifiedParts')}</div>}
@@ -102,7 +102,7 @@ function PartRequestFulfillmentModal({ request, onClose, onSaved }: { request: M
     }
   }
   return <Modal title={t('requests.fulfillmentTitle')} onClose={onClose} wide><form className="form-grid" onSubmit={submit}>
-    <label>{t('common.status')}<select value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>{statuses.map((status) => <option value={status} key={status}>{statusText(t, status, 'part')}</option>)}</select></label>
+    <label>{t('common.status')}<select className="ac-native-select" value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>{statuses.map((status) => <option value={status} key={status}>{statusText(t, status, 'part')}</option>)}</select></label>
     <label>{t('catalog.supplier')}<input value={supplier} onChange={(event) => setSupplier(event.target.value)} /></label>
     <label className="wide">{t('common.notes')}<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label>
     <div className="wide request-line-list">{request.lines.map((line) => <div key={line.id}><span><b>{line.part_number || t('common.noValue')}</b><small>{line.description}</small></span><label>{t('requests.deliveredQuantity')}<input aria-label={`${t('requests.deliveredQuantity')} ${line.part_number || line.id}`} disabled={nextStatus === 'ORDERED' || nextStatus === 'CANCELLED'} type="number" inputMode="numeric" min={line.delivered_quantity} max={line.quantity} step="1" value={quantities[line.id] ?? 0} onChange={(event) => { const value = Number(event.target.value); if (isDeliveredPartQuantity(value)) setQuantities((current) => ({ ...current, [line.id]: value })) }} /></label><em>/ {formatTransactionalPartQuantity(line.quantity)} {line.unit}</em></div>)}</div>

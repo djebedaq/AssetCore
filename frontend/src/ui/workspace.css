@@ -1,13 +1,16 @@
 /* Shared operational controls preserve AssetCore's navy/orange identity. */
 :root { --ac-focus: #bc7611; --ac-line: #ccd8e1; --ac-muted: #536779; }
 .ac-select { min-width: 0; width: 100%; }
-.ac-select > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 36px; padding: 7px 10px; border: 1px solid var(--ac-line); border-radius: 7px; background: #fff; color: #173e63; font: inherit; text-align: left; }
+.ac-select > button, select.ac-native-select { width: 100%; min-height: 36px; padding: 7px 10px; border: 1px solid var(--ac-line); border-radius: 7px; background: #fff; color: #173e63; font: inherit; text-align: left; }
+.ac-select > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Native form controls keep browser validation, labels and keyboard behavior. */
+select.ac-native-select { min-width: 0; max-width: 100%; cursor: pointer; }
 .ac-select > button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ac-select svg { flex: none; }
-.ac-select > button:hover { border-color: #68849b; background: #f7fafc; }
-.ac-select > button:disabled { background: #eef2f5; color: #687789; cursor: not-allowed; }
-.ac-select > button[aria-invalid=true] { border-color: #b32832; }
-.ac-select > button:focus-visible, .ac-select-menu input:focus-visible, .ac-filter-toolbar input:focus-visible { outline: 2px solid var(--ac-focus); outline-offset: 2px; }
+.ac-select > button:hover, select.ac-native-select:hover { border-color: #68849b; background: #f7fafc; }
+.ac-select > button:disabled, select.ac-native-select:disabled { background: #eef2f5; color: #687789; cursor: not-allowed; }
+.ac-select > button[aria-invalid=true], select.ac-native-select[aria-invalid=true], select.ac-native-select:user-invalid { border-color: #b32832; }
+.ac-select > button:focus-visible, select.ac-native-select:focus-visible, .ac-select-menu input:focus-visible, .ac-filter-toolbar input:focus-visible { outline: 2px solid var(--ac-focus); outline-offset: 2px; }
 .ac-select-menu { position: fixed; z-index: 3500; display: flex; flex-direction: column; overflow: hidden; padding: 4px; border: 1px solid #bccbd7; border-radius: 9px; background: #fff; box-shadow: 0 8px 24px #102f492b; color: #173e63; font-size: 13px; }
 .ac-select-search { display: flex; align-items: center; gap: 7px; padding: 5px 6px 8px; border-bottom: 1px solid #e1e7ed; }
 .ac-select-search input { min-width: 0; width: 100%; min-height: 32px; padding: 5px 7px; border: 1px solid var(--ac-line); border-radius: 5px; font: inherit; }
@@ -73,7 +76,7 @@
   .ac-filter { flex-basis: 140px; max-width: none; }
   .ac-filter-search { flex-basis: 100%; }
   .ac-filter-date { flex: 1 1 130px; }
-  .ac-select > button, .ac-select-menu [role=option], .ac-context-tabs button, .ac-reset { min-height: 44px; }
+  .ac-select > button, select.ac-native-select, .ac-select-menu [role=option], .ac-context-tabs button, .ac-reset { min-height: 44px; }
   .ac-activity button { flex-direction: column; gap: 4px; }
   .ac-activity time { flex-basis: auto; }
   .ac-pagination > div { flex-wrap: wrap; }
@@ -84,6 +87,6 @@
 }
 @media (forced-colors: active) {
   * { scrollbar-color: auto; }
-  .ac-status, .ac-select > button, .ac-select-menu { border: 1px solid CanvasText; }
+  .ac-status, .ac-select > button, select.ac-native-select, .ac-select-menu { border: 1px solid CanvasText; }
   .ac-select-menu [role=option].active { outline: 1px solid Highlight; }
 }

@@ -202,7 +202,7 @@ def machines(
         statement = statement.where(Machine.id == f.machine_id)
     if active_only:
         statement = statement.where(Machine.is_active.is_(True))
-    rows, meta = page_rows(db, statement, Machine.inventory_number, Machine.id, f)
+    rows, meta = page_rows(db, statement, Machine.created_at, Machine.id, f)
     serializer = _limited_machine if is_observer(user) else _machine_with_capabilities
     return meta | {"items": [serializer(row[0]) for row in rows]}
 

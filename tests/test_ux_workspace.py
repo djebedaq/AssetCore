@@ -200,6 +200,41 @@ def test_machine_search_pagination_capability_and_literal_wildcards(client, auth
     assert get(client, auth_headers, "/workspace/machines?q=%25")["total"] == 0
 
 
+def test_machine_sort_uses_creation_time_and_stable_ties(client, auth_headers, session_factory):
+    with session_factory() as db:
+        # Change only the isolated test database; leave the verified seed untouched.
+        assets = db.scalars(select(Machine).order_by(Machine.id)).all()
+        for asset in assets:
+            asset.created_at = datetime(2026, 10, 1)
+        assets[0].created_at = datetime(2026, 10, 3)
+        assets[1].created_at = datetime(2026, 10, 2)
+        oldest_ids = [asset.id for asset in assets[2:]] + [assets[1].id, assets[0].id]
+        db.commit()
+
+    for sort, expected in (("oldest", oldest_ids), ("newest", list(reversed(oldest_ids)))):
+        actual = []
+        for page in range(1, 5):
+            result = get(
+                client, auth_headers, f"/workspace/machines?sort={sort}&page_size=5&page={page}"
+            )
+            assert result["total"] == 19 and result["total_pages"] == 4
+            actual.extend(item["id"] for item in result["items"])
+        assert actual == expected
+        assert len(set(actual)) == 19
+
+
+def test_verified_machine_inventory_keeps_natural_order_across_pages(client, auth_headers):
+    numbers = []
+    for page in range(1, 5):
+        result = get(
+            client, auth_headers, f"/workspace/machines?sort=oldest&page_size=5&page={page}"
+        )
+        numbers.extend(item["inventory_number"] for item in result["items"])
+    assert len(numbers) == 19
+    assert numbers == sorted(numbers, key=int)
+    assert numbers.index("9") < numbers.index("10")
+
+
 def test_activity_uses_bounded_business_evidence_and_excludes_noise(
     client, auth_headers, session_factory
 ):
