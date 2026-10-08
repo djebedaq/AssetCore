@@ -30,7 +30,7 @@ export default function Transfers({ entryIntent, onEntryConsumed, initialRecordI
   const generation = useRef(0)
   const { categories, error: categoryError } = useCategories('transfers', refresh)
   const filter = useWorkspaceFilters()
-  const path = `/workspace/${context === 'individual' ? 'transfers' : 'batches'}?${queryParams({ ...filter.params, context: context === 'individual' ? undefined : context, status: context === 'individual' && !recordId ? 'completed' : undefined, record_id: recordId })}`
+  const path = `/workspace/${context === 'individual' ? 'transfers' : 'batches'}?${queryParams({ ...filter.params, context: context === 'individual' ? undefined : context, record_id: recordId })}`
   const batches = usePage<BatchRow>(context === 'individual' ? null : path, refresh)
   const records = usePage<TransferRecord>(context === 'individual' ? path : null, refresh)
   const result = context === 'individual' ? records : batches

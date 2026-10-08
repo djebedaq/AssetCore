@@ -35,6 +35,10 @@ try {
  await page.getByRole('option',{name:'QA категория A',exact:true}).click();
  await page.locator('.ac-pagination').getByText('Резултати: 1',{exact:true}).waitFor();
  await page.screenshot({path:`${out}/transfer-category-filter.png`,fullPage:true});
+ await page.getByRole('button',{name:'Записи по машини',exact:true}).click();
+ await page.locator('tbody tr').filter({hasText:'QA UX asset 1'}).waitFor();
+ await page.screenshot({path:`${out}/individual-active-transfer-records.png`,fullPage:true});
+ await page.getByRole('button',{name:'Партиди и напредък',exact:true}).click();
  const currentActive=await (await page.request.get(`${baseUrl}/api/workspace/batches?context=active`)).json();
  if(!currentActive.total) await page.getByRole('button',{name:'Индивидуална история',exact:true}).click();
  await page.getByRole('button',{name:'Детайли',exact:true}).first().click();

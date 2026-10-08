@@ -333,6 +333,17 @@ def test_mixed_batches_preserve_exact_membership_and_legacy_access(
                     is_active=True,
                 )
             )
+        legacy_machine = db.scalar(select(Machine).where(Machine.id.not_in([asset.id for asset in assets])))
+        legacy_machine.category_id = None
+        legacy_transfer = TransferProtocol(
+            machine_id=legacy_machine.id,
+            protocol_number="QA-UX-UNBATCHED-ACTIVE",
+            issue_status="COMPLETED",
+            is_active=True,
+        )
+        db.add(legacy_transfer)
+        db.flush()
+        legacy_id = legacy_transfer.id
         db.commit()
         category_id, asset_id = category.id, assets[1].id
     mixed = get(client, auth_headers, "/workspace/batches?scope=mixed")
@@ -349,6 +360,10 @@ def test_mixed_batches_preserve_exact_membership_and_legacy_access(
         db.get(Machine, asset_id).category_id = None
         db.commit()
     assert get(client, auth_headers, "/workspace/batches?scope=legacy")["total"] == 1
+    records = get(client, auth_headers, "/workspace/transfers?scope=legacy")
+    unbatched = next(item for item in records["items"] if item["id"] == legacy_id)
+    assert unbatched["batch_id"] is None and unbatched["is_active"]
+    assert get(client, auth_headers, "/workspace/transfers?status=completed")["total"] == 0
 
 
 def test_recent_activity_uses_completion_and_decision_evidence_without_duplicates(
