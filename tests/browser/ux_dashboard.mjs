@@ -15,6 +15,18 @@ try {
  await page.locator('input[type=password]').fill(credentials.password);
  await page.getByRole('button',{name:'Вход',exact:true}).click();
  await page.getByRole('heading',{name:'Машини по категории',exact:true}).waitFor();
+ const dashboard=await (await page.request.get(`${baseUrl}/api/dashboard`)).json();
+ await page.locator('.ac-dashboard').evaluate(async root=>{
+  const finite=root.getAnimations({subtree:true}).filter(animation=>animation.effect?.getComputedTiming().iterations!==Infinity);
+  await Promise.all(finite.map(animation=>animation.finished.catch(()=>{})));
+ });
+ const kpis=await page.locator('.stat-card strong > span[aria-hidden=true]').allTextContents();
+ assert.deepEqual(kpis,[dashboard.total_machines,dashboard.ready,dashboard.in_use,dashboard.open_repairs,dashboard.pending_parts].map(String));
+ for(const category of dashboard.categories) {
+  const row=page.locator('.ac-category-counts > div').filter({has:page.getByText(category.name_bg,{exact:true})});
+  assert.equal(await row.locator('b').innerText(),String(category.asset_count));
+ }
+ assert.equal(await page.locator('.ac-category-total b').innerText(),String(dashboard.total_machines));
  for(const locale of ['bg','en','ru']) {
   await page.setViewportSize({width:1440,height:1000});
   if(locale!=='bg') {await page.locator('.language-switch').getByRole('combobox').click();await page.getByRole('option',{name:locale==='en'?'English':'Русский',exact:true}).click();}
@@ -284,6 +296,9 @@ export async function emptyDashboard({page, baseUrl, screenshotDir, credentials}
  assert.equal(dashboard.total_machines,19);
  assert.equal(dashboard.categories.reduce((total,item)=>total+item.asset_count,0)+dashboard.uncategorized_assets,19);
  assert.equal(dashboard.recent_activity.length,0);
+ await page.locator('.ac-dashboard').evaluate(async root=>{
+  await Promise.all(root.getAnimations({subtree:true}).filter(animation=>animation.effect?.getComputedTiming().iterations!==Infinity).map(animation=>animation.finished.catch(()=>{})));
+ });
  await page.screenshot({path:`${screenshotDir}/dashboard-real-empty.png`,fullPage:true});
  console.log('Real loading, empty activity and verified 19-machine inventory passed.');
 }

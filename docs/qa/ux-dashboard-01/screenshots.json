@@ -1,107 +1,107 @@
 [
   {
-    "sha256": "ae1d427bc95b7ec1ee7c9e16bbbbc93ca636b2bae8e081c098e87ce3f0b93b75",
     "file": "catalog-original-hotspot-dialog.png",
-    "bytes": 153753
+    "sha256": "8d1f4e082d56bdc6659c5afed3c00d97ed192e9e27aaf867f8f68738b2d2eea9",
+    "bytes": 153215
   },
   {
-    "sha256": "b58d9741819b577baea7103bfd6379839a07b0c2c8f6a8a5aadd9c9c04972194",
     "file": "completed-partial-return-history.png",
-    "bytes": 164766
+    "sha256": "71017de781f6d54716fce52569484b6394913db444e5c9e653ce4ffa73a1dc76",
+    "bytes": 163431
   },
   {
-    "sha256": "50ec6ba375b143b5ead8fbc46930e4e1cce27433d06753d4f6af4791718ef017",
     "file": "completed-repair-original-protocols.png",
-    "bytes": 83769
+    "sha256": "7b9898725ed9be0d9b07f75031797f89d9d1a92ce70f71f7d16a2559a54d61ac",
+    "bytes": 83493
   },
   {
-    "sha256": "77181976053a7a54570bf1758e9f73a822cbb7af8812440cd55146739fe71c4f",
     "file": "dashboard-bg-1440.png",
-    "bytes": 159446
+    "sha256": "153da2e355bc2add1a088e055db697991f1c0e99d78cbeba4f9528844e0fd17b",
+    "bytes": 137089
   },
   {
-    "sha256": "9b036aae00b633dc32a2e7fdabea6891724326cbb934235947662c33c5f4d9e1",
     "file": "dashboard-bg-390.png",
-    "bytes": 111026
+    "sha256": "d4fa621c4f8552cb5d1f42d95c392d8fdd985a0fff6ddf5473e7e9e0293d811a",
+    "bytes": 86144
   },
   {
-    "sha256": "f3fd37cf5ce673bd839f6874af34a5332ebd6182f0d6c0af9fc053c424bf6870",
     "file": "dashboard-en-900.png",
-    "bytes": 130555
+    "sha256": "760dc9f215520887530f97c1f53f1bd9354c7ff5d495ca55c766eda3fb31f65a",
+    "bytes": 131217
   },
   {
-    "sha256": "12413dc7ac93cf7dfc82da2af158e0f766a080b4365903ae1d537b7223a86dea",
     "file": "dashboard-real-empty.png",
-    "bytes": 75650
+    "sha256": "3e80e9ce13732055e73ab16b4de9b6b37d06e967c2880c8fb9b73739b4180b5e",
+    "bytes": 95984
   },
   {
-    "sha256": "df0b92e6ff5818c6a7053406bc2ab879a6d4fee4b1cacfa56e2b5dfec792d7a4",
     "file": "dashboard-real-loading.png",
+    "sha256": "df0b92e6ff5818c6a7053406bc2ab879a6d4fee4b1cacfa56e2b5dfec792d7a4",
     "bytes": 64927
   },
   {
-    "sha256": "0374a2b8a5c316fbd66fbb21f061c4e0d552bdc26c1ef2e7b05a903db5176bfb",
     "file": "dashboard-ru-1280.png",
-    "bytes": 142065
+    "sha256": "472d144bbe0a1811a80343fb08cdaa981a66f315e7c43484f45d6771303a4834",
+    "bytes": 142088
   },
   {
-    "sha256": "48b0f710f2e94f80ecc501f113b564217ecf57c26ab5af6d213fcb8e285c4a44",
     "file": "individual-active-transfer-records.png",
-    "bytes": 114641
+    "sha256": "4f78c0a997a4bec368b822af3ae0a0ba907d4386a2b651d33d7f002b5e0e2921",
+    "bytes": 114780
   },
   {
-    "sha256": "25e4ae94167a5dc2904ea81450605cab89dc843408b5aea7733b5021bb49c475",
     "file": "keyboard-long-list.png",
+    "sha256": "25e4ae94167a5dc2904ea81450605cab89dc843408b5aea7733b5021bb49c475",
     "bytes": 95762
   },
   {
-    "sha256": "e749b20448b16c697811686ade07f5026bafdc96bf971c404ab5f1e1da1feac4",
     "file": "machine-empty-timeline.png",
-    "bytes": 117425
+    "sha256": "059ce1f510488f8040845037f6c9c6cf0749dc6401497565952f3838c7111b32",
+    "bytes": 109062
   },
   {
-    "sha256": "dffd3531dc173adc213d6a891b9cf5835c44c7f3f6e36b323969e332eaedecd6",
     "file": "machine-timeline.png",
-    "bytes": 104090
+    "sha256": "44a0c3d95148a31b688894b5794a5e80641df864195880a25fe207c1950519d5",
+    "bytes": 103944
   },
   {
-    "sha256": "f6c0d484f824059427a0048b397202ea3c25895d1983db1e6b489d61354d506c",
     "file": "observer-authorized-limited-passport.png",
+    "sha256": "f6c0d484f824059427a0048b397202ea3c25895d1983db1e6b489d61354d506c",
     "bytes": 54262
   },
   {
-    "sha256": "b982b4c8bf537635c707b45baea66d2d3123dad9fa6099e0a1746e6f66aa3d0f",
     "file": "published-catalog-hotspot.png",
-    "bytes": 137543
+    "sha256": "f9d6c918b02025ac2a5b5c4e0559f7a20be7a0aa298523f7d48af166040baf56",
+    "bytes": 140094
   },
   {
-    "sha256": "b1d9deb49f7f2e675e06b067ba643eec1dfeb361a53f8a6e724fb9dff3959e83",
     "file": "repairs-bg-390.png",
-    "bytes": 61314
+    "sha256": "fa901ec1d86645f8d12e5398c43504834186c274c447f9f00c4410044a1b9be9",
+    "bytes": 60995
   },
   {
-    "sha256": "cb95ee94ca75a2043c51f37627d1e1603afed3f0a2fa3c048965a688846cb74d",
     "file": "repairs-category-filters.png",
-    "bytes": 106162
+    "sha256": "f88998965e2dbb61ecf4ff468cf93bad9de5bab1980242b4859f0b0ff689624d",
+    "bytes": 106015
   },
   {
-    "sha256": "73c5df7f159121adaf520efb178bba7e76eeea3f8bb16a0ce0d82052c038f232",
     "file": "timeline-original-repair.png",
-    "bytes": 98166
+    "sha256": "c8eb41e22514f22695e1f43046647db747d5307eb4f40d642c7df5480c571e0d",
+    "bytes": 97994
   },
   {
-    "sha256": "ec59c0211ab69894cc7eb5ce55c20b518c05e47e402f0e2ba1bbd699a7dd478c",
     "file": "transfer-category-filter.png",
-    "bytes": 104354
+    "sha256": "061dac435e6dd9c9aac3bb5582dc6edbe1f652aa76c82894030dbf34e3049b41",
+    "bytes": 104177
   },
   {
-    "sha256": "d4e27fa31f7990549f439bb3ed562e0f3c513aa6f13312f751db18458bcac42b",
     "file": "transfer-remaining-0.png",
-    "bytes": 96314
+    "sha256": "4400a4ccf34ff178bc3c75a6eb448e0e330ab72f3687832949bb8a2095adb4ee",
+    "bytes": 96341
   },
   {
-    "sha256": "cff06e884defb4040223a9af3cef5b80de2df776f9fd24446e4f8d277334b1a4",
     "file": "transfer-remaining-1.png",
-    "bytes": 104494
+    "sha256": "96cfcbc995d223331daa996ae392f4b7d02f3fb6039e9c28ca6e10450605b0f2",
+    "bytes": 104293
   }
 ]
