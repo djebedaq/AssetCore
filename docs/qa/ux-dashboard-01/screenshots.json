@@ -1,74 +1,102 @@
 [
   {
-    "file": "dashboard-bg-1440.png",
-    "sha256": "5d4826d94a1ab70dad6cd3c378dc685b05492c267940b43799278f60ff8efd53"
-  },
-  {
-    "file": "dashboard-bg-390.png",
-    "sha256": "7bc35ee7978c42e828782fa33fd58fef640e1bb62360ae2a977b78ecd7acbbfe"
-  },
-  {
-    "file": "dashboard-en-900.png",
-    "sha256": "069fecdcc0ff80699aef7da487bd737824fd42cb3086524b2231f643fbfa715d"
-  },
-  {
-    "file": "dashboard-ru-1280.png",
-    "sha256": "1851300112e2f2c539875d1ffac0fad3bb3cc15b951c9debd391f74808d61423"
-  },
-  {
-    "file": "dashboard-real-loading.png",
-    "sha256": "df0b92e6ff5818c6a7053406bc2ab879a6d4fee4b1cacfa56e2b5dfec792d7a4"
-  },
-  {
-    "file": "dashboard-real-empty.png",
-    "sha256": "7faed0147b09fbe875526f74908f7aa2970e71386e40a1bb8a982f07214cb08f"
-  },
-  {
-    "file": "transfer-remaining-1.png",
-    "sha256": "9c9dcff7670b37c8a3e50605b04db37fc552198a6e3d04ca6cda8da537582b94"
-  },
-  {
-    "file": "transfer-remaining-0.png",
-    "sha256": "446cd36e81fd7f7ba525040deeadfe524f8edcdbe7b9cbb9323c5461f1db9ebd"
+    "file": "catalog-original-hotspot-dialog.png",
+    "sha256": "8d1f4e082d56bdc6659c5afed3c00d97ed192e9e27aaf867f8f68738b2d2eea9",
+    "bytes": 153215
   },
   {
     "file": "completed-partial-return-history.png",
-    "sha256": "5b579689d43754188e7cf3843a4ab05ec61e6adff3b758ec3b49f84cbd6c106e"
+    "sha256": "29ecdf11e9f1b0aa44b4b6d67cc509b1124ca226b6cbaff74f54eaf6cf6994e2",
+    "bytes": 164494
   },
   {
-    "file": "repairs-category-filters.png",
-    "sha256": "84792343731deb52456dfc45082ee9082ca63351e6d00123ef48fc35e740d4be"
+    "file": "completed-repair-original-protocols.png",
+    "sha256": "fedad3a532e3dd90c5994535f0934613a1d1dd7dbf37a9d9bb78b8bbdf25ac81",
+    "bytes": 83603
   },
   {
-    "file": "repairs-bg-390.png",
-    "sha256": "006801bb4264884b50c6660b181e533c9d96363f6abc8bd2b8a0fb1278fa3085"
+    "file": "dashboard-bg-1440.png",
+    "sha256": "0d4bb36b9a9810baef13814f1348fe4baf652b4257e8a15d61a227f7dac2296b",
+    "bytes": 175138
   },
   {
-    "file": "published-catalog-hotspot.png",
-    "sha256": "01ab68e576fe5935647d475a9e2c094d2702808c60891009383d555752c0b441"
+    "file": "dashboard-bg-390.png",
+    "sha256": "776df8dfd5a9e067c31bc3aee448cff1d0b44c42b4386f29c5c43ca55d359b82",
+    "bytes": 86329
   },
   {
-    "file": "catalog-original-hotspot-dialog.png",
-    "sha256": "0c9d0248c7b242d96ca110afb09db82d9c7c83a29ec05730492aed65b6d67e7f"
+    "file": "dashboard-en-900.png",
+    "sha256": "b83e0474ef0f770a892ac05b3e162b44bbffb3b23f9ecb99e3d8c7f485e28bea",
+    "bytes": 130968
   },
   {
-    "file": "machine-timeline.png",
-    "sha256": "84560c37b440245436cbaac54931b6b96fb1d94bc0fa2051287f6cf654538cf3"
+    "file": "dashboard-real-empty.png",
+    "sha256": "b6b0c8a80e8270515d42ad193652c3bab819f6d4f571cad671a5edd59b8dddbb",
+    "bytes": 77625
   },
   {
-    "file": "machine-empty-timeline.png",
-    "sha256": "2315acb69799dd6dfc29a4c4a4187d341d7efe2a0fb30af5097e7257f54d4a5d"
+    "file": "dashboard-real-loading.png",
+    "sha256": "df0b92e6ff5818c6a7053406bc2ab879a6d4fee4b1cacfa56e2b5dfec792d7a4",
+    "bytes": 64927
   },
   {
-    "file": "timeline-original-repair.png",
-    "sha256": "d6171db4b877863e95cae0000a4693ea66ccb1dabb436d13e7d09cf5f719213f"
+    "file": "dashboard-ru-1280.png",
+    "sha256": "6e082b80dbe6992af4338262201585460de10b3c534813f9e2c7821297e8b2c7",
+    "bytes": 140794
   },
   {
     "file": "keyboard-long-list.png",
-    "sha256": "28248ad632081b735f9fb2c596539aea42326493a8ed050a16227eb91aaccd0e"
+    "sha256": "25e4ae94167a5dc2904ea81450605cab89dc843408b5aea7733b5021bb49c475",
+    "bytes": 95762
+  },
+  {
+    "file": "machine-empty-timeline.png",
+    "sha256": "d20c179e8d47f3be10b8f6ab3628016e35c4980ef8ef039b22065cc9f5b8e9cc",
+    "bytes": 109535
+  },
+  {
+    "file": "machine-timeline.png",
+    "sha256": "372f04a93f5834c4c67317db788b7c877ac2c64665d75f1f423d8f15bfc966ec",
+    "bytes": 103904
   },
   {
     "file": "observer-authorized-limited-passport.png",
-    "sha256": "f6c0d484f824059427a0048b397202ea3c25895d1983db1e6b489d61354d506c"
+    "sha256": "f6c0d484f824059427a0048b397202ea3c25895d1983db1e6b489d61354d506c",
+    "bytes": 54262
+  },
+  {
+    "file": "published-catalog-hotspot.png",
+    "sha256": "f99d0826bda32eb063fea0d3b8453100ec31d30a61122e0823c9c3327b40ee1d",
+    "bytes": 143401
+  },
+  {
+    "file": "repairs-bg-390.png",
+    "sha256": "09298164d0f25596a6f6875f71ecc9a54bc9b7a1bfb96b9ad319159fe0ba6e4d",
+    "bytes": 61174
+  },
+  {
+    "file": "repairs-category-filters.png",
+    "sha256": "844e3b5003a135a186b83680f7c9e14c53aa293aaa0983177302088014ce7584",
+    "bytes": 105786
+  },
+  {
+    "file": "timeline-original-repair.png",
+    "sha256": "35bc939fee4fe100d065a803707990963607f09190677f9d6496b080856dc0e5",
+    "bytes": 97942
+  },
+  {
+    "file": "transfer-category-filter.png",
+    "sha256": "433cc32a1a1a8827e7826b31737067ecbdc2c2f8af068c43d3bca98e08a99f55",
+    "bytes": 104151
+  },
+  {
+    "file": "transfer-remaining-0.png",
+    "sha256": "4400a4ccf34ff178bc3c75a6eb448e0e330ab72f3687832949bb8a2095adb4ee",
+    "bytes": 96341
+  },
+  {
+    "file": "transfer-remaining-1.png",
+    "sha256": "46843d4ef3c145d8df2405d79b87e5c8e4a97d0b166bb5322ddd0821e7c89f0d",
+    "bytes": 104267
   }
 ]

@@ -91,6 +91,10 @@
 
 Проверени са BG/EN/RU Dashboard и петте модула на BG/EN при 1920, 1440, 1280, 900 и 390 px; липса на horizontal overflow; long labels; portal в диалог; дълъг списък; клавиатура/focus/Escape; reduced motion; реално празна активност и празни search/timeline резултати. Две подписани частични връщания променят остатъка 2→1→0 и партидата преминава в историята. DOCX/PDF/ZIP/preview остават достъпни. Ремонти в две категории се филтрират, каталогът зарежда published PDF/hotspot, category switch изчиства машината, timeline отваря точния оригинален ремонт. Observer получава limited passport и 403 за недопустим workspace.
 
+Финалният разширен браузърен прогон е успешен: 84 screenshots, `errors: []`. Изрично са проверени transfer category B→нула/A→една активна партида и целият ремонтен процес: приемане → диагностика → ремонт → завършване, участник, реално време, успешен тест, status filter за завършени, повторно отваряне на същия REP запис и действително изтегляне на неговите DOCX/PDF. В Git са включени 20 избрани изображения и SHA-256 manifest; QA DB и credentials не се включват.
+
+Първите три jobs на [CI run 37807535987](https://github.com/djebedaq/AssetCore/actions/runs/37807535987) са зелени: frontend **577 passed**, PostgreSQL **74 passed** плюс encrypted backup/restore и pre-0025 Builder upgrade, Docker — всички production-image build/runtime gates. Backend е в процес на пълна проверка към записването на този отчет. Новите QA доказателства са отделен commit в същия PR; окончателният HEAD и четирите CI conclusions се проверяват отново и се посочват в PR/final отчета.
+
 Възпроизводимият runner е `python tests/browser/run_ux_dashboard_qa.py`, след frontend build и инсталирани тестови зависимости/Playwright. Credentials и keys се генерират в process memory; не се записват storage state, HAR, trace или DB в Git. Снимките и SHA-256 manifest са в `docs/qa/ux-dashboard-01`; техният README описва действителните сценарии и визуалните корекции.
 
 ## Ограничения и оценка

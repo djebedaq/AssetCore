@@ -28,6 +28,13 @@ try {
  await page.setViewportSize({width:1440,height:1000});
  await page.locator('.language-switch').getByRole('combobox').click();await page.getByRole('option',{name:'Български',exact:true}).click();
  await nav('Приемане / предаване');
+ await page.getByRole('combobox',{name:'Категория',exact:true}).click();
+ await page.getByRole('option',{name:/^QA категория B/}).click();
+ await page.locator('.ac-pagination').getByText('Резултати: 0',{exact:true}).waitFor();
+ await page.getByRole('combobox',{name:'Категория',exact:true}).click();
+ await page.getByRole('option',{name:'QA категория A',exact:true}).click();
+ await page.locator('.ac-pagination').getByText('Резултати: 1',{exact:true}).waitFor();
+ await page.screenshot({path:`${out}/transfer-category-filter.png`,fullPage:true});
  const currentActive=await (await page.request.get(`${baseUrl}/api/workspace/batches?context=active`)).json();
  if(!currentActive.total) await page.getByRole('button',{name:'Индивидуална история',exact:true}).click();
  await page.getByRole('button',{name:'Детайли',exact:true}).first().click();
@@ -118,7 +125,7 @@ try {
  await repairModal.getByLabel('Извършена работа',{exact:true}).fill('Synthetic UX QA completed work');
  await repairModal.getByLabel('Реално време за ремонт (минути)',{exact:true}).fill('70');
  await repairModal.getByRole('button',{name:'Запази и продължи към Завършване',exact:true}).click();
- await repairModal.getByLabel('Успешен тест',{exact:true}).selectOption('yes');
+ await repairModal.getByLabel('Успешен тест').selectOption('yes');
  await repairModal.getByLabel('Метод на тестване',{exact:true}).fill('Synthetic UX QA functional test');
  await repairModal.getByLabel('Реално време за тестване (минути)',{exact:true}).fill('25');
  await repairModal.getByLabel('Реален резултат от теста',{exact:true}).fill('Synthetic UX QA verified result');
