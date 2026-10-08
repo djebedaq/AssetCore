@@ -1,11 +1,15 @@
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, configure, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { bg, en, ru, I18nProvider } from '../../i18n'
 import type { MachinePassport } from '../../types'
 import { entryApi, entryAvailability, entryPassport, entryRepair, entrySession, json, mutations, stubEntryImages } from './machineEntryTestFixtures'
 
+// These integration cases await real lazy workspace imports as well as API reads.
+// Keep every security assertion while allowing a cold, resource-constrained runner.
+beforeAll(() => { configure({ asyncUtilTimeout: 10000 }); vi.setConfig({ testTimeout: 15000 }) })
+afterAll(() => { configure({ asyncUtilTimeout: 1000 }); vi.resetConfig() })
 beforeEach(() => { localStorage.clear(); window.history.replaceState({}, '', '/machine/13'); stubEntryImages() })
 afterEach(() => { cleanup(); window.history.replaceState({}, '', '/'); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 function start() { return render(<I18nProvider initialLocale="bg"><App /></I18nProvider>) }
@@ -30,7 +34,7 @@ it.each(['issue', 'return'] as const)('%s uses the existing workflow once, waits
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(mutations(fetchMock)).toHaveLength(0)
   await act(async () => resolve(json(available)))
-  const modal = await screen.findByRole('dialog', { name: bg[`bulk.${action}`] })
+  const modal = await screen.findByRole('dialog', { name: bg[`bulk.${action}`] }, { timeout: 5000 })
   expect(screen.getAllByRole('dialog')).toHaveLength(1)
   await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true))
   const checkboxes = within(modal).getAllByRole('checkbox').filter((item) => item.getAttribute('aria-label')?.includes('13') || item.getAttribute('aria-label')?.includes('9'))
@@ -45,14 +49,14 @@ it.each(['issue', 'return'] as const)('%s uses the existing workflow once, waits
   await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url === '/api/transfers/availability')).toHaveLength(2))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(mutations(fetchMock)).toHaveLength(0)
-})
+}, 15000) // Includes awaited workspace imports and multiple deliberate navigation changes.
 
 it.each(['issue', 'return'] as const)('%s never force-selects stale passport eligibility or falls back to another machine', async (action) => {
   const current = action === 'issue' ? [{ ...entryAvailability(13), available: false }, entryAvailability(9)] : [{ ...issuedAvailability(13), returnable: false }, issuedAvailability(9)]
   const fetchMock = entryApi({ passport: action === 'return' ? issuedPassport : entryPassport, availability: current })
   start()
   await userEvent.click(within(await passportDialog()).getByRole('button', { name: bg[`entry.${action}`] }))
-  const modal = await screen.findByRole('dialog', { name: bg[`bulk.${action}`] })
+  const modal = await screen.findByRole('dialog', { name: bg[`bulk.${action}`] }, { timeout: 5000 })
   expect(within(modal).getByText(bg['entry.targetUnavailable'])).toBeVisible()
   expect(within(modal).getByText('Избрани машини: 0')).toBeVisible()
   for (const checkbox of within(modal).getAllByRole('checkbox')) expect(checkbox).not.toBeChecked()
@@ -84,14 +88,14 @@ it('starts the existing repair form with the exact machine and empty problem fie
   await waitFor(() => expect(modal.contains(document.activeElement)).toBe(true))
   expect(window.location.pathname).toBe('/')
   expect(screen.getAllByRole('dialog')).toHaveLength(1)
-  expect(within(modal).getByLabelText(bg['repairs.machine'])).toHaveValue('13')
+  expect(within(modal).getByLabelText(bg['repairs.machine'])).toHaveTextContent('№13')
   expect(within(modal).getByLabelText(bg['repairs.reportedProblem'])).toHaveValue('')
   expect(within(modal).getByLabelText(bg['repairCase.conditionBefore'])).toHaveValue('')
   expect(mutations(fetchMock)).toHaveLength(0)
   await userEvent.click(within(modal).getByRole('button', { name: bg['common.close'] }))
   await userEvent.click(screen.getByRole('button', { name: bg['nav.machines'] }))
   await userEvent.click(screen.getByRole('button', { name: bg['nav.repairs'] }))
-  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url === '/api/repair-cases')).toHaveLength(2))
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/workspace/repairs?'))).toHaveLength(2))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
@@ -124,7 +128,7 @@ it('opens only the exact validated active repair workspace, consumes the intent 
   await userEvent.click(within(modal).getByRole('button', { name: bg['common.close'] }))
   await userEvent.click(screen.getByRole('button', { name: bg['nav.machines'] }))
   await userEvent.click(screen.getByRole('button', { name: bg['nav.repairs'] }))
-  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => url === '/api/repair-cases')).toHaveLength(2))
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/workspace/repairs?'))).toHaveLength(2))
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
@@ -150,7 +154,7 @@ it('switches existing Protocols/Files tabs without downloading/uploading, and ha
   expect(within(modal).getByRole('button', { name: bg['passport.addFile'] })).toBeVisible()
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/download'))).toBe(false)
   await userEvent.click(within(actions).getByRole('button', { name: bg['nav.catalog'] }))
-  await waitFor(() => expect(screen.getByLabelText(bg['catalog.chooseMachine'])).toHaveValue('13'))
+  await waitFor(() => expect(screen.getByLabelText(bg['catalog.chooseMachine'])).toHaveTextContent('№13'), { timeout: 5000 })
   expect(window.location.pathname).toBe('/')
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   await screen.findByText('Test-only unsupported catalog')

@@ -1,3 +1,4 @@
+import { withWorkspaceRoutes } from './ui/workspaceTestFixtures'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -97,6 +98,7 @@ describe('индустриален каталог', () => {
       if (path.includes('/api/technical-library/9/preview?page=21')) return new Response(new Blob(['preview'], { type: 'image/png' }))
       throw new Error(`Unexpected request: ${path}`)
     }))
+    withWorkspaceRoutes(vi.mocked(fetch))
     const NativeURL = URL
     class MockURL extends NativeURL {
       static createObjectURL = vi.fn(() => 'blob:diagram')
@@ -152,6 +154,7 @@ describe('индустриален каталог', () => {
       throw new Error(`Unexpected request: ${path}`)
     })
     vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
     const user = userEvent.setup()
 
     render(
@@ -159,11 +162,12 @@ describe('индустриален каталог', () => {
         <IndustrialCatalog />
       </I18nProvider>,
     )
+    await user.click(await screen.findByRole('combobox', { name: 'Категория' })); await user.click(screen.getByRole('option', { name: 'QA workspace category' }))
     const machine = await screen.findByLabelText('Избери машина')
-    await user.selectOptions(machine, '9')
+    await user.click(machine); await user.click(await screen.findByRole('option', { name: /^№9 ·/ }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/assemblies/${falchSource}?machine_id=9`))).toBe(true))
 
-    await user.selectOptions(machine, '20')
+    await user.click(machine); await user.click(await screen.findByRole('option', { name: /^№20 ·/ }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/assemblies/${hydwinSource}?machine_id=20`))).toBe(true))
 
     const paths = fetchMock.mock.calls.map(([input]) => String(input))

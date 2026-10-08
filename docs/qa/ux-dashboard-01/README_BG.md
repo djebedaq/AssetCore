@@ -1,0 +1,23 @@
+# UX Dashboard 01 — доказателства от реалния браузър
+
+Всички изображения са от отделна локална QA база, създадена с Alembic и верифицирания регистър от 19 машини. Допълнителните шест `QA-UX-*` машини, категории, ремонти, заявка, подписи и PDF схема са изрично синтетични тестови fixtures. Не са производствени или исторически бизнес записи. Базата, паролите, ключовете, сесиите и signing links не се включват в Git.
+
+Изпълнени са 82 снимки: Dashboard на BG/EN/RU и петте оперативни модула на BG/EN при 1920/1440/1280/900/390 px, плюс действията по-долу. Тук са избрани 18 изображения с общ размер под 2 MB; SHA-256 стойностите са в `screenshots.json`, а резултатът без browser errors е в `qa-results.json`.
+
+| Доказателство | Проверено поведение |
+|---|---|
+| `dashboard-bg-1440.png`, `dashboard-bg-390.png`, `dashboard-en-900.png`, `dashboard-ru-1280.png` | Действителни броячи и категории, осем реални QA събития, преводи и тесен изглед. |
+| `dashboard-real-loading.png`, `dashboard-real-empty.png` | Реално изчакване на backend отговор; празна активност преди добавянето на fixtures; точно 19 верифицирани машини. |
+| `transfer-remaining-1.png`, `transfer-remaining-0.png` | Две реални частични връщания през формулярите, всяко с два графични подписа. Остатъкът се променя от 2 на 1 и на 0. |
+| `completed-partial-return-history.png` | Завършена партида, един inline Details панел и запазени две отделни операции по връщане. DOCX, PDF, ZIP и PDF preview са използвани успешно. |
+| `repairs-category-filters.png`, `repairs-bg-390.png` | Ремонти в две категории; отделяне на избраната категория; сървърни търсене, статус и период. |
+| `published-catalog-hotspot.png`, `catalog-original-hotspot-dialog.png` | Реално публикуван Builder runtime, PDF preview и оригиналният hotspot диалог. Смяна на категорията изчиства машината и ограничава следващия списък. |
+| `machine-timeline.png`, `timeline-original-repair.png`, `machine-empty-timeline.png` | Една машина с издаване, връщане и ремонт: правилен ред, уникални event keys, отваряне на оригиналния ремонт; друга машина без събития. |
+| `keyboard-long-list.png` | Дълъг сървърен списък в диалог, скролиране, клавиатура и Escape с връщане на фокуса. |
+| `observer-authorized-limited-passport.png` | Observer вижда ограничения паспорт; няма History tab; backend отказва `/api/workspace/repairs` с 403. |
+
+Сценарият е в `tests/browser/ux_dashboard.mjs`. Възпроизводимото изпълнение е `python tests/browser/run_ux_dashboard_qa.py` след `pnpm build` в `frontend`, с инсталирани backend/test зависимости и Playwright. Ако Playwright е предоставен от външен runtime, задайте `PLAYWRIGHT_MODULE` към неговия пакет; на Windows сценарият използва локалния Edge. На Linux е необходим инсталиран Playwright Chromium.
+
+Runner-ът създава нова уникална директория под игнорираното `.tmp`, нова SQLite база, свободен localhost port и отделни browser contexts. Отказва да работи с друга база. Не използва съществуващ server, не записва storage state/HAR/trace и не изтрива стари инсталации или история.
+
+При визуалната проверка бяха коригирани наследеното смаляване на KPI числата, съкращаването на „Български“, подравняването на статуса при последните ремонти и показването на празни заявки преди приключването на зареждането. Проверени са native скролиране, portal над диалог, фокус, липса на хоризонтално преливане и reduced motion.

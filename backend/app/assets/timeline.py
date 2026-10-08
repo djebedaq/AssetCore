@@ -95,6 +95,7 @@ def _item(
     description=None,
     related=None,
     details=None,
+    files=None,
 ) -> MachineTimelineItem:
     return MachineTimelineItem(
         event_key=key or f"{source_type}:{source_id}",
@@ -110,6 +111,7 @@ def _item(
         machine_id=machine_id,
         related=TimelineRelated(**(related or {})),
         details=details or {},
+        files=files or [],
     )
 
 
@@ -588,6 +590,7 @@ def _document_events(db, machine_id) -> list[MachineTimelineItem]:
                     "registry_key",
                     "domain_id",
                 ),
+                files=record["files"] if not official or record["version_status"] in {"SIGNED", "FINALIZED", "SUPERSEDED"} else [],
             )
         )
     return items

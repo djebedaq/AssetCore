@@ -10,10 +10,9 @@ import { BatchDetailsPanel, BatchProgressCard } from './BatchHistory'
 import { IssueModal } from './IssueFlow'
 import { ReturnModal } from './ReturnFlow'
 import { CancelBatchModal } from './CancelBatchModal'
-import { ModalShell } from './TransferModalShell'
 import type { TransferEntryIntent } from '../passport/machineEntryIntent'
 
-type BulkTransfersProps = { onChanged: () => void; entryIntent?: TransferEntryIntent; onEntryConsumed?: () => void }
+type BulkTransfersProps = { onChanged: () => void; entryIntent?: TransferEntryIntent; onEntryConsumed?: () => void; hideBatchPanel?: boolean }
 
 function canOperateTransfers(): boolean {
   return hasPermission('transfers.create', 'transfers.return')
@@ -23,7 +22,7 @@ function canCancelTransfers(): boolean {
   return hasPermission('transfers.create')
 }
 
-export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed }: BulkTransfersProps) {
+export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed, hideBatchPanel = false }: BulkTransfersProps) {
   const { t } = useI18n()
   const allowCancel = canCancelTransfers()
   const [availabilityItems, setAvailability] = useState<TransferAvailability[]>([])
@@ -34,7 +33,6 @@ export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [cancelBatch, setCancelBatch] = useState<BatchDetails | null>(null)
-  const [operationDetails, setOperationDetails] = useState<BatchDetails | null>(null)
   const [initialMachineId, setInitialMachineId] = useState<number>()
   const consumed = useRef<TransferEntryIntent | null>(null)
 
@@ -44,7 +42,7 @@ export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed 
       const [available, locationItems, batchItems] = await Promise.all([
         transferApi.availability(),
         transferApi.locations(),
-        transferApi.batches(),
+        hideBatchPanel ? Promise.resolve([]) : transferApi.batches(),
       ])
       setAvailability(available)
       setLocations(locationItems)
@@ -75,7 +73,6 @@ export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed 
   const openMode = (next: 'issue' | 'return') => { setInitialMachineId(undefined); setMode(next) }
   const completed = () => {
     setDetails({})
-    setOperationDetails(null)
     void load()
     onChanged()
   }
@@ -107,14 +104,13 @@ export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed 
   }
   const cancelled = () => {
     setDetails({})
-    setOperationDetails(null)
     void load()
     onChanged()
   }
 
   const openOperation = async (batchId: number) => {
     try {
-      setOperationDetails(await transferApi.batch(batchId))
+      setCancelBatch(await transferApi.batch(batchId))
     } catch (caught) {
       setError(caught instanceof Error ? caught : new Error('request_failed'))
     }
@@ -129,17 +125,16 @@ export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed 
         <div className="bulk-actions"><button className="primary" onClick={() => openMode('issue')}><Send size={18} />{t('bulk.issue')}</button><button className="secondary emphasized" onClick={() => openMode('return')}><RotateCcw size={18} />{t('bulk.return')}</button></div>
       )}
       <ConflictNotice error={error} />
-      <div className="panel batch-panel">
+      {!hideBatchPanel && <div className="panel batch-panel">
         <div className="panel-title"><div><h3>{t('bulk.batchProgressTitle')}</h3><p className="muted">{t('bulk.batchProgressSubtitle')}</p></div></div>
         {loading
           ? <div className="loading">{t('common.loading')}</div>
           : batches.length
-            ? <div className="batch-list">{batches.map((batch) => <div key={batch.batch_id}><BatchProgressCard batch={batch} onOpen={openBatch} onCancel={allowCancel ? (value) => void requestCancel(value) : undefined} />{details[batch.batch_id] && <BatchDetailsPanel details={details[batch.batch_id]} onDownload={download} onOpenOperation={(batchId) => void openOperation(batchId)} onCancel={allowCancel ? (value) => void requestCancel(value) : undefined} />}</div>)}</div>
+            ? <div className="batch-list">{batches.map((batch) => <div key={batch.batch_id}><BatchProgressCard batch={batch} expanded={Boolean(details[batch.batch_id])} onOpen={openBatch} onCancel={allowCancel ? (value) => void requestCancel(value) : undefined} />{details[batch.batch_id] && <BatchDetailsPanel details={details[batch.batch_id]} onDownload={download} onCancelOperation={allowCancel ? (batchId) => void openOperation(batchId) : undefined} onCancel={allowCancel ? (value) => void requestCancel(value) : undefined} />}</div>)}</div>
             : <div className="empty-state">{t('bulk.noBatches')}</div>}
-      </div>
+      </div>}
       {mode === 'issue' && <IssueModal initialMachineId={initialMachineId} items={availabilityItems} locations={locations} onClose={() => { setMode(null); setInitialMachineId(undefined) }} onComplete={completed} />}
       {mode === 'return' && <ReturnModal initialMachineId={initialMachineId} items={availabilityItems} onClose={() => { setMode(null); setInitialMachineId(undefined) }} onComplete={completed} />}
-      {operationDetails && !cancelBatch && <ModalShell title={`${t('bulk.returnOperation')}: ${operationDetails.batch_reference}`} onClose={() => setOperationDetails(null)}><BatchDetailsPanel details={operationDetails} onDownload={download} onCancel={allowCancel ? (value) => void requestCancel(value) : undefined} /></ModalShell>}
       {cancelBatch && <CancelBatchModal batch={cancelBatch} onClose={() => setCancelBatch(null)} onCancelled={cancelled} />}
     </section>
   )

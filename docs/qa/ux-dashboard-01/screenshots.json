@@ -1,0 +1,74 @@
+[
+  {
+    "file": "dashboard-bg-1440.png",
+    "sha256": "5d4826d94a1ab70dad6cd3c378dc685b05492c267940b43799278f60ff8efd53"
+  },
+  {
+    "file": "dashboard-bg-390.png",
+    "sha256": "7bc35ee7978c42e828782fa33fd58fef640e1bb62360ae2a977b78ecd7acbbfe"
+  },
+  {
+    "file": "dashboard-en-900.png",
+    "sha256": "069fecdcc0ff80699aef7da487bd737824fd42cb3086524b2231f643fbfa715d"
+  },
+  {
+    "file": "dashboard-ru-1280.png",
+    "sha256": "1851300112e2f2c539875d1ffac0fad3bb3cc15b951c9debd391f74808d61423"
+  },
+  {
+    "file": "dashboard-real-loading.png",
+    "sha256": "df0b92e6ff5818c6a7053406bc2ab879a6d4fee4b1cacfa56e2b5dfec792d7a4"
+  },
+  {
+    "file": "dashboard-real-empty.png",
+    "sha256": "7faed0147b09fbe875526f74908f7aa2970e71386e40a1bb8a982f07214cb08f"
+  },
+  {
+    "file": "transfer-remaining-1.png",
+    "sha256": "9c9dcff7670b37c8a3e50605b04db37fc552198a6e3d04ca6cda8da537582b94"
+  },
+  {
+    "file": "transfer-remaining-0.png",
+    "sha256": "446cd36e81fd7f7ba525040deeadfe524f8edcdbe7b9cbb9323c5461f1db9ebd"
+  },
+  {
+    "file": "completed-partial-return-history.png",
+    "sha256": "5b579689d43754188e7cf3843a4ab05ec61e6adff3b758ec3b49f84cbd6c106e"
+  },
+  {
+    "file": "repairs-category-filters.png",
+    "sha256": "84792343731deb52456dfc45082ee9082ca63351e6d00123ef48fc35e740d4be"
+  },
+  {
+    "file": "repairs-bg-390.png",
+    "sha256": "006801bb4264884b50c6660b181e533c9d96363f6abc8bd2b8a0fb1278fa3085"
+  },
+  {
+    "file": "published-catalog-hotspot.png",
+    "sha256": "01ab68e576fe5935647d475a9e2c094d2702808c60891009383d555752c0b441"
+  },
+  {
+    "file": "catalog-original-hotspot-dialog.png",
+    "sha256": "0c9d0248c7b242d96ca110afb09db82d9c7c83a29ec05730492aed65b6d67e7f"
+  },
+  {
+    "file": "machine-timeline.png",
+    "sha256": "84560c37b440245436cbaac54931b6b96fb1d94bc0fa2051287f6cf654538cf3"
+  },
+  {
+    "file": "machine-empty-timeline.png",
+    "sha256": "2315acb69799dd6dfc29a4c4a4187d341d7efe2a0fb30af5097e7257f54d4a5d"
+  },
+  {
+    "file": "timeline-original-repair.png",
+    "sha256": "d6171db4b877863e95cae0000a4693ea66ccb1dabb436d13e7d09cf5f719213f"
+  },
+  {
+    "file": "keyboard-long-list.png",
+    "sha256": "28248ad632081b735f9fb2c596539aea42326493a8ed050a16227eb91aaccd0e"
+  },
+  {
+    "file": "observer-authorized-limited-passport.png",
+    "sha256": "f6c0d484f824059427a0048b397202ea3c25895d1983db1e6b489d61354d506c"
+  }
+]

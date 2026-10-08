@@ -1,3 +1,4 @@
+import { withWorkspaceRoutes } from '../../ui/workspaceTestFixtures'
 // Isolated frontend HTTP fixtures, never production or seed records.
 import { vi } from 'vitest'
 import type { MachinePassport, RepairCase, TransferAvailability, UserSession } from '../../types'
@@ -66,6 +67,7 @@ export function entryApi(options: {
     return json([])
   })
   vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
   return fetchMock
 }
 export const passportGets = (fetchMock: ReturnType<typeof entryApi>) => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/passport'))

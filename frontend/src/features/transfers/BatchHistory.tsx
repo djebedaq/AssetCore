@@ -2,6 +2,7 @@ import { Archive, Ban } from 'lucide-react'
 import { statusText, useI18n } from '../../i18n'
 import { DocumentButtons } from '../../industrialUi'
 import type { BatchDetails, BatchProgress, ProtocolDocument } from '../../types'
+import { StatusBadge } from '../../ui/StatusBadge'
 
 function groupProtocolDocuments(documents: ProtocolDocument[], fallbackNumber?: string) {
   const groups = new Map<string, { number: string | null; documents: ProtocolDocument[] }>()
@@ -15,31 +16,31 @@ function groupProtocolDocuments(documents: ProtocolDocument[], fallbackNumber?: 
   return [...groups.values()]
 }
 
-export function BatchProgressCard({ batch, onOpen, onCancel }: { batch: BatchProgress; onOpen?: (batch: BatchProgress) => void; onCancel?: (batch: BatchProgress) => void }) {
+export function BatchProgressCard({ batch, onOpen, onCancel, expanded = false }: { batch: BatchProgress; onOpen?: (batch: BatchProgress) => void; onCancel?: (batch: BatchProgress) => void; expanded?: boolean }) {
   const { date, t } = useI18n()
   const returnedPercent = batch.total_machines ? Math.round((batch.returned_machines / batch.total_machines) * 100) : 0
   const canCancel = batch.cancellable_batch_ids?.includes(batch.batch_id) ?? batch.awaiting_signature_machines > 0
   return (
     <article className="batch-card">
-      <div><span className={`badge ${batch.still_issued_machines ? 'batch-active' : 'batch-complete'}`}>{statusText(t, batch.status, 'batch')}</span><h4>{batch.machine_numbers.map((number) => `№${number}`).join(', ')}</h4><small>{t('bulk.technicalReference')}: {batch.batch_reference}</small>{batch.created_at && <small>{date(batch.created_at)}</small>}{batch.awaiting_signature_machines > 0 && <small className="muted batch-awaiting">{t('bulk.awaitingSignatureCount', { count: batch.awaiting_signature_machines })}</small>}</div>
+      <div><StatusBadge status={batch.status} domain="batch" /><h4>{batch.machine_numbers.map((number) => `№${number}`).join(', ')}</h4><small>{t('bulk.technicalReference')}: {batch.batch_reference}</small>{batch.created_at && <small>{date(batch.created_at)}</small>}{batch.awaiting_signature_machines > 0 && <small className="muted batch-awaiting">{t('bulk.awaitingSignatureCount', { count: batch.awaiting_signature_machines })}</small>}</div>
       <div className="batch-progress"><span style={{ width: `${returnedPercent}%` }} /><small>{t('bulk.returnedProgress', { returned: batch.returned_machines, issued: batch.still_issued_machines, total: batch.total_machines })}</small></div>
-      <div className="batch-card-actions">{canCancel && onCancel && <button className="danger compact" onClick={() => onCancel(batch)}><Ban size={15} />{t('bulk.cancelPendingAction')}</button>}{onOpen && <button className="secondary compact" onClick={() => onOpen(batch)}>{t('common.details')}</button>}</div>
+      <div className="batch-card-actions">{canCancel && onCancel && <button className="danger compact" onClick={() => onCancel(batch)}><Ban size={15} />{t('bulk.cancelPendingAction')}</button>}{onOpen && <button className="secondary compact" aria-expanded={expanded} aria-controls={`batch-detail-${batch.batch_id}`} onClick={() => onOpen(batch)}>{t('common.details')}</button>}</div>
     </article>
   )
 }
 
-export function BatchDetailsPanel({ details, onDownload, onCancel, onOpenOperation }: { details: BatchDetails; onDownload: (path: string, filename: string) => void; onCancel?: (details: BatchDetails) => void; onOpenOperation?: (batchId: number) => void }) {
+export function BatchDetailsPanel({ details, onDownload, onCancel, onCancelOperation }: { details: BatchDetails; onDownload: (path: string, filename: string) => void; onCancel?: (details: BatchDetails) => void; onCancelOperation?: (batchId: number) => void }) {
   const { date, t } = useI18n()
   const hasFinalDocuments = details.transfers.some((transfer) => transfer.issue_status === 'COMPLETED' || transfer.return_status === 'COMPLETED')
   const canCancel = details.cancellable_batch_ids?.includes(details.batch_id) ?? details.awaiting_signature_machines > 0
   return (
-    <div className="batch-details">
+    <div className="batch-details" id={`batch-detail-${details.batch_id}`}>
       <div className="batch-detail-actions"><button className="secondary" disabled={!hasFinalDocuments} onClick={() => onDownload(details.zip_download_endpoint, `${details.batch_reference}-protocols.zip`)}><Archive size={16} />{hasFinalDocuments ? t('bulk.zipProtocols') : t('bulk.awaitingSignature')}</button>{canCancel && onCancel && <button className="danger" onClick={() => onCancel(details)}><Ban size={16} />{t('bulk.cancelPendingAction')}</button>}</div>
       {!!details.return_operations?.length && <section aria-label={t('bulk.returnOperations')}>
         <h4>{t('bulk.returnOperations')}</h4>
         {details.return_operations.map((operation) => <div className="batch-transfer-item" key={operation.batch_id}>
           <div><strong>{t('bulk.returnOperation')}: {operation.batch_reference}</strong><p>{operation.machine_numbers.map(number => `№${number}`).join(', ')}</p><small>{date(operation.created_at)} · {operation.signing_status === 'AWAITING_SIGNATURE' ? t('bulk.awaitingSignature') : operation.signing_status === 'COMPLETED' ? t('status.completed') : statusText(t, operation.status, 'batch')}</small></div>
-          {onOpenOperation && <button className="secondary compact" onClick={() => onOpenOperation(operation.batch_id)}>{t('common.details')}</button>}
+          {operation.signing_status === 'AWAITING_SIGNATURE' && onCancelOperation && <button className="danger compact" onClick={() => onCancelOperation(operation.batch_id)}><Ban size={15} />{t('bulk.cancelPendingAction')}</button>}
         </div>)}
       </section>}
       {details.transfers.map((transfer) => (
@@ -47,7 +48,9 @@ export function BatchDetailsPanel({ details, onDownload, onCancel, onOpenOperati
           <section className="batch-transfer-machine">
             <h4>{t('bulk.batchMachine', { number: transfer.machine_number })}</h4>
             <small>{transfer.brand}</small>
-            <span className={`availability-pill ${transfer.is_active ? 'blocked' : 'available'}`}>{details.operation === 'RETURN' && transfer.return_status === 'CANCELLED' ? t('status.cancelled') : transfer.issue_status === 'AWAITING_SIGNATURE' || transfer.return_status === 'AWAITING_SIGNATURE' ? t('bulk.awaitingSignature') : transfer.is_active ? t('transfers.stillIssued') : t('transfers.returned')}</span>
+            <StatusBadge domain="batch" status={details.operation === 'RETURN' && transfer.return_status === 'CANCELLED' ? 'CANCELLED' : transfer.issue_status === 'AWAITING_SIGNATURE' || transfer.return_status === 'AWAITING_SIGNATURE' ? 'AWAITING_SIGNATURE' : transfer.is_active ? 'ACTIVE' : transfer.return_status === 'COMPLETED' ? 'RETURNED' : transfer.issue_status} label={transfer.is_active && transfer.issue_status === 'COMPLETED' && transfer.return_status !== 'AWAITING_SIGNATURE' ? t('transfers.stillIssued') : transfer.return_status === 'COMPLETED' ? t('transfers.returned') : undefined} />
+            {transfer.issued_at && <small>{t('bulk.issueProtocol')}: {date(transfer.issued_at)}</small>}
+            {transfer.returned_at && <small>{t('bulk.returnProtocol')}: {date(transfer.returned_at)}</small>}
           </section>
           <div className="batch-transfer-protocols" aria-label={t('transfers.documents')}>
             {transfer.issue_status === 'COMPLETED'

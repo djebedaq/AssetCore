@@ -1,3 +1,4 @@
+import { withWorkspaceRoutes } from '../../ui/workspaceTestFixtures'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -149,6 +150,7 @@ function setupFetch(options: {
     throw new Error(`Unexpected test request: ${path}`)
   })
   vi.stubGlobal('fetch', fetchMock)
+    withWorkspaceRoutes(vi.mocked(fetch))
   return fetchMock
 }
 
@@ -209,7 +211,7 @@ describe('machine-bound catalog request cart', () => {
     setupFetch({ builder: true, falchParts: [builderPart] })
     const user = userEvent.setup()
     render(<CatalogHarness defaultMachineId={FALCH_MACHINE_ID} />)
-    expect(await screen.findByRole('option', { name: /Тестов възел/ })).toBeInTheDocument()
+    await user.click(await screen.findByRole('combobox', { name: 'Избери възел…' })); expect(screen.getByRole('option', { name: /Тестов възел/ })).toBeInTheDocument(); await user.keyboard('{Escape}')
     await user.click(await screen.findByText(catalogDisplayName(builderPart)))
     await user.click(await screen.findByRole('button', { name: 'Добави към заявка' }))
     expect(screen.getByText('Избрани части: 1')).toBeInTheDocument()
@@ -231,20 +233,20 @@ describe('machine-bound catalog request cart', () => {
     await addFalchPart(user)
 
     const machineSelect = screen.getByLabelText('Избери машина')
-    await user.selectOptions(machineSelect, String(HYDWIN_MACHINE_ID))
+    await user.click(machineSelect); await user.click(await screen.findByRole('option', { name: /^№20 ·/ }))
     expect(await screen.findByRole('dialog', { name: 'Смяна на машината' })).toBeInTheDocument()
-    expect(machineSelect).toHaveValue(String(FALCH_MACHINE_ID))
+    expect(machineSelect).toHaveTextContent('№9')
     expect(screen.getByText('Избрани части: 1')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Отказ' }))
     expect(screen.queryByRole('dialog', { name: 'Смяна на машината' })).not.toBeInTheDocument()
-    expect(machineSelect).toHaveValue(String(FALCH_MACHINE_ID))
+    expect(machineSelect).toHaveTextContent('№9')
     expect(screen.getByLabelText(`Заявено количество ${falchPart.part_number}`)).toHaveValue(1)
 
-    await user.selectOptions(machineSelect, String(HYDWIN_MACHINE_ID))
+    await user.click(machineSelect); await user.click(await screen.findByRole('option', { name: /^№20 ·/ }))
     await user.click(await screen.findByRole('button', { name: 'Смени машината и изчисти заявката' }))
     await screen.findByText(catalogDisplayName(hydwinPart))
-    expect(machineSelect).toHaveValue(String(HYDWIN_MACHINE_ID))
+    expect(machineSelect).toHaveTextContent('№20')
     expect(screen.getByText('Избрани части: 0')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Отмени добавянето на комплекта' })).not.toBeInTheDocument()
     expect(screen.queryByText(catalogDisplayName(falchPart))).not.toBeInTheDocument()
@@ -254,14 +256,15 @@ describe('machine-bound catalog request cart', () => {
     setupFetch()
     const user = userEvent.setup()
     render(<CatalogHarness />)
+    await user.click(await screen.findByRole('combobox', { name: 'Категория' })); await user.click(screen.getByRole('option', { name: 'QA workspace category' }))
     const machineSelect = await screen.findByLabelText('Избери машина')
 
-    await user.selectOptions(machineSelect, String(FALCH_MACHINE_ID))
+    await user.click(machineSelect); await user.click(await screen.findByRole('option', { name: /^№9 ·/ }))
     await screen.findByText(catalogDisplayName(falchPart))
-    await user.selectOptions(machineSelect, String(HYDWIN_MACHINE_ID))
+    await user.click(machineSelect); await user.click(await screen.findByRole('option', { name: /^№20 ·/ }))
 
     await screen.findByText(catalogDisplayName(hydwinPart))
-    expect(machineSelect).toHaveValue(String(HYDWIN_MACHINE_ID))
+    expect(machineSelect).toHaveTextContent('№20')
     expect(screen.queryByRole('dialog', { name: 'Смяна на машината' })).not.toBeInTheDocument()
   })
 
@@ -274,7 +277,7 @@ describe('machine-bound catalog request cart', () => {
     view.rerender(<CatalogHarness defaultMachineId={HYDWIN_MACHINE_ID} />)
 
     await screen.findByText(catalogDisplayName(hydwinPart))
-    expect(screen.getByLabelText('Избери машина')).toHaveValue(String(HYDWIN_MACHINE_ID))
+    expect(screen.getByLabelText('Избери машина')).toHaveTextContent('№20')
     expect(screen.getByText('Избрани части: 0')).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: 'Смяна на машината' })).not.toBeInTheDocument()
     expect(screen.queryByText(catalogDisplayName(falchPart))).not.toBeInTheDocument()

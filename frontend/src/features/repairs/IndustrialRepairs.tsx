@@ -13,8 +13,11 @@ import {
 } from '../../industrialUi'
 import { statusText, useI18n, type TranslationKey } from '../../i18n'
 import { hasPermission } from '../../permissions'
-import type { CatalogPartEnhanced, Machine, RepairCase } from '../../types'
+import type { CatalogPartEnhanced, RepairCase } from '../../types'
 import { repairApi } from './repairApi'
+import { Select } from '../../ui/Select'
+import { StatusBadge } from '../../ui/StatusBadge'
+import { CategorySelect, DateFilters, FilterToolbar, MachineSelect, Pagination, SortSelect, queryParams, useCategories, usePage, useWorkspaceFilters } from '../../ui/workspace'
 import type { RepairEntryIntent } from '../passport/machineEntryIntent'
 import {
   canonicalRepairStage,
@@ -26,10 +29,9 @@ import {
   type RepairFormState,
 } from './workflow'
 
-function RepairCreateModal({ machines, onClose, onSaved, initialMachineId }: { machines: Machine[]; onClose: () => void; onSaved: () => void; initialMachineId?: number }) {
+function RepairCreateModal({ onClose, onSaved, initialMachineId }: { onClose: () => void; onSaved: () => void; initialMachineId?: number }) {
   const { t } = useI18n()
-  const eligible = machines.filter((machine) => machine.status === 'READY' && machine.category_capabilities?.includes('HAS_REPAIR_WORKFLOW') !== false)
-  const [form, setForm] = useState({ machine_id: initialMachineId === undefined ? eligible[0]?.id || 0 : eligible.find((machine) => machine.id === initialMachineId && machine.is_active)?.id || 0, reported_problem: '', condition_before: '' })
+  const [form, setForm] = useState({ machine_id: initialMachineId || 0, reported_problem: '', condition_before: '' })
   const [error, setError] = useState('')
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -39,10 +41,10 @@ function RepairCreateModal({ machines, onClose, onSaved, initialMachineId }: { m
     } catch (caught) { setError(friendlyError(caught, t('repairs.saveError'))) }
   }
   return <Modal title={t('repairs.acceptTitle')} onClose={onClose}><form className="form-grid" onSubmit={submit}>
-    <label>{t('repairs.machine')}<select value={form.machine_id} onChange={(event) => setForm({ ...form, machine_id: Number(event.target.value) })}>{eligible.map((machine) => <option key={machine.id} value={machine.id}>{machine.name} · {statusText(t, machine.status)}</option>)}</select></label>
+    <MachineSelect module="repairs" status="READY" value={form.machine_id ? String(form.machine_id) : ''} onChange={value => setForm({ ...form, machine_id: Number(value) })} />
     <label className="wide">{t('repairs.reportedProblem')}<textarea required value={form.reported_problem} onChange={(event) => setForm({ ...form, reported_problem: event.target.value })} /></label>
     <label className="wide">{t('repairCase.conditionBefore')}<textarea required value={form.condition_before} onChange={(event) => setForm({ ...form, condition_before: event.target.value })} /></label>
-    {error && <div className="error wide">{error}</div>}<div className="actions wide"><button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" disabled={!eligible.length}>{t('repairCase.accept')}</button></div>
+    {error && <div className="error wide">{error}</div>}<div className="actions wide"><button type="button" className="secondary" onClick={onClose}>{t('common.cancel')}</button><button className="primary" disabled={!form.machine_id}>{t('repairCase.accept')}</button></div>
   </form></Modal>
 }
 
@@ -138,7 +140,7 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
     try { await repairApi.removeParticipant(repair.id, id); await load(true); onChanged() }
     catch (caught) { setError(friendlyError(caught, t('repairCase.participantError'))) }
   }
-  if (!repair || !form) return <Modal title={t('common.loading')} onClose={closeWorkspace} wide><div className="loading">{t('common.loading')}</div></Modal>
+  if (!repair || !form) return <Modal title={t(error ? 'repairs.title' : 'common.loading')} onClose={closeWorkspace} wide>{error ? <div className="error" role="alert">{error}</div> : <div className="loading" role="status">{t('common.loading')}</div>}</Modal>
   const currentStage = canonicalRepairStage(repair)
   const viewedStage = editingStage ?? currentStage
   const canEdit = hasPermission('repairs.edit') && repair.status !== 'COMPLETED'
@@ -164,33 +166,66 @@ function RepairWorkspace({ repairId, onClose, onChanged }: { repairId: number; o
   </Modal>
 }
 
-export function IndustrialRepairs({ entryIntent, onEntryConsumed }: { entryIntent?: RepairEntryIntent; onEntryConsumed?: () => void } = {}) {
+type RepairSummary = Pick<RepairCase, 'id' | 'machine_id' | 'machine_name' | 'machine_number' | 'repair_reference' | 'reported_problem' | 'status' | 'opened_at' | 'closed_at'>
+
+export function IndustrialRepairs({ entryIntent, onEntryConsumed, initialRecordId }: { entryIntent?: RepairEntryIntent; onEntryConsumed?: () => void; initialRecordId?: number } = {}) {
   const { date, t } = useI18n()
-  const [items, setItems] = useState<RepairCase[]>([])
-  const [machines, setMachines] = useState<Machine[]>([])
-  const [selected, setSelected] = useState<number | null>(null)
+  const [selected, setSelected] = useState<number | null>(initialRecordId || null)
   const [create, setCreate] = useState(false)
   const [error, setError] = useState('')
-  const [loaded, setLoaded] = useState(false)
+  const [refresh, setRefresh] = useState(0)
   const [initialMachineId, setInitialMachineId] = useState<number>()
   const consumed = useRef<RepairEntryIntent | null>(null)
-  const load = () => Promise.all([repairApi.list(), repairApi.machines()]).then(([repairs, machineItems]) => { setItems(repairs); setMachines(machineItems); setError('') }).catch((caught) => setError(friendlyError(caught, t('repairCase.loadError')))).finally(() => setLoaded(true))
-  useEffect(() => { void load() }, [])
+  const pendingEntry = useRef<{ intent: RepairEntryIntent; read: Promise<unknown> } | null>(null)
+  const { categories, error: categoryError } = useCategories('repairs', refresh)
+  const filter = useWorkspaceFilters()
+  const { data, loading, error: listError } = usePage<RepairSummary>(`/workspace/repairs?${queryParams(filter.params)}`, refresh)
+  const load = () => { setRefresh(value => value + 1) }
   useEffect(() => {
-    if (!loaded || !entryIntent || consumed.current === entryIntent) return
-    consumed.current = entryIntent
-    if (!error) {
-      if (entryIntent.action === 'repair-create' && hasPermission('repairs.create') && machines.some((machine) => machine.id === entryIntent.machineId && machine.is_active && machine.status === 'READY' && machine.category_capabilities?.includes('HAS_REPAIR_WORKFLOW') !== false)) {
-        setInitialMachineId(entryIntent.machineId)
-        setCreate(true)
-      } else if (entryIntent.action === 'repair-open' && hasPermission('repairs.view') && items.some((repair) => repair.id === entryIntent.repairId && repair.machine_id === entryIntent.machineId && repair.status !== 'COMPLETED')) {
-        setSelected(entryIntent.repairId)
-      } else setError(t('entry.targetUnavailable'))
+    if (!entryIntent || consumed.current === entryIntent) return
+    let active = true
+    const finish = () => { if (active) { consumed.current = entryIntent; onEntryConsumed?.() } }
+    const read = <T,>(fetch: () => Promise<T>): Promise<T> => {
+      if (pendingEntry.current?.intent !== entryIntent) pendingEntry.current = { intent: entryIntent, read: fetch() }
+      return pendingEntry.current.read as Promise<T>
     }
-    onEntryConsumed?.()
-  }, [loaded, entryIntent, onEntryConsumed, machines, items, error, t])
+    if (entryIntent.action === 'repair-create' && hasPermission('repairs.create')) {
+      void read(() => repairApi.machine(entryIntent.machineId)).then(machine => {
+        if (!active) return
+        if (machine.is_active && machine.status === 'READY' && machine.category_capabilities?.includes('HAS_REPAIR_WORKFLOW') === true) {
+          setInitialMachineId(machine.id); setCreate(true)
+        } else setError(t('entry.targetUnavailable'))
+      }).catch(() => { if (active) setError(t('entry.targetUnavailable')) }).finally(finish)
+    } else if (entryIntent.action === 'repair-open' && hasPermission('repairs.view')) {
+      void read(() => repairApi.get(entryIntent.repairId)).then(repair => {
+        if (!active) return
+        if (repair.machine_id === entryIntent.machineId && repair.status !== 'COMPLETED') setSelected(repair.id)
+        else setError(t('entry.targetUnavailable'))
+      }).catch(() => { if (active) setError(t('entry.targetUnavailable')) }).finally(finish)
+    } else { setError(t('entry.targetUnavailable')); finish() }
+    return () => { active = false }
+  }, [entryIntent, t])
+  useEffect(() => { if (initialRecordId) setSelected(initialRecordId) }, [initialRecordId])
   useEffect(() => {
     if (consumed.current && (create || selected)) document.querySelector<HTMLElement>('[role="dialog"] button')?.focus()
   }, [create, selected])
-  return <><div className="toolbar"><div><h3>{t('repairs.title')}</h3><p className="muted">{t('repairCase.workflowHint')}</p></div>{hasPermission('repairs.create') && <button className="primary" onClick={() => { setInitialMachineId(undefined); setCreate(true) }}><Plus size={18} />{t('repairs.new')}</button>}</div>{error && <div className="error">{error}</div>}<div className="cards-list">{items.map((repair) => { const stage = canonicalRepairStage(repair); return <button className="repair-card repair-card-button" key={repair.id} onClick={() => setSelected(repair.id)}><div><span className="badge">{t(repairStageTitleKeys[repairStageOrder[stage]])}</span><h3>{repair.machine_name} · {repair.repair_reference}</h3><p><b>{t('repairs.problem')}</b> {repair.reported_problem}</p><div className="workflow-checks">{repairStageOrder.map((item, index) => <span className={repair.status === 'COMPLETED' || index <= stage ? 'done' : ''} key={item}>{t(repairStageTitleKeys[item])}</span>)}</div></div><div className="repair-side"><small>{date(repair.opened_at)}</small><ChevronRight /></div></button> })}{!items.length && <div className="empty-state">{t('repairs.empty')}</div>}</div>{create && <RepairCreateModal initialMachineId={initialMachineId} machines={machines} onClose={() => { setCreate(false); setInitialMachineId(undefined) }} onSaved={() => { setCreate(false); setInitialMachineId(undefined); void load() }} />}{selected && <RepairWorkspace repairId={selected} onClose={() => setSelected(null)} onChanged={() => void load()} />}</>
+  return <>
+    <div className="toolbar"><div><h3>{t('repairs.title')}</h3><p className="muted">{t('repairCase.workflowHint')}</p></div>{hasPermission('repairs.create') && <button className="primary" onClick={() => { setInitialMachineId(undefined); setCreate(true) }}><Plus size={18} />{t('repairs.new')}</button>}</div>
+    <FilterToolbar query={filter.values.q} onQuery={value => filter.change('q', value)} onReset={filter.reset}>
+      <CategorySelect categories={categories} value={filter.values.category} onChange={value => filter.change('category', value)} legacy />
+      <label className="ac-filter"><span>{t('common.status')}</span><Select label={t('common.status')} value={filter.values.status} onChange={value => filter.change('status', value)}
+        options={[{ value: '', label: t('ux.allStatuses') }, ...['ACCEPTED', 'DIAGNOSIS', 'WAITING_APPROVAL', 'WAITING_PARTS', 'REPAIRING', 'TESTING', 'COMPLETED'].map(value => ({ value, label: statusText(t, value, 'repair') }))]} /></label>
+      <DateFilters from={filter.values.from} to={filter.values.to} onFrom={value => filter.change('from', value)} onTo={value => filter.change('to', value)} />
+      <SortSelect value={filter.values.sort} onChange={value => filter.change('sort', value)} />
+    </FilterToolbar>
+    <p className="ac-history-note">{t('ux.currentCategory')}</p>
+    {(error || listError || categoryError) && <div className="error" role="alert">{error || t('repairCase.loadError')}</div>}
+    {loading && <div className="loading" role="status">{t('common.loading')}</div>}
+    <div className="cards-list">{data?.items.map(repair => <button className="repair-card repair-card-button" key={repair.id} onClick={() => setSelected(repair.id)}>
+      <div><StatusBadge status={repair.status} domain="repair" /><h3>{repair.machine_name} · {repair.repair_reference}</h3><p><b>{t('repairs.problem')}</b> {repair.reported_problem}</p></div><div className="repair-side"><small>{date(repair.opened_at)}</small><ChevronRight /></div>
+    </button>)}{data && !data.items.length && <div className="empty-state">{t('repairs.empty')}</div>}</div>
+    <Pagination data={data} onPage={filter.setPage} />
+    {create && <RepairCreateModal initialMachineId={initialMachineId} onClose={() => { setCreate(false); setInitialMachineId(undefined) }} onSaved={() => { setCreate(false); setInitialMachineId(undefined); load() }} />}
+    {selected && <RepairWorkspace repairId={selected} onClose={() => setSelected(null)} onChanged={load} />}
+  </>
 }

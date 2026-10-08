@@ -3,7 +3,8 @@ import { BarChart3, BookOpen, Boxes, ClipboardSignature, FileText, FileCheck2, G
 import { api, clearLegacyAuthStorage, logout } from './api'
 import ChangePassword from './ChangePassword'
 import { useI18n, type TranslationKey } from './i18n'
-import { clearSessionUser, setSessionUser } from './permissions'
+import { clearSessionUser, setSessionUser, hasPermission } from './permissions'
+import type { OperationTarget } from './ui/workspace'
 import type { EmergencyAccessStatus, PermissionCode, UserSession } from './types'
 import ProfileCompletion from './ProfileCompletion'
 import { useMobileNavigationLock } from './useMobileNavigationLock'
@@ -56,14 +57,31 @@ function App() {
   const passportMachineId = machineEntry.machineId
   const [entryIntent, setEntryIntent] = useState<MachineEntryIntent | null>(null)
   const [workflowVisit, setWorkflowVisit] = useState(0)
+  const [operationTarget, setOperationTarget] = useState<OperationTarget | null>(null)
   const signingMatch = window.location.pathname.match(/^\/sign\/([^/]+)\/?$/)
 
   function navigatePage(next: Page) {
+    setOperationTarget(null)
     machineEntry.leave()
     setPage(next)
     window.history.pushState({ ...window.history.state, assetcorePage: next }, '', next === 'machines' ? '/machines' : '/')
     window.dispatchEvent(new Event('assetcore:routechange'))
   }
+
+  useEffect(() => {
+    function openRecord(event: Event) {
+      const target = (event as CustomEvent<OperationTarget>).detail
+      const permission = target.module === 'parts' ? 'requests.view' : target.module === 'repairs' ? 'repairs.view' : target.module === 'transfers' ? 'transfers.view' : 'documents.view'
+      if (!hasPermission(permission) || !Number.isInteger(target.recordId) || target.recordId < 1) return
+      machineEntry.leave(); setEntryIntent(null); setOperationTarget(target); setWorkflowVisit(value => value + 1)
+      const next = target.module === 'documents' ? 'official' : target.module
+      setPage(next)
+      window.history.pushState({ ...window.history.state, assetcorePage: next }, '', '/')
+      window.dispatchEvent(new Event('assetcore:routechange'))
+    }
+    window.addEventListener('assetcore:operation', openRecord)
+    return () => window.removeEventListener('assetcore:operation', openRecord)
+  }, [])
 
   function openCatalog(machineId: number) {
     setEntryIntent(null)
@@ -235,11 +253,11 @@ function App() {
           <PageBoundary key={page}>
           {page === 'dashboard' && <Dashboard />}
           {page === 'machines' && <Machines onOpenCatalog={openCatalog} onOpenPassport={machineEntry.open} />}
-          {page === 'transfers' && <Transfers key={workflowVisit} entryIntent={entryIntent?.action === 'issue' || entryIntent?.action === 'return' ? entryIntent : undefined} onEntryConsumed={() => setEntryIntent(null)} />}
-          {page === 'repairs' && <IndustrialRepairs key={workflowVisit} entryIntent={entryIntent?.action === 'repair-create' || entryIntent?.action === 'repair-open' ? entryIntent : undefined} onEntryConsumed={() => setEntryIntent(null)} />}
+          {page === 'transfers' && <Transfers key={workflowVisit} initialRecordId={operationTarget?.module === 'transfers' ? operationTarget.recordId : undefined} entryIntent={entryIntent?.action === 'issue' || entryIntent?.action === 'return' ? entryIntent : undefined} onEntryConsumed={() => setEntryIntent(null)} />}
+          {page === 'repairs' && <IndustrialRepairs key={workflowVisit} initialRecordId={operationTarget?.module === 'repairs' ? operationTarget.recordId : undefined} entryIntent={entryIntent?.action === 'repair-create' || entryIntent?.action === 'repair-open' ? entryIntent : undefined} onEntryConsumed={() => setEntryIntent(null)} />}
           {page === 'catalog' && <IndustrialCatalog defaultMachineId={catalogMachineId || undefined} />}
           {page === 'catalogBuilder' && <CatalogBuilder />}
-          {page === 'parts' && <IndustrialPartRequests />}
+          {page === 'parts' && <IndustrialPartRequests key={workflowVisit} initialRecordId={operationTarget?.module === 'parts' ? operationTarget.recordId : undefined} />}
           {page === 'documents' && <TechnicalLibrary />}
           {page === 'official' && <OfficialDocuments />}
           {page === 'reports' && <Reports />}

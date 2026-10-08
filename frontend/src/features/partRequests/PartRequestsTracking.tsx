@@ -8,6 +8,9 @@ import {
 } from 'lucide-react'
 
 import { api } from '../../api'
+import { Select } from '../../ui/Select'
+import { StatusBadge } from '../../ui/StatusBadge'
+import { CategorySelect, DateFilters, FilterToolbar, Pagination, SortSelect, queryParams, useCategories, usePage, useWorkspaceFilters } from '../../ui/workspace'
 import {
   AttachmentList,
   DocumentButtons,
@@ -119,24 +122,26 @@ function nextActionKey(request: MultiPartRequest): TranslationKey {
   return 'requests.nextAction.none'
 }
 
-export function PartRequestsTracking() {
+export function PartRequestsTracking({ initialRecordId }: { initialRecordId?: number } = {}) {
   const { date, t } = useI18n()
-  const [items, setItems] = useState<MultiPartRequest[]>([])
+  const [refresh, setRefresh] = useState(0)
+  const [recordId, setRecordId] = useState(initialRecordId)
+  const filter = useWorkspaceFilters()
+  const { categories, error: categoryError } = useCategories('requests', refresh)
+  const { data, loading, error: listError } = usePage<MultiPartRequest>(`/workspace/requests?${queryParams({ ...filter.params, record_id: recordId })}`, refresh)
+  const items = data?.items || []
   const [catalog, setCatalog] = useState<CatalogPartEnhanced[]>([])
   const [fulfillment, setFulfillment] = useState<MultiPartRequest | null>(null)
   const [unknownLink, setUnknownLink] = useState<{ request: MultiPartRequest; line: MultiPartRequest['lines'][number] } | null>(null)
   const [error, setError] = useState('')
-  const load = async () => {
-    try {
-      const requestItems = await api<MultiPartRequest[]>('/part-requests/multi')
-      setItems([...requestItems].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime()))
-      if (hasPermission('parts.manage')) setCatalog(await api<CatalogPartEnhanced[]>('/catalog/parts'))
-      setError('')
-    } catch (caught) {
-      setError(friendlyError(caught, t('requests.loadError')))
-    }
-  }
-  useEffect(() => { void load() }, [])
+  const load = async () => { setRefresh(value => value + 1) }
+  useEffect(() => {
+    let active = true
+    if (hasPermission('parts.manage')) void api<CatalogPartEnhanced[]>('/catalog/parts').then(value => { if (active) setCatalog(value) }).catch(caught => { if (active) setError(friendlyError(caught, t('requests.loadError'))) })
+    return () => { active = false }
+  }, [t])
+  useEffect(() => { setRecordId(initialRecordId) }, [initialRecordId])
+
 
   async function submitDraft(id: number) {
     if (!window.confirm(t('requests.submitDraftConfirm'))) return
@@ -179,9 +184,18 @@ export function PartRequestsTracking() {
 
   return <>
     <div className="toolbar"><div><h3>{t('parts.title')}</h3><p className="muted">{t('requests.subtitle')}</p></div></div>
+    <FilterToolbar query={filter.values.q} onQuery={value => { setRecordId(undefined); filter.change('q', value) }} onReset={() => { setRecordId(undefined); filter.reset() }}>
+      <CategorySelect categories={categories} value={filter.values.category} onChange={value => { setRecordId(undefined); filter.change('category', value) }} legacy />
+      <label className="ac-filter"><span>{t('common.status')}</span><Select label={t('common.status')} value={filter.values.status} onChange={value => { setRecordId(undefined); filter.change('status', value) }}
+        options={[{ value: '', label: t('ux.allStatuses') }, ...['DRAFT', 'SUBMITTED', 'WAITING_APPROVAL', 'APPROVED', 'REJECTED', 'ORDERED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED'].map(value => ({ value, label: statusText(t, value, 'part') }))]} /></label>
+      <DateFilters from={filter.values.from} to={filter.values.to} onFrom={value => filter.change('from', value)} onTo={value => filter.change('to', value)} />
+      <SortSelect value={filter.values.sort} onChange={value => filter.change('sort', value)} />
+    </FilterToolbar>
+    {(listError || categoryError) && <div className="error" role="alert">{t('requests.loadError')}</div>}
+    {loading && <div className="loading" role="status">{t('common.loading')}</div>}
     {error && <div className="error" role="alert">{error}</div>}
     <div className="cards-list">{items.map((request) => <article className="panel request-card" key={request.id}>
-      <div className="request-card-head"><div><span className="badge">{statusText(t, request.status, 'part')}</span><h3>{request.request_reference}</h3><small>{date(request.created_at)} · {request.machine_number ? t('passport.title', { number: request.machine_number }) : t('parts.general')}</small>{request.requested_by_name && <small>{t('requests.requester')}: {request.requested_by_name}</small>}{request.repair_reference && <small>{t('requests.linkedRepair')}: {request.repair_reference}</small>}{request.department && <small>{t('requests.department')}: {request.department}</small>}{request.supplier && <small>{t('catalog.supplier')}: {request.supplier}</small>}</div><b>{statusText(t, request.priority, 'part')}</b></div>
+      <div className="request-card-head"><div><StatusBadge status={request.status} domain="part" /><h3>{request.request_reference}</h3><small>{date(request.created_at)} · {request.machine_number ? t('passport.title', { number: request.machine_number }) : t('parts.general')}</small>{request.requested_by_name && <small>{t('requests.requester')}: {request.requested_by_name}</small>}{request.repair_reference && <small>{t('requests.linkedRepair')}: {request.repair_reference}</small>}{request.department && <small>{t('requests.department')}: {request.department}</small>}{request.supplier && <small>{t('catalog.supplier')}: {request.supplier}</small>}</div><b>{statusText(t, request.priority, 'part')}</b></div>
       {request.quantity_compatibility.status === 'LEGACY_FRACTIONAL' && <div className="conflict-notice" role="alert"><b>{t('requests.legacyQuantityWarning')}</b><p>{t(`requests.legacyRecovery.${request.quantity_compatibility.recovery_action}` as TranslationKey)}</p><small>{t('requests.legacyQuantityAffectedLines', { lines: request.quantity_compatibility.affected_line_ids.join(', ') })}</small></div>}
       <div className="request-next-action"><b>{t('requests.nextAction')}</b><span>{t(nextActionKey(request))}</span></div>
       <div className="request-line-list">{request.lines.map((line) => <div className={line.is_unknown_part ? 'unknown-part-request-line' : ''} key={line.id}><span><b>{line.is_unknown_part ? t('unknownPart.label') : line.part_number || t('common.noValue')}</b><small>{line.is_unknown_part && line.assembly ? `${t('unknownPart.assembly')}: ${line.assembly} · ` : ''}{line.description}</small>{line.linked_part_number && <small className="verified">{t('unknownPart.linkedTo')}: {line.linked_part_number} · {line.linked_part_description}</small>}</span><span className="request-line-side"><em>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${formatTransactionalPartQuantity(line.delivered_quantity)} / ` : ''}{formatTransactionalPartQuantity(line.quantity)} {line.unit}</em>{line.is_unknown_part && !line.linked_catalog_part_id && hasPermission('parts.manage') && <button className="secondary compact" onClick={() => setUnknownLink({ request, line })}><ShieldCheck size={14} />{t('unknownPart.linkAction')}</button>}</span></div>)}</div>
@@ -195,8 +209,9 @@ export function PartRequestsTracking() {
         {DOCUMENT_STATUSES.has(request.status) && request.documents.length === 0 && hasPermission('documents.generate') && <button className="secondary" onClick={() => void generate(request)}><FilePlus2 size={16} />{t('requests.generate')} ({t(`language.${request.language}` as TranslationKey)})</button>}
         {request.documents.map((document) => <DocumentButtons key={document.id} path={document.download_endpoint} filename={document.filename} format={document.format} />)}
       </div>
-    </article>)}{!items.length && <div className="empty-state">{t('parts.empty')}</div>}</div>
+    </article>)}{data && !loading && !items.length && <div className="empty-state">{t('parts.empty')}</div>}</div>
     {unknownLink && <UnknownPartLinkModal request={unknownLink.request} line={unknownLink.line} catalog={catalog} onClose={() => setUnknownLink(null)} onSaved={() => { setUnknownLink(null); void load() }} />}
+    <Pagination data={data} onPage={filter.setPage} />
     {fulfillment && <PartRequestFulfillmentModal request={fulfillment} onClose={() => setFulfillment(null)} onSaved={() => { setFulfillment(null); void load() }} />}
   </>
 }

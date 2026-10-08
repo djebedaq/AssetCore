@@ -1,4 +1,5 @@
 import { workspaceBg, workspaceEn, workspaceRu } from './features/catalogBuilder/workspaceTranslations'
+import { uxBg, uxEn, uxRu } from './ui/translations'
 import { wizardBg, wizardEn, wizardRu } from './features/catalogBuilder/wizardTranslations'
 import { guidedBg, guidedEn, guidedRu } from './features/catalogBuilder/guidedTranslations'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
@@ -14,6 +15,7 @@ import {
 } from './locale'
 
 export const bg = {
+  ...uxBg,
   ...workspaceBg,
   ...guidedBg,
   ...wizardBg,
@@ -1305,6 +1307,7 @@ export const en: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(en, {
+  ...uxEn,
   ...wizardEn,
   ...workspaceEn,
   ...guidedEn,
@@ -1967,6 +1970,7 @@ export const ru: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(ru, {
+  ...uxRu,
   ...wizardRu,
   ...workspaceRu,
   ...guidedRu,
@@ -2642,7 +2646,10 @@ export function translate(locale: Locale, key: TranslationKey, values: Values = 
 const intlLocales: Record<Locale, string> = { bg: 'bg-BG', en: 'en-GB', ru: 'ru-RU' }
 
 export function formatDate(locale: Locale, value: string | Date): string {
-  const date = value instanceof Date ? value : new Date(value)
+  // Persisted domain timestamps use utcnow(); older APIs omit the ISO zone.
+  // Interpret that same evidence consistently with the explicit UTC activity feed.
+  const instant = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(value) ? `${value}Z` : value
+  const date = instant instanceof Date ? instant : new Date(instant)
   if (Number.isNaN(date.getTime())) return bg['common.noValue']
   return new Intl.DateTimeFormat(intlLocales[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
