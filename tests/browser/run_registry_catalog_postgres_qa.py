@@ -30,7 +30,10 @@ def main():
             "--publish", f"127.0.0.1:{port}:5432", "--env", "POSTGRES_PASSWORD", "--env", "POSTGRES_USER",
             "--env", "POSTGRES_DB", "postgres:16-alpine"], env=env, check=True, capture_output=True)
         for _ in range(60):
-            if subprocess.run(["docker", "exec", name, "pg_isready", "-U", "assetcore_qa"], capture_output=True).returncode == 0:
+            # The image's temporary init server accepts Unix-socket connections
+            # before it restarts. TCP becomes ready only on the final server.
+            if subprocess.run(["docker", "exec", name, "pg_isready", "-h", "127.0.0.1",
+                    "-U", "assetcore_qa", "-d", "assetcore_test_concurrency"], capture_output=True).returncode == 0:
                 break
             time.sleep(1)
         else:
