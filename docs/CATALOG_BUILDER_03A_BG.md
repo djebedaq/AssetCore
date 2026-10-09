@@ -34,7 +34,7 @@ UI показва всеки физически източник, processing/rev
 
 Нулев/неуспешен/legacy резултат може да се завърши чрез изрично удостоверена ръчна транскрипция, само при записани части, свързани с точния източник, и разрешени кандидати. Нулева страница без части не може да бъде VERIFIED. Няма EXCLUDED флаг, който да пропусне все още избран списък.
 
-Грешен избор се коригира отделно: точен оригинал, основание, актуална версия, липса на активна обработка, отхвърлени кандидати и липса на mapped parts. Audit запазва класификацията WRONG_SELECTION, стария source и fingerprint; assignment се премахва от текущия избор. Старите DELETE/classify endpoints не могат тихо да премахнат обработен източник. Това отличава документирано поправения избор от непрочетен списък, който изисква retry или транскрипция.
+Грешен избор се коригира отделно: точен оригинал, основание, актуална версия, липса на активна обработка, отхвърлени кандидати и липса на mapped parts. Audit запазва класификацията WRONG_SELECTION, стария source и fingerprint; assignment се премахва от текущия избор. Старите DELETE/classify endpoints, включително изтриване на цял legacy възел, не могат тихо да премахнат обработен източник. Това отличава документирано поправения избор от непрочетен списък, който изисква retry или транскрипция.
 
 Човешките поправки на непотвърдени редове се записват автоматично с optimistic version. Потвърдените части се редактират през съществуващия parts editor. Resume възстановява резултатите и издава нов краткотраен actor-bound preview token без повторен OCR. Logout/refresh/изтекъл token не изтриват решенията. RUNNING се записва преди worker; изтекъл lease се възстановява като CANCELLED с audit, а закъснял стар worker не отменя по-нов опит.
 
@@ -52,4 +52,23 @@ Machine.id, 19-машинният регистър и Falch номерацият
 
 ## Проверки
 
-Точните финални команди и резултати се записват тук след приключване на QA и CI. Локалните browser данни са синтетични и се създават само в отделна временна QA база; проверените seed записи се използват без промяна.
+Локални изпълнени проверки (командите са от корена, освен frontend):
+
+| Команда | Резултат |
+| --- | --- |
+| `python -m pytest -q tests/test_catalog_durable_review.py tests/test_catalog_durable_review_migration.py --tb=short` | 14 passed; 8 предупреждения от съществуващи зависимости/SQLite migration introspection |
+| `python -m pytest -q tests/test_registry_catalog_02.py -k test_builder_drafts_excluded_published_revision_pinned --tb=short` | 1 passed, 10 deselected; shared reference pinning assertions са запазени |
+| Целевият прогон на durable review, migration, guided/publication/wizard/final audit и release infrastructure | 44 passed преди финалното допълнение за архивирания PDF; то е покрито от 14-те проверки по-горе |
+| `pnpm typecheck`, `pnpm lint`, `pnpm exec vitest run --maxWorkers=1`, `pnpm build` във frontend | PASS; 64 файла / 587 теста; допълнителната regression проверка за технически бележки: 5/5 в GuidedParts; Linux CI изпълнява целия разширен набор |
+| `python tests/browser/run_catalog_durable_review_qa.py` | PASS през реален Edge: поправка преди confirm, 2 source blockers, refresh, logout/login, 768/390 px, точни 10 синтетични части и 10 видими callouts, успешна публикация; няма page errors |
+| `python scripts/verify_release.py --output .tmp/catalog-03a-release-final` | 26/26 PASS, включително 19 проверени машини и 611 проверени части |
+| `python -m ruff check backend/app backend/alembic backend/scripts scripts tests`, `python -m compileall -q backend/app backend/alembic backend/scripts scripts tests` | PASS |
+| `python backend/scripts/validate_migration_history.py --require-all-protected`, `python backend/scripts/validate_authorization_inventory.py` | PASS; 33 защитени миграции, старите 32 hashes са непроменени; новите routes използват централизираното permission |
+| `PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py`, `PYTHONPATH=backend python backend/scripts/build_catalog_translations.py --check` | PASS; frontend тестовете проверяват BG/EN/RU key parity |
+| `python scripts/audit_dependencies.py python`, `python scripts/audit_dependencies.py frontend`, `python -m pip check` | PASS; няма нови зависимости |
+
+Linux CI в [PR #101](https://github.com/djebedaq/AssetCore/pull/101) изпълнява пълните `python -m pytest -q -m "not postgres" --durations=10`, `python -m pytest -q tests/postgres --durations=10`, PostgreSQL 16 migration/encrypted backup/restore, production Docker build и всички image smoke проверки, включително PARTS-DOC/LibreOffice/OCR и read-only non-root runtime. Точният завършен статус, SHA и брой тестове се записват в PR описанието при предаване; Checks са авторитетни за текущия head.
+
+Ограничения на локалната среда: пълният Windows backend прогон е прекъснат, а локалният Docker build е прекъснат при продължителен export на layers; те не се отчитат като PASS. Windows документният smoke достига публикация, но няма работеща LibreOffice конверсия; действителният DOCX/PDF round trip се проверява в Linux Docker CI. QA PostgreSQL launcher-ът вече изчаква крайния TCP сървър, вместо временния Unix-socket init server, който причини ранните connection failures. Не са увеличавани parser/worker лимити или concurrency assertions.
+
+Локалните browser данни са синтетични и се създават само в отделна временна QA база; проверените seed записи се използват без промяна. QA launcher-ът премахва само своя случайно именуван PostgreSQL контейнер и неговите volumes. Предварително наличните untracked документи, OEM PDF и QA данни са запазени. Финалният diff няма промени в seed/source registers, OEM binaries или исторически бизнес материали.
