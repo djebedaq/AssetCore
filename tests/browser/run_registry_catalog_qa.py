@@ -53,6 +53,7 @@ def main():
     with SessionLocal() as db:
         owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
         owner.password_hash = hash_password(password)
+        owner.preferred_language = "bg"
         owner.must_change_password = False
         owner.profile_status = "PROFILE_COMPLETE"
         category = AssetCategory(code="QA_QR", name_bg="QA категория за QR печат", name_en="QA QR print category",

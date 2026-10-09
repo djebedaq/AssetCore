@@ -1,0 +1,40 @@
+{
+  "passed": true,
+  "browser": "155.0.4283.45",
+  "checks": [
+    "All default; exact four physical serial mappings; server search",
+    "Category deep link and menu reset to All",
+    "Seven-pixel navy scrollbar with real wheel scrolling",
+    "Existing original PDF; exact scheme/list; one variant; two machines; explicit confirmation",
+    "CombiJet retains its identity; one approved variant shown with source, revision and operator",
+    "All three independent compact registries; debounce, signature evidence and date filters",
+    "No initial QR images; 24-label display page; all 27 selected labels in Chromium print output",
+    "390-pixel responsive views; BG/EN/RU; keyboard focus"
+  ],
+  "screenshots": [
+    "01-machines-all.png",
+    "02-falch-identities.png",
+    "07-sidebar-scrollbar.png",
+    "03-reference-source-selection.png",
+    "04-scheme-and-parts-list.png",
+    "05-explicit-compatibility-confirmation.png",
+    "06-machine-shared-reference.png",
+    "08-official-transfers-filters.png",
+    "09-official-repairs-filters.png",
+    "10-official-parts-filters.png",
+    "11-qr-initial-categories.png",
+    "12-qr-selected-category.png",
+    "13-qr-print-selected-category.png",
+    "14-mobile-qr.png",
+    "15-mobile-machines.png",
+    "16-machines-en.png",
+    "16-machines-ru.png"
+  ],
+  "scrollbar": {
+    "width": 7,
+    "overflowing": true,
+    "track": "rgb(10, 29, 48)",
+    "thumb": "rgb(120, 148, 170)"
+  },
+  "errors": []
+}

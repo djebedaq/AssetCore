@@ -1,8 +1,12 @@
 """Disposable ASSETCORE-02 identity, reference and registry acceptance cases."""
 
 from datetime import datetime
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from app.catalog.runtime_context import require_compatible_kit, require_compatible_part
 from app.catalog.service import machine_family
 from app.machine_identity import FALCH_500_CORRECTIONS
@@ -106,6 +110,14 @@ def test_all_eight_corrected_falch_physical_identities_keep_original_catalog(cli
         for machine in machines:
             require_compatible_kit(db, machine, kit)
         ids = [m.id for m in machines]
+    payload, _ = builtin_selection(client, auth_headers, session_factory)
+    payload["machine_ids"] = [ids[0]]
+    # A redundant supplemental reference must not narrow the primary catalog.
+    original = client.get(f"/api/catalog/v2/assemblies/falch_500_pump?machine_id={ids[0]}", headers=auth_headers).json()
+    assert client.post(f"{BASE}/reference-associations", headers=auth_headers, json=payload).status_code == 201
+    current = client.get(f"/api/catalog/v2/assemblies/falch_500_pump?machine_id={ids[0]}", headers=auth_headers).json()
+    assert len(original["parts"]) > 1 and current["parts"] == original["parts"]
+    assert client.get(f"/api/catalog/v2/repair-kits?machine_id={ids[0]}&source_id=falch_500_pump", headers=auth_headers).json()
     for machine_id in ids:
         catalog = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers)
         assert catalog.status_code == 200 and catalog.json()["supported"]
@@ -150,6 +162,10 @@ def test_builtin_references_multiple_machines_exact_variants_and_revoke(client, 
         detail = client.get(f"/api/catalog/v2/assemblies/falch_500_pump?machine_id={machine_id}", headers=auth_headers)
         assert detail.status_code == 200, detail.text
         assert [part["id"] for part in detail.json()["parts"]] == payload["part_ids"]
+        for diagram in detail.json()["diagrams"]:
+            hotspots = client.get(f"/api/catalog/v2/diagrams/{diagram['id']}/hotspots?machine_id={machine_id}", headers=auth_headers)
+            assert hotspots.status_code == 200, hotspots.text
+            assert all(variant["id"] in payload["part_ids"] for hotspot in hotspots.json() for variant in hotspot["variants"])
         for part_id, expected in ((parts[0]["id"], 201), (parts[1]["id"], 409)):
             request = client.post("/api/part-requests/multi", headers=auth_headers, json={
                 "machine_id": machine_id, "lines": [{"catalog_part_id": part_id, "description": "QA reference", "quantity": 1}]})
@@ -159,6 +175,13 @@ def test_builtin_references_multiple_machines_exact_variants_and_revoke(client, 
     with session_factory() as db:
         assert db.scalar(select(func.count(CatalogAssetBinding.id))) == 0
         assert db.scalar(select(func.count(CatalogReferenceAssociation.id))) == 2
+    migration_file = Path(__file__).resolve().parents[1] / "backend/alembic/versions/20261009_0032_catalog_reference_associations.py"
+    spec = spec_from_file_location("reference_migration", migration_file)
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    with session_factory.kw["bind"].begin() as connection, Operations.context(MigrationContext.configure(connection)):
+        with pytest.raises(RuntimeError, match="Audited reference history"):
+            migration.downgrade()
     revoked = client.post(f"{BASE}/reference-associations/{created.json()[0]['id']}/revoke", headers=auth_headers,
                            json={"reason": "QA incorrect applicability"})
     assert revoked.status_code == 200
@@ -172,6 +195,11 @@ def test_builtin_references_multiple_machines_exact_variants_and_revoke(client, 
 
 def test_builder_drafts_excluded_published_revision_pinned(client, auth_headers, session_factory):
     catalog_id, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory, include_empty_group=False)
+    with session_factory() as db:
+        machine = db.scalar(select(Machine).where(Machine.inventory_number == "4"))
+        machine_id, category_id = machine.id, machine.category_id
+    assert client.patch(f"{BASE}/catalogs/{catalog_id}", headers=auth_headers,
+                        json={"asset_category_id": category_id}).status_code == 200
     _, spare, _, _ = source(client, auth_headers, assembly_id)
     part_id = part(client, auth_headers, assembly_id).json()["id"]
     assert client.post(f"{BASE}/parts/{part_id}/source-pages", headers=auth_headers,
@@ -181,6 +209,7 @@ def test_builder_drafts_excluded_published_revision_pinned(client, auth_headers,
     published = client.post(f"{BASE}/revisions/{revision_id}/publish", headers=auth_headers, json={
         "expected_publication_digest": readiness["publication_digest"], "expected_current_published_revision_id": None, "confirmed": True})
     assert published.status_code == 200, published.text
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers).status_code == 201
     selected = next(item for item in client.get(f"{BASE}/reference-sources", headers=auth_headers).json()
                     if item["revision"] == f"CATALOG_BUILDER_R{revision_id}")
     with session_factory() as db:
@@ -193,6 +222,15 @@ def test_builder_drafts_excluded_published_revision_pinned(client, auth_headers,
         "source_revision": selected["revision"], "part_ids": [runtime_part["id"]],
         "reason": "QA published reference", "compatibility_confirmed": True})
     assert created.status_code == 201, created.text
+    supplemental, _ = builtin_selection(client, auth_headers, session_factory)
+    assert client.post(f"{BASE}/reference-associations", headers=auth_headers, json=supplemental).status_code == 201
+    context = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers).json()
+    assert len(context["assemblies"]) == 2
+    assert not context["assemblies"][0].get("is_supplemental")
+    assert context["assemblies"][1]["is_supplemental"]
+    with session_factory() as db:
+        binding = db.scalar(select(CatalogAssetBinding).where(CatalogAssetBinding.machine_id == machine_id))
+        assert binding.catalog_id == catalog_id
     request = client.post("/api/part-requests/multi", headers=auth_headers, json={
         "machine_id": machine_id, "lines": [{"catalog_part_id": runtime_part["id"], "description": "QA", "quantity": 1}]})
     assert request.status_code == 201, request.text

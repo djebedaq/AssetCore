@@ -3,7 +3,7 @@
 from collections import defaultdict
 
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..assets.capabilities import supports
 from ..audit import add_audit_log
@@ -84,7 +84,8 @@ def list_parts(db, list_id):
     return [serialize_part(part) for part in db.scalars(select(PartCatalog)
             .join(CatalogVisualPartMap, CatalogVisualPartMap.part_id == PartCatalog.id)
             .where(CatalogVisualPartMap.visual_source_id == list_id,
-                   PartCatalog.is_active.is_(True), PartCatalog.is_verified.is_(True))
+                   PartCatalog.is_active.is_(True), PartCatalog.is_verified.is_(True),
+                   func.trim(PartCatalog.part_number) != "")
             .order_by(PartCatalog.source_row_index, PartCatalog.id))]
 
 

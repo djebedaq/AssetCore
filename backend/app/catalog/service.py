@@ -308,7 +308,8 @@ def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
 
     result = _primary_machine_catalog(db, machine_id)
     result["references"] = [association_dict(db, row) for row in associations(db, machine_id)]
-    primary_ids = {item["source_id"] for item in result["assemblies"]}
+    primary_ids = {source_id for item in result["assemblies"]
+                   for source_id in [item["source_id"], *[page["source_id"] for page in item.get("pages", [])]]}
     result["assemblies"] += [item for item in supplemental_assemblies(db, machine_id)
                               if item["source_id"] not in primary_ids]
     result["supported"] = result["supported"] or bool(result["assemblies"])

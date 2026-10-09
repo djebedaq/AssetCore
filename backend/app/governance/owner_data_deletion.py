@@ -123,6 +123,8 @@ REFERENCE_LABELS = {
     "catalog_definitions": "builderCatalogs",
     "catalog_revisions": "builderRevisions",
     "catalog_asset_bindings": "builderBindings",
+    "catalog_reference_associations": "catalog",
+    "catalog_reference_parts": "catalog",
     "catalog_revision_reference_pages": "builderPages",
     "catalog_revision_assemblies": "builderAssemblies",
     "catalog_revision_artifacts": "builderArtifacts",

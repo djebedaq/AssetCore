@@ -48,4 +48,12 @@ def upgrade():
 
 
 def downgrade():
-    raise RuntimeError("Audited reference history cannot be discarded by downgrade")
+    connection = op.get_bind()
+    existing = set(sa.inspect(connection).get_table_names())
+    tables = ("catalog_reference_parts", "catalog_reference_associations")
+    for name in tables:
+        if name in existing and connection.scalar(sa.select(sa.func.count()).select_from(sa.table(name))):
+            raise RuntimeError("Audited reference history cannot be discarded by downgrade")
+    for name in tables:
+        if name in existing:
+            op.drop_table(name)

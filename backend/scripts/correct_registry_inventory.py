@@ -24,8 +24,9 @@ def main():
     url = os.environ.get("DATABASE_URL")
     if not url:
         parser.error("An explicit DATABASE_URL is required")
-    engine = create_engine(url, hide_parameters=True)
+    engine = None
     try:
+        engine = create_engine(url, hide_parameters=True)
         with Session(engine) as db:
             if args.apply:
                 if not all((args.approved_fingerprint, args.actor_email, args.reason)):
@@ -49,7 +50,8 @@ def main():
               file=sys.stderr)
         return 2
     finally:
-        engine.dispose()
+        if engine is not None:
+            engine.dispose()
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
+from ..catalog.references import ReferenceCreate, ReferenceRevoke
 from ..database import get_db
 from ..models import User
 from ..permissions import Permission, require_permission
@@ -61,9 +62,6 @@ def reference_sources(_: User = Depends(manager), db: Session = Depends(get_db))
 def reference_parts(list_id: int, _: User = Depends(manager), db: Session = Depends(get_db)):
     from ..catalog.references import list_parts
     return list_parts(db, list_id)
-
-
-from ..catalog.references import ReferenceCreate, ReferenceRevoke  # noqa: E402
 
 
 @router.post("/reference-associations", status_code=201)
