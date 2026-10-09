@@ -194,12 +194,11 @@ def test_builtin_references_multiple_machines_exact_variants_and_revoke(client, 
 
 
 def test_builder_drafts_excluded_published_revision_pinned(client, auth_headers, session_factory):
-    catalog_id, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory, include_empty_group=False)
     with session_factory() as db:
         machine = db.scalar(select(Machine).where(Machine.inventory_number == "4"))
         machine_id, category_id = machine.id, machine.category_id
-    assert client.patch(f"{BASE}/catalogs/{catalog_id}", headers=auth_headers,
-                        json={"asset_category_id": category_id}).status_code == 200
+    catalog_id, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory,
+        include_empty_group=False, category_id=category_id)
     _, spare, _, _ = source(client, auth_headers, assembly_id)
     part_id = part(client, auth_headers, assembly_id).json()["id"]
     assert client.post(f"{BASE}/parts/{part_id}/source-pages", headers=auth_headers,
