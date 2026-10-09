@@ -58,11 +58,11 @@ from backend.scripts.document_qa import generate as generate_document_qa  # noqa
 from backend.scripts.migration_history import validate_migration_release  # noqa: E402
 from scripts.dependency_inventory import write_inventory  # noqa: E402
 
-EXPECTED_INVENTORY = {"4", "5", "7", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24"}
+EXPECTED_INVENTORY = {"4", "5", "7", "8", "9", "10", "11", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24"}
 EXPECTED_SERIALS = {
     "7": "G41200143", "17": "G41200203", "18": "G41200204",
-    "9": "G39300296", "10": "G39300297", "11": "G39300298",
-    "12": "G39300299", "13": "G39300415", "14": "G39300416",
+    "8": "G39300296", "9": "G39300297", "10": "G39300298",
+    "11": "G39300299", "13": "G39300415", "14": "G39300416",
     "15": "G39300417", "16": "G39300418", "20": "2512005",
     "21": "2512004", "22": "2512001", "23": "2512003", "24": "2512002",
 }

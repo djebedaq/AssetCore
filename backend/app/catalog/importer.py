@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..audit import add_audit_log
+from ..machine_identity import FALCH_500_SERIALS, verified_family
 from ..models import (
     CatalogDiagram,
     CatalogPositionHotspot,
@@ -43,7 +44,9 @@ def _verified_machine_numbers(db: Session, family: str) -> list[str]:
     metadata = load_manifest()["families"][family]
     expected = {str(number) for number in metadata["machine_numbers"]}
     machines = list(
-        db.scalars(select(Machine).where(Machine.inventory_number.in_(expected)))
+        db.scalars(select(Machine).where(
+            Machine.serial_number.in_(FALCH_500_SERIALS) if family == "FALCH_500"
+            else Machine.inventory_number.in_(expected)))
     )
     # Compatibility is provenance from the verified catalog manifest, not an
     # instruction to recreate current inventory. Owner-deleted machines may be
@@ -53,6 +56,7 @@ def _verified_machine_numbers(db: Session, family: str) -> list[str]:
         machine.inventory_number
         for machine in machines
         if machine.brand != metadata["brand"] or machine.model != metadata["model"]
+        or (family == "FALCH_500" and verified_family(machine) != family)
     ]
     if invalid:
         raise CatalogImportError(

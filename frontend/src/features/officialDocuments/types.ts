@@ -19,6 +19,7 @@ export type OfficialRegistryItem = {
   machine_id?: number | null
   machine_number?: string | null
   status: string
+  workflow_status?: string | null
   signature_status: 'SIGNED' | 'PARTIALLY_SIGNED' | 'UNSIGNED' | 'NOT_REQUIRED' | 'UNKNOWN'
   created_at?: string | null
   started_at?: string | null

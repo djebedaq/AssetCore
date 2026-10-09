@@ -1,8 +1,10 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, RefreshCw, Search, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeft, RefreshCw } from 'lucide-react'
 
 import { api } from '../../api'
-import { useI18n, type TranslationKey } from '../../i18n'
+import { statusText, useI18n, type TranslationKey } from '../../i18n'
+import { DateFilters, FilterToolbar, useDebounced } from '../../ui/workspace'
+import { Select } from '../../ui/Select'
 import OfficialDocumentCategoryCards from './OfficialDocumentCategoryCards'
 import OfficialDocumentSection from './OfficialDocumentSection'
 import type {
@@ -13,6 +15,13 @@ import type {
 } from './types'
 
 const PAGE_SIZE = 25
+type RegistryFilters = { query: string; status: string; signature_status: string; date_from: string; date_to: string }
+const EMPTY_FILTERS: RegistryFilters = { query: '', status: '', signature_status: '', date_from: '', date_to: '' }
+const STATUS_OPTIONS = {
+  transfers: ['COMPLETE', 'INCOMPLETE'],
+  repairs: ['ACCEPTED', 'DIAGNOSIS', 'WAITING_APPROVAL', 'WAITING_PARTS', 'REPAIRING', 'TESTING', 'COMPLETED'],
+  parts: ['DRAFT', 'SUBMITTED', 'WAITING_APPROVAL', 'APPROVED', 'REJECTED', 'ORDERED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED'],
+}
 
 const CATEGORY_PRESENTATION: Record<OfficialRegistryCategory, {
   titleKey: TranslationKey
@@ -40,13 +49,13 @@ const CATEGORY_PRESENTATION: Record<OfficialRegistryCategory, {
   },
 }
 
-function registryPagePath(category: OfficialRegistryCategory, page: number, query: string): string {
+function registryPagePath(category: OfficialRegistryCategory, page: number, filters: RegistryFilters): string {
   const params = new URLSearchParams({
     category,
     page: String(page),
     page_size: String(PAGE_SIZE),
   })
-  if (query) params.set('q', query)
+  for (const [key, value] of Object.entries(filters)) if (value.trim()) params.set(key === 'query' ? 'q' : key, value.trim())
   return `/official-documents/registry/items?${params.toString()}`
 }
 
@@ -62,8 +71,13 @@ export default function OfficialDocuments() {
   const [countsLoading, setCountsLoading] = useState(true)
   const [countsError, setCountsError] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<OfficialRegistryCategory | null>(null)
-  const [searchInput, setSearchInput] = useState('')
-  const [appliedSearch, setAppliedSearch] = useState('')
+  const [filtersByCategory, setFiltersByCategory] = useState<Record<OfficialRegistryCategory, RegistryFilters>>({ transfers: EMPTY_FILTERS, repairs: EMPTY_FILTERS, parts: EMPTY_FILTERS })
+  const filters = selectedCategory ? filtersByCategory[selectedCategory] : EMPTY_FILTERS
+  const debouncedFilters = useDebounced(filters)
+  const appliedSearch = debouncedFilters.query.trim()
+  function changeFilter(key: keyof RegistryFilters, value: string) {
+    if (selectedCategory) setFiltersByCategory(current => ({ ...current, [selectedCategory]: { ...current[selectedCategory], [key]: value } }))
+  }
   const [items, setItems] = useState<OfficialRegistryItem[]>([])
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
@@ -92,7 +106,7 @@ export default function OfficialDocuments() {
   const loadCategoryPage = useCallback(async (
     category: OfficialRegistryCategory,
     requestedPage: number,
-    query: string,
+    query: RegistryFilters,
     append = false,
   ) => {
     const generation = ++resultsRequestGeneration.current
@@ -136,25 +150,24 @@ export default function OfficialDocuments() {
     }
   }, [loadCounts])
 
+  useEffect(() => {
+    if (selectedCategory && debouncedFilters === filters) void loadCategoryPage(selectedCategory, 1, debouncedFilters)
+  }, [selectedCategory, debouncedFilters, filters, loadCategoryPage])
+
   function openCategory(category: OfficialRegistryCategory) {
     resultsRequestGeneration.current += 1
     setSelectedCategory(category)
-    setSearchInput('')
-    setAppliedSearch('')
     setItems([])
     setPage(0)
     setTotal(0)
     setHasNext(false)
     setCategoryError('')
     setLoadMoreError('')
-    void loadCategoryPage(category, 1, '')
   }
 
   function showAllCategories() {
     resultsRequestGeneration.current += 1
     setSelectedCategory(null)
-    setSearchInput('')
-    setAppliedSearch('')
     setItems([])
     setPage(0)
     setTotal(0)
@@ -165,24 +178,13 @@ export default function OfficialDocuments() {
     setLoadMoreError('')
   }
 
-  function submitSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!selectedCategory) return
-    const query = searchInput.trim()
-    setAppliedSearch(query)
-    void loadCategoryPage(selectedCategory, 1, query)
-  }
-
   function clearSearch() {
-    if (!selectedCategory) return
-    setSearchInput('')
-    setAppliedSearch('')
-    void loadCategoryPage(selectedCategory, 1, '')
+    if (selectedCategory) setFiltersByCategory(current => ({ ...current, [selectedCategory]: EMPTY_FILTERS }))
   }
 
   function refresh() {
     void loadCounts()
-    if (selectedCategory) void loadCategoryPage(selectedCategory, 1, appliedSearch)
+    if (selectedCategory) void loadCategoryPage(selectedCategory, 1, debouncedFilters)
   }
 
   if (!selectedCategory) {
@@ -227,34 +229,21 @@ export default function OfficialDocuments() {
         </button>
       </div>
 
-      <form className="official-category-search" role="search" onSubmit={submitSearch}>
-        <label htmlFor="official-category-query">{t('official.searchLabel')}</label>
-        <div className="official-category-search-field">
-          <Search size={17} aria-hidden="true" />
-          <input
-            id="official-category-query"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder={t(presentation.searchPlaceholderKey)}
-            type="search"
-          />
-        </div>
-        <button className="primary" disabled={loadingMore} type="submit">
-          <Search size={16} aria-hidden="true" />
-          {t('official.searchAction')}
-        </button>
-        {appliedSearch && (
-          <button className="secondary" disabled={loadingMore} onClick={clearSearch} type="button">
-            <X size={16} aria-hidden="true" />
-            {t('official.clearSearch')}
-          </button>
-        )}
-      </form>
+      <p className="muted">{t(presentation.searchPlaceholderKey)}</p>
+      <FilterToolbar searchLabel={t('official.searchLabel')} searchPlaceholder={t(presentation.searchPlaceholderKey)} query={filters.query} onQuery={value => changeFilter('query', value)} onReset={clearSearch}>
+        <label className="ac-filter"><span>{t('common.status')}</span><Select label={t('common.status')} value={filters.status} onChange={value => changeFilter('status', value)} searchable={false}
+          options={[{ value: '', label: t('ux.allStatuses') }, ...STATUS_OPTIONS[selectedCategory].map(value => ({ value, label: selectedCategory === 'transfers' ? t(value === 'COMPLETE' ? 'official.lifecycleComplete' : 'official.lifecycleIncomplete') : statusText(t, value, selectedCategory === 'repairs' ? 'repair' : 'part') }))]} /></label>
+        <label className="ac-filter"><span>{t('registry.signatures')}</span><Select label={t('registry.signatures')} value={filters.signature_status} onChange={value => changeFilter('signature_status', value)} searchable={false}
+          options={[{ value: '', label: t('ux.allStatuses') }, ...([
+            ['SIGNED', 'official.signatureSigned'], ['PARTIALLY_SIGNED', 'official.signaturePartial'], ['UNSIGNED', 'official.signatureUnsigned'], ['NOT_REQUIRED', 'official.signatureNotRequired'], ['UNKNOWN', 'official.signatureUnknown'],
+          ] as const).map(([value, key]) => ({ value, label: t(key) }))]} /></label>
+        <DateFilters from={filters.date_from} to={filters.date_to} onFrom={value => changeFilter('date_from', value)} onTo={value => changeFilter('date_to', value)} />
+      </FilterToolbar>
 
       {categoryError && (
         <div className="error official-registry-error" role="alert">
           <span>{categoryError}</span>
-          <button className="secondary compact" onClick={() => { void loadCategoryPage(selectedCategory, 1, appliedSearch) }}>
+          <button className="secondary compact" onClick={() => { void loadCategoryPage(selectedCategory, 1, debouncedFilters) }}>
             {t('official.retry')}
           </button>
         </div>
@@ -283,7 +272,7 @@ export default function OfficialDocuments() {
                   <button
                     className="secondary"
                     disabled={loadingMore}
-                    onClick={() => { void loadCategoryPage(selectedCategory, page + 1, appliedSearch, true) }}
+                    onClick={() => { void loadCategoryPage(selectedCategory, page + 1, debouncedFilters, true) }}
                   >
                     {loadingMore ? t('official.loadingMore') : loadMoreError ? t('official.retry') : t('official.showMore')}
                   </button>

@@ -42,6 +42,7 @@ from .auth_throttle import (
     throttled_error,
 )
 from .catalog import router as catalog_router
+from .catalog.runtime_context import _legacy_compatible as _legacy_catalog_compatible
 from .catalog.runtime_context import published_binding
 from .catalog_admin.guided_routes import router as catalog_guided_router
 from .catalog_admin.routes import router as catalog_builder_router
@@ -870,7 +871,7 @@ def catalog(
         if selected is None:
             items = [
                 item for item in items
-                if str(machine.inventory_number) in (item.compatible_machine_numbers or [])
+                if _legacy_catalog_compatible(machine, item)
             ]
     return items[:1000]
 

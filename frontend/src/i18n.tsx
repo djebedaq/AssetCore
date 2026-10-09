@@ -1,3 +1,4 @@
+import { referenceBg, referenceEn, referenceRu } from './features/catalogBuilder/referenceTranslations'
 import { workspaceBg, workspaceEn, workspaceRu } from './features/catalogBuilder/workspaceTranslations'
 import { uxBg, uxEn, uxRu } from './ui/translations'
 import { wizardBg, wizardEn, wizardRu } from './features/catalogBuilder/wizardTranslations'
@@ -16,6 +17,7 @@ import {
 
 export const bg = {
   ...uxBg,
+  ...referenceBg,
   ...workspaceBg,
   ...guidedBg,
   ...wizardBg,
@@ -1308,6 +1310,7 @@ export const en: Catalog = Object.fromEntries(
 
 Object.assign(en, {
   ...uxEn,
+  ...referenceEn,
   ...wizardEn,
   ...workspaceEn,
   ...guidedEn,
@@ -1971,6 +1974,7 @@ export const ru: Catalog = Object.fromEntries(
 
 Object.assign(ru, {
   ...uxRu,
+  ...referenceRu,
   ...wizardRu,
   ...workspaceRu,
   ...guidedRu,

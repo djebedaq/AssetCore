@@ -155,7 +155,7 @@ router = APIRouter(prefix="/api", tags=["industrial-platform"])
 router.include_router(visual_snapshot_router)
 
 PROTECTED_HPWJ_NUMBERS = {
-    "4", "5", "7", "9", "10", "11", "12", "13", "14", "15", "16",
+    "4", "5", "7", "8", "9", "10", "11", "13", "14", "15", "16",
     "17", "18", "19", "20", "21", "22", "23", "24",
 }
 
@@ -2185,16 +2185,15 @@ def technical_library(
     documents = db.scalars(statement.order_by(TechnicalDocument.brand, TechnicalDocument.category, TechnicalDocument.title)).all()
     if q:
         normalized = q.strip().casefold()
-        matching_machine_numbers = set(
-            db.scalars(
-                select(Machine.inventory_number).where(
-                    or_(
-                        Machine.inventory_number.ilike(f"%{q.strip()}%"),
-                        Machine.serial_number.ilike(f"%{q.strip()}%"),
-                    )
-                )
-            ).all()
-        )
+        from .machine_identity import legacy_catalog_number
+
+        matching_machine_numbers = {
+            number for machine in db.scalars(
+                select(Machine).where(or_(
+                    Machine.inventory_number.ilike(f"%{q.strip()}%"),
+                    Machine.serial_number.ilike(f"%{q.strip()}%"))))
+            for number in (machine.inventory_number, legacy_catalog_number(machine))
+        }
         matching_sources = {
             source.casefold()
             for source in db.scalars(

@@ -8,7 +8,7 @@ import MachineModal from './MachineModal'
 import { LazyMachinePassportModal as MachinePassportModal } from '../passport/LazyMachinePassportModal'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { FilterToolbar, Pagination, queryParams, useDebounced, type PageData } from '../../ui/workspace'
+import { FilterToolbar, Pagination, SortSelect, queryParams, useDebounced, type PageData } from '../../ui/workspace'
 
 const ALL = 'ALL'
 const categoryFromUrl = () => new URLSearchParams(window.location.search).get('category')
@@ -27,6 +27,7 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
   const [query, setQuery] = useState('')
   const debouncedQuery = useDebounced(query)
   const [status, setStatus] = useState('')
+  const [sort, setSort] = useState('oldest')
   const [page, setPage] = useState(1)
   const [result, setResult] = useState<PageData<Machine> | null>(null)
   const [selected, setSelected] = useState<Machine | null>(null)
@@ -38,7 +39,7 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
   const showTechnicalDetails = hasPermission('documents.view')
 
   useEffect(() => {
-    const synchronize = () => setRequestedCode(categoryFromUrl())
+    const synchronize = () => { setRequestedCode(categoryFromUrl()); setQuery(''); setStatus(''); setPage(1) }
     window.addEventListener('popstate', synchronize)
     window.addEventListener('assetcore:routechange', synchronize)
     return () => { window.removeEventListener('popstate', synchronize); window.removeEventListener('assetcore:routechange', synchronize) }
@@ -65,7 +66,7 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
 
   const selectedCode = requestedCode === ALL ? ALL
     : categories.some((category) => category.code === requestedCode) ? requestedCode
-    : categories.length === 1 ? categories[0].code : null
+    : ALL
   const selectedCategory = categories.find((category) => category.code === selectedCode)
   const showPressure = showTechnicalDetails && Boolean(selectedCategory?.has_pressure)
 
@@ -83,13 +84,13 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
     setItems([])
     setLoadedCode(null)
     setLoadingItems(true)
-    const path = `/workspace/machines?${queryParams({ category_id: selectedCode === ALL ? undefined : selectedCategory?.id, q: debouncedQuery, status, page, sort: 'oldest' })}`
+    const path = `/workspace/machines?${queryParams({ category_id: selectedCode === ALL ? undefined : selectedCategory?.id, q: debouncedQuery, status, page, sort })}`
     void api<PageData<Machine>>(path)
       .then((result) => { if (active) { setItems(result.items); setResult(result); setLoadedCode(selectedCode); setError(false) } })
       .catch(() => { if (active) setError(true) })
       .finally(() => { if (active) setLoadingItems(false) })
     return () => { active = false }
-  }, [navigationReady, navigationFailed, selectedCode, selectedCategory?.id, refresh, debouncedQuery, status, page])
+  }, [navigationReady, navigationFailed, selectedCode, selectedCategory?.id, refresh, debouncedQuery, status, page, sort])
 
   function chooseCategory(code: string) {
     setQuery('')
@@ -127,6 +128,7 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
       </label>}
     </div>
     <FilterToolbar query={query} onQuery={value => { setQuery(value); setPage(1) }} onReset={() => { setQuery(''); setStatus(''); setPage(1) }}>
+      <SortSelect value={sort} onChange={value => { setSort(value); setPage(1) }} />
       <label className="ac-filter"><span>{t('common.status')}</span><Select label={t('common.status')} value={status} onChange={value => { setStatus(value); setPage(1) }} searchable={false}
         options={[{ value: '', label: t('ux.allStatuses') }, ...['READY', 'ISSUED', 'REPAIR'].map(value => ({ value, label: statusText(t, value) }))]} /></label>
       {hasPermission('assets.create') && <button className="primary" onClick={() => setShowNew(true)}><Plus size={18} />{t('machines.new')}</button>}

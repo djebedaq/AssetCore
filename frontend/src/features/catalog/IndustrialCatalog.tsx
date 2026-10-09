@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, CheckCircle2, ChevronRight } from 'lucide-react'
 
+import SharedReferences from './SharedReferences'
 import { api } from '../../api'
 import { friendlyError } from '../../industrialUi'
 import { statusText, useI18n } from '../../i18n'
@@ -31,6 +32,7 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
   currentMachine.current = machineId
   const previousDefaultMachineId = useRef(defaultMachineId)
   const [pendingMachineId, setPendingMachineId] = useState<number | '' | null>(null)
+  const [referenceRefresh, setReferenceRefresh] = useState(0)
   const [context, setContext] = useState<MachineCatalog | null>(null)
   const [sourceId, setSourceId] = useState('')
   const reference = context?.assemblies.find(item => item.source_id === sourceId || item.pages?.some(page => page.source_id === sourceId))
@@ -85,7 +87,7 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
     }).catch((caught) => { if (active) setError(friendlyError(caught, t('catalog.loadError'))) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [machineId, t])
+  }, [machineId, t, referenceRefresh])
   useEffect(() => {
     let active = true
     setDetails(null); setSelectedPart(null); setSelectedPosition(null); setVariantChoice(null); setKitPreview(null)
@@ -189,8 +191,9 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
       <CategorySelect categories={categories} value={categoryId} onChange={requestCategorySelection} all={false} />
       <MachineSelect module="catalog" label={t('catalog.chooseMachine')} category={categoryId} value={String(machineId)} onChange={value => requestMachineSelection(value ? Number(value) : '')} disabled={!categoryId} />
       {machine && <div><b>№{machine.inventory_number} · {machine.brand}</b><span>{machine.model || t('common.noValue')}</span><small>{machine.pressure_bar != null && <>{t('machines.pressure')}: {machine.pressure_bar} · </>}{t('common.status')}: {statusText(t, machine.status)} · {t('common.location')}: {machine.location?.name || t('common.noValue')}</small></div>}
-      {context?.supported && <label>{t('catalog.chooseAssembly')}<Select label={t('catalog.chooseAssembly')} value={reference?.source_id || sourceId} onChange={value => { const item = context.assemblies.find(assembly => assembly.source_id === value); setSourceId(item?.pages?.[0]?.source_id || value) }} options={context.assemblies.map(assembly => ({ value: assembly.source_id, label: `${assembly[`name_${locale}`] || assembly.title} · ${assembly.part_count}` }))} /></label>}
+      {context?.supported && <label>{t('catalog.chooseAssembly')}<Select label={t('catalog.chooseAssembly')} value={reference?.source_id || sourceId} onChange={value => { const item = context.assemblies.find(assembly => assembly.source_id === value); setSourceId(item?.pages?.[0]?.source_id || value) }} options={context.assemblies.map(assembly => ({ value: assembly.source_id, label: `${t(assembly.is_supplemental ? 'ref.additional' : 'ref.primary')} · ${assembly[`name_${locale}`] || assembly.title} · ${assembly.part_count}` }))} /></label>}
     </section>
+    {context && <SharedReferences references={context.references || []} onChanged={() => setReferenceRefresh(value => value + 1)} />}
     {pendingMachineId !== null && <div className="catalog-v2-machine-switch panel" role="dialog" aria-modal="true" aria-labelledby="catalog-machine-switch-title"><h3 id="catalog-machine-switch-title">{t('catalog.changeMachineTitle')}</h3><p>{t('catalog.changeMachineWarning')}</p><div className="actions"><button className="secondary" onClick={() => { setPendingMachineId(null); setPendingCategoryId(null) }}>{t('common.cancel')}</button><button className="primary" onClick={() => { applyMachineSelection(pendingMachineId); if (pendingCategoryId !== null) setCategoryId(pendingCategoryId); setPendingCategoryId(null) }}>{t('catalog.changeMachineConfirm')}</button></div></div>}
     {loading && <div className="empty-state">{t('common.loading')}</div>}
     {!machineId && !loading && <div className="empty-state visual-catalog-empty"><BookOpen size={36} /><h3>{t('catalog.chooseMachineTitle')}</h3><p>{t('catalog.chooseMachineExplanation')}</p></div>}

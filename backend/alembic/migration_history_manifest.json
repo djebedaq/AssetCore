@@ -32,6 +32,7 @@
     "20260928_0028_catalog_builder_hotspots_repair_kits.py": "4082a3233ff40a4cc2481fb0514ac1e85958bb77f74284a162195c0dd5b3b4c8",
     "20260929_0029_catalog_publication.py": "53dcfcf21e2c12e0f77fee330b4e636b9411cd47c549a40446f67f55597aa270",
     "20260930_0030_catalog_diagram_titles.py": "8adbd19429d603de0abfefcbddb69fd55cff5a02d0eab9ee59f7d6e0279e29df",
-    "20261001_0031_catalog_auto_ingest.py": "93609bba17ba3987cbe6b4f79a0be8a39d21da6b47632914713d7fb35fab891a"
+    "20261001_0031_catalog_auto_ingest.py": "93609bba17ba3987cbe6b4f79a0be8a39d21da6b47632914713d7fb35fab891a",
+    "20261009_0032_catalog_reference_associations.py": "a2618110f62cdbb2ebe766b4017f723718432e3eadb383623186ce9df9833ca4"
   }
 }

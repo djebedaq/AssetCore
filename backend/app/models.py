@@ -1825,6 +1825,41 @@ class CatalogVisualSource(Base):
     technical_document: Mapped[TechnicalDocument] = relationship()
 
 
+class CatalogReferenceAssociation(Base):
+    """Version-pinned technical approval, separate from the primary binding."""
+
+    __tablename__ = "catalog_reference_associations"
+    __table_args__ = (
+        Index("uq_catalog_reference_active", "machine_id", "scheme_id", "parts_list_id",
+              unique=True, postgresql_where=text("revoked_at IS NULL"),
+              sqlite_where=text("revoked_at IS NULL")),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    machine_id: Mapped[int] = mapped_column(ForeignKey("machines.id"), index=True)
+    source_id: Mapped[str] = mapped_column(String(120), index=True)
+    source_revision: Mapped[str] = mapped_column(String(255))
+    builder_revision_id: Mapped[int | None] = mapped_column(ForeignKey("catalog_revisions.id"))
+    scheme_id: Mapped[int] = mapped_column(ForeignKey("catalog_visual_sources.id"))
+    parts_list_id: Mapped[int] = mapped_column(ForeignKey("catalog_visual_sources.id"))
+    confirmed_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    reason: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[dict] = mapped_column(JSON)
+    revoked_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime)
+    revoke_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class CatalogReferencePart(Base):
+    __tablename__ = "catalog_reference_parts"
+    __table_args__ = (UniqueConstraint("association_id", "part_id",
+                                     name="uq_catalog_reference_part"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    association_id: Mapped[int] = mapped_column(
+        ForeignKey("catalog_reference_associations.id"), index=True)
+    part_id: Mapped[int] = mapped_column(ForeignKey("part_catalog.id"), index=True)
+
+
 class CatalogVisualPartMap(Base):
     """A verified part's relevant list page; geometry remains optional."""
 

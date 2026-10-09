@@ -28,6 +28,7 @@ class OfficialRegistryItemOut(BaseModel):
     machine_id: int | None = None
     machine_number: str | None = None
     status: str
+    workflow_status: str | None = None
     signature_status: Literal[
         "SIGNED", "PARTIALLY_SIGNED", "UNSIGNED", "NOT_REQUIRED", "UNKNOWN"
     ]

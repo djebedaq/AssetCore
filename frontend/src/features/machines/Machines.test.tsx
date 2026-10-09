@@ -49,13 +49,14 @@ beforeEach(() => { window.history.replaceState({}, '', '/machines'); setSessionU
 afterEach(() => { window.history.replaceState({}, '', '/'); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 describe('category-driven machine registry', () => {
-  it('chooses a category before loading assets, filters on the server, and keeps search scoped', async () => {
+  it('opens All by default, then filters on the server and keeps search scoped', async () => {
     const fetchMock = mockRegistry()
     const actor = userEvent.setup()
     mount()
     expect(await screen.findByRole('button', { name: /Бояджийски машини.*1/ })).toBeVisible()
-    expect(screen.queryByText('QA water jet')).not.toBeInTheDocument()
-    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/workspace/machines?') && !String(url).includes('category_id='))).toBe(false)
+    expect(await screen.findByText('QA water jet')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Всички' })).toHaveAttribute('aria-pressed', 'true')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/workspace/machines?') && !String(url).includes('category_id='))).toBe(true)
     await actor.click(screen.getByRole('button', { name: /Бояджийски машини.*1/ }))
     expect(await screen.findByText('QA paint machine')).toBeVisible()
     expect(screen.queryByText('QA water jet')).not.toBeInTheDocument()
@@ -105,7 +106,7 @@ describe('category-driven machine registry', () => {
     mockRegistry()
     const actor = userEvent.setup()
     mount()
-    expect((await screen.findAllByText('Изберете категория')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('QA water jet')).toBeVisible()
     await waitFor(() => expect(window.location.search).toBe(''))
     await actor.click(screen.getByRole('button', { name: /Роботи.*0/ }))
     expect(await screen.findByText('В тази категория няма активи.')).toBeVisible()
@@ -116,11 +117,11 @@ describe('category-driven machine registry', () => {
     expect(within(screen.getByRole('dialog')).getByLabelText('Категория')).toHaveValue('')
   })
 
-  it('auto-selects the sole browseable category', async () => {
+  it('opens All even for a sole browseable category', async () => {
     const fetchMock = mockRegistry([navigation[0]])
     mount()
     expect(await screen.findByText('QA water jet')).toBeVisible()
-    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/workspace/machines?category_id=1&'))).toBe(true)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).startsWith('/api/workspace/machines?') && !String(url).includes('category_id='))).toBe(true)
   })
 
   it('keeps the compact selector usable with more than thirty dynamic categories', async () => {

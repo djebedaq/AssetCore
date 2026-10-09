@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Collection
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -936,7 +936,12 @@ def _registry_candidates(
             )
         ]
     if query:
-        candidates = [candidate for candidate in candidates if candidate.matches(query)]
+        machine_terms = {row.id: (row.serial_number or "", row.name) for row in db.execute(
+            select(Machine.id, Machine.serial_number, Machine.name).where(
+                Machine.id.in_({candidate.machine_id for candidate in candidates})))}
+        candidates = [candidate for candidate in candidates if candidate.matches(query)
+                      or any(query.casefold() in value.casefold()
+                             for value in machine_terms.get(candidate.machine_id, ()))]
     candidates.sort(
         key=lambda candidate: (candidate.effective_at, candidate.registry_key),
         reverse=True,
@@ -1080,6 +1085,7 @@ def _repair_items(db: Session, records: list[_DocumentRecord]) -> list[dict[str,
                 "machine_id": machine_id,
                 "machine_number": machine_number,
                 "status": status,
+                "workflow_status": repair.status if repair else None,
                 "signature_status": _combine_signature_status(records_for_item),
                 "created_at": max(
                     [record.effective_at for record in records_for_item]
@@ -1185,6 +1191,7 @@ def _part_items(db: Session, records: list[_DocumentRecord]) -> list[dict[str, A
                     else None
                 ),
                 "status": status,
+                "workflow_status": request.status if request else None,
                 "signature_status": _combine_signature_status(records_for_item),
                 "created_at": max(
                     record.effective_at for record in records_for_item
@@ -1276,10 +1283,38 @@ def query_official_document_registry_items(
     query: str = "",
     page: int = 1,
     page_size: int = 25,
+    status: str = "",
+    signature_status: str = "",
+    date_from: date | None = None,
+    date_to: date | None = None,
 ) -> dict[str, Any]:
     """Return one stable, category-scoped page without hydrating other pages."""
     normalized_query = query.strip()
     candidates = _registry_candidates(db, category, normalized_query)
+    if date_from:
+        candidates = [item for item in candidates if item.effective_at.date() >= date_from]
+    if date_to:
+        candidates = [item for item in candidates if item.effective_at.date() <= date_to]
+    if status:
+        if category == OfficialRegistryCategory.TRANSFERS:
+            records = [record for item in candidates for record in item.records]
+            states = {item["registry_key"]: item["status"] for item in _transfer_items(db, records)}
+        else:
+            model = Repair if category == OfficialRegistryCategory.REPAIRS else PartRequest
+            domain_states = dict(db.execute(select(model.id, model.status).where(
+                model.id.in_({item.domain_id for item in candidates}))).all())
+            states = {item.registry_key: domain_states.get(item.domain_id, "UNKNOWN") for item in candidates}
+        candidates = [item for item in candidates if states.get(item.registry_key) == status]
+    if signature_status:
+        # Only lightweight signature metadata is evaluated before pagination.
+        # UNKNOWN legacy documents never masquerade as unsigned documents.
+        ids = {record.official_document_id for item in candidates for record in item.records
+               if record.official_document_id is not None}
+        signed = {record.source_key: record for record in _official_records(
+            db, document_types=_DOCUMENT_TYPES_BY_CATEGORY[category], document_ids=ids,
+            include_files=False)}
+        candidates = [item for item in candidates if _combine_signature_status([
+            signed.get(record.source_key, record) for record in item.records]) == signature_status]
     total = len(candidates)
     total_pages = (total + page_size - 1) // page_size if total else 0
     offset = (page - 1) * page_size

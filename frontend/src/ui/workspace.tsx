@@ -80,10 +80,10 @@ export function CategorySelect({ categories, value, onChange, legacy = false, mi
       ...(legacy ? [{ value: 'legacy', label: t('ux.legacy') }] : []), ...(mixed ? [{ value: 'mixed', label: t('ux.mixed') }] : []),
     ]} /></label>
 }
-export function FilterToolbar({ query, onQuery, onReset, children }: { query?: string; onQuery?: (value: string) => void; onReset: () => void; children: ReactNode }) {
+export function FilterToolbar({ query, onQuery, onReset, children, searchLabel, searchPlaceholder }: { searchLabel?: string; searchPlaceholder?: string; query?: string; onQuery?: (value: string) => void; onReset: () => void; children: ReactNode }) {
   const { t } = useI18n()
   return <div className="ac-filter-toolbar" role="group" aria-label={t('ux.filters')}>
-    {children}{onQuery && <label className="ac-filter ac-filter-search"><span>{t('common.search')}</span><div className="search"><Search size={16} aria-hidden="true" /><input aria-label={t('common.search')} value={query || ''} placeholder={t('ux.searchHint')} onChange={event => onQuery(event.target.value)} /></div></label>}
+    {children}{onQuery && <label className="ac-filter ac-filter-search"><span>{searchLabel || t('common.search')}</span><div className="search"><Search size={16} aria-hidden="true" /><input aria-label={searchLabel || t('common.search')} value={query || ''} placeholder={searchPlaceholder || t('ux.searchHint')} onChange={event => onQuery(event.target.value)} /></div></label>}
     <button type="button" className="secondary compact ac-reset" onClick={onReset}><RotateCcw size={14} aria-hidden="true" />{t('ux.reset')}</button>
   </div>
 }

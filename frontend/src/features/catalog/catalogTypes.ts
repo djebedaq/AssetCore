@@ -53,6 +53,7 @@ export type CatalogReferencePage = { id: number; stable_key: string; number: num
   source_id: string; diagrams: CatalogDiagram[]; part_count: number; verified_hotspot_count: number }
 
 export type CatalogAssembly = {
+  is_supplemental?: boolean
   source_id: string
   family: string
   assembly: string
@@ -69,6 +70,7 @@ export type CatalogAssembly = {
 }
 
 export type MachineCatalog = {
+  references?: SharedReference[]
   dataset_version: string
   supported: boolean
   message: string
@@ -79,6 +81,10 @@ export type MachineCatalog = {
   family?: string | null
   assemblies: CatalogAssembly[]
 }
+
+export type SharedReference = { id: number; source_id: string; revision: string; confirmed_by: string | null;
+  confirmed_at: string; reason: string; available: boolean; part_ids: number[];
+  evidence: { parts: { position: string; part_number: string }[] } }
 
 export type AssemblyDetails = {
   dataset_version: string

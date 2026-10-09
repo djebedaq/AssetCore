@@ -51,6 +51,33 @@ router = APIRouter(prefix="/api/admin/catalog-builder", tags=["catalog-builder"]
 manager = require_permission(Permission.PARTS_MANAGE)
 
 
+@router.get("/reference-sources")
+def reference_sources(_: User = Depends(manager), db: Session = Depends(get_db)):
+    from ..catalog.references import sources
+    return sources(db)
+
+
+@router.get("/reference-sources/{list_id}/parts")
+def reference_parts(list_id: int, _: User = Depends(manager), db: Session = Depends(get_db)):
+    from ..catalog.references import list_parts
+    return list_parts(db, list_id)
+
+
+from ..catalog.references import ReferenceCreate, ReferenceRevoke  # noqa: E402
+
+
+@router.post("/reference-associations", status_code=201)
+def create_reference(data: ReferenceCreate, actor: User = Depends(manager), db: Session = Depends(get_db)):
+    from ..catalog.references import create
+    return create(db, actor, data)
+
+
+@router.post("/reference-associations/{association_id}/revoke")
+def revoke_reference(association_id: int, data: ReferenceRevoke, actor: User = Depends(manager), db: Session = Depends(get_db)):
+    from ..catalog.references import revoke
+    return revoke(db, actor, association_id, data.reason)
+
+
 
 @router.post("/simple/catalogs", status_code=201)
 def create_simple_catalog(data: SimpleCatalogCreate, actor: User = Depends(manager),

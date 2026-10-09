@@ -264,7 +264,7 @@ def test_completion_is_atomic_generates_three_part_protocol_and_restores_availab
     issue_payload,
     session_factory,
 ):
-    repair_id = _create_repair(client, auth_headers, machine_ids["12"])
+    repair_id = _create_repair(client, auth_headers, machine_ids["8"])
     participant = client.post(
         f"/api/repair-cases/{repair_id}/participants",
         headers=auth_headers,
@@ -326,7 +326,7 @@ def test_completion_is_atomic_generates_three_part_protocol_and_restores_availab
         workshop = session.scalar(
             select(Location).where(Location.name == "Цех", Location.is_active.is_(True))
         )
-        machine = session.get(Machine, machine_ids["12"])
+        machine = session.get(Machine, machine_ids["8"])
         assert repair.closed_at is not None
         assert machine.status == "READY"
         assert machine.location_id == workshop.id
@@ -403,7 +403,7 @@ def test_completion_is_atomic_generates_three_part_protocol_and_restores_availab
     issue = client.post(
         "/api/transfers/bulk-issue",
         headers=auth_headers,
-        json=issue_payload(machine_ids["12"]),
+        json=issue_payload(machine_ids["8"]),
     )
     assert issue.status_code == 201, issue.text
 

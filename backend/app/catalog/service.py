@@ -77,7 +77,14 @@ def _translation_error(exc: CatalogTranslationError) -> ApplicationError:
 
 
 def machine_family(machine: Machine) -> str | None:
+    from ..machine_identity import verified_family
+
+    verified = verified_family(machine)
+    if verified:
+        return verified
     for family, metadata in load_manifest()["families"].items():
+        if family == "FALCH_500":
+            continue
         if (
             machine.brand == metadata["brand"]
             and machine.model == metadata["model"]
@@ -223,7 +230,7 @@ def _builder_pages(db: Session, assembly) -> list[dict]:
     return result
 
 
-def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
+def _primary_machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
     machine = require_machine(db, machine_id)
     binding = published_binding(db, machine)
     base = {
@@ -296,6 +303,18 @@ def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
     }
 
 
+def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
+    from .references import association_dict, associations, supplemental_assemblies
+
+    result = _primary_machine_catalog(db, machine_id)
+    result["references"] = [association_dict(db, row) for row in associations(db, machine_id)]
+    primary_ids = {item["source_id"] for item in result["assemblies"]}
+    result["assemblies"] += [item for item in supplemental_assemblies(db, machine_id)
+                              if item["source_id"] not in primary_ids]
+    result["supported"] = result["supported"] or bool(result["assemblies"])
+    return result
+
+
 def require_compatible_source(
     db: Session, *, machine_id: int, source_id: str
 ) -> tuple[Machine, dict[str, Any]]:
@@ -307,6 +326,21 @@ def require_compatible_source(
             operation="catalog_read", stage="capability",
         )
     binding = published_binding(db, machine)
+    from .references import active_source
+
+    owns_source = bool(binding and _builder_assembly(db, binding.revision_id, source_id))
+    if binding is None:
+        try:
+            owns_source = machine_family(machine) == source_by_id(source_id)["family"]
+        except CatalogSourceError:
+            owns_source = False
+    shared = active_source(db, machine.id, source_id) if not owns_source else None
+    if shared:
+        part = db.get(PartCatalog, next(iter(shared["part_ids"])))
+        return machine, {"source_id": source_id, "family": part.family,
+                         "builder_revision_id": shared["builder_revision_id"],
+                         "assembly": part.assembly, "document_title": part.assembly,
+                         "shared": shared}
     if binding is not None:
         assembly = _builder_assembly(db, binding.revision_id, source_id)
         if assembly is None:
@@ -355,6 +389,15 @@ def assembly_details(db: Session, *, machine_id: int, source_id: str) -> dict[st
     machine, source = require_compatible_source(
         db, machine_id=machine_id, source_id=source_id
     )
+    shared = source.get("shared")
+    diagrams = repository.diagrams_for_source(db, source_id)
+    parts = repository.parts_for_source(db, source_id, builder_revision_id=source.get("builder_revision_id"))
+    if shared:
+        pages = [db.get(CatalogVisualSource, value) for value in shared["scheme_ids"]]
+        diagrams = [diagram for diagram in diagrams if any(
+            diagram.technical_document_id == page.technical_document_id
+            and diagram.page_number == page.page_number for page in pages)]
+        parts = [part for part in parts if part.id in shared["part_ids"]]
     return {
         "dataset_version": f"CATALOG_BUILDER_R{source['builder_revision_id']}" if source.get("builder_revision_id") else CATALOG_VERSION,
         "machine_id": machine.id,
@@ -367,11 +410,10 @@ def assembly_details(db: Session, *, machine_id: int, source_id: str) -> dict[st
         "name_ru": source.get("name_ru"),
         "diagrams": [
             serialize_diagram(diagram)
-            for diagram in repository.diagrams_for_source(db, source_id)
+            for diagram in diagrams
         ],
         "parts": [
-            serialize_part(part) for part in repository.parts_for_source(
-                db, source_id, builder_revision_id=source.get("builder_revision_id"))
+            serialize_part(part) for part in parts
         ],
     }
 
@@ -385,6 +427,13 @@ def search(
     limit: int,
 ) -> list[dict[str, Any]]:
     machine = require_machine(db, machine_id)
+    from .references import active_source
+
+    if source_id and active_source(db, machine_id, source_id):
+        parts = assembly_details(db, machine_id=machine_id, source_id=source_id)["parts"]
+        term = query.strip().casefold()
+        return [part for part in parts if not term or any(
+            term in str(value).casefold() for value in part.values() if value is not None)][:limit]
     binding = published_binding(db, machine)
     if binding is not None:
         if not asset_supports(machine, "HAS_PARTS_CATALOG"):
@@ -434,6 +483,13 @@ def diagram_hotspots(
             stage="diagram_lookup",
         )
     _, source = require_compatible_source(db, machine_id=machine_id, source_id=diagram.source_id)
+    shared = source.get("shared")
+    if shared and not any(
+        (page := db.get(CatalogVisualSource, value)).technical_document_id == diagram.technical_document_id
+        and page.page_number == diagram.page_number for value in shared["scheme_ids"]
+    ):
+        raise ApplicationError(status_code=409, code="catalog_reference_diagram_mismatch",
+                               message="Схемата не е потвърдена за машината.")
     if diagram.builder_revision_id != source.get("builder_revision_id"):
         if diagram.builder_revision_id is not None or source.get("builder_revision_id") is not None:
             raise ApplicationError(status_code=409, code="catalog_runtime_revision_mismatch",
@@ -443,6 +499,8 @@ def diagram_hotspots(
                                            builder_revision_id=source.get("builder_revision_id"))
     by_position: dict[str, list[PartCatalog]] = {}
     for part in variants:
+        if shared and part.id not in shared["part_ids"]:
+            continue
         by_position.setdefault(str(part.position), []).append(part)
     return [
         {
@@ -544,6 +602,8 @@ def kits(
     db: Session, *, machine_id: int, source_id: str | None = None
 ) -> list[dict[str, Any]]:
     machine = require_machine(db, machine_id)
+    if source_id and require_compatible_source(db, machine_id=machine_id, source_id=source_id)[1].get("shared"):
+        return []
     binding = published_binding(db, machine)
     if binding is not None:
         if not asset_supports(machine, "HAS_PARTS_CATALOG"):

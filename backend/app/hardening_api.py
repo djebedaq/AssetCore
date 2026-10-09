@@ -6,7 +6,7 @@ import io
 import json
 import re
 import secrets
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -628,6 +628,10 @@ def official_document_registry_items(
     q: Annotated[str, Query(max_length=200)] = "",
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 25,
+    status: Annotated[str, Query(max_length=40)] = "",
+    signature_status: Annotated[str, Query(pattern="^(SIGNED|PARTIALLY_SIGNED|UNSIGNED|NOT_REQUIRED|UNKNOWN)?$")] = "",
+    date_from: date | None = None,
+    date_to: date | None = None,
     _: User = Depends(require_permission(Permission.DOCUMENTS_VIEW)),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -637,6 +641,7 @@ def official_document_registry_items(
         query=q,
         page=page,
         page_size=page_size,
+        status=status, signature_status=signature_status, date_from=date_from, date_to=date_to,
     )
 
 

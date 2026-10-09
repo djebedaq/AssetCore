@@ -45,10 +45,10 @@ MACHINES = [
     {"inventory_number": "4", "brand": "CombiJet", "model": "JE60-500", "pressure_bar": 500, "serial_number": None},
     {"inventory_number": "5", "brand": "CombiJet", "model": "JE60-500", "pressure_bar": 500, "serial_number": None},
     {"inventory_number": "7", "brand": "Falch", "model": "Wheel Jet 30-e", "pressure_bar": 1000, "serial_number": "G41200143"},
-    {"inventory_number": "9", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300296"},
-    {"inventory_number": "10", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300297"},
-    {"inventory_number": "11", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300298"},
-    {"inventory_number": "12", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300299"},
+    {"inventory_number": "8", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300296"},
+    {"inventory_number": "9", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300297"},
+    {"inventory_number": "10", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300298"},
+    {"inventory_number": "11", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300299"},
     {"inventory_number": "13", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300415"},
     {"inventory_number": "14", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300416"},
     {"inventory_number": "15", "brand": "Falch", "model": "Wheel Jet 15-e", "pressure_bar": 500, "serial_number": "G39300417"},
@@ -190,13 +190,15 @@ def _seed_verified_registry(db: Session) -> None:
             name_en="High-pressure water jet machines",
             name_ru="Водоструйные машины высокого давления",
             description="Проверена категория за наличния HPWJ регистър.",
+            capabilities=["HAS_PRESSURE", "HAS_PARTS_CATALOG", "HAS_REPAIR_WORKFLOW", "HAS_TRANSFER_WORKFLOW"],
         )
         db.add(hpwj_category)
         db.flush()
-    hpwj_category.capabilities = [
-        "HAS_PRESSURE", "HAS_PARTS_CATALOG", "HAS_REPAIR_WORKFLOW", "HAS_TRANSFER_WORKFLOW"
-    ]
     existing = {m.inventory_number: m for m in db.scalars(select(Machine)).all()}
+    # Bootstrap only. Existing installations, including the legacy numbering,
+    # are never repaired or supplemented by startup seed.
+    if existing:
+        return
     for item in MACHINES:
         machine = existing.get(item["inventory_number"])
         if machine is None:

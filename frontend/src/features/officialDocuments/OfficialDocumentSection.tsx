@@ -41,7 +41,7 @@ export default function OfficialDocumentSection({ section, titleKey, emptyKey, s
           {item.documents.map((document) => <span className="official-number" key={`${item.registry_key}-${document.document_type}-${document.document_number}`}><strong>{document.document_number}</strong>{item.documents.length > 1 && <small>{documentLabel(document)}</small>}</span>)}
           {item.machine_number && <small>{t('official.machineNumber', { number: item.machine_number })}</small>}
         </td>
-        <td data-label={t('common.status')}><span className={`badge official-status ${item.status.toLowerCase()}`}>{registryStatus(item.status, rowStatusDomain)}</span></td>
+        <td data-label={t('common.status')}><span className={`badge official-status ${(item.workflow_status || item.status).toLowerCase()}`}>{registryStatus(item.workflow_status || item.status, rowStatusDomain)}</span></td>
         <td data-label={t('official.progress')}><span className={`official-signature ${item.signature_status.toLowerCase()}`}>{signatureLabel(item.signature_status)}</span></td>
         <td data-label={t('official.created')}>{created}{!item.created_at && item.started_at && <small>{t('official.startedAt', { date: date(item.started_at) })}</small>}</td>
         <td data-label={t('transfers.documents')}><div className="official-document-actions">{item.documents.map((document) => <DocumentAction key={`${item.registry_key}-${document.document_type}-${document.document_number}`} document={document} />)}</div></td>
