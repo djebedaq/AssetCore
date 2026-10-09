@@ -259,6 +259,23 @@ def test_processed_wrong_selection_requires_original_reason_and_retains_attempt_
     assert "X-Catalog-Review-Receipt" not in archived.headers
 
 
+def test_legacy_assembly_delete_cannot_bypass_processed_source_review(client, auth_headers, session_factory):
+    from catalog_review_helpers import verify_http_revision
+    from test_catalog_builder_parts import part, source, workspace
+    _, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory, include_empty_group=False)
+    _, spare_id, _, _ = source(client, auth_headers, assembly_id)
+    created = checked(part(client, auth_headers, assembly_id), 201)
+    assert client.post(f"{BASE}/parts/{created['id']}/source-pages", headers=auth_headers,
+        json={"visual_page_ids": [spare_id]}).status_code == 201
+    verify_http_revision(client, auth_headers, revision_id)
+    response = client.delete(f"{BASE}/assemblies/{assembly_id}", headers=auth_headers)
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "catalog_source_correction_review_required"
+    assert client.get(f"{BASE}/assemblies/{assembly_id}/parts", headers=auth_headers).json()[0]["id"] == created["id"]
+    state = checked(client.post(f"{BASE}/assemblies/{assembly_id}/source-review", headers=auth_headers))["sources"][0]
+    assert state["review_state"] == "VERIFIED" and len(state["attempts"]) == 1
+
+
 def test_zero_result_requires_explicit_complete_manual_transcription(client, auth_headers, session_factory, monkeypatch):
     _, _, page, _ = setup_review(client, auth_headers, session_factory)
     source = next(s for s in page["sources"] if s["role"] == "SPARE_PARTS_LIST")

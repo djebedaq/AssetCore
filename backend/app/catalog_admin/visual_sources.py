@@ -196,8 +196,15 @@ def delete_assembly(db: Session, actor: User, assembly_id: int) -> None:
     if db.scalar(select(CatalogRevisionReferencePage.id).where(
             CatalogRevisionReferencePage.assembly_id == item.id).limit(1)):
         raise fail("catalog_reference_page_in_use")
-    from .parts_extraction.ledger import invalidate_scope
-    invalidate_scope(db, actor, assembly_id, None, "ASSEMBLY_REMOVED")
+    from .parts_extraction import ledger
+    if db.scalar(select(ledger.Attempt.id).join(ledger.Source, ledger.Attempt.source_id == ledger.Source.id)
+            .join(ledger.ExtractionSession, ledger.Source.session_id == ledger.ExtractionSession.id)
+            .join(CatalogRevisionVisualPage, ledger.Source.visual_page_id == CatalogRevisionVisualPage.id)
+            .join(CatalogRevisionArtifact, CatalogRevisionVisualPage.artifact_id == CatalogRevisionArtifact.id)
+            .where(ledger.ExtractionSession.revision_id == revision.id,
+                CatalogRevisionArtifact.assembly_id == item.id).limit(1)):
+        raise fail("catalog_source_correction_review_required")
+    ledger.invalidate_scope(db, actor, assembly_id, None, "ASSEMBLY_REMOVED")
     artifacts = db.scalars(select(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == item.id)).all()
     artifact_audit = [{"artifact_id": artifact.id, "filename": artifact.filename,
                        "sha256": artifact.sha256, "visual_pages": _role_pages(db, artifact.id)}
