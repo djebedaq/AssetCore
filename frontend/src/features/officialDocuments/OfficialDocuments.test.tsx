@@ -97,6 +97,42 @@ describe('OfficialDocuments category registry screen', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps status, signatures, dates and debounced search independent for all three categories', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/registry/counts')) return json({ transfers: 1, repairs: 1, parts: 1 })
+      const category = new URL(url, 'https://qa.invalid').searchParams.get('category') as OfficialRegistryCategory
+      return json(registryPage(category, []))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderOfficialDocuments()
+    await user.click(await screen.findByRole('button', { name: /^Отвори Приемане/ }))
+    await user.type(screen.getByLabelText('Търсене в избраната категория'), 'TR-QA')
+    await user.click(screen.getByRole('combobox', { name: 'Статус' }))
+    await user.click(screen.getByRole('option', { name: 'Незавършен' }))
+    await user.click(screen.getByRole('combobox', { name: 'Състояние на подписите' }))
+    await user.click(screen.getByRole('option', { name: 'Подписан' }))
+    fireEvent.change(screen.getByLabelText('От дата'), { target: { value: '2026-08-01' } })
+    fireEvent.change(screen.getByLabelText('До дата'), { target: { value: '2026-08-31' } })
+    const transferPath = '/api/official-documents/registry/items?category=transfers&page=1&page_size=25&q=TR-QA&status=INCOMPLETE&signature_status=SIGNED&date_from=2026-08-01&date_to=2026-08-31'
+    await waitFor(() => expect(urls(fetchMock)).toContain(transferPath))
+    for (const title of ['Ремонти', 'Заявени части']) {
+      await user.click(screen.getByRole('button', { name: 'Всички категории' }))
+      await user.click(await screen.findByRole('button', { name: new RegExp(`^Отвори ${title}`) }))
+      expect(screen.getByLabelText('Търсене в избраната категория')).toHaveValue('')
+      expect(screen.getByLabelText('От дата')).toHaveValue('')
+      expect(screen.getByRole('combobox', { name: 'Статус' })).toHaveTextContent('Всички статуси')
+      await user.type(screen.getByLabelText('Търсене в избраната категория'), title === 'Ремонти' ? 'REP-QA' : 'PR-QA')
+    }
+    await user.click(screen.getByRole('button', { name: 'Всички категории' }))
+    await user.click(await screen.findByRole('button', { name: /^Отвори Приемане/ }))
+    expect(screen.getByLabelText('Търсене в избраната категория')).toHaveValue('TR-QA')
+    expect(screen.getByLabelText('До дата')).toHaveValue('2026-08-31')
+    expect(screen.getByRole('combobox', { name: 'Състояние на подписите' })).toHaveTextContent('Подписан')
+    expectNoMassRegistryRequest(fetchMock)
+  })
+
   it('loads counts only and renders exactly three truthful keyboard-accessible category cards', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/registry/counts')
       ? json({ transfers: 84, repairs: 0, parts: 12 })
@@ -160,7 +196,7 @@ describe('OfficialDocuments category registry screen', () => {
     expectNoMassRegistryRequest(fetchMock)
   })
 
-  it('runs a category-scoped, encoded search only on submit and clears back to unfiltered page one', async () => {
+  it('runs a category-scoped, encoded search after debounce and clears back to unfiltered page one', async () => {
     const initial = registryItem('transfer:1', 'TR-INITIAL', 'TRANSFER_ISSUE')
     const filtered = registryItem('transfer:2', 'TR-FILTERED', 'TRANSFER_ISSUE')
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -177,13 +213,12 @@ describe('OfficialDocuments category registry screen', () => {
     const search = screen.getByLabelText('Търсене в избраната категория')
     await userEvent.type(search, 'QA 17/+')
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    fireEvent.submit(screen.getByRole('search'))
 
     expect(await screen.findByText('TR-FILTERED')).toBeVisible()
     expect(screen.queryByText('TR-INITIAL')).not.toBeInTheDocument()
     expect(urls(fetchMock)[2]).toContain('category=transfers&page=1&page_size=25&q=QA+17%2F%2B')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Изчисти търсенето' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Изчисти' }))
     expect(await screen.findByText('TR-INITIAL')).toBeVisible()
     expect(search).toHaveValue('')
     expect(urls(fetchMock)[3]).toBe('/api/official-documents/registry/items?category=transfers&page=1&page_size=25')
@@ -232,7 +267,7 @@ describe('OfficialDocuments category registry screen', () => {
     expect(await screen.findByText('REP-INITIAL')).toBeVisible()
     await userEvent.type(screen.getByLabelText('Търсене в избраната категория'), 'REP-FILTERED{Enter}')
     expect(await screen.findByText('REP-FILTERED')).toBeVisible()
-    await userEvent.click(screen.getByRole('button', { name: 'Изчисти търсенето' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Изчисти' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Документите в избраната категория не могат да бъдат заредени.')
     expect(screen.queryByText('REP-FILTERED')).not.toBeInTheDocument()
@@ -253,7 +288,7 @@ describe('OfficialDocuments category registry screen', () => {
     await userEvent.type(screen.getByLabelText('Търсене в избраната категория'), '   {Enter}')
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
     expect(urls(fetchMock)[2]).toBe('/api/official-documents/registry/items?category=repairs&page=1&page_size=25')
-    expect(screen.queryByRole('button', { name: 'Изчисти търсенето' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Изчисти' })).toBeVisible()
   })
 
   it('distinguishes an empty category from an empty search result and offers search clearing', async () => {
@@ -268,7 +303,7 @@ describe('OfficialDocuments category registry screen', () => {
     await userEvent.type(screen.getByLabelText('Търсене в избраната категория'), 'REP-NONE{Enter}')
     expect(await screen.findByText('Няма документи, отговарящи на търсенето.')).toBeVisible()
     expect(screen.queryByText('Няма създадени ремонтни протоколи.')).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Изчисти търсенето' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'Изчисти' }).length).toBeGreaterThan(0)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
@@ -378,7 +413,7 @@ describe('OfficialDocuments category registry screen', () => {
     expect(screen.queryByText('REP-STALE')).not.toBeInTheDocument()
   })
 
-  it('prevents an older search response from overwriting a newer submitted search', async () => {
+  it('prevents an older search response from overwriting a newer debounced search', async () => {
     const searchA = deferred<Response>()
     const searchB = deferred<Response>()
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -395,9 +430,11 @@ describe('OfficialDocuments category registry screen', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^Отвори Ремонти/ }))
     await screen.findByText('Няма създадени ремонтни протоколи.')
     const input = screen.getByLabelText('Търсене в избраната категория')
-    await userEvent.type(input, 'A{Enter}')
+    await userEvent.type(input, 'A')
+    await waitFor(() => expect(urls(fetchMock).some(url => url.endsWith('q=A'))).toBe(true))
     await userEvent.clear(input)
-    await userEvent.type(input, 'B{Enter}')
+    await userEvent.type(input, 'B')
+    await waitFor(() => expect(urls(fetchMock).some(url => url.endsWith('q=B'))).toBe(true))
     searchB.resolve(json(registryPage('repairs', [registryItem('repair:2', 'REP-NEW', 'REPAIR_PROTOCOL')])))
     expect(await screen.findByText('REP-NEW')).toBeVisible()
     searchA.resolve(json(registryPage('repairs', [registryItem('repair:1', 'REP-STALE', 'REPAIR_PROTOCOL')])))
@@ -484,7 +521,8 @@ describe('OfficialDocuments category registry screen', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: cardName }))
     expect(await screen.findByLabelText(searchLabel)).toBeVisible()
-    expect(screen.getByRole('button', { name: searchAction })).toBeVisible()
+    expect(screen.queryByRole('button', { name: searchAction })).not.toBeInTheDocument()
+    expect(screen.getByRole('group')).toBeVisible()
     expect(document.body.textContent).not.toContain('official.')
   })
 

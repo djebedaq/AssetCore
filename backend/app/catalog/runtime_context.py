@@ -50,6 +50,10 @@ def require_compatible_part(db: Session, machine: Machine | None, part: PartCata
                             *, selected: PublishedBinding | None | object = _UNSELECTED,
                             incompatible_code: str = "catalog_parts_not_compatible_with_machine") -> None:
     binding = (published_binding(db, machine, lock=True) if machine else None) if selected is _UNSELECTED else selected
+    from .references import permits_part
+
+    if permits_part(db, machine, part):
+        return
     if part.builder_revision_id is not None:
         if binding is None or binding.revision_id != part.builder_revision_id:
             raise business_conflict("catalog_runtime_binding_mismatch",
@@ -57,10 +61,23 @@ def require_compatible_part(db: Session, machine: Machine | None, part: PartCata
     elif binding is not None:
         raise business_conflict("catalog_runtime_binding_mismatch",
                                 "Частта не принадлежи към текущия каталог на машината.")
-    elif machine is not None and str(machine.inventory_number) not in {
-            str(value) for value in (part.compatible_machine_numbers or [])}:
+    elif machine is not None and not _legacy_compatible(machine, part):
         raise business_conflict(incompatible_code,
                                 "Каталожната част не е потвърдена за тази машина.")
+
+
+def _legacy_compatible(machine, part):
+    from ..machine_identity import legacy_catalog_number, verified_family
+    from .sources import CATALOG_VERSION
+
+    if part.source_version != CATALOG_VERSION:
+        return str(machine.inventory_number) in {str(value) for value in (part.compatible_machine_numbers or [])}
+    if part.family == "FALCH_500" and verified_family(machine) != "FALCH_500":
+        return False
+    return (machine.brand == part.brand and machine.model == part.model
+            and legacy_catalog_number(machine) in {
+            str(value) for value in (part.compatible_machine_numbers or [])}
+            )
 
 
 def require_compatible_kit(db: Session, machine: Machine | None, kit: RepairKit,
@@ -74,6 +91,13 @@ def require_compatible_kit(db: Session, machine: Machine | None, kit: RepairKit,
         raise business_conflict("catalog_runtime_binding_mismatch",
                                 "Комплектът не принадлежи към текущия каталог на машината.")
     elif machine is not None:
+        from .service import machine_family
+        from .sources import CATALOG_VERSION
+
+        # Individual part approvals do not approve an entire foreign kit.
+        if kit.source_version == CATALOG_VERSION and machine_family(machine) != kit.family:
+            raise business_conflict("catalog_parts_not_compatible_with_machine",
+                                    "Ремонтният комплект не е потвърден за тази машина.")
         # KIT mode has no selected catalog lines. Its components still carry
         # the verified legacy compatibility, which must be checked here too.
         for component in kit.components:

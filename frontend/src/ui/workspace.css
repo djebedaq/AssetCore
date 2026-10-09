@@ -71,6 +71,14 @@ select.ac-native-select { min-width: 0; max-width: 100%; cursor: pointer; }
 ::-webkit-scrollbar-track { background: #edf2f6; }
 ::-webkit-scrollbar-thumb { background: #879eaf; border: 2px solid #edf2f6; border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: #587991; }
+.sidebar-navigation { scrollbar-gutter: auto; scrollbar-width: thin; scrollbar-color: #526f88 #0a1d30; padding-right: 10px; }
+.sidebar-navigation::-webkit-scrollbar { width: 7px; }
+.sidebar-navigation::-webkit-scrollbar-track { background: #0a1d30; }
+.sidebar-navigation::-webkit-scrollbar-thumb { background: #526f88; border: 1px solid #0a1d30; border-radius: 7px; }
+.sidebar-navigation::-webkit-scrollbar-thumb:hover { background: #7894aa; }
+/* Chromium's standard non-auto properties override WebKit width/radius.
+   Firefox uses the standard thin/color fallback above. */
+@supports selector(::-webkit-scrollbar) { .sidebar-navigation { scrollbar-width: auto; scrollbar-color: auto; } }
 @keyframes ac-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 760px) {
   .ac-filter { flex-basis: 140px; max-width: none; }
@@ -86,7 +94,25 @@ select.ac-native-select { min-width: 0; max-width: 100%; cursor: pointer; }
   .ac-dashboard .bar i, .ac-dashboard .stat-card { transition: none; }
 }
 @media (forced-colors: active) {
+  .sidebar-navigation { scrollbar-color: auto; scrollbar-width: auto; }
+  .sidebar-navigation::-webkit-scrollbar-track { background: Canvas; }
+  .sidebar-navigation::-webkit-scrollbar-thumb { background: ButtonText; border-color: Canvas; }
   * { scrollbar-color: auto; }
   .ac-status, .ac-select > button, select.ac-native-select, .ac-select-menu { border: 1px solid CanvasText; }
   .ac-select-menu [role=option].active { outline: 1px solid Highlight; }
 }
+
+.qr-print-grid { display: none; }
+.reference-linker, .shared-references { margin-block: 14px; padding: 16px; }
+.reference-targets { justify-content: flex-start; flex-wrap: wrap; margin: 12px 0; }
+.reference-previews { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.reference-previews figure { margin: 0; min-width: 0; }
+.reference-previews img { max-width: 100%; max-height: 340px; object-fit: contain; }
+.reference-previews figcaption { font-weight: 600; margin-bottom: 8px; }
+.reference-parts { max-height: 340px; margin-block: 12px; }
+.reference-reason { display: block; margin-block: 12px; }
+.reference-reason textarea, .reference-reason input { display: block; width: 100%; border: 1px solid #d7e0e8; border-radius: 7px; padding: 8px; margin-top: 6px; }
+.reference-confirm { display: flex; align-items: flex-start; gap: 8px; }
+.shared-references article { border-bottom: 1px solid #d7e0e8; padding-block: 10px; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .reference-previews { grid-template-columns: 1fr; } }
+@media print { .qr-screen-grid { display: none !important; } }

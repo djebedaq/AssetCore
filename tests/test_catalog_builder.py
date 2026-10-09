@@ -66,7 +66,7 @@ def test_builder_routes_are_permission_classified():
     report = build_authorization_inventory(app)
     assert report.valid, report.errors
     builder = [route for route in report.routes if route.path.startswith(BASE)]
-    assert len(builder) == 84
+    assert len(builder) == 88
     assert all(route.permission == "parts.manage" for route in builder)
 
 

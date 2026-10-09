@@ -206,7 +206,7 @@ def main():
     engine.dispose()
     print(json.dumps({"pre_builder_upgrade": "passed", "encrypted_builder_restore": "passed",
                       "shared_binding_count": 2, "immutable_request_documents": "passed",
-                      "head": "20261001_0031", "anchors": anchors}, sort_keys=True))
+                      "head": "20261009_0032", "anchors": anchors}, sort_keys=True))
 
 
 if __name__ == "__main__":

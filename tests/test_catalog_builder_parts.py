@@ -29,13 +29,14 @@ from sqlalchemy import func, select
 BASE = "/api/admin/catalog-builder"
 
 
-def workspace(client, headers, factory, *, include_empty_group=True):
-    with factory() as db:
-        category = AssetCategory(code="QA_PARTS_CATEGORY", name_bg="QA", name_en="QA", name_ru="QA",
-                                 capabilities=["HAS_PARTS_CATALOG"])
-        db.add(category)
-        db.commit()
-        category_id = category.id
+def workspace(client, headers, factory, *, include_empty_group=True, category_id=None):
+    if category_id is None:
+        with factory() as db:
+            category = AssetCategory(code="QA_PARTS_CATEGORY", name_bg="QA", name_en="QA", name_ru="QA",
+                                     capabilities=["HAS_PARTS_CATALOG"])
+            db.add(category)
+            db.commit()
+            category_id = category.id
     catalog = client.post(f"{BASE}/catalogs", headers=headers, json={
         "code": "QA_PARTS_CATALOG", "asset_category_id": category_id,
         "name_bg": "QA", "name_en": "QA", "name_ru": "QA",

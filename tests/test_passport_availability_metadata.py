@@ -159,7 +159,7 @@ def test_inactive_machine_passport_is_not_available_or_issuable(
 def test_completed_repair_is_historical_for_passport_availability(
     client, auth_headers, machine_ids, session_factory
 ):
-    machine_id = machine_ids["12"]
+    machine_id = machine_ids["8"]
     repair = _create_active_repair(client, auth_headers, machine_id)
     with session_factory() as db:
         stored_repair = db.get(Repair, repair["id"])

@@ -144,9 +144,9 @@ def _add_legacy_generated_pair(
         )
 
 
-def _seed_registry_scenario(session_factory, machine_ids) -> dict[str, int]:
+def _seed_registry_scenario(session_factory, machine_ids, actor_email="admin@assetcore.local") -> dict[str, int]:
     with session_factory() as session:
-        actor = session.scalar(select(User).where(User.email == "admin@assetcore.local"))
+        actor = session.scalar(select(User).where(User.email == actor_email))
         batch = TransferBatch(
             batch_reference="BATCH-REGISTRY-TEST",
             status="PARTIALLY_RETURNED",
@@ -226,7 +226,7 @@ def _seed_registry_scenario(session_factory, machine_ids) -> dict[str, int]:
             closed_at=datetime(2026, 8, 19, 16, 0),
         )
         legacy_repair = Repair(
-            machine_id=machine_ids["12"],
+            machine_id=machine_ids["8"],
             repair_reference="REP-LEGACY-012",
             reported_problem="Исторически тестов сценарий",
             status="COMPLETED",
@@ -260,7 +260,7 @@ def _seed_registry_scenario(session_factory, machine_ids) -> dict[str, int]:
             document_type=DocumentType.REPAIR_PROTOCOL.value,
             actor_id=actor.id,
             created_at=datetime(2026, 7, 2, 16, 0),
-            machine_id=machine_ids["12"],
+            machine_id=machine_ids["8"],
             repair_id=legacy_repair.id,
         )
 
@@ -448,7 +448,7 @@ def test_registry_groups_canonical_and_historical_documents_without_duplicates(
     assert len(current_repair["documents"]) == 1
     assert current_repair["documents"][0]["official_document_id"] is not None
     historical_repair = next(
-        item for item in repairs if item["machine_number"] == "12"
+        item for item in repairs if item["machine_number"] == "8"
     )
     assert historical_repair["documents"][0]["official_document_id"] is None
     assert {
@@ -634,7 +634,7 @@ def test_category_search_uses_only_authoritative_identifiers_with_literal_matchi
         ("repairs", "repair-reference-011", {"11"}),
         ("parts", "pr-reg-013", {"13"}),
         ("parts", "request-reference-013", {"13"}),
-        ("repairs", "rep-legacy-012", {"12"}),
+        ("repairs", "rep-legacy-012", {"8"}),
         ("parts", "pr-legacy-014", {"14"}),
     )
     for category, query, expected_machines in cases:
