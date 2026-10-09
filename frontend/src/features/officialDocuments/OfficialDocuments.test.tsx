@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -95,6 +95,42 @@ describe('OfficialDocuments category registry screen', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+  })
+
+  it('keeps status, signatures, dates and debounced search independent for all three categories', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/registry/counts')) return json({ transfers: 1, repairs: 1, parts: 1 })
+      const category = new URL(url, 'https://qa.invalid').searchParams.get('category') as OfficialRegistryCategory
+      return json(registryPage(category, []))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderOfficialDocuments()
+    await user.click(await screen.findByRole('button', { name: /^Отвори Приемане/ }))
+    await user.type(screen.getByLabelText('Търсене в избраната категория'), 'TR-QA')
+    await user.click(screen.getByRole('combobox', { name: 'Статус' }))
+    await user.click(screen.getByRole('option', { name: 'Незавършен' }))
+    await user.click(screen.getByRole('combobox', { name: 'Състояние на подписите' }))
+    await user.click(screen.getByRole('option', { name: 'Подписан' }))
+    fireEvent.change(screen.getByLabelText('От дата'), { target: { value: '2026-08-01' } })
+    fireEvent.change(screen.getByLabelText('До дата'), { target: { value: '2026-08-31' } })
+    const transferPath = '/api/official-documents/registry/items?category=transfers&page=1&page_size=25&q=TR-QA&status=INCOMPLETE&signature_status=SIGNED&date_from=2026-08-01&date_to=2026-08-31'
+    await waitFor(() => expect(urls(fetchMock)).toContain(transferPath))
+    for (const title of ['Ремонти', 'Заявени части']) {
+      await user.click(screen.getByRole('button', { name: 'Всички категории' }))
+      await user.click(await screen.findByRole('button', { name: new RegExp(`^Отвори ${title}`) }))
+      expect(screen.getByLabelText('Търсене в избраната категория')).toHaveValue('')
+      expect(screen.getByLabelText('От дата')).toHaveValue('')
+      expect(screen.getByRole('combobox', { name: 'Статус' })).toHaveTextContent('Всички статуси')
+      await user.type(screen.getByLabelText('Търсене в избраната категория'), title === 'Ремонти' ? 'REP-QA' : 'PR-QA')
+    }
+    await user.click(screen.getByRole('button', { name: 'Всички категории' }))
+    await user.click(await screen.findByRole('button', { name: /^Отвори Приемане/ }))
+    expect(screen.getByLabelText('Търсене в избраната категория')).toHaveValue('TR-QA')
+    expect(screen.getByLabelText('До дата')).toHaveValue('2026-08-31')
+    expect(screen.getByRole('combobox', { name: 'Състояние на подписите' })).toHaveTextContent('Подписан')
+    expectNoMassRegistryRequest(fetchMock)
   })
 
   it('loads counts only and renders exactly three truthful keyboard-accessible category cards', async () => {

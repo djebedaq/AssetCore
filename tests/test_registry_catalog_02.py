@@ -257,13 +257,26 @@ def test_registry_filters_use_real_signature_evidence_before_pagination(client, 
     with session_factory() as db:
         machines = dict(db.execute(select(Machine.inventory_number, Machine.id)).all())
     _seed_registry_scenario(session_factory, machines)
-    for signature in ("SIGNED", "PARTIALLY_SIGNED", "UNSIGNED", "UNKNOWN", "NOT_REQUIRED"):
-        response = client.get(f"/api/official-documents/registry/items?category=transfers&signature_status={signature}&page_size=1", headers=auth_headers)
-        assert response.status_code == 200, response.text
-        assert all(item["signature_status"] == signature for item in response.json()["items"])
-        if response.json()["total"]:
-            assert response.json()["count"] == 1
+    for category in ("transfers", "repairs", "parts"):
+        for signature in ("SIGNED", "PARTIALLY_SIGNED", "UNSIGNED", "UNKNOWN", "NOT_REQUIRED"):
+            response = client.get(f"/api/official-documents/registry/items?category={category}&signature_status={signature}&page_size=1", headers=auth_headers)
+            assert response.status_code == 200, response.text
+            assert all(item["signature_status"] == signature for item in response.json()["items"])
+            if response.json()["total"]:
+                assert response.json()["count"] == 1
     response = client.get("/api/official-documents/registry/items?category=transfers&q=G39300297&status=INCOMPLETE&date_from=2026-08-20&date_to=2026-08-20", headers=auth_headers)
     assert response.status_code == 200 and response.json()["total"] == 1, response.text
     assert response.json()["items"][0]["machine_number"] == "9"
+    for category, serial, status, signature, day in (
+        ("repairs", "G39300299", "COMPLETED", "NOT_REQUIRED", "2026-08-19"),
+        ("parts", "G39300415", "APPROVED", "UNSIGNED", "2026-08-23"),
+    ):
+        params = dict(category=category, q=serial, status=status, signature_status=signature,
+                      date_from=day, date_to=day, page_size=1)
+        response = client.get("/api/official-documents/registry/items", headers=auth_headers, params=params)
+        assert response.status_code == 200 and response.json()["total"] == 1, response.text
+        assert response.json()["items"][0]["workflow_status"] == status
+        response = client.get("/api/official-documents/registry/items", headers=auth_headers,
+                              params={**params, "date_to": "2026-01-01"})
+        assert response.status_code == 200 and response.json()["total"] == 0
     assert client.get("/api/official-documents/registry/items?category=transfers&signature_status=INVALID", headers=auth_headers).status_code == 422

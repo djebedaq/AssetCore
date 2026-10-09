@@ -8,7 +8,8 @@ Microsoft Edge / Chromium 155.0.4283.45, desktop 1440×900, sidebar overflow
 [Машинночетим резултат](qa-results.json): 8 успешни групи, 17 screenshots,
 без browser page errors. Проверени са реални кликове, server search, deep link,
 scroll wheel, forced colors, избор на оригинални страници и конкретен вариант,
-две целеви машини, изрично потвърждение, debounce и филтри, QR scope и keyboard
+две целеви машини, изрично потвърждение, debounce, статус/подписи/период,
+независими филтри за трите категории, QR scope и keyboard
 focus. BG/EN/RU са отворени в браузъра.
 
 Печатът е проверен чрез Chromium print media и реален A4 PDF export: **27**

@@ -9,11 +9,13 @@ const context=await browser.newContext({viewport:{width:1440,height:900}});
 const page=await context.newPage();
 const base=process.env.PUBLIC_BASE_URL, out=process.env.QA_OUTPUT;
 const errors=[], screenshots=[], checks=[];
+const registryRequests=[];
+page.on('request',request=>{const url=new URL(request.url());if(url.pathname==='/api/official-documents/registry/items')registryRequests.push(url.search);});
 page.on('pageerror',error=>errors.push(error.message));
 page.setDefaultTimeout(30000);
 const shot=async (name,fullPage=true)=>{await page.screenshot({path:`${out}/${name}.png`,fullPage}); screenshots.push(`${name}.png`);};
 const nav=async name=>page.locator('.sidebar-navigation').getByRole('button',{name,exact:true}).click();
-const choose=async (name, option)=>{await page.getByRole('combobox',{name,exact:true}).click();await page.getByRole('option',{name:option}).click();};
+const choose=async (name, option)=>{await page.getByRole('combobox',{name,exact:true}).click();await page.getByRole('option',{name:option,exact:typeof option==='string'}).click();};
 const json=async path=>{const response=await page.request.get(`${base}/api${path}`);assert.equal(response.status(),200,path);return response.json();};
 const wait=ms=>page.waitForTimeout(ms);
 try {
@@ -79,7 +81,7 @@ try {
  await choose('Категория',/Водоструйни машини с високо налягане/);
  await choose('Избери машина',/^№4 ·/);
  await page.locator('.shared-references article').waitFor();
- await page.locator('.catalog-v2-parts-table tbody tr').first().waitFor().catch(()=>page.locator('.catalog-v2-layout table tbody tr').first().waitFor());
+ await page.locator('.catalog-v2-layout table tbody tr').first().waitFor();
  await shot('06-machine-shared-reference');
  const combi=machines.find(machine=>machine.inventory_number==='4');
  const catalog=await json(`/catalog/v2/machines/${combi.id}`);
@@ -96,14 +98,21 @@ try {
    const query=category==='transfers'?'TR-REG':category==='repairs'?'REP-':'PR-';
    const response=page.waitForResponse(response=>response.url().includes(`/registry/items?category=${category}`)&&response.url().includes(`q=${query}`));
    await page.getByRole('textbox',{name:'Търсене в избраната категория'}).fill(query);await response;
-   await choose('Състояние на подписите',/Подписан$/);
+   const signatureLabel=category==='transfers'?'Подписан':category==='repairs'?'Не се изисква':'Неподписан';
+   await choose('Състояние на подписите',signatureLabel);
+   const statusCode=category==='transfers'?'INCOMPLETE':category==='repairs'?'COMPLETED':'APPROVED';
+   const statusLabel=category==='transfers'?'Незавършен':category==='repairs'?'Завършена':'Одобрена';
+   await Promise.all([
+     page.waitForResponse(response=>response.url().includes(`/registry/items?category=${category}`)&&response.url().includes(`status=${statusCode}`)),
+     choose('Статус',statusLabel),
+   ]);
    await page.getByRole('textbox',{name:'Търсене в избраната категория'}).fill('');
    await page.getByLabel('От дата',{exact:true}).fill('2026-08-01');
    await page.getByLabel('До дата',{exact:true}).fill('2026-09-30');
    await wait(600);await shot(`${index}-official-${category}-filters`);
    await page.getByRole('button',{name:'Всички категории',exact:true}).click();
  }
- checks.push('All three independent compact registries; debounce, signature evidence and date filters');
+ checks.push('All three independent compact registries; debounce, workflow status, signature evidence and date filters');
 
  const qrRequests=[];page.on('request',request=>{if(/\/machines\/\d+\/qr$/.test(request.url()))qrRequests.push(request.url());});
  await nav('QR кодове');
@@ -141,6 +150,7 @@ try {
  await writeFile(`${out}/qa-results.json`,JSON.stringify({passed:true,browser:await browser.version(),checks,screenshots,scrollbar,errors},null,2));
  console.log(`Browser acceptance passed: ${checks.length} groups; ${screenshots.length} screenshots.`);
 } catch(error) {
- const safe=String(error.stack||error).replaceAll(process.env.QA_PASSWORD,'[redacted]');console.error(safe);
+ await page.screenshot({path:`${out}/failed-step.png`,fullPage:true});
+ const safe=String(error.stack||error).replaceAll(process.env.QA_PASSWORD,'[redacted]');console.error(safe);console.error(JSON.stringify(registryRequests.slice(-12)));
  await writeFile(`${out}/qa-results.json`,JSON.stringify({passed:false,checks,screenshots,error:safe},null,2));process.exitCode=1;
 } finally {await browser.close();}
