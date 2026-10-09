@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n'
 import GuidedParts from './GuidedParts'
 import type { Preview, ReferencePage, Source } from './guidedTypes'
+import { ReviewTestTransport } from './reviewTestTransport'
 
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 const source = (id: number, sort_order: number, artifact_id = 20): Source => ({ id, sort_order, artifact_id, page_number: id - 8, role: 'SPARE_PARTS_LIST', filename: `qa-${artifact_id}.pdf`, title: 'Synthetic QA' })
@@ -22,12 +23,14 @@ it.each([2, 3])('one click processes %i ordered sources and confirms every sourc
   const requests: Record<string, unknown>[] = []
   const confirmations: Record<string, unknown>[] = []
   const changed = vi.fn(async () => {})
+  const durable = new ReviewTestTransport()
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
+    const resumed = durable.handle(path, init); if (resumed) return resumed
     if (path.endsWith('/extract')) {
       const body = JSON.parse(String(init?.body)); requests.push(body)
       const index = sources.findIndex(item => item.id === body.visual_page_id)
-      return json(preview(sources[index], index * 5 + 1))
+      return json(durable.record(preview(sources[index], index * 5 + 1)))
     }
     if (path.endsWith('/confirm')) { confirmations.push(JSON.parse(String(init?.body))); return json({ created_count: 5 }) }
     return json([])
@@ -48,13 +51,15 @@ it.each([2, 3])('one click processes %i ordered sources and confirms every sourc
 it('accounts for a failed middle source, continues, and retries that source without losing edits or accepted rows', async () => {
   const sources = [source(10, 0), source(11, 1), source(12, 2)]
   let fail = true
+  const durable = new ReviewTestTransport()
   const requests: Record<string, unknown>[] = []
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const resumed = durable.handle(String(input), init); if (resumed) return resumed
     if (String(input).endsWith('/extract')) {
       const body = JSON.parse(String(init?.body)); requests.push(body)
       if (body.visual_page_id === 11 && fail) return json({ detail: { code: 'catalog_extraction_page_failed' } }, 422)
       const index = sources.findIndex(item => item.id === body.visual_page_id)
-      return json(preview(sources[index], index * 5 + 1))
+      return json(durable.record(preview(sources[index], index * 5 + 1)))
     }
     return json([])
   }))
@@ -67,10 +72,11 @@ it('accounts for a failed middle source, continues, and retries that source with
   const first = screen.getAllByLabelText('Описание 1')[0]
   await user.clear(first); await user.type(first, 'Human correction')
   fail = false
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Грешка — опитайте отново' })).toBeEnabled())
   await user.click(screen.getByRole('button', { name: 'Грешка — опитайте отново' }))
   await screen.findByText('Общо части: 15 · Обработени източници: 3 / 3')
   expect(requests).toHaveLength(4)
-  expect(first).toHaveValue('Human correction')
+  expect(screen.getAllByLabelText('Описание 1')[0]).toHaveValue('Human correction')
 })
 
 it('shows a zero-row source and maps only that page while keeping the first page review', async () => {
@@ -80,10 +86,12 @@ it('shows a zero-row source and maps only that page while keeping the first page
     bbox: [0, 0, 100, 100], headers: ['', '', '', ''], sample_cells: [['6', 'QA-6', 'Synthetic component', '2']], schema: { state: 'NEEDS_REVIEW', mapping: {} },
   }] }
   let mapping: Record<string, unknown> | undefined
+  const durable = new ReviewTestTransport()
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
-    if (path.endsWith('/extract')) return json(JSON.parse(String(init?.body)).visual_page_id === 10 ? preview(sources[0], 1) : unresolved)
-    if (path.endsWith('/mapping')) { mapping = JSON.parse(String(init?.body)); return json(second) }
+    const resumed = durable.handle(path, init); if (resumed) return resumed
+    if (path.endsWith('/extract')) return json(durable.record(JSON.parse(String(init?.body)).visual_page_id === 10 ? preview(sources[0], 1) : unresolved))
+    if (path.endsWith('/mapping')) { mapping = JSON.parse(String(init?.body)); return json(durable.record(second)) }
     return json([])
   }))
   render(<I18nProvider><GuidedParts page={makePage(sources)} changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
@@ -93,12 +101,13 @@ it('shows a zero-row source and maps only that page while keeping the first page
   expect(within(screen.getByLabelText('Списъци с резервни части')).getByRole('alert')).toHaveTextContent('PDF страница 3 · Нуждае се от внимание · Части: 0')
   const first = screen.getByLabelText('Описание 1')
   await user.clear(first); await user.type(first, 'Kept edit')
+  await waitFor(() => expect(screen.getByRole('combobox', { name: /^Колона 1/ })).toBeEnabled())
   for (const [index, role] of ['position', 'part_number', 'description', 'quantity'].entries()) {
     await user.selectOptions(screen.getByRole('combobox', { name: new RegExp(`^Колона ${index + 1}`) }), role)
   }
   await user.click(screen.getByRole('button', { name: 'Прочети таблицата отново' }))
   await screen.findByText('Общо части: 10 · Обработени източници: 2 / 2')
   expect(mapping?.token).toBe('signed-11')
-  expect(first).toHaveValue('Kept edit')
+  expect(screen.getAllByLabelText('Описание 1')[0]).toHaveValue('Kept edit')
   expect(screen.getAllByRole('checkbox')).toHaveLength(10)
 })
