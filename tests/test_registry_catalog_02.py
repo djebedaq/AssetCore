@@ -191,6 +191,16 @@ def test_builtin_references_multiple_machines_exact_variants_and_revoke(client, 
         machine = db.get(Machine, row.machine_id)
         with pytest.raises(HTTPException):
             require_compatible_part(db, machine, db.get(PartCatalog, payload["part_ids"][0]))
+    # Explicitly approving every variant on a list still does not approve a kit.
+    complete_list = {**payload, "machine_ids": [created.json()[0]["machine_id"]],
+                     "part_ids": [part["id"] for part in parts]}
+    assert client.post(f"{BASE}/reference-associations", headers=auth_headers, json=complete_list).status_code == 201
+    with session_factory() as db:
+        kit_id = db.scalar(select(RepairKit.id).where(RepairKit.family == "FALCH_500"))
+    kit_request = client.post("/api/part-requests/multi", headers=auth_headers, json={
+        "machine_id": complete_list["machine_ids"][0], "repair_kit_id": kit_id,
+        "repair_kit_mode": "KIT", "lines": [{"description": "QA", "quantity": 1}]})
+    assert kit_request.status_code == 409, kit_request.text
 
 
 def test_builder_drafts_excluded_published_revision_pinned(client, auth_headers, session_factory):

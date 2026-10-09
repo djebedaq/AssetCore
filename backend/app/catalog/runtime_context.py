@@ -91,6 +91,13 @@ def require_compatible_kit(db: Session, machine: Machine | None, kit: RepairKit,
         raise business_conflict("catalog_runtime_binding_mismatch",
                                 "Комплектът не принадлежи към текущия каталог на машината.")
     elif machine is not None:
+        from .service import machine_family
+        from .sources import CATALOG_VERSION
+
+        # Individual part approvals do not approve an entire foreign kit.
+        if kit.source_version == CATALOG_VERSION and machine_family(machine) != kit.family:
+            raise business_conflict("catalog_parts_not_compatible_with_machine",
+                                    "Ремонтният комплект не е потвърден за тази машина.")
         # KIT mode has no selected catalog lines. Its components still carry
         # the verified legacy compatibility, which must be checked here too.
         for component in kit.components:
