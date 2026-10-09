@@ -94,8 +94,12 @@ def backup(directory, environment, actor_id):
 
 
 def publish(factory, revision_id):
+    from catalog_review_helpers import verify_service_sources
     with factory() as db:
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        for assembly_id in db.scalars(select(CatalogRevisionAssembly.id).where(
+                CatalogRevisionAssembly.revision_id == revision_id)):
+            verify_service_sources(db, actor, assembly_id)
         preview = publication.readiness(db, revision_id)
         assert preview["ready"]
         publication.publish(db, actor, revision_id, preview["publication_digest"],
@@ -206,7 +210,7 @@ def main():
     engine.dispose()
     print(json.dumps({"pre_builder_upgrade": "passed", "encrypted_builder_restore": "passed",
                       "shared_binding_count": 2, "immutable_request_documents": "passed",
-                      "head": "20261009_0032", "anchors": anchors}, sort_keys=True))
+                      "head": "20261009_0033", "anchors": anchors}, sort_keys=True))
 
 
 if __name__ == "__main__":

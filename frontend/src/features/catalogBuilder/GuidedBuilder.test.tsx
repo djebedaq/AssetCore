@@ -8,6 +8,7 @@ import GuidedSources from './GuidedSources'
 import { UploadTestTransport } from './uploadTestTransport'
 import type { Preview, ReferencePage } from './guidedTypes'
 import { guidedBg, guidedEn, guidedRu } from './guidedTranslations'
+import { ReviewTestTransport } from './reviewTestTransport'
 
 const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } })
 const page: ReferencePage = { id: 7, assembly_id: 3, stable_key: 'qa-page', sort_order: 0, version: 1, title: null,
@@ -20,10 +21,12 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 it('extracts only explicit lists, edits a preview and confirms in bulk with its signed source token', async () => {
   const requests: Array<{ path: string; body: Record<string, unknown> }> = []
+  const durable = new ReviewTestTransport()
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
+    const resumed = durable.handle(path, init); if (resumed) return resumed
     if (init?.method === 'POST') requests.push({ path, body: JSON.parse(String(init.body)) })
-    if (path.endsWith('/extract')) return json(preview)
+    if (path.endsWith('/extract')) return json(durable.record(preview))
     if (path.endsWith('/confirm')) return json({ created_count: 1, part_ids: [1] })
     return json([])
   }))
@@ -38,23 +41,26 @@ it('extracts only explicit lists, edits a preview and confirms in bulk with its 
   const description = screen.getByLabelText('Описание 1')
   await user.clear(description); await user.type(description, 'Human source correction')
   expect(requests.filter(item => item.path.endsWith('/confirm'))).toHaveLength(0)
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Потвърди избраните части' })).toBeEnabled())
   await user.click(screen.getByRole('button', { name: 'Потвърди избраните части' }))
   await waitFor(() => expect(changed).toHaveBeenCalled())
   const confirmation = requests.find(item => item.path.endsWith('/confirm'))!
   expect(confirmation.body.token).toBe('signed-qa-preview')
-  expect(confirmation.body.rows).toEqual([{ index: 0, part: { ...row.payload, description: 'Human source correction' } }])
+  expect(confirmation.body.rows).toEqual([{ index: 0, part: { ...row.payload, description: 'Human source correction' }, expected_version: 2 }])
 })
 
 it('shows actual ambiguous column samples and rereads using one explicit mapping', async () => {
   let submitted: unknown
+  const durable = new ReviewTestTransport()
   const uncertain: Preview = { ...preview, rows: [], warnings: ['SCHEMA_AMBIGUOUS'], tables: [{
     headers: ['ID', 'Number', 'Type', 'Qty'], sample_cells: [['1', '51', 'Seal', '2'], ['4', '54', 'Pump', '1']],
     schema: { state: 'NEEDS_REVIEW', mapping: {} },
   }] }
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
-    if (path.endsWith('/extract')) return json(uncertain)
-    if (path.endsWith('/mapping')) { submitted = JSON.parse(String(init?.body)); return json(preview) }
+    const resumed = durable.handle(path, init); if (resumed) return resumed
+    if (path.endsWith('/extract')) return json(durable.record(uncertain))
+    if (path.endsWith('/mapping')) { submitted = JSON.parse(String(init?.body)); return json(durable.record(preview)) }
     return json([])
   }))
   render(<I18nProvider><GuidedParts page={page} changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
@@ -70,6 +76,21 @@ it('shows actual ambiguous column samples and rereads using one explicit mapping
     mapping: { '0': 'position', '1': 'part_number', '2': 'description', '3': 'quantity' } }))
   await user.selectOptions(screen.getByLabelText('Покажи'), 'all')
   expect(await screen.findByLabelText('Номер на част 1')).toHaveValue('QA-1')
+})
+
+it('saves a correction while the field stays focused and resumes it after remount', async () => {
+  const durable = new ReviewTestTransport()
+  durable.record(preview)
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => durable.handle(String(input), init) || json([])))
+  const view = render(<I18nProvider><GuidedParts page={page} changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
+  const user = userEvent.setup()
+  const field = await screen.findByLabelText('Номер на част 1')
+  await user.clear(field); await user.type(field, 'QA-SAVED-HUMAN')
+  await waitFor(() => expect(durable.previews.get(11)?.rows[0].payload.part_number).toBe('QA-SAVED-HUMAN'), { timeout: 4000 })
+  expect(field).toHaveFocus()
+  view.unmount()
+  render(<I18nProvider><GuidedParts page={page} changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
+  expect(await screen.findByLabelText('Номер на част 1')).toHaveValue('QA-SAVED-HUMAN')
 })
 
 it('keeps exact BG/EN/RU guided terminology parity without obsolete inference concepts', () => {

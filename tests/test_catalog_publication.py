@@ -29,6 +29,7 @@ from app.models import (
     User,
 )
 from app.part_requests.service import load_request
+from catalog_review_helpers import verify_http_revision
 from reportlab.pdfgen import canvas
 from sqlalchemy import func, inspect, select, text
 from test_catalog_builder_parts import BASE, part, source, workspace
@@ -82,6 +83,7 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
                        headers=auth_headers).status_code == 201
     before = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers)
     assert before.status_code == 200 and not before.json()["supported"]
+    verify_http_revision(client, auth_headers, revision_id)
     preview = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness", headers=auth_headers)
     assert preview.status_code == 200, preview.text
     assert preview.json()["ready"], preview.json()
@@ -163,6 +165,8 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
     assert clone_parts[0]["position"] == position and clone_parts[0]["source_pages"]
     assert client.patch(f"{BASE}/parts/{clone_parts[0]['id']}", headers=auth_headers,
                         json={"name_en": "Next test part"}).status_code == 200
+    assert not client.get(f"{BASE}/revisions/{clone_id}/publication-readiness", headers=auth_headers).json()["ready"]
+    verify_http_revision(client, auth_headers, clone_id)
     next_preview = client.get(f"{BASE}/revisions/{clone_id}/publication-readiness", headers=auth_headers)
     assert next_preview.status_code == 200 and next_preview.json()["ready"], next_preview.text
     next_published = client.post(f"{BASE}/revisions/{clone_id}/publish", headers=auth_headers,
@@ -259,6 +263,7 @@ def test_clone_preserves_repair_kit_code_lock_after_component_removal(
     source_kit = client.get(f"{BASE}/repair-kits/{kit_id}", headers=auth_headers).json()
     assert source_kit["code_locked"] is True and source_kit["component_count"] == 1
 
+    verify_http_revision(client, auth_headers, revision_id)
     readiness = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness",
                            headers=auth_headers)
     assert readiness.status_code == 200 and readiness.json()["ready"], readiness.text
@@ -348,6 +353,7 @@ def test_separate_pdf_pages_group_two_requested_positions(client, auth_headers, 
         db.commit()
         machine_id = machine.id
     assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers).status_code == 201
+    verify_http_revision(client, auth_headers, revision_id)
     preview = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness", headers=auth_headers).json()
     assert preview["ready"], preview
     published = client.post(f"{BASE}/revisions/{revision_id}/publish", headers=auth_headers,
@@ -384,6 +390,7 @@ def test_publish_failure_rolls_back_all_live_materialization(client, auth_header
     assert part.status_code == 201, part.text
     assert client.post(f"{BASE}/parts/{part.json()['id']}/source-pages", headers=auth_headers,
                        json={"visual_page_ids": [spare_page_id]}).status_code == 201
+    verify_http_revision(client, auth_headers, revision_id)
     preview = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness",
                          headers=auth_headers).json()
     assert preview["ready"], preview
@@ -439,6 +446,7 @@ def test_readiness_blocks_incomplete_graph_and_corrupt_source(client, auth_heade
     with session_factory() as db:
         db.get(CatalogRevisionArtifact, artifact_id).content = original_content
         db.commit()
+    verify_http_revision(client, auth_headers, revision_id)
     valid = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness",
                        headers=auth_headers).json()
     assert valid["ready"], valid

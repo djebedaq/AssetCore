@@ -32,6 +32,7 @@ from app.models import (
     TechnicalDocument,
     User,
 )
+from catalog_review_helpers import verify_service_sources
 from fastapi import HTTPException
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
@@ -160,6 +161,8 @@ def test_maximum_names_and_position_publish_without_truncation_and_guard_downgra
         db.get(CatalogRevisionPart, part_id).position = position
         db.scalar(select(CatalogRevisionPositionHotspot)).position = position
         db.commit()
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        verify_service_sources(db, actor, assembly.id)
     preview = _preview(pg_factory, revision_id)
     with pg_factory() as db:
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
@@ -184,13 +187,20 @@ def test_maximum_names_and_position_publish_without_truncation_and_guard_downgra
     config.set_main_option("script_location", str(ROOT / "backend/alembic"))
     with pg_factory.kw["bind"].begin() as connection:
         config.attributes["connection"] = connection
-        with pytest.raises(RuntimeError, match="shared or guided source evidence"):
+        with pytest.raises(RuntimeError, match="history cannot be discarded"):
             command.downgrade(config, "20260929_0029")
         # Retain the preceding migration's PostgreSQL truncation assertion too.
         import importlib.util
 
         from alembic.migration import MigrationContext
         from alembic.operations import Operations
+        path = ROOT / "backend/alembic/versions/20261001_0031_catalog_auto_ingest.py"
+        spec = importlib.util.spec_from_file_location("qa_ingest_migration", path)
+        ingest_migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ingest_migration)
+        with Operations.context(MigrationContext.configure(connection)):
+            with pytest.raises(RuntimeError, match="shared or guided source evidence"):
+                ingest_migration.downgrade()
         path = ROOT / "backend/alembic/versions/20260930_0030_catalog_diagram_titles.py"
         spec = importlib.util.spec_from_file_location("qa_title_migration", path)
         title_migration = importlib.util.module_from_spec(spec)
@@ -198,4 +208,4 @@ def test_maximum_names_and_position_publish_without_truncation_and_guard_downgra
         with Operations.context(MigrationContext.configure(connection)):
             with pytest.raises(RuntimeError, match="title exceeds 500"):
                 title_migration.downgrade()
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261001_0031"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261009_0033"

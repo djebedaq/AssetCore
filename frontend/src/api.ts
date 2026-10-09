@@ -137,7 +137,7 @@ export async function downloadApiFile(path: string, fallbackName: string): Promi
   URL.revokeObjectURL(url)
 }
 
-export async function createApiObjectUrl(path: string): Promise<{ url: string; mediaType: string }> {
+export async function createApiObjectUrl(path: string): Promise<{ url: string; mediaType: string; reviewReceipt?: string | null }> {
   const response = await fetch(apiUrl(path), {
     credentials: 'same-origin',
     headers: authenticatedHeaders({}),
@@ -148,6 +148,7 @@ export async function createApiObjectUrl(path: string): Promise<{ url: string; m
   return {
     url: URL.createObjectURL(blob),
     mediaType: blob.type || response.headers.get('Content-Type') || 'application/octet-stream',
+    reviewReceipt: response.headers.get('X-Catalog-Review-Receipt'),
   }
 }
 

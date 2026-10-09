@@ -93,7 +93,8 @@ it('retains multiple schemes/lists, offers dual roles and removes with the lates
 
 it('keeps reference and page selected when switching the local sources/parts/mapping work', async () => {
   const groups = [3, 4].map(id => ({ id, code: 'QA', name_bg: `Reference ${id}`, name_en: '', name_ru: '', part_count: 0, exploded_page_count: 0, spare_list_page_count: 0 }))
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/reference-pages') ? json([empty, { ...empty, id: 8 }]) : json([])))
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/review-session') ? json({ id: 1, sources: [], selection_digest: 'qa' })
+    : String(input).endsWith('/reference-pages') ? json([empty, { ...empty, id: 8 }]) : json([])))
   render(<I18nProvider><GuidedWorkspace revisionId={2} groups={groups} task="references" changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: /Страница 2/ }))

@@ -132,7 +132,9 @@ def workflow(db: Session, revision_id: int) -> dict:
         logical_page_id = issue.get("reference_page_id") or (part.reference_page_id if part else page.reference_page_id if page else None)
         if logical_page_id in reference_pages:
             issue.update(reference_page_id=logical_page_id, assembly_id=reference_pages[logical_page_id].assembly_id)
-        if part:
+        if issue["code"] == "catalog_publication_source_review_required":
+            issue["step"] = "parts"
+        elif part:
             issue.update(assembly_id=part.assembly_id, part_id=part.id, step="parts")
         elif hotspot:
             issue.update(assembly_id=artifact.assembly_id if artifact else None,

@@ -27,6 +27,7 @@ from app.models import (
 )
 from app.part_requests.service import load_request
 from app.seed import seed_database
+from catalog_review_helpers import verify_http_revision
 from docx import Document
 from fastapi import HTTPException
 from sqlalchemy import func, inspect, select
@@ -44,6 +45,7 @@ def _draft(client, headers, factory):
 
 
 def _publish(client, headers, revision_id):
+    verify_http_revision(client, headers, revision_id)
     preview = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness", headers=headers)
     assert preview.status_code == 200 and preview.json()["ready"], preview.text
     response = client.post(f"{BASE}/revisions/{revision_id}/publish", headers=headers, json={
