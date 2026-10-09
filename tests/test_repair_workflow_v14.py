@@ -277,7 +277,7 @@ def test_completion_is_atomic_generates_three_part_protocol_and_restores_availab
     )
     assert participant.status_code == 201, participant.text
     catalog = client.get(
-        f"/api/catalog/parts?verified_only=true&machine_id={machine_ids['12']}",
+        f"/api/catalog/parts?verified_only=true&machine_id={machine_ids['8']}",
         headers=auth_headers,
     )
     assert catalog.status_code == 200, catalog.text
@@ -360,6 +360,7 @@ def test_completion_is_atomic_generates_three_part_protocol_and_restores_availab
         pdf_record = next(item for item in documents if item.format == "pdf")
 
     assert docx_record.snapshot["reported_problem"] == "Контролен проблем в изолираната тестова база"
+    assert docx_record.snapshot["machine_number"] == "8"
     assert docx_record.snapshot["diagnostic_cleaning"] == "Извършено контролно почистване при диагностиката"
     assert docx_record.snapshot["test_method"] == "Контролен функционален тест"
     assert docx_record.snapshot["participant_total_minutes"] == 80
@@ -398,7 +399,7 @@ def test_completion_is_atomic_generates_three_part_protocol_and_restores_availab
     assert len(pdf.pages) == 3
     pdf_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
     assert "Контролният тест е успешен" in pdf_text
-    assert "12" in pdf_text
+    assert "8" in pdf_text
 
     issue = client.post(
         "/api/transfers/bulk-issue",
