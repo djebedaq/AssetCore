@@ -53,6 +53,7 @@ def main():
     from app.main import app
     from app.models import AssetCategory, Machine
     from app.runtime import initialize_runtime
+    from catalog_review_helpers import verify_http_revision
     from fastapi.testclient import TestClient
     from sqlalchemy import select
     from test_bulk_transfers import complete_signing
@@ -265,6 +266,7 @@ def main():
             db.commit()
         for machine_id in ids[4:]:
             checked(client.post(f"{BASE}/catalogs/{catalog}/assets/{machine_id}", headers=headers))
+        verify_http_revision(client, headers, revision)
         readiness = checked(
             client.get(f"{BASE}/revisions/{revision}/publication-readiness", headers=headers)
         )
