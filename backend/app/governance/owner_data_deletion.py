@@ -25,6 +25,7 @@ from ..models import (
     AuthSession,
     CatalogAssetBinding,
     CatalogDefinition,
+    CatalogExtractionSession,
     CatalogRevision,
     CatalogRevisionArtifact,
     CatalogRevisionAssembly,
@@ -134,6 +135,11 @@ REFERENCE_LABELS = {
     "catalog_revision_position_hotspots": "builderHotspots",
     "catalog_revision_repair_kits": "builderRepairKits",
     "catalog_revision_repair_kit_components": "builderRepairKitComponents",
+    "catalog_extraction_sessions": "builderReviewHistory",
+    "catalog_extraction_sources": "builderReviewHistory",
+    "catalog_extraction_attempts": "builderReviewHistory",
+    "catalog_extraction_candidates": "builderReviewHistory",
+    "catalog_source_review_decisions": "builderReviewHistory",
 }
 
 # Only local events are owned data. Unknown or operational events fail closed.
@@ -349,6 +355,9 @@ def _analyze(db, actor, kind, target) -> dict:
         if published:
             blockers.append(_dependency("catalog_revisions", published))
         revision_ids = select(CatalogRevision.id).where(CatalogRevision.catalog_id == target.id)
+        review_history = _count(db, CatalogExtractionSession, CatalogExtractionSession.revision_id.in_(revision_ids))
+        if review_history:
+            blockers.append(_dependency("catalog_extraction_sessions", review_history))
         assembly_ids = select(CatalogRevisionAssembly.id).where(CatalogRevisionAssembly.revision_id.in_(revision_ids))
         artifact_ids = select(CatalogRevisionArtifact.id).where(CatalogRevisionArtifact.assembly_id.in_(assembly_ids))
         part_ids = select(CatalogRevisionPart.id).where(CatalogRevisionPart.assembly_id.in_(assembly_ids))
@@ -423,7 +432,7 @@ def _lock_dependencies(db: Session, kind: ResourceType) -> None:
                        "catalog_revision_artifacts", "catalog_revision_visual_pages",
                        "catalog_revision_parts", "catalog_revision_part_page_maps",
                        "catalog_revision_position_hotspots", "catalog_revision_repair_kits",
-                       "catalog_revision_repair_kit_components"})
+                       "catalog_revision_repair_kit_components", "catalog_extraction_sessions"})
     # Rare destructive operations serialize writers to their reference tables.
     # This covers string/configuration references and child-insert phantoms as
     # well as FKs, without requiring every existing writer to use a new service.
@@ -469,6 +478,11 @@ def execute(
             if retry:
                 raise throttled_error(retry)
             raise error("reauthentication_failed", 403)
+        if kind == ResourceType.CATALOG_DEFINITION:
+            # Same order as Builder mutations: catalog row, then dependent data.
+            # Taking table locks first could deadlock an in-flight review writer.
+            from ..catalog_admin.visual_sources import lock_catalog
+            lock_catalog(db, identifier)
         _lock_dependencies(db, kind)
         # SQLite ignores FOR UPDATE. Re-resolve authorization after its writer
         # lock too, closing an ownership/password change between initial reads

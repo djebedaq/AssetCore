@@ -18,6 +18,8 @@ Additive Alembic `20261009_0033`, след `20261009_0032`, създава пе�
 
 Няма backfill на VERIFIED, промяна на исторически миграции или редакция на бизнес записи. Downgrade е разрешен само за празен ledger; при записана работа отказва да изтрие история. Изключването на OCR през съществуващата конфигурация не отменя publication gate.
 
+Owner deletion също отказва да изтрие каталог с ledger история и показва преведен blocker. Новите actor foreign keys имат изрично прегледани етикети и блокират изтриването на съответния потребител. Catalog deletion взема същия catalog row lock преди dependent table locks; PostgreSQL regression проверява конкуренцията с човешко одобрение без загуба на история.
+
 ## Публикация и конкурентност
 
 Преди публикация backend придобива каноничния catalog lock. PostgreSQL използва FOR UPDATE; SQLite придобива write lock с update на същия catalog ред. ORM cache се обновява след lock, включително при дълго живяла сесия. Всички нови review операции и засегнати source/part/mapping операции споделят тази граница.
@@ -58,6 +60,8 @@ Machine.id, 19-машинният регистър и Falch номерацият
 | --- | --- |
 | `python -m pytest -q tests/test_catalog_durable_review.py tests/test_catalog_durable_review_migration.py --tb=short` | 14 passed; 8 предупреждения от съществуващи зависимости/SQLite migration introspection |
 | `python -m pytest -q tests/test_registry_catalog_02.py -k test_builder_drafts_excluded_published_revision_pinned --tb=short` | 1 passed, 10 deselected; shared reference pinning assertions са запазени |
+| `python tests/browser/run_registry_catalog_postgres_qa.py tests/postgres/test_catalog_durable_review_postgres.py -x` | 5/5 PASS на PostgreSQL 16 след TCP readiness поправката; новият owner deletion concurrency случай се изпълнява допълнително и в пълния Linux CI |
+| Целевият прогон на route inventory, Builder permissions, incoming user FK labels и owner catalog deletion | 5/5 PASS; точните route counts са актуализирани за седемте нови permission-protected endpoints, без премахнати assertions |
 | Целевият прогон на durable review, migration, guided/publication/wizard/final audit и release infrastructure | 44 passed преди финалното допълнение за архивирания PDF; то е покрито от 14-те проверки по-горе |
 | `pnpm typecheck`, `pnpm lint`, `pnpm exec vitest run --maxWorkers=1`, `pnpm build` във frontend | PASS; 64 файла / 587 теста; допълнителната regression проверка за технически бележки: 5/5 в GuidedParts; Linux CI изпълнява целия разширен набор |
 | `python tests/browser/run_catalog_durable_review_qa.py` | PASS през реален Edge: поправка преди confirm, 2 source blockers, refresh, logout/login, 768/390 px, точни 10 синтетични части и 10 видими callouts, успешна публикация; няма page errors |

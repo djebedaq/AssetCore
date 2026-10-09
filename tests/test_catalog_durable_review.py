@@ -1,5 +1,6 @@
 """Fail-closed publication and durable human work using synthetic PDFs only."""
 import copy
+import os
 from datetime import timedelta
 
 from app.catalog_admin.parts_extraction import ledger, process, service
@@ -274,6 +275,20 @@ def test_legacy_assembly_delete_cannot_bypass_processed_source_review(client, au
     assert client.get(f"{BASE}/assemblies/{assembly_id}/parts", headers=auth_headers).json()[0]["id"] == created["id"]
     state = checked(client.post(f"{BASE}/assemblies/{assembly_id}/source-review", headers=auth_headers))["sources"][0]
     assert state["review_state"] == "VERIFIED" and len(state["attempts"]) == 1
+
+
+def test_owner_catalog_deletion_preserves_durable_review_history(client, auth_headers, session_factory):
+    revision, _, page, _ = setup_review(client, auth_headers, session_factory)
+    state = resume(client, auth_headers, page)
+    catalog_id = revision["catalog_id"]
+    path = f"/api/owner/data-deletion/catalog_definition/{catalog_id}"
+    preview = checked(client.get(path + "/preview", headers=auth_headers))
+    assert not preview["can_delete"]
+    assert any(item["code"] == "catalog_extraction_sessions" for item in preview["blockers"])
+    response = client.post(path + "/execute", headers=auth_headers, json={
+        "current_password": os.environ["ADMIN_PASSWORD"], "confirmation_text": preview["confirmation_text"]})
+    assert response.status_code == 409 and response.json()["detail"]["code"] == "deletion_blocked"
+    assert resume(client, auth_headers, page)["id"] == state["id"]
 
 
 def test_zero_result_requires_explicit_complete_manual_transcription(client, auth_headers, session_factory, monkeypatch):

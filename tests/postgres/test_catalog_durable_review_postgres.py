@@ -50,6 +50,36 @@ def test_candidate_edits_share_catalog_lock_and_reject_stale_version(pg_factory)
     assert sorted(outcome.status for outcome in outcomes) == [200, 409]
 
 
+def test_owner_catalog_delete_serializes_with_review_and_retains_history(pg_factory):
+    import secrets
+
+    from app.governance.owner_data_deletion import ExecuteRequest, ResourceType, execute, preview
+    from app.security import hash_password
+    from starlette.requests import Request
+    _, state, receipt, catalog_id, revision_id = prepared(pg_factory)
+    password = secrets.token_urlsafe(32)
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        actor.password_hash = hash_password(password)
+        db.commit()
+        plan = preview(db, actor, ResourceType.CATALOG_DEFINITION, catalog_id)
+        assert not plan["can_delete"]
+        assert any(item["code"] == "catalog_extraction_sessions" for item in plan["blockers"])
+    decision = SourceReview(expected_version=state["version"], fingerprint=state["fingerprint"],
+        inspection_token=receipt, reason="QA exact original reviewed while deletion was attempted")
+    deletion = ExecuteRequest(current_password=password, confirmation_text=plan["confirmation_text"])
+    request = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 1234)})
+    outcomes = race(pg_factory, CatalogDefinition, catalog_id, [
+        lambda db, actor: review.verify(db, actor, state["visual_page_id"], decision),
+        lambda db, actor: execute(db, actor, ResourceType.CATALOG_DEFINITION, catalog_id, deletion, request),
+    ], success_status=200)
+    assert sorted(outcome.status for outcome in outcomes) == [200, 409]
+    assert next(outcome.code for outcome in outcomes if outcome.status == 409) == "deletion_blocked"
+    with pg_factory() as db:
+        assert db.get(CatalogRevision, revision_id).status == "DRAFT"
+        assert db.get(ledger.Source, state["id"]).review_state == "VERIFIED"
+
+
 def test_unprocessed_selected_source_remains_blocker_in_migrated_postgres(pg_factory):
     page, _ = selected_source(pg_factory)
     with pg_factory() as db:
