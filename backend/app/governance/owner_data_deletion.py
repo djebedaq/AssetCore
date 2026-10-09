@@ -464,6 +464,12 @@ def execute(
 ) -> dict:
     correlation_id = _correlation_id(request) or str(uuid4())
     try:
+        if kind == ResourceType.CATALOG_DEFINITION:
+            # Builder decisions insert actor FKs while holding the catalog row.
+            # Lock the catalog before actor/ownership rows to keep that order.
+            require_owner(db, actor)
+            from ..catalog_admin.visual_sources import lock_catalog
+            lock_catalog(db, identifier)
         actor = require_owner(db, actor, lock=True)
         keys = sensitive_rate_limit_keys(request, actor, "owner_delete")
         enforce_rate_limit(db, keys)
@@ -478,11 +484,6 @@ def execute(
             if retry:
                 raise throttled_error(retry)
             raise error("reauthentication_failed", 403)
-        if kind == ResourceType.CATALOG_DEFINITION:
-            # Same order as Builder mutations: catalog row, then dependent data.
-            # Taking table locks first could deadlock an in-flight review writer.
-            from ..catalog_admin.visual_sources import lock_catalog
-            lock_catalog(db, identifier)
         _lock_dependencies(db, kind)
         # SQLite ignores FOR UPDATE. Re-resolve authorization after its writer
         # lock too, closing an ownership/password change between initial reads

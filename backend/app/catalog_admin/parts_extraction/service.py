@@ -6,6 +6,7 @@ import hmac
 import json
 import time
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,18 @@ from . import ledger, process
 from .tables import parse_region
 
 EXTRACTOR_VERSION = "SPARE_PARTS_1"
+
+
+def resumable_attempt(db, source):
+    attempt = db.get(CatalogExtractionAttempt, source.current_attempt_id) if source.current_attempt_id else None
+    if source.processing_state in {"FAILED", "CANCELLED"}:
+        # The failed retry remains authoritative processing history. Its previous
+        # exact-source rows can still be corrected/confirmed; final source review
+        # requires explicit manual transcription while processing is not successful.
+        attempt = db.scalar(select(CatalogExtractionAttempt).where(
+            CatalogExtractionAttempt.source_id == source.id, CatalogExtractionAttempt.state == "SUCCEEDED")
+            .order_by(CatalogExtractionAttempt.id.desc()).limit(1))
+    return attempt if attempt and attempt.state == "SUCCEEDED" else None
 
 
 def _sign(claim: dict) -> str:
@@ -59,7 +72,7 @@ def _read(db: Session, actor, page_id: int, token: str) -> tuple[dict, tuple]:
     source, active, *_ = ledger.source_context(db, claim["source"]["visual_page_id"])
     attempt = db.get(CatalogExtractionAttempt, claim.get("attempt_id")) if claim.get("attempt_id") else None
     if (source is None or active.id != claim.get("session_id") or attempt is None
-            or source.current_attempt_id != attempt.id or attempt.source_id != source.id
+            or resumable_attempt(db, source) is not attempt or attempt.source_id != source.id
             or attempt.state != "SUCCEEDED" or ledger.hashed(attempt.evidence) != claim.get("evidence_digest")):
         raise fail("catalog_extraction_token_invalid", 422)
     return claim, context

@@ -194,6 +194,37 @@ def test_interrupted_attempt_recovers_with_history_and_selection_edit_preserves_
     assert recovered["processing_state"] == "CANCELLED"
     assert recovered["attempts"][-1]["state"] == "CANCELLED"
     assert recovered["candidates"][0]["values"]["part_number"] == "QA-DRAFT-SAVED"
+    assert recovered["preview"]["rows"][0]["payload"]["part_number"] == "QA-DRAFT-SAVED"
+    accept(client, auth_headers, page, recovered["preview"])
+    recovered = next(s for s in resume(client, auth_headers, page)["sources"] if s["id"] == carried["id"])
+    assert recovered["processing_state"] == "CANCELLED" and recovered["review_state"] == "NEEDS_REVIEW"
+    verified = verify_http_source(client, auth_headers, recovered, manual=True)
+    assert verified["review_state"] == "VERIFIED" and verified["attempts"][-1]["kind"] == "MANUAL"
+
+
+def test_failed_retry_keeps_saved_rows_editable_without_claiming_processing_success(client, auth_headers, session_factory, monkeypatch):
+    _, _, page, _ = setup_review(client, auth_headers, session_factory)
+    visual = next(s for s in page["sources"] if s["role"] == "SPARE_PARTS_LIST")
+    preview = extract(client, auth_headers, page, visual)
+    row = preview["rows"][0]
+    checked(client.patch(f"{BASE}/extraction-candidates/{row['candidate_id']}", headers=auth_headers, json={
+        "expected_version": row["candidate_version"], "values": {**row["payload"], "part_number": "QA-SAVED-BEFORE-FAILURE"}}))
+    real = process.extract
+    monkeypatch.setattr(process, "extract", lambda raw, operation, number, config:
+        {"error": "catalog_extraction_page_failed"} if operation == "page" else real(raw, operation, number, config))
+    assert client.post(f"{BASE}/reference-pages/{page['id']}/extract", headers=auth_headers,
+        json={"visual_page_id": visual["id"]}).status_code == 422
+    restored = resume(client, auth_headers, page)["sources"][0]
+    assert restored["processing_state"] == "FAILED" and restored["attempts"][-1]["state"] == "FAILED"
+    assert restored["preview"]["rows"][0]["payload"]["part_number"] == "QA-SAVED-BEFORE-FAILURE"
+    accept(client, auth_headers, page, restored["preview"])
+    restored = resume(client, auth_headers, page)["sources"][0]
+    original = client.get(f"{BASE}/visual-pages/{visual['id']}/review-original", headers=auth_headers)
+    rejected = client.post(f"{BASE}/visual-pages/{visual['id']}/review", headers=auth_headers, json={
+        "expected_version": restored["version"], "fingerprint": restored["fingerprint"],
+        "inspection_token": original.headers["X-Catalog-Review-Receipt"], "reason": "QA failed retry still needs explicit manual transcription"})
+    assert rejected.status_code == 422 and rejected.json()["detail"]["code"] == "catalog_source_review_manual_required"
+    assert verify_http_source(client, auth_headers, restored, manual=True)["review_state"] == "VERIFIED"
 
 
 def test_evidence_and_review_endpoints_reject_unauthorized_actors(client, auth_headers, viewer_headers, session_factory):

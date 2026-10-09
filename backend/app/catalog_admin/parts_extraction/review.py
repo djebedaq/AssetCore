@@ -35,7 +35,7 @@ def workspace(db, actor, assembly_id, reference_page_id=None):
                     {"source_id": source.id, "part_id": candidate.part_id})
         db.flush()
         item = ledger.serialize(db, source, active)
-        attempt = db.get(ledger.Attempt, source.current_attempt_id) if source.current_attempt_id else None
+        attempt = service.resumable_attempt(db, source)
         item["preview"] = service._result(service.claim_for(db, actor, page, source, active, attempt), db) if (
             reference_page_id is not None and attempt and attempt.state == "SUCCEEDED") else None
         result.append(item)
