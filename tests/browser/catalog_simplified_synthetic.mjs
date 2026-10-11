@@ -179,6 +179,7 @@ try {
         && Math.abs(rect.width - Math.max(borderWidth, parent.width * parseFloat(node.style.width) / 100)) < 1
         && Math.abs(rect.height - Math.max(borderHeight, parent.height * parseFloat(node.style.height) / 100)) < 1
     }))).toBe(true)
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.evaluate(() => window.scrollTo(0, 0))
     await page.screenshot({ path: out + `/touch-hotspots-${width}.png`, fullPage: true })
   }

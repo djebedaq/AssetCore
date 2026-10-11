@@ -160,6 +160,8 @@ Desktop: една компактна таблица и сравнение PDF/р
 Touch targets не променят размерите на marker overlay: общият минимален размер на бутоните
 изключва геометричните маркери, които запазват съществуващия отделен hit target. Реални touch
 поставяния при трите ширини проверяват и съответствието на видимите размери с normalized geometry.
+Контролите за последния избран маркер се пренасят в десния панел; overflow се проверява
+и след всяко записване, когато контекстните действия вече са видими.
 
 Има semantic buttons/labels/status/alerts, keyboard row selection, editor heading focus,
 видим focus ring, modal focus trap/restoration, Escape и 44 px mobile action targets.

@@ -49,6 +49,9 @@
 .source-options summary { padding: 5px 10px; cursor: pointer; }
 .source-options[open] button { position: absolute; z-index: 3; right: 0; background: white; }
 .hotspot-simple .builder-scheme-layout { grid-template-columns: minmax(0, 1fr) 230px; }
+.hotspot-simple .builder-scheme-details { min-width: 0; }
+.hotspot-simple .builder-scheme-details > input, .hotspot-simple .builder-scheme-details select { min-width: 0; max-width: 100%; }
+.hotspot-simple .builder-scheme-details .actions { flex-wrap: wrap; }
 .hotspot-simple .builder-scheme-viewport { height: 65vh; }
 .hotspot-simple .wizard-position-list { max-height: 36vh; }
 .catalog-maintenance > details > summary, .part-edit summary { cursor: pointer; font-weight: 600; }
