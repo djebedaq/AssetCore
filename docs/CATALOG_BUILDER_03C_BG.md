@@ -194,7 +194,7 @@ Baseline изискваше 20 отделни OCR checkboxes; останалит
 |---|---|
 | Windows/Edge, реален D13 през нормалния UI | 20/20 + 10/10; една таблица; SHA/page; edit/refresh; re-extraction без дубликати; source review refresh; hotspot blockers |
 | Linux Docker D13, 3 повторения | 3 × (20/20 + 10/10), всички 4 полета + SHA/physical page; 0 останали subprocess-и |
-| Full Vitest | 603 PASS / 66 файла (`node node_modules/vitest/vitest.mjs run --maxWorkers=2`) |
+| Full Vitest | 604 PASS / 66 файла (`node node_modules/vitest/vitest.mjs run --maxWorkers=2`) |
 | Typecheck / ESLint / production Vite build | PASS; съществуващото предупреждение за големия общ app chunk остава |
 | Backend durable/adaptive/publication/wizard/evidence | 69 PASS, 2 platform SKIP на Windows; Unix process-group cases се изпълняват в Linux CI |
 | Evidence geometry и подмяна на HMAC claim | 2 PASS, включително legacy no-highlight и 422 tampering |
@@ -209,7 +209,7 @@ Full backend SQLite, PostgreSQL transactions/backup compatibility, dependency au
 checks се изпълняват от съществуващия **Build check** workflow върху PR HEAD. Финалният CI статус
 и точните резултати са в PR checks и машинночетимия QA отчет; не се заменят с frontend readiness.
 Локалният full frontend прогон с неограничени workers беше прекъснат при конкуриращ се QA load;
-повторният ограничен прогон завърши с 603 PASS. Прекъснатият опит не е отчетен като PASS.
+повторният ограничен прогон завърши с 604 PASS. Прекъснатият опит не е отчетен като PASS.
 
 Основни команди: `pytest -q tests/test_catalog_durable_review.py tests/test_catalog_adaptive_extraction.py
 tests/test_catalog_publication.py tests/test_catalog_wizard.py tests/test_catalog_evidence_preview.py`;
@@ -236,6 +236,7 @@ OEM screenshots остават локални; не се публикуват и
 
 Новите тестове покриват една таблица с отделни еднакви occurrences, partial кандидати, bulk selection,
 две бързи редакции, stale SAVE, отказ/потвърждение на reload, token renewal със/без concurrent change,
+невалиден пропуснат ред след частично потвърждение и неуспешен refresh,
 retained candidates след failed retry, empty-page creation race, BG/EN/RU и rotated/invalid geometry.
 Съществуващите GuidedParts тестове обработват 1/2/3/4/7 списъка и failed middle source/context retry.
 CatalogMaintenance и реалният CatalogBuilder проверяват запазените административни операции,

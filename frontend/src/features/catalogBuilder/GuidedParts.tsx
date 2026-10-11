@@ -77,7 +77,7 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
   useEffect(() => () => { timers.current.forEach(clearTimeout) }, [])
   function review(preview: Preview): Review {
     return { preview, rows: preview.rows.map(row => ({ part: { ...row.payload },
-      selected: !!preview.token && !row.warnings.length && !['ACCEPTED', 'REJECTED', 'CONFLICT'].includes(row.candidate_state || ''),
+      selected: !!preview.token && valid({ part: row.payload }) && !row.warnings.length && !['ACCEPTED', 'REJECTED', 'CONFLICT'].includes(row.candidate_state || ''),
       rejected: row.candidate_state === 'REJECTED', confirmed: row.candidate_state === 'ACCEPTED', reason: '' })) }
   }
   async function load() {
@@ -271,7 +271,7 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
           token: current.token, rows, confirm_warnings: true,
         }) })
         setReviews(current => current.map((value, index) => index !== source ? value : {
-          ...value, rows: value.rows.map(row => row.selected && !row.rejected ? { ...row, selected: false, confirmed: true } : row),
+          ...value, rows: value.rows.map((row, index) => rows.some(submitted => submitted.index === index) ? { ...row, selected: false, confirmed: true } : row),
         }))
       }
       setUnsaved(false); await load(); await changed()
@@ -279,7 +279,7 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
   }
   const allRows = reviews.flatMap((item, source) => item.rows.map((row, index) => ({ item, row, source, index,
     candidate: item.preview.rows[index], key: String(item.preview.rows[index].candidate_id ?? `${item.preview.source.visual_page_id}:${index}`) })))
-  function valid(row: ReviewRow) {
+  function valid(row: Pick<ReviewRow, 'part'>) {
     return !!row.part.position?.trim() && !!row.part.part_number?.trim() && !!row.part.description?.trim()
       && row.part.quantity !== null && row.part.quantity !== '' && Number.isFinite(Number(row.part.quantity)) && Number(row.part.quantity) >= 0 && /^\d{1,10}(?:\.\d{1,4})?$/.test(String(row.part.quantity))
   }

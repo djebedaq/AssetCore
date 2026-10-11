@@ -56,6 +56,34 @@ it('persists two rapid edits from different source occurrences before the deboun
   expect(screen.getByLabelText('Номер на част')).toHaveValue('002-HUMAN-B')
 })
 
+it('never marks an omitted invalid row confirmed if reload fails after a partial confirmation', async () => {
+  const durable = new ReviewTestTransport(), p = preview(11)
+  p.rows[0].warnings = []
+  p.rows.push({ ...p.rows[0], payload: { ...p.rows[0].payload, position: '2', part_number: '002-QA' } })
+  durable.record(p)
+  let confirmed = false
+  const submitted: Array<{ index: number }> = []
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input)
+    if (path.endsWith('/confirm')) { confirmed = true; submitted.push(...JSON.parse(String(init?.body)).rows); return json({}) }
+    if (path.endsWith('/review-session') && confirmed) return json({ detail: 'QA reload failure' }, 503)
+    return durable.handle(path, init) || json([])
+  }))
+  render(<I18nProvider><GuidedParts page={page} changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: /^Провери позиция 2,/ }))
+  fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '' } })
+  await waitFor(() => expect(durable.previews.get(11)?.rows[1].payload.quantity).toBeNull())
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Потвърди избраните части' })).toBeEnabled())
+  await user.click(screen.getByRole('button', { name: 'Потвърди избраните части' }))
+  await waitFor(() => expect(confirmed).toBe(true))
+  expect(submitted.map(row => row.index)).toEqual([0])
+  await waitFor(() => expect(screen.getAllByRole('row')[1]).toHaveTextContent('Потвърдени'))
+  await waitFor(() => expect(screen.getByLabelText('Количество')).toBeEnabled())
+  expect(screen.getAllByRole('row')[2]).toHaveTextContent('Нуждае се от проверка')
+  expect(screen.getAllByRole('row')[2]).not.toHaveTextContent('Потвърдени')
+})
+
 it('retains unsaved human values after a stale version and blocks confirmation', async () => {
   const durable = new ReviewTestTransport(); durable.record(preview(11))
   const patch = vi.fn((_init?: RequestInit) => json({ detail: { code: 'catalog_reference_page_stale' } }, 409))
