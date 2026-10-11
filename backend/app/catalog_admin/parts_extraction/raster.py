@@ -183,7 +183,7 @@ def extract(page, config, *, deadline=None):
         if not tables:
             raise
         code = str(exc)
-        warning = code if code in {"OCR_CELL_LIMIT", "OCR_PIXEL_LIMIT", "OCR_TIME_BUDGET"} else "CELL_OCR_UNAVAILABLE"
+        warning = code if code in {"OCR_CELL_LIMIT", "OCR_PIXEL_LIMIT", "OCR_TIME_BUDGET", "PAGE_WORD_LIMIT"} else "CELL_OCR_UNAVAILABLE"
         for table in tables:
             table["incomplete_regions"] = True
             table.setdefault("strategy_warnings", []).append(warning)
@@ -191,7 +191,7 @@ def extract(page, config, *, deadline=None):
 
 
 def regions(page, config, *, deadline=None):
-    used = 0
+    used, words_used = 0, 0
     for original, original_transform, evidence in images(page, config):
         selected = orientation(original, original_transform, deadline)
         if not selected:
@@ -223,6 +223,9 @@ def regions(page, config, *, deadline=None):
             _, header_boxes = crop_cells(image, xs, *ys[:2])
             recognized = [{**cell, "language": header_language, "psm": 7, "alternatives": []}
                           for cell in headers[index]] + recognized
+            words_used += sum(len(reading["words"]) for cell in recognized for reading in [cell, *cell.get("alternatives", [])])
+            if words_used > config["max_words"]:
+                raise ValueError("PAGE_WORD_LIMIT")
             cell_boxes = header_boxes + cell_boxes
             cells = [[cell["text"] for cell in recognized[i:i + columns]] for i in range(0, len(recognized), columns)]
             boxes = [list(fitz.Rect(xs[0], top, xs[-1], bottom) * transform) for top, bottom in zip(ys, ys[1:])]

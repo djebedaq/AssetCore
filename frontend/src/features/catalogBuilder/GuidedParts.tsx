@@ -236,7 +236,7 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
         </p>}
         {(['OCR_UNAVAILABLE', 'OCR_DISABLED', 'OCR_PIXEL_LIMIT', 'TABLE_DETECTION_FAILED', 'CONTINUATION_UNRESOLVED',
           'ROW_COVERAGE_INCOMPLETE', 'BORDERLESS_COVERAGE_UNCERTAIN', 'RASTER_COVERAGE_UNRESOLVED',
-          'CELL_OCR_UNAVAILABLE', 'OCR_CELL_LIMIT', 'OCR_TIME_BUDGET'] as const)
+          'CELL_OCR_UNAVAILABLE', 'OCR_CELL_LIMIT', 'OCR_TIME_BUDGET', 'PAGE_WORD_LIMIT'] as const)
           .filter(warning => item.preview.warnings.includes(warning)).map(warning => <p role="alert" key={warning}>{t(`guided.${warning}`)}</p>)}
         {!item.rows.length && <p role="status">{t('guided.noRows')}</p>}
         {item.preview.tables.map((table, tableIndex) => table.schema.state !== 'RESOLVED' ? <Mapping

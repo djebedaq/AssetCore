@@ -221,6 +221,21 @@ def test_completed_raster_regions_survive_later_timeout(monkeypatch):
     assert "OCR_TIME_BUDGET" in tables[0]["strategy_warnings"]
 
 
+def test_cell_ocr_respects_the_existing_page_word_budget(monkeypatch):
+    image, transform = Image.new("RGB", (300, 120), "white"), fitz.Matrix(1, 1)
+    grid = {"xs": [0, 50, 110, 240, 300], "ys": [0, 30, 60, 90], "bbox": [0, 0, 300, 90]}
+    headers = [{"text": text, "words": [], "confidence": 90} for text in ("Pos", "Part No", "Description", "Qty")]
+    monkeypatch.setattr(raster, "images", lambda *a: [(image, transform, {})])
+    monkeypatch.setattr(raster, "orientation", lambda *a: ((image, transform, 0, [grid]), {0: headers}, "eng"))
+    monkeypatch.setattr(raster.cell_ocr, "adaptive", lambda images, **kwargs:
+        [{"text": "QA", "words": [{"text": "QA", "bbox": [0, 0, 10, 10], "confidence": 90} for _ in range(3)],
+          "confidence": 90, "alternatives": []} for _ in images])
+    with fitz.open() as pdf:
+        page = pdf.new_page(width=300, height=120)
+        with pytest.raises(ValueError, match="PAGE_WORD_LIMIT"):
+            list(raster.regions(page, {"max_words": 10}))
+
+
 def test_cleaner_ocr_proposal_cannot_discard_unreadable_physical_rows():
     headers = ["Pos", "Part No", "Description", "Qty"]
     cells = [[str(i), f"QA-{i:04}", "QA item", "" if i in (2, 3) else "2"] for i in range(1, 5)]
@@ -277,15 +292,18 @@ def test_suspicious_original_cells_are_preserved_without_substitution(number, qt
     assert quality.assessment(rows, table)["state"] == "NEEDS_REVIEW"
 
 
-def test_identical_occurrences_have_separate_durable_corrections(client, auth_headers, session_factory, monkeypatch):
+@pytest.mark.parametrize("change", ["count", "ordinal"])
+def test_identical_occurrences_have_separate_durable_corrections(client, auth_headers, session_factory, monkeypatch, change):
     _, _, page, _ = setup_review(client, auth_headers, session_factory)
     source = next(s for s in page["sources"] if s["role"] == "SPARE_PARTS_LIST")
     real = process.extract
     visible = [5]
+    ordinal_shift = [1]
     def identical(*args):
         result = real(*args)
         for row in result["rows"]:
             row["payload"] = copy.deepcopy(result["rows"][0]["payload"])
+            row["source_row_index"] += ordinal_shift[0]
         result["rows"] = result["rows"][:visible[0]]
         result["rows"], result["tables"], result["quality"], _ = quality.choose([
             ("NATIVE_TABLE", result["rows"], result["tables"])])
@@ -303,10 +321,13 @@ def test_identical_occurrences_have_separate_durable_corrections(client, auth_he
     assert repeated["rows"][0]["payload"]["part_number"] == "QA-HUMAN-FIRST-OCCURRENCE"
     assert all(r["payload"]["part_number"] == row["payload"]["part_number"] for r in repeated["rows"][1:])
     assert len(resume(client, auth_headers, page)["sources"][0]["candidates"]) == 5
-    visible[0] = 4
+    if change == "count":
+        visible[0] = 4
+    else:
+        ordinal_shift[0] = 0
     ambiguous = extract(client, auth_headers, page, source)
     assert all(r["candidate_state"] == "CONFLICT" for r in ambiguous["rows"])
-    assert ambiguous["rows"][0]["payload"]["part_number"] == "QA-HUMAN-FIRST-OCCURRENCE"
+    assert ambiguous["rows"][0 if change == "count" else 1]["payload"]["part_number"] == "QA-HUMAN-FIRST-OCCURRENCE"
     assert all(c["state"] == "CONFLICT" for c in resume(client, auth_headers, page)["sources"][0]["candidates"])
 
 

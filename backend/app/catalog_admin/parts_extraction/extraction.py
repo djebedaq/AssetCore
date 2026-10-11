@@ -66,7 +66,7 @@ def extract_page(page, config: dict) -> dict:
                     ocr_used = True
             except (ValueError, RuntimeError, OSError, TimeoutError, subprocess.SubprocessError) as exc:
                 code = str(exc)
-                warnings.append(code if code in {"OCR_CELL_LIMIT", "OCR_PIXEL_LIMIT", "OCR_TIME_BUDGET"}
+                warnings.append(code if code in {"OCR_CELL_LIMIT", "OCR_PIXEL_LIMIT", "OCR_TIME_BUDGET", "PAGE_WORD_LIMIT"}
                                 else "CELL_OCR_UNAVAILABLE")
             rows, tables, coverage, summaries = quality.choose(strategies)
             if (not rows or coverage["state"] != "COMPLETE_CANDIDATES") and deadline - time.monotonic() > 3:

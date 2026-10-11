@@ -49,7 +49,7 @@ Metadata таблици без BOM семантика се отхвърлят с
 
 Един ред използва PSM7; измерени многострочни клетки — PSM6. Езикът на описанията се определя от локалните семантични заглавия, независимо кой модел е успял да ги прочете: английски прочит на „Benennung/Menge“ избира немски модел за описанието. До 24 празни/нискоуверени клетки имат един selective autocontrast retry. Различните прочити остават evidence; няма O/0, I/1, кирилица/латиница или пунктуационни подмени. Confidence е помощен сигнал.
 
-Ограничения: 512 клетки, 4 MiB TSV, до 35 s за CLI batch в общия page deadline; максимум 8 image области в aggregate pixel budget. `OMP_THREAD_LIMIT=1`. OCR/DPI/PSM/езици не са нови UI настройки.
+Ограничения: 512 клетки, 4 MiB TSV, до 35 s за CLI batch в общия page deadline; максимум 8 image области в aggregate pixel budget. Cell words, включително запазените алтернативни прочити, спазват същия page word budget като native стратегията. `OMP_THREAD_LIMIT=1`. OCR/DPI/PSM/езици не са нови UI настройки.
 
 ## 6. Transparency masks
 
@@ -75,7 +75,7 @@ Artifact bytes се проверяват срещу записания SHA-256 �
 
 Уникалните оригинални payload-и запазват съществуващата stable identity без bbox dependence. За отделни еднакви видими редове се добавя occurrence key от локалния table/row index. Съществуващите unique constraints не се премахват. Повторена еднаква позиция/Part Number получава отделна reconciliation задача: няма автоматично сливане; операторът може изрично и с audit причина да свърже оригиналните occurrences към съществуваща част. И двете оригинални геометрии/кандидати остават записани.
 
-Повторно извличане не презаписва `candidate.values` или потвърдена част. Различен OCR номер за поправен ред води до reconciliation конфликт. Променен брой еднакви occurrences след човешка работа блокира автоматичното прехвърляне на поправката и създава `OCCURRENCE_SET_CHANGED`. Оригиналните клетки и всички attempts остават достъпни.
+Повторно извличане не презаписва `candidate.values` или потвърдена част. Различен OCR номер за поправен ред води до reconciliation конфликт. Променен набор от occurrence identities след човешка работа създава `OCCURRENCE_SET_CHANGED`, включително при същия брой редове, но изместени table/row ordinals. Поправката остава записана, но двусмисленото прехвърляне към друг еднакъв ред изисква reconciliation. Оригиналните клетки и всички attempts остават достъпни.
 
 ## 10. Частични резултати
 
@@ -114,9 +114,9 @@ Incomplete quality изисква original inspection и изрична manual c
 
 Финалните машинночетими отчети съдържат измерванията за точния Linux image и implementation hashes. Sampling е 20 ms, process-tree RSS включва controller-а; кратки пикове между пробите може да не се уловят. Queue wait е 0: съществуващият semaphore връща busy при зает слот, без неограничена опашка.
 
-Финален Linux image след temp-dir cleanup корекцията: Tesseract 5.5.0, PyMuPDF 1.26.7, Pillow 12.3.0, Python 3.12.15. За трите точни повторения page 13: wall 3.68–4.00 s, CPU 3.61–3.93 s, RSS 350.68–351.62 MiB; native page 15: wall 0.58–0.62 s, CPU 0.54–0.61 s, RSS 174.30–175.13 MiB, без OCR. Windows: image wall 3.69–6.59 s, native wall 0.44–0.84 s. Предходен Linux image опит при силно паралелно host QA натоварване достигна 42.03 s, близо до 45 s deadline; това остава отчетено, без latency SLA.
+Финален Linux image след cleanup/identity/word-budget корекциите: Tesseract 5.5.0, PyMuPDF 1.26.7, Pillow 12.3.0, Python 3.12.15. За трите точни повторения page 13: wall 3.55–3.84 s, CPU 3.54–3.68 s, RSS 350.16–351.45 MiB; native page 15: wall 0.57–0.57 s, CPU 0.54–0.56 s, RSS 173.96–174.88 MiB, без OCR. Windows: image wall 3.59–8.36 s, native wall 0.42–0.97 s. Предходен Linux image опит при силно паралелно host QA натоварване достигна 42.03 s, близо до 45 s deadline; това остава отчетено, без latency SLA.
 
-Два едновременни Linux worker-а в общ 1 GiB / 2 CPU контейнер върху финалния код: два точни резултата 20/20, aggregate wall 27.43 s, CPU 43.27 s, peak tree RSS 771.77 MiB, максимум 5 процеса включително controller, 0 останали descendants. Измервателят обхваща children на всички spawning threads. Начален опит едновременно с други Linux QA операции достигна timeout; отделните повторения преминаха без увеличение на лимити (предходно измерване: 17.24 s / 602.01 MiB). Отказът и ограничението са записани в concurrent отчета.
+Два едновременни Linux worker-а в общ 1 GiB / 2 CPU контейнер върху финалния код: два точни резултата 20/20, aggregate wall 4.04 s, CPU 7.48 s, peak tree RSS 604.85 MiB, максимум 5 процеса включително controller, 0 останали descendants. Измервателят обхваща children на всички spawning threads. Начален опит едновременно с други Linux QA операции достигна timeout; отделните повторения преминаха без увеличение на лимити (предходно измерване: 17.24 s / 602.01 MiB). Отказът и ограничението са записани в concurrent отчета.
 
 Page timeout ~45 s, worker address-space boundary 1 GiB, raster budget 16M pixels, word/output/input limits и parser slots не са увеличавани. Unix worker е private process group; timeout/cancellation и worker crash убиват останалите OCR descendants. Съществуващото production Compose `init: true` осигурява reaping на orphan/zombie процеси; Linux negative QA използва същата граница и изисква PID да изчезне. Windows запазва Job Object границата. Worker TMPDIR/TEMP/TMP сочат private parent-owned директория: PNG/cell файловете се почистват и при принудително прекратяване, когато worker finalizers не могат да се изпълнят. Timeout/crash тестът проверява и липсата на тези файлове. OCR може да се изключи чрез съществуващата настройка; publication gate остава активен.
 
@@ -131,9 +131,10 @@ Linux runtime smoke съдържа 11 реални OCR случая: обикн�
 | Локална проверка | Резултат |
 |---|---|
 | Linux extraction / durable review / multipage / process boundaries | 83 passed, 3 warnings, 238.87 s; последвани от 2/2 финални timeout/crash + PNG cleanup проверки (2.69 s) |
+| Финални adaptive/durable/authorization инварианти | 55 passed, 3 warnings, 146.70 s; включително shifted occurrences, page word budget и parent PNG cleanup |
 | PostgreSQL 16: N-source context + concurrent review/NOWAIT transaction release | 2 passed, 3 warnings, 100.31 s |
 | Frontend full Vitest, BG/EN/RU parity | 589 passed / 64 files; пълен повторен прогон след един QR timeout при натоварване, без промяна на assertions |
-| Финални GuidedParts/GuidedBuilder/RevisionVisualSources | 13 passed / 3 files |
+| Финални GuidedParts/GuidedBuilder/RevisionVisualSources | 13 passed / 3 files; след word-budget предупреждението още 6/6 GuidedParts + typecheck/lint PASS |
 | Typecheck, lint, frontend build, Ruff, compileall | PASS; съществуващ Vite chunk-size advisory |
 | Migration history / authorization inventory | 33 protected migrations; 281 routes / 145 mutating, PASS |
 | Release verifier / verified source anchors | 26/26, 19 машини / 611 части, PASS |
@@ -141,7 +142,7 @@ Linux runtime smoke съдържа 11 реални OCR случая: обикн�
 | Linux image + реални CLI OCR / LibreOffice / PARTS-DOC smokes | PASS; 11 adaptive OCR случая + съществуващ OCR, runtime, appendix и Builder DOCX/PDF |
 | D13 exact / Edge browser | 3×30/30 Linux, 3×30/30 Windows; UI correction/refresh/retry/source-review gate PASS, 0 page errors |
 
-Пълните локални Windows backend/PostgreSQL серии са **прекъснати, не PASS**: около 87 min, backend progress 50% и PostgreSQL 64 progress marks без отчетен отказ, при 678 MiB свободна RAM от 8127 MiB. Backend серията е започнала преди последните допълнителни тестове. Спрени са само собствените QA process trees; PostgreSQL wrapper е почистил собствения си контейнер/volume. Начални PostgreSQL readiness и LibreOffice conversion откази при това натоварване са последвани от успешни изолирани повторения. Лимитите и assertions не са отслабени.
+Пълните локални Windows backend/PostgreSQL серии са **прекъснати, не PASS**: около 87 min, backend progress 50% и PostgreSQL 64 progress marks без отчетен отказ, при 678 MiB свободна RAM от 8127 MiB. Backend серията е започнала преди последните допълнителни тестове. Спрени са само собствените QA process trees; PostgreSQL wrapper е почистил собствения си контейнер/volume. Начални PostgreSQL readiness и LibreOffice conversion откази при това натоварване са последвани от успешни изолирани повторения. Допълнителен прогон на 55 теста имаше един timeout при synthetic PDF upload в setup, преди authorization assertions, едновременно с Docker frontend compilation; пълният изолиран повторен прогон е 55/55 PASS. Лимитите и assertions не са отслабени.
 
 Окончателният пълен backend/SQLite, PostgreSQL, frontend и Docker резултат се потвърждава чрез GitHub Actions върху точния PR HEAD; immutable CI URL, counts и ограничения се предават в PR описанието. Незавършените локални серии не се представят като заместител на този CI резултат. Машинночетими локални доказателства: [QA verification](qa/catalog-builder-03b/verification.json).
 
@@ -158,6 +159,8 @@ Windows CLI е локален QA инструмент, не нов distribution 
 Миграции 0001–0033 не са променяни. Няма VERIFIED backfill. Старите attempts/drafts се възобновяват чрез 03A ledger; published/retired revisions, signed DOCX/PDF, snapshots, machine IDs, Falch numbering, HPWJ seed, source registers и factory fingerprints не се променят. Publication digest включва актуалното review състояние и concurrent/stale промяна не може да го прескочи.
 
 Работено е само в development и изолирани QA ресурси. Production директория, DB, конфигурации, услуги и публичната инсталация не са достъпвани. Няма deployment или merge.
+
+Browser QA сървърите са спрени и собствените PostgreSQL контейнери/volumes са почистени. Автоматична проверка отказа изтриването на временните локални browser SQLite файлове с „blocked by policy“; те са запазени извън Git, заедно с локалните QA доказателства.
 
 ## 18. Остава за 03C
 

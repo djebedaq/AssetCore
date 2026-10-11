@@ -278,9 +278,12 @@ def reconcile(db, actor, source, evidence, active):
     original_groups = {}
     for candidate in previous:
         original_groups.setdefault(hashed(candidate.original["payload"]), []).append(candidate)
-    current_groups = Counter(hashed(row["payload"]) for row in evidence["rows"])
+    current_groups = {}
+    for row in evidence["rows"]:
+        current_groups.setdefault(hashed(row["payload"]), set()).add(row_key(row))
     uncertain_occurrences = {key for key, group in original_groups.items()
-        if max(len(group), current_groups[key]) > 1 and len(group) != current_groups[key]
+        if max(len(group), len(current_groups.get(key, set()))) > 1
+        and {c.stable_key for c in group} != current_groups.get(key, set())
         and any(c.part_id or c.state == "REJECTED" or c.values != c.original["payload"] for c in group)}
     legacy = list(db.scalars(select(CatalogRevisionPart).join(CatalogRevisionPartPageMap,
         CatalogRevisionPartPageMap.part_id == CatalogRevisionPart.id).where(

@@ -114,7 +114,7 @@
       "name": "Production-oriented Linux image build in development",
       "command": "docker build --tag assetcore-catalog-03b-final:dev .",
       "status": "PASS",
-      "manifest_sha256": "fadcd90dc9845eb5291ac724c24c7f4f702dbc15aecbb337a27642689db52cd6"
+      "manifest_sha256": "64ec5b6b569d58bdd59ea7a0192df505daa20ed52a197ee82cf78234e3b8fc31"
     },
     {
       "name": "Real Linux D13",
@@ -190,6 +190,38 @@
       "warnings": 3,
       "seconds": 2.69,
       "runtime": "Current final Linux code, init, network none"
+    },
+    {
+      "name": "Final adaptive / durable review / authorization invariants",
+      "command": "python -m pytest -q --tb=short -p no:cacheprovider tests/test_catalog_adaptive_extraction.py tests/test_catalog_durable_review.py",
+      "status": "PASS",
+      "passed": 55,
+      "warnings": 3,
+      "seconds": 146.7,
+      "runtime": "Final current Linux code, init, network none",
+      "observations": "Earlier combined run: 54 passed, one synthetic source-upload setup timeout before authorization assertions while frontend Docker compilation competed for host resources. Complete isolated rerun passed; assertions and limits unchanged."
+    },
+    {
+      "name": "Final GuidedParts resource warning / translations integration",
+      "command": "pnpm --dir frontend exec vitest run src/features/catalogBuilder/GuidedParts.test.tsx --maxWorkers=2",
+      "status": "PASS",
+      "files": 1,
+      "passed": 6,
+      "seconds": 65.31
+    },
+    {
+      "name": "Final frontend typecheck / lint",
+      "command": "pnpm --dir frontend typecheck; pnpm --dir frontend lint",
+      "status": "PASS"
+    },
+    {
+      "name": "Before-fix negative proofs",
+      "status": "DEFECTS_REPRODUCED_THEN_FIXED",
+      "cases": [
+        "Same number of identical visible rows with shifted ordinals did not force reconciliation after a human correction.",
+        "Cell OCR did not enforce the existing native page word budget."
+      ],
+      "after_fix": "Covered by the complete final 55-test PASS; no authorization assertions or resource limits weakened."
     }
   ],
   "final_ci": "Full Linux backend, PostgreSQL, frontend and Docker checks are required on the exact PR HEAD. Their immutable GitHub Actions logs and final counts are linked in the PR description; local interrupted series above are not substituted for those results.",
@@ -201,7 +233,8 @@
     "roles_added": false,
     "db_migrations_added": false,
     "worker_limits_increased": false,
-    "ux_03c_started": false
+    "ux_03c_started": false,
+    "browser_sqlite_cleanup": "RETAINED_OUTSIDE_GIT: deletion of own temporary QA files rejected by automatic approval review (blocked by policy). Browser servers stopped; own PostgreSQL containers/volumes removed."
   },
   "limitations": [
     "No universal OCR accuracy claim across all manufacturers; real D13 plus manufacturer-neutral fixtures.",
