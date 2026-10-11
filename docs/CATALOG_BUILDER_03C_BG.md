@@ -157,6 +157,9 @@ Desktop: една компактна таблица и сравнение PDF/р
 Премахнат е наследеният table min-width, който иначе скрива Part Number извън мобилната карта.
 Браузърните assertions проверяват и document overflow, и вътрешния overflow на parts изгледа.
 Проверени ширини: 390, 768 и 1440 px.
+Touch targets не променят размерите на marker overlay: общият минимален размер на бутоните
+изключва геометричните маркери, които запазват съществуващия отделен hit target. Реални touch
+поставяния при трите ширини проверяват и съответствието на видимите размери с normalized geometry.
 
 Има semantic buttons/labels/status/alerts, keyboard row selection, editor heading focus,
 видим focus ring, modal focus trap/restoration, Escape и 44 px mobile action targets.

@@ -5,7 +5,7 @@ const require = createRequire(import.meta.url), modulePath = process.env.PLAYWRI
 const { chromium } = require(modulePath)
 const expect = require(modulePath + '/test').expect.configure({ timeout: 60000 })
 const browser = await chromium.launch({ headless: true, ...(process.env.QA_BROWSER_CHANNEL ? { channel: process.env.QA_BROWSER_CHANNEL } : {}) })
-const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+const context = await browser.newContext({ hasTouch: true, viewport: { width: 1440, height: 1000 } })
 const page = await context.newPage(), base = process.env.PUBLIC_BASE_URL, out = process.env.QA_OUTPUT
 page.setDefaultTimeout(60000)
 const errors = [], checks = [], extracted = []
@@ -157,22 +157,53 @@ try {
   await button('Цяла страница').click()
   for (let index = 0; index < 10; index++) {
     await expect(page.getByText(`Щракнете позиция ${index + 1} върху схемата.`, { exact: true })).toBeVisible()
-    const canvas = page.locator('.builder-scheme-canvas'), box = await canvas.boundingBox()
-    await canvas.click({ position: { x: box.width * (80 + index % 5 * 140) / 850, y: box.height * (145 + Math.floor(index / 5) * 140) / 650 } })
+    const width = index < 3 ? 390 : index < 6 ? 768 : 1440
+    await page.setViewportSize({ width, height: 1000 }); await button('Цяла страница').click()
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const canvas = page.locator('.builder-scheme-canvas')
+    await canvas.scrollIntoViewIfNeeded()
+    const box = await canvas.boundingBox()
+    await page.touchscreen.tap(box.x + box.width * (80 + index % 5 * 140) / 850, box.y + box.height * (145 + Math.floor(index / 5) * 140) / 650)
     await expect.poll(async () => (await api(`/reference-pages/${referenceId}/coverage`)).filter(row => row.state === 'VERIFIED').length).toBe(index + 1)
     await expect(button('Точка')).toBeEnabled()
+    // The last saved marker remains selected as a draft overlay; coverage above
+    // proves verification independently of the rendered selection class.
+    await expect(canvas.locator('.builder-hotspot')).toHaveCount(index + 1)
+    await expect.poll(() => canvas.locator('.builder-hotspot').evaluateAll(nodes => nodes.every(node => {
+      const rect = node.getBoundingClientRect(), parent = node.parentElement.getBoundingClientRect()
+      const css = getComputedStyle(node)
+      // A subpixel 0.2% point still has its existing one-pixel border on both sides.
+      const borderWidth = parseFloat(css.borderLeftWidth) + parseFloat(css.borderRightWidth)
+      const borderHeight = parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth)
+      return css.minHeight === '0px' && css.minWidth === '0px'
+        && Math.abs(rect.width - Math.max(borderWidth, parent.width * parseFloat(node.style.width) / 100)) < 1
+        && Math.abs(rect.height - Math.max(borderHeight, parent.height * parseFloat(node.style.height) / 100)) < 1
+    }))).toBe(true)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.screenshot({ path: out + `/touch-hotspots-${width}.png`, fullPage: true })
   }
+  await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: out + '/hotspots-1440.png', fullPage: true })
   await task(/Публикуване/)
   await expect(button('Публикувай каталог')).toBeEnabled()
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 })
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await expect(button('Публикувай каталог')).toBeEnabled()
+  }
   await page.screenshot({ path: out + '/ready-1440.png', fullPage: true })
   await button('Публикувай каталог').click()
   await expect(page.getByText('Каталогът е публикуван.', { exact: true })).toBeVisible()
-  checks.push('Ten actual synthetic callouts placed, saved, verified and advanced in ten clicks; complete reviewed synthetic catalog publishes through UI')
+  checks.push('Ten actual synthetic callouts placed, saved, verified and advanced with touch at 390/768/1440; overlay dimensions match normalized geometry; responsive reviewed synthetic catalog publishes through UI')
   expect(errors).toEqual([])
   await writeFile(out + '/results.json', JSON.stringify({ passed: true, checks, pageErrors: errors, syntheticOnly: true, productionAccess: false }, null, 2))
   console.log(JSON.stringify({ checks, pageErrors: errors }))
 } catch (error) {
+  console.error('Marker layout diagnostics:', JSON.stringify(await page.locator('.builder-hotspot.verified').evaluateAll(nodes => nodes.map(node => ({
+    width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height,
+    parentWidth: node.parentElement.getBoundingClientRect().width, parentHeight: node.parentElement.getBoundingClientRect().height,
+    styleWidth: node.style.width, styleHeight: node.style.height, minHeight: getComputedStyle(node).minHeight,
+  }))).catch(() => [])))
   await page.screenshot({ path: out + '/failure.png', fullPage: true }).catch(() => {})
   console.error(String(error.stack || error).replaceAll(process.env.QA_PASSWORD, '[redacted]')); process.exitCode = 1
 } finally { await browser.close() }

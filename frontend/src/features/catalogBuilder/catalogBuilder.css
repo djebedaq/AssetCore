@@ -1,6 +1,6 @@
 .catalog-workbench { font-size: 14px; }
 .catalog-workbench [hidden] { display: none !important; }
-.catalog-workbench button, .catalog-workbench summary { min-height: 40px; }
+.catalog-workbench button:not(.builder-hotspot), .catalog-workbench summary { min-height: 40px; }
 .catalog-workbench button:focus-visible, .catalog-workbench summary:focus-visible,
 .catalog-workbench input:focus-visible, .catalog-workbench select:focus-visible { outline: 3px solid #287cb8; outline-offset: 2px; }
 .catalog-context { color: #526576; margin: 0 0 10px; }
@@ -57,7 +57,7 @@
   .part-comparison { grid-template-columns: minmax(0, 1fr) 280px; }
 }
 @media (max-width: 700px) {
-  .catalog-workbench button, .catalog-workbench summary { min-height: 44px; }
+  .catalog-workbench button:not(.builder-hotspot), .catalog-workbench summary { min-height: 44px; }
   .catalog-workbench .panel { padding: 10px; }
   .catalog-navigation button { font-size: 12px; }
   .catalog-navigation button span { width: 20px; height: 20px; }

@@ -8,7 +8,7 @@
     "frontend_vitest": {
       "passed": 604,
       "files": 66,
-      "wall_seconds": 104.05,
+      "wall_seconds": 115.98,
       "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=2"
     },
     "backend_targeted": {
