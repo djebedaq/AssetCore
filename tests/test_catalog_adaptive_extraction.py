@@ -346,9 +346,10 @@ def test_timeout_kills_worker_and_child_without_application_environment(tmp_path
     launch = subprocess.Popen
     workers = []
     def fake_worker(args, **kwargs):
-        program = ("import os,sys,subprocess,json,time; from pathlib import Path; "
+        program = ("import os,sys,subprocess,json,time,tempfile; from pathlib import Path; "
             "child=subprocess.Popen([sys.executable,'-c','import time; time.sleep(120)']); "
-            f"Path({str(marker)!r}).write_text(json.dumps([child.pid,'SECRET_KEY' in os.environ])); "
+            "temporary=tempfile.mkdtemp(); (Path(temporary)/'private-cell.png').write_bytes(b'QA'); "
+            f"Path({str(marker)!r}).write_text(json.dumps([child.pid,'SECRET_KEY' in os.environ,temporary])); "
             + ("sys.exit(1)" if crash else "time.sleep(120)"))
         worker = launch([sys.executable, "-c", program], **kwargs)
         workers.append(worker)
@@ -358,8 +359,9 @@ def test_timeout_kills_worker_and_child_without_application_environment(tmp_path
     with pytest.raises(HTTPException) as error:
         process.extract(b"invalid synthetic PDF", "page", 1, {"timeout": 2})
     assert error.value.detail["code"] == ("catalog_extraction_resource_limit" if crash else "catalog_extraction_timeout")
-    pid, inherited_secret = json.loads(marker.read_text())
+    pid, inherited_secret, temporary = json.loads(marker.read_text())
     assert not inherited_secret and workers[0].poll() is not None
+    assert not Path(temporary).exists()
     status = Path(f"/proc/{pid}/stat")
     # Match the existing production Compose init:true contract. Require reaping,
     # including zombies, rather than merely checking that CPU use has stopped.

@@ -18,7 +18,7 @@
       "passed": 83,
       "warnings": 3,
       "seconds": 238.87,
-      "runtime": "Linux Docker, current frozen product code, init, network none"
+      "runtime": "Linux Docker before final parent-owned temp-dir cleanup; final cleanup tested separately and full exact-head CI required."
     },
     {
       "name": "PostgreSQL 16 targeted current code: group context and concurrent review / transaction release",
@@ -114,7 +114,7 @@
       "name": "Production-oriented Linux image build in development",
       "command": "docker build --tag assetcore-catalog-03b-final:dev .",
       "status": "PASS",
-      "manifest_sha256": "48fed509e9153781ef5dc25eb753c77f9158d33775ed90a3558d1eba523a394d"
+      "manifest_sha256": "fadcd90dc9845eb5291ac724c24c7f4f702dbc15aecbb337a27642689db52cd6"
     },
     {
       "name": "Real Linux D13",
@@ -180,6 +180,16 @@
       "status": "PASS",
       "runtime": "Isolated current Linux runtime image; no external network",
       "observations": "Existing assertions unchanged."
+    },
+    {
+      "name": "Final worker timeout/crash: kill descendants, reap PID, remove private cell PNG/temp directory, sanitize environment",
+      "command": "python -m pytest -q --tb=short -p no:cacheprovider tests/test_catalog_adaptive_extraction.py -k timeout_kills",
+      "status": "PASS",
+      "passed": 2,
+      "deselected": 36,
+      "warnings": 3,
+      "seconds": 2.69,
+      "runtime": "Current final Linux code, init, network none"
     }
   ],
   "final_ci": "Full Linux backend, PostgreSQL, frontend and Docker checks are required on the exact PR HEAD. Their immutable GitHub Actions logs and final counts are linked in the PR description; local interrupted series above are not substituted for those results.",

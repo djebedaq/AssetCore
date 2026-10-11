@@ -42,6 +42,9 @@ def _extract(content: bytes, operation: str, number: int, config: dict) -> dict:
         env = {key: value for key, value in os.environ.items() if key.upper() in public_runtime}
         env["PYTHONPATH"] = str(Path(__file__).resolve().parents[3])
         env["OMP_THREAD_LIMIT"] = "1"
+        # Parent cleanup must own cell PNGs even after SIGKILL/Job termination,
+        # when the worker cannot run its own TemporaryDirectory finalizers.
+        env.update(TMPDIR=folder, TEMP=folder, TMP=folder)
         try:
             completed = subprocess.Popen([sys.executable, "-m", "app.catalog_admin.parts_extraction.worker",
                 str(source), str(output), operation, str(number), json.dumps(config)],

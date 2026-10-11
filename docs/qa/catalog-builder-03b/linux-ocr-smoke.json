@@ -20,7 +20,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 1.9554,
+        "wall_seconds": 0.8042,
         "ocr_used": true
       }
     },
@@ -45,7 +45,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 1.4395,
+        "wall_seconds": 0.817,
         "ocr_used": true
       }
     },
@@ -70,7 +70,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 0.9723,
+        "wall_seconds": 0.8061,
         "ocr_used": true
       }
     },
@@ -95,7 +95,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 0.8699,
+        "wall_seconds": 0.7525,
         "ocr_used": true
       }
     },
@@ -120,7 +120,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 0.8097,
+        "wall_seconds": 0.8075,
         "ocr_used": true
       }
     },
@@ -145,7 +145,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 1.4093,
+        "wall_seconds": 1.3761,
         "ocr_used": true
       }
     },
@@ -170,7 +170,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 0.7071,
+        "wall_seconds": 0.6018,
         "ocr_used": true
       }
     },
@@ -195,7 +195,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 2.8438,
+        "wall_seconds": 1.176,
         "ocr_used": true
       }
     },
@@ -214,7 +214,7 @@
         "needs_context": false
       },
       "metrics": {
-        "wall_seconds": 1.9572,
+        "wall_seconds": 1.1175,
         "ocr_used": true
       }
     },
@@ -239,7 +239,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 5.2104,
+        "wall_seconds": 1.8082,
         "ocr_used": true
       }
     },
@@ -264,7 +264,7 @@
         }
       },
       "metrics": {
-        "wall_seconds": 1.4333,
+        "wall_seconds": 1.1444,
         "ocr_used": true
       }
     }

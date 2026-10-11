@@ -114,11 +114,11 @@ Incomplete quality изисква original inspection и изрична manual c
 
 Финалните машинночетими отчети съдържат измерванията за точния Linux image и implementation hashes. Sampling е 20 ms, process-tree RSS включва controller-а; кратки пикове между пробите може да не се уловят. Queue wait е 0: съществуващият semaphore връща busy при зает слот, без неограничена опашка.
 
-Финален Linux image: Tesseract 5.5.0, PyMuPDF 1.26.7, Pillow 12.3.0, Python 3.12.15. За трите точни повторения page 13: wall 8.11–42.03 s, CPU 8.18–33.13 s, RSS 350.17–351.21 MiB; native page 15: wall 0.67–2.44 s, CPU 0.59–2.50 s, RSS 174.18–175.09 MiB. Вътрешният native анализ е 0.05–0.17 s и не използва OCR. Windows: image wall 4.11–22.81 s, native wall 0.56–2.64 s. Първият Linux image опит е близо до 45 s deadline при паралелно host QA натоварване; това не е прикрито като постоянна latency гаранция.
+Финален Linux image след temp-dir cleanup корекцията: Tesseract 5.5.0, PyMuPDF 1.26.7, Pillow 12.3.0, Python 3.12.15. За трите точни повторения page 13: wall 3.68–4.00 s, CPU 3.61–3.93 s, RSS 350.68–351.62 MiB; native page 15: wall 0.58–0.62 s, CPU 0.54–0.61 s, RSS 174.30–175.13 MiB, без OCR. Windows: image wall 3.69–6.59 s, native wall 0.44–0.84 s. Предходен Linux image опит при силно паралелно host QA натоварване достигна 42.03 s, близо до 45 s deadline; това остава отчетено, без latency SLA.
 
-Два едновременни Linux worker-а в общ 1 GiB / 2 CPU контейнер: два точни резултата 20/20, aggregate wall 17.24 s, CPU 28.23 s, peak tree RSS 602.01 MiB, максимум 5 процеса включително controller, 0 останали descendants. Измервателят обхваща children на всички spawning threads. Начален опит едновременно с други Linux QA операции достигна timeout; отделното повторение премина без увеличение на лимити. Отказът и ограничението са записани в concurrent отчета.
+Два едновременни Linux worker-а в общ 1 GiB / 2 CPU контейнер върху финалния код: два точни резултата 20/20, aggregate wall 27.43 s, CPU 43.27 s, peak tree RSS 771.77 MiB, максимум 5 процеса включително controller, 0 останали descendants. Измервателят обхваща children на всички spawning threads. Начален опит едновременно с други Linux QA операции достигна timeout; отделните повторения преминаха без увеличение на лимити (предходно измерване: 17.24 s / 602.01 MiB). Отказът и ограничението са записани в concurrent отчета.
 
-Page timeout ~45 s, worker address-space boundary 1 GiB, raster budget 16M pixels, word/output/input limits и parser slots не са увеличавани. Unix worker е private process group; timeout/cancellation и worker crash убиват останалите OCR descendants. Съществуващото production Compose `init: true` осигурява reaping на orphan/zombie процеси; Linux negative QA използва същата граница и изисква PID да изчезне. Windows запазва Job Object границата. Temporary files се почистват. OCR може да се изключи чрез съществуващата настройка; publication gate остава активен.
+Page timeout ~45 s, worker address-space boundary 1 GiB, raster budget 16M pixels, word/output/input limits и parser slots не са увеличавани. Unix worker е private process group; timeout/cancellation и worker crash убиват останалите OCR descendants. Съществуващото production Compose `init: true` осигурява reaping на orphan/zombie процеси; Linux negative QA използва същата граница и изисква PID да изчезне. Windows запазва Job Object границата. Worker TMPDIR/TEMP/TMP сочат private parent-owned директория: PNG/cell файловете се почистват и при принудително прекратяване, когато worker finalizers не могат да се изпълнят. Timeout/crash тестът проверява и липсата на тези файлове. OCR може да се изключи чрез съществуващата настройка; publication gate остава активен.
 
 ## 15. Регресии и проверка
 
@@ -130,7 +130,7 @@ Linux runtime smoke съдържа 11 реални OCR случая: обикн�
 
 | Локална проверка | Резултат |
 |---|---|
-| Linux extraction / durable review / multipage / process boundaries | 83 passed, 3 warnings, 238.87 s; текущият замразен продуктов код |
+| Linux extraction / durable review / multipage / process boundaries | 83 passed, 3 warnings, 238.87 s; последвани от 2/2 финални timeout/crash + PNG cleanup проверки (2.69 s) |
 | PostgreSQL 16: N-source context + concurrent review/NOWAIT transaction release | 2 passed, 3 warnings, 100.31 s |
 | Frontend full Vitest, BG/EN/RU parity | 589 passed / 64 files; пълен повторен прогон след един QR timeout при натоварване, без промяна на assertions |
 | Финални GuidedParts/GuidedBuilder/RevisionVisualSources | 13 passed / 3 files |
