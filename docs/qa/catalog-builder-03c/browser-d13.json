@@ -1,0 +1,39 @@
+{
+  "passed": true,
+  "checks": [
+    "Single UI action: page 13 exact 20/20, page 15 exact 10/10; all four fields and SHA/page provenance",
+    "One table retains 20/10 original source occurrences; responsive 390/768/1440 without page overflow; keyboard field focus",
+    "Human draft correction survives refresh; restored to inspected original before confirmation",
+    "Thirty confirmed parts remain blocked until both original sources receive explicit human review",
+    "Re-extraction keeps all candidate identities and creates no duplicate parts",
+    "Source decisions survive refresh; publication still blocked by unverified hotspot work (48/38 untouched)",
+    "Simplified hotspot workspace opens original; unresolved positions stay blocked; final readiness remains server-authoritative"
+  ],
+  "pageErrors": [],
+  "source_sha256": "e9540c2af79802d000f186381c403dfbca6ae6b58ecb6cb13b9ecec862558e42",
+  "productionAccess": false,
+  "actions": {
+    "measurement": "Trusted button/checkbox/summary click, Enter, select/file change; typing excluded; scripted QA, not a user study",
+    "baseline_commit": "9048bee81888aad31fb520d0b0d5e03a8b2d89d6",
+    "before": {
+      "catalog-and-pages": 18,
+      "recognize": 1,
+      "edit-refresh": 3,
+      "confirm-parts": 21,
+      "reextract": 2,
+      "review-sources": 7
+    },
+    "after": {
+      "catalog-and-pages": 18,
+      "recognize": 2,
+      "edit-refresh": 3,
+      "confirm-parts": 2,
+      "reextract": 3,
+      "review-sources": 9
+    },
+    "primary_path_before": 40,
+    "primary_path_after": 22,
+    "reduction_percent": 45
+  },
+  "publication": "BLOCKED_UNVERIFIED_HOTSPOTS_48_38_UNRESOLVED"
+}

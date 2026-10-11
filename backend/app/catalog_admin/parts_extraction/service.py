@@ -104,7 +104,8 @@ def _result(claim: dict, db: Session) -> dict:
             "candidate_version": candidate.version, "candidate_state": candidate.state})
     return {"token": _sign(claim), "source": claim["source"], "rows": rows,
             "tables": claim["tables"], "warnings": claim["warnings"], "method": claim["method"],
-            "quality": claim.get("quality"), "pipeline_version": claim.get("pipeline_version")}
+            "quality": claim.get("quality"), "pipeline_version": claim.get("pipeline_version"),
+            "page_geometry": claim.get("page_geometry")}
 
 
 def claim_for(db, actor, page, source, active, attempt):
@@ -115,7 +116,8 @@ def claim_for(db, actor, page, source, active, attempt):
         "attempt_id": attempt.id, "session_id": active.id, "evidence_digest": attempt.evidence_digest,
         "attempt_extractor": attempt.extractor,
         "rows": evidence["rows"], "tables": evidence["tables"], "warnings": evidence["warnings"],
-        "method": evidence["method"], "quality": evidence.get("quality"), "pipeline_version": evidence.get("pipeline_version")}
+        "method": evidence["method"], "quality": evidence.get("quality"), "pipeline_version": evidence.get("pipeline_version"),
+        "page_geometry": {key: evidence[key] for key in ("width", "height", "rotation_matrix") if key in evidence}}
 
 
 def selected_profiles(db, active, source):

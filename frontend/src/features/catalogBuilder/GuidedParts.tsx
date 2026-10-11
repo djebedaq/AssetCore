@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { api } from '../../api'
+import { api, ApiError, downloadApiFile } from '../../api'
 import { useI18n } from '../../i18n'
 import { guidedError } from './guidedErrors'
-import usePagePreview from './usePagePreview'
+import SourcePageViewer from './SourcePageViewer'
+import { evidenceRegion } from './evidenceGeometry'
+import Modal from './CatalogDialog'
 import RevisionParts from './RevisionParts'
 import DurableSourceReview from './DurableSourceReview'
 import { builderBase } from './wizardTypes'
-import type { PartValues, Preview, ReferencePage, ReviewSession, Source } from './guidedTypes'
+import type { PartValues, Preview, ReferencePage, ReviewSession, ReviewSource, Source } from './guidedTypes'
 
 type ReviewRow = { part: PartValues; selected: boolean; rejected: boolean; confirmed: boolean; reason: string }
 type Review = { preview: Preview; rows: ReviewRow[] }
@@ -14,10 +16,15 @@ type SourceResult = { source: Source; state: 'pending' | 'processed' | 'failed';
 const fields = ['position', 'part_number', 'description', 'quantity', 'technical_notes', 'technical_specification'] as const
 const roles = ['unknown', ...fields] as const
 
-function Original({ artifactId, number }: { artifactId: number; number: number }) {
-  const { t } = useI18n()
-  const preview = usePagePreview(artifactId, number)
-  return <div className="guided-original">{preview.error ? <div role="alert"><p>{t('builder.previewError')}</p><button className="secondary" onClick={preview.retry}>{t('wizard.retry')}</button></div> : preview.url ? <img src={preview.url} onError={preview.failed} alt={t('guided.physicalPage', { number })} /> : <p role="status">{t('builder.previewPending')}</p>}</div>
+// A failed retry can retain durable candidates without a confirmable preview.
+// Display those values, but never invent an actor-bound confirmation token.
+function retainedPreview(source: ReviewSource, parts: Array<PartValues & { id: number }>): Preview | null {
+  return source.preview || (source.candidates.length ? {
+    token: '', source: source.source, tables: [], warnings: [], method: '',
+    rows: source.candidates.map(candidate => ({ payload: candidate.state === 'ACCEPTED' ? parts.find(part => part.id === candidate.part_id) || candidate.values : candidate.values,
+      raw_text: candidate.original.raw_text || '', bbox: candidate.original.bbox, warnings: candidate.original.warnings || [],
+      candidate_id: candidate.id, candidate_version: candidate.version, candidate_state: candidate.state })),
+  } : null)
 }
 
 function Mapping({ preview, tableIndex, apply, busy }: { preview: Preview; tableIndex: number;
@@ -35,7 +42,7 @@ function Mapping({ preview, tableIndex, apply, busy }: { preview: Preview; table
   </section>
 }
 
-export default function GuidedParts({ page, changed, onDirtyChange, targetSourceId }: { page: ReferencePage; targetSourceId?: number;
+export default function GuidedParts({ page, changed, onDirtyChange, targetSourceId, targetPartId, stage = 'parts', onContinue }: { page: ReferencePage; targetSourceId?: number; targetPartId?: number; stage?: 'extract' | 'parts'; onContinue?: () => void;
   changed: () => Promise<void>; onDirtyChange: (dirty: boolean) => void }) {
   const { t } = useI18n()
   const [reviews, setReviews] = useState<Review[]>([])
@@ -45,38 +52,60 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [filter, setFilter] = useState<'all' | 'attention' | 'errors' | 'rejected' | 'clean' | 'accepted'>('all')
   const [search, setSearch] = useState('')
-  const [sourceIndex, setSourceIndex] = useState<number | null>(null)
+  const [activeRow, setActiveRow] = useState<string | null | undefined>(undefined)
+  const [tools, setTools] = useState(false)
+  const [editPartId, setEditPartId] = useState<number | undefined>()
+  const editorTitle = useRef<HTMLHeadingElement>(null)
+  useEffect(() => { if (activeRow) editorTitle.current?.focus() }, [activeRow])
   const [error, setError] = useState('')
   const [advancedDirty, setAdvancedDirty] = useState(false)
+  const [sourceReviewDirty, setSourceReviewDirty] = useState(false)
   const [session, setSession] = useState<ReviewSession | null>(null)
   const [unsaved, setUnsaved] = useState(false)
   const saveQueue = useRef<Promise<void>>(Promise.resolve())
-  const editGeneration = useRef(0)
   const candidateVersions = useRef(new Map<number, number>())
-  const [pendingEdit, setPendingEdit] = useState<{ source: number; index: number } | null>(null)
-  useEffect(() => {
-    if (!pendingEdit) return
-    const timer = setTimeout(() => saveRow(pendingEdit.source, pendingEdit.index), 600)
-    return () => clearTimeout(timer)
-  }, [pendingEdit])
+  const currentReviews = useRef<Review[]>([])
+  const generations = useRef(new Map<number, number>())
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
+  const pending = useRef(new Map<number, { source: number; index: number }>())
+  const [saveStates, setSaveStates] = useState<Record<number, 'saving' | 'saved' | 'saveError' | 'conflict'>>({})
+  const dirtyIds = useRef(new Set<number>())
+  const loadGeneration = useRef(0)
+  const scope = useRef(page.id)
+  scope.current = page.id
+  currentReviews.current = reviews
+  useEffect(() => () => { timers.current.forEach(clearTimeout) }, [])
   function review(preview: Preview): Review {
     return { preview, rows: preview.rows.map(row => ({ part: { ...row.payload },
-      selected: !row.warnings.length && !['ACCEPTED', 'REJECTED', 'CONFLICT'].includes(row.candidate_state || ''),
+      selected: !!preview.token && !row.warnings.length && !['ACCEPTED', 'REJECTED', 'CONFLICT'].includes(row.candidate_state || ''),
       rejected: row.candidate_state === 'REJECTED', confirmed: row.candidate_state === 'ACCEPTED', reason: '' })) }
   }
   async function load() {
+    const generation = ++loadGeneration.current
     const [parts, durable] = await Promise.all([
       api<Array<PartValues & { id: number }>>(`${builderBase}/reference-pages/${page.id}/parts`),
       api<ReviewSession>(`${builderBase}/reference-pages/${page.id}/review-session`, { method: 'POST' }),
     ])
     if (!Array.isArray(durable.sources)) throw new Error('review_session_invalid')
+    if (scope.current !== page.id || dirtyIds.current.size || generation !== loadGeneration.current) return
     setAccepted(parts); setSession(durable)
-    candidateVersions.current = new Map(durable.sources.flatMap(source => source.preview?.rows || [])
-      .flatMap(row => row.candidate_id && row.candidate_version ? [[row.candidate_id, row.candidate_version] as const] : []))
-    setReviews(durable.sources.flatMap(source => source.preview ? [review(source.preview)] : []))
+    candidateVersions.current = new Map(durable.sources.flatMap(source => [
+      ...source.candidates.map(candidate => [candidate.id, candidate.version] as const),
+      ...(source.preview?.rows || []).flatMap(row => row.candidate_id && row.candidate_version ? [[row.candidate_id, row.candidate_version] as const] : []),
+    ]))
+    setReviews(durable.sources.flatMap(source => {
+      const preview = retainedPreview(source, parts)
+      return preview ? [review(preview)] : []
+    })
+      .sort((a, b) => sources.findIndex(source => source.id === a.preview.source.visual_page_id)
+        - sources.findIndex(source => source.id === b.preview.source.visual_page_id)))
   }
   useEffect(() => { void load().catch(() => setError(t('guided.error'))) }, [page.id, page.version])
-  useEffect(() => { onDirtyChange(busy || unsaved || advancedDirty); return () => onDirtyChange(false) }, [busy, unsaved, advancedDirty, onDirtyChange])
+  useEffect(() => { onDirtyChange(busy || unsaved || advancedDirty || sourceReviewDirty); return () => onDirtyChange(false) }, [busy, unsaved, advancedDirty, sourceReviewDirty, onDirtyChange])
+  useEffect(() => {
+    const target = session?.sources.flatMap(source => source.candidates).find(candidate => candidate.part_id === targetPartId)
+    if (target) setActiveRow(String(target.id))
+  }, [session?.id, targetPartId])
   const sources = page.sources.filter(source => source.role === 'SPARE_PARTS_LIST')
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
   async function extractSource(source: Source, previous: string | null, groupContext = false, contextOnly = false): Promise<Preview | null> {
@@ -129,32 +158,77 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
     }
   }
   function edit(source: number, index: number, values: Partial<ReviewRow>) {
-    if (values.part) { setUnsaved(true); editGeneration.current += 1; setPendingEdit({ source, index }) }
-    setReviews(current => current.map((item, sourceIndex) => sourceIndex !== source ? item : {
+    const candidate = currentReviews.current[source]?.preview.rows[index]
+    if (values.part && candidate?.candidate_id) {
+      const id = candidate.candidate_id
+      loadGeneration.current += 1
+      dirtyIds.current.add(id); setUnsaved(true)
+      generations.current.set(id, (generations.current.get(id) || 0) + 1)
+      setSaveStates(current => ({ ...current, [id]: 'saving' }))
+      pending.current.set(id, { source, index }); clearTimeout(timers.current.get(id))
+      timers.current.set(id, setTimeout(() => saveRow(source, index), 600))
+    }
+    const next = currentReviews.current.map((item, sourceIndex) => sourceIndex !== source ? item : {
       ...item, rows: item.rows.map((row, rowIndex) => rowIndex !== index ? row : { ...row, ...values }),
-    }))
+    })
+    currentReviews.current = next; setReviews(next)
   }
   function saveRow(source: number, index: number, action = 'SAVE') {
-    setPendingEdit(null)
-    const item = reviews[source], row = item.rows[index], candidate = item.preview.rows[index]
-    if (!candidate.candidate_id) return
-    const generation = editGeneration.current
+    const item = currentReviews.current[source], row = item?.rows[index], candidate = item?.preview.rows[index]
+    if (!candidate?.candidate_id || !row) return
+    const id = candidate.candidate_id
+    if (action === 'SAVE' && !pending.current.has(id)) return
+    clearTimeout(timers.current.get(id)); pending.current.delete(id)
+    const generation = generations.current.get(id) || 0, values = { ...row.part }, reason = row.reason
+    const pageId = page.id
+    dirtyIds.current.add(id); setUnsaved(true)
+    setSaveStates(current => ({ ...current, [id]: 'saving' }))
     saveQueue.current = saveQueue.current.catch(() => {}).then(async () => {
-      setError('')
-      const result = await api<{ version: number; state: string }>(`${builderBase}/extraction-candidates/${candidate.candidate_id}`, { method: 'PATCH', body: JSON.stringify({
-        expected_version: candidateVersions.current.get(candidate.candidate_id!) ?? candidate.candidate_version, action, ...(action === 'SAVE' ? { values: row.part } : { reason: row.reason }),
-      }) })
-      candidateVersions.current.set(candidate.candidate_id!, result.version)
-      setReviews(current => current.map(value => ({ ...value,
-        preview: { ...value.preview, rows: value.preview.rows.map(value => value.candidate_id === candidate.candidate_id
-          ? { ...value, candidate_version: result.version, candidate_state: result.state } : value) },
-        rows: value.rows.map((row, i) => value.preview.rows[i]?.candidate_id === candidate.candidate_id
-          ? { ...row, rejected: result.state === 'REJECTED' } : row),
-      })))
-      if (editGeneration.current === generation) setUnsaved(false)
-      setSession(await api<ReviewSession>(`${builderBase}/reference-pages/${page.id}/review-session`, { method: 'POST' }))
+      try {
+        const result = await api<{ version: number; state: string }>(`${builderBase}/extraction-candidates/${id}`, { method: 'PATCH', body: JSON.stringify({
+          expected_version: candidateVersions.current.get(id) ?? candidate.candidate_version, action, ...(action === 'SAVE' ? { values } : { reason }),
+        }) })
+        if (scope.current !== pageId) return
+        candidateVersions.current.set(id, result.version)
+        setReviews(current => current.map(value => ({ ...value,
+          preview: { ...value.preview, rows: value.preview.rows.map(value => value.candidate_id === id
+            ? { ...value, candidate_version: result.version, candidate_state: result.state } : value) },
+          rows: value.rows.map((row, i) => value.preview.rows[i]?.candidate_id === id
+            ? { ...row, rejected: result.state === 'REJECTED', confirmed: result.state === 'ACCEPTED' } : row),
+        })))
+        if ((generations.current.get(id) || 0) === generation) {
+          dirtyIds.current.delete(id); setUnsaved(dirtyIds.current.size > 0)
+          setSaveStates(current => ({ ...current, [id]: 'saved' }))
+        }
+        setSession(await api<ReviewSession>(`${builderBase}/reference-pages/${pageId}/review-session`, { method: 'POST' }))
+      } catch (caught) {
+        if (scope.current === pageId) {
+          setSaveStates(current => ({ ...current, [id]: caught instanceof ApiError && caught.status === 409 ? 'conflict' : 'saveError' }))
+          setError(t(guidedError(caught)))
+        }
+        throw caught
+      }
     })
-    void saveQueue.current.catch(caught => setError(t(guidedError(caught))))
+    void saveQueue.current.catch(() => {})
+  }
+  async function reloadRow(id: number) {
+    if (!window.confirm(t('catalogUx.reloadConfirm'))) return
+    setBusy(true)
+    try {
+      const durable = await api<ReviewSession>(`${builderBase}/reference-pages/${page.id}/review-session`, { method: 'POST' })
+      const source = durable.sources.find(source => source.candidates.some(candidate => candidate.id === id) || source.preview?.rows.some(row => row.candidate_id === id))
+      const preview = source ? retainedPreview(source, accepted) : null
+      const candidate = preview?.rows.find(row => row.candidate_id === id)
+      if (!preview || !candidate) { setError(t('guided.stale')); return }
+      clearTimeout(timers.current.get(id)); pending.current.delete(id); loadGeneration.current += 1
+      candidateVersions.current.set(id, candidate.candidate_version!)
+      setReviews(current => current.map(item => ({ ...item,
+        preview: { ...item.preview, rows: item.preview.rows.map(row => row.candidate_id === id ? candidate : row) },
+        rows: item.rows.map((row, index) => item.preview.rows[index].candidate_id === id ? review(preview).rows[preview.rows.indexOf(candidate)] : row),
+      })))
+      dirtyIds.current.delete(id); setUnsaved(dirtyIds.current.size > 0); setError('')
+      setSaveStates(current => ({ ...current, [id]: 'saved' })); setSession(durable)
+    } catch (caught) { setError(t(guidedError(caught))) } finally { setBusy(false) }
   }
   async function remap(index: number, tableIndex: number, mapping: Record<string, string>) {
     setBusy(true); setError('')
@@ -173,16 +247,28 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
     } catch (caught) { setError(t(guidedError(caught))) } finally { setBusy(false) }
   }
   async function confirm() {
-    if (busy) return
+    if (busy || unsaved || dirtyIds.current.size) return
     setBusy(true); setError('')
     try {
       await saveQueue.current
+      const fresh = await api<ReviewSession>(`${builderBase}/reference-pages/${page.id}/review-session`, { method: 'POST' })
       for (const [source, item] of reviews.entries()) {
-        const rows = item.rows.flatMap((row, index) => row.selected && !row.rejected && !row.confirmed ? [{ index, part: row.part,
+        const rows = item.rows.flatMap((row, index) => !!item.preview.token && row.selected && !row.rejected && !row.confirmed && valid(row) && item.preview.rows[index].candidate_state !== 'CONFLICT' ? [{ index, part: row.part,
           expected_version: candidateVersions.current.get(item.preview.rows[index].candidate_id!) ?? item.preview.rows[index].candidate_version }] : [])
         if (!rows.length) continue
+        const current = fresh.sources.find(value => value.visual_page_id === item.preview.source.visual_page_id)?.preview
+        if (!current || rows.some(row => {
+          const candidate = item.preview.rows[row.index], latest = current.rows[row.index]
+          return latest?.candidate_id !== candidate.candidate_id || latest?.candidate_version !== row.expected_version
+        })) {
+          for (const row of rows) {
+            const id = item.preview.rows[row.index].candidate_id
+            if (id) { dirtyIds.current.add(id); setSaveStates(value => ({ ...value, [id]: 'conflict' })) }
+          }
+          setUnsaved(true); setError(t('guided.stale')); return
+        }
         await api(`${builderBase}/reference-pages/${page.id}/extraction/confirm`, { method: 'POST', body: JSON.stringify({
-          token: item.preview.token, rows, confirm_warnings: true,
+          token: current.token, rows, confirm_warnings: true,
         }) })
         setReviews(current => current.map((value, index) => index !== source ? value : {
           ...value, rows: value.rows.map(row => row.selected && !row.rejected ? { ...row, selected: false, confirmed: true } : row),
@@ -191,79 +277,112 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
       setUnsaved(false); await load(); await changed()
     } catch (caught) { setError(t(guidedError(caught))) } finally { setBusy(false) }
   }
-  return <section className="guided-parts">
+  const allRows = reviews.flatMap((item, source) => item.rows.map((row, index) => ({ item, row, source, index,
+    candidate: item.preview.rows[index], key: String(item.preview.rows[index].candidate_id ?? `${item.preview.source.visual_page_id}:${index}`) })))
+  function valid(row: ReviewRow) {
+    return !!row.part.position?.trim() && !!row.part.part_number?.trim() && !!row.part.description?.trim()
+      && row.part.quantity !== null && row.part.quantity !== '' && Number.isFinite(Number(row.part.quantity)) && Number(row.part.quantity) >= 0 && /^\d{1,10}(?:\.\d{1,4})?$/.test(String(row.part.quantity))
+  }
+  const visible = allRows.filter(({ row, candidate }) => {
+    const attention = !valid(row) || candidate.warnings.length > 0 || candidate.candidate_state === 'CONFLICT'
+    return (filter === 'all' || filter === 'attention' && attention && !row.confirmed || filter === 'accepted' && row.confirmed
+      || filter === 'errors' && !valid(row) || filter === 'clean' && !attention || filter === 'rejected' && row.rejected)
+      && (filter === 'rejected' || !row.rejected)
+      && [row.part.position, row.part.part_number, row.part.description].join(' ').toLocaleLowerCase().includes(search.toLocaleLowerCase())
+  })
+  const active = activeRow === undefined ? allRows[0] : allRows.find(row => row.key === activeRow)
+  const canSelect = (entry: typeof allRows[number]) => !!entry.item.preview.token && valid(entry.row) && !entry.row.rejected && !entry.row.confirmed && entry.candidate.candidate_state !== 'CONFLICT'
+  return <section className="guided-parts" aria-busy={busy}>
     {error && <p role="alert" className="error">{error}</p>}
     {!page.spare_list_count && <p role="status">{t('guided.noLists')}</p>}
-    <details><summary>{t('guided.advanced')}</summary><RevisionParts assemblyId={page.assembly_id} referencePageId={page.id} editable onChanged={async () => { await load(); await changed() }} onDirtyChange={setAdvancedDirty} /></details>
-    {unsaved && <p role="status">{t('guided.savingChanges')}</p>}
-    <DurableSourceReview session={session} targetSourceId={targetSourceId} reload={async () => { await load(); await changed() }} parts={accepted} busy={busy || unsaved} />
-    <button className="primary" disabled={busy || unsaved || !!sourceResults.length || !page.spare_list_count} onClick={() => void extract()}>{t('guided.extract')}</button>
-    {progress && <p role="status">{t('guided.extracting', progress)}</p>}
-    {!!sourceResults.length && <div className="guided-source-results" aria-label={t('guided.lists')}>
-      {sourceResults.map(result => {
-        const item = reviews.find(value => value.preview.source.visual_page_id === result.source.id)
-        const attention = result.state === 'failed' || !!item && (!item.rows.length || item.preview.warnings.length > 0
-          || item.preview.tables.some(table => table.schema.state !== 'RESOLVED') || item.preview.rows.some(row => row.warnings.length))
-        return <div key={result.source.id} role={attention ? 'alert' : 'status'}>
-          <b>{result.source.filename} · {t('guided.physicalPage', { number: result.source.page_number })}</b>
-          {' · '}{t(result.state === 'pending' ? 'builder.previewPending' : attention ? 'guided.NEEDS_ATTENTION' : 'guided.clean')}
-          {item && <> · {t('guided.sourceRows', { count: item.rows.length })}</>}
-          {result.error && <p>{t(result.error)}</p>}
-          {(result.state === 'failed' || result.state === 'processed' && item?.preview.quality?.state === 'NEEDS_REVIEW') &&
-            <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(result.source)}>{t('wizard.retry')}</button>}
-        </div>
-      })}
-      <p role="status">{t('guided.sourceTotal', { count: reviews.reduce((total, item) => total + item.rows.length, 0), processed: sourceResults.filter(item => item.state !== 'pending').length, total: sourceResults.length })}</p>
-      {!reviews.length && !busy && <button className="secondary" onClick={() => setSourceResults([])}>{t('common.close')}</button>}
-    </div>}
-    {accepted.length > 0 && <details><summary>{t('guided.review')} ({accepted.length})</summary>
-      {accepted.map(part => <p key={part.id}>{part.position} · {part.part_number} · {part.description} · {part.quantity}</p>)}</details>}
-    {!!reviews.length && <>
-      <h4>{t('guided.review')}</h4>
-      <p role="status">{t('guided.summary', { count: reviews.reduce((total, item) => total + item.rows.length, 0), selected: reviews.reduce((total, item) => total + item.rows.filter(row => row.selected).length, 0) })}</p>
-      <div className="actions"><label>{t('guided.filter')}<select value={filter} onChange={event => setFilter(event.target.value as typeof filter)}>
-        {(['attention', 'all', 'clean', 'errors', 'accepted', 'rejected'] as const).map(value => <option value={value} key={value}>{t(`guided.${value}`)}</option>)}
-      </select></label><label>{t('common.search')}<input value={search} onChange={event => setSearch(event.target.value)} /></label>
-        <button className="secondary" disabled={busy} onClick={() => setReviews(current => current.map(item => ({ ...item,
-          rows: item.rows.map((row, index) => ({ ...row, selected: !row.rejected && !row.confirmed && !item.preview.rows[index].warnings.length })),
-        })))}>{t('guided.selectClean')}</button>
+    {stage === 'extract' && <>
+      <p>{t('catalogUx.recognizeHelp')}</p>
+      <button className={allRows.length ? "secondary" : "primary"} disabled={busy || unsaved || !page.spare_list_count} onClick={() => void extract()}>{t('guided.extract')}</button>
+      {progress && <p role="status">{t('guided.extracting', progress)}</p>}
+      <div className="guided-source-results" aria-label={t('guided.lists')}>
+        {sources.map(source => {
+          const result = sourceResults.find(value => value.source.id === source.id)
+          const item = reviews.find(value => value.preview.source.visual_page_id === source.id)
+          const durable = session?.sources.find(value => value.visual_page_id === source.id)
+          const failed = result?.state === 'failed' || durable?.processing_state === 'FAILED' || durable?.processing_state === 'CANCELLED'
+          return <div key={source.id}><b>{source.filename} · {t('guided.physicalPage', { number: source.page_number })}</b>
+            {' · '}{t(failed ? 'guided.processing.FAILED' : durable?.review_state === 'VERIFIED' ? 'guided.reviewState.VERIFIED' : item ? 'guided.attention' : 'guided.processing.QUEUED')}
+            {item && <> · {t('guided.sourceRows', { count: item.rows.length })}</>}
+            {result?.error && <p role="alert">{t(result.error)}</p>}
+            {(failed || item?.preview.quality?.state === 'NEEDS_REVIEW') && <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(source)}>{t('wizard.retry')}</button>}
+          </div>
+        })}
+        <p role="status">{t('guided.sourceTotal', { count: allRows.length, processed: sourceResults.length ? sourceResults.filter(item => item.state !== 'pending').length : session?.sources.filter(item => item.attempts.length).length || 0, total: sources.length })}</p>
       </div>
-      {reviews.map((item, source) => <section key={source}>
-        <h4>{item.preview.source.filename} · {t('guided.physicalPage', { number: item.preview.source.page_number })} ({item.rows.length})</h4>
-        {item.preview.quality && <p role={item.preview.quality.state === 'NEEDS_REVIEW' ? 'alert' : 'status'}>
-          {t('guided.coverage', { observed: item.preview.quality.observed_rows, count: item.preview.quality.candidate_rows })}
-          {item.preview.quality.state === 'NEEDS_REVIEW' && <> {t('guided.coverageIncomplete')}</>}
-        </p>}
-        {(['OCR_UNAVAILABLE', 'OCR_DISABLED', 'OCR_PIXEL_LIMIT', 'TABLE_DETECTION_FAILED', 'CONTINUATION_UNRESOLVED',
-          'ROW_COVERAGE_INCOMPLETE', 'BORDERLESS_COVERAGE_UNCERTAIN', 'RASTER_COVERAGE_UNRESOLVED',
-          'CELL_OCR_UNAVAILABLE', 'OCR_CELL_LIMIT', 'OCR_TIME_BUDGET', 'PAGE_WORD_LIMIT'] as const)
-          .filter(warning => item.preview.warnings.includes(warning)).map(warning => <p role="alert" key={warning}>{t(`guided.${warning}`)}</p>)}
-        {!item.rows.length && <p role="status">{t('guided.noRows')}</p>}
-        {item.preview.tables.map((table, tableIndex) => table.schema.state !== 'RESOLVED' ? <Mapping
-          key={`${item.preview.token.slice(-12)}-${tableIndex}`} preview={item.preview} tableIndex={tableIndex} busy={busy || unsaved} apply={mapping => void remap(source, tableIndex, mapping)} /> : <details key={`${item.preview.token.slice(-12)}-${tableIndex}`}><summary>{t('guided.mapping')}</summary><Mapping
-          preview={item.preview} tableIndex={tableIndex} busy={busy || unsaved || item.rows.some(row => row.confirmed)} apply={mapping => void remap(source, tableIndex, mapping)} /></details>)}
-        <button className="secondary" onClick={() => setSourceIndex(sourceIndex === source ? null : source)}>{t('guided.sourceView')}</button>
-        {sourceIndex === source && <Original artifactId={item.preview.source.artifact_id} number={item.preview.source.page_number} />}
-        <div className="table-wrap"><table><thead><tr><th>{t('guided.selected', { count: item.rows.filter(row => row.selected).length })}</th>
-          {fields.slice(0, 4).map(field => <th key={field}>{t(`guided.${field}`)}</th>)}<th>{t('guided.review')}</th></tr></thead>
-          <tbody>{item.rows.map((row, index) => {
-            const warnings = item.preview.rows[index].warnings
-            if ((filter === 'attention' && !warnings.length || filter === 'errors' && row.part.position && row.part.part_number && row.part.description
-              || filter === 'clean' && !!warnings.length || filter === 'accepted' && !row.confirmed
-              || filter === 'rejected' && !row.rejected || filter !== 'rejected' && row.rejected
-              || filter !== 'accepted' && filter !== 'all' && row.confirmed)
-              || !Object.values(row.part).join(' ').toLocaleLowerCase().includes(search.toLocaleLowerCase())) return null
-            return <tr key={index} className={warnings.length && !row.confirmed ? 'part-attention' : ''}><td><input type="checkbox" aria-label={t('guided.position') + ' ' + row.part.position} disabled={busy || row.rejected || row.confirmed}
-              checked={row.selected} onChange={event => edit(source, index, { selected: event.target.checked })} /></td>
-              {fields.slice(0, 4).map(field => <td key={field}><input aria-label={t(`guided.${field}`) + ' ' + (index + 1)} disabled={busy || row.rejected || row.confirmed}
-                value={row.part[field] ?? ''} onChange={event => edit(source, index, { part: { ...row.part, [field]: event.target.value || null } })} onBlur={() => { if (unsaved) void saveRow(source, index) }} /></td>)}
-              <td><details><summary>{t('guided.advanced')}</summary>{fields.slice(4).map(field => <label key={field}>{t(`guided.${field}`)}<input aria-label={t(`guided.${field}`) + ' ' + (index + 1)} value={row.part[field] ?? ''} disabled={busy || row.confirmed || row.rejected} onChange={event => edit(source, index, { part: { ...row.part, [field]: event.target.value || null } })} onBlur={() => { if (unsaved) void saveRow(source, index) }} /></label>)}</details><span>{t(row.confirmed ? 'guided.accepted' : warnings.length ? 'guided.attention' : 'guided.clean')}</span>
-                <label>{t('guided.reviewReason')}<input value={row.reason} onChange={event => edit(source, index, { reason: event.target.value })} /></label>
-                <button className="secondary" disabled={busy || row.confirmed || !row.rejected && row.reason.trim().length < 10} onClick={() => void saveRow(source, index, row.rejected ? 'RESTORE' : 'REJECT')}>{t(row.rejected ? 'guided.restore' : 'guided.reject')}</button></td></tr>
-          })}</tbody></table></div>
-      </section>)}
-      <div className="actions"><button className="primary" disabled={busy || unsaved || !reviews.some(item => item.rows.some(row => row.selected && !row.rejected))} onClick={() => void confirm()}>{t('guided.confirm')}</button>
-        <button className="secondary" disabled={busy || unsaved} onClick={() => { setReviews([]); setSourceResults([]); setSourceIndex(null) }}>{t('common.close')}</button></div>
+      {onContinue && <button className="primary" disabled={busy || unsaved || !allRows.length} onClick={onContinue}>{t('catalogUx.step.parts')}</button>}
     </>}
+    {stage === 'parts' && <>
+      <p role="status">{t('guided.sourceTotal', { count: allRows.length, processed: sourceResults.length ? sourceResults.filter(item => item.state !== 'pending').length : session?.sources.filter(item => item.attempts.length).length || 0, total: sources.length })}</p>
+      <div aria-label={t('guided.lists')}>{sources.filter(source => sourceResults.some(result => result.source.id === source.id && result.state === 'failed') || session?.sources.some(item => item.visual_page_id === source.id && ['FAILED', 'CANCELLED'].includes(item.processing_state))).map(source => <div key={source.id} role="alert">
+        <b>{source.filename} · {t('guided.physicalPage', { number: source.page_number })}</b><p>{t(sourceResults.find(result => result.source.id === source.id)?.error || 'guided.processing.FAILED')}</p>
+        <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(source)}>{t('wizard.retry')}</button>
+      </div>)}</div>
+      {!allRows.length && <button className="primary" disabled={busy || unsaved || !sources.length} onClick={() => void extract()}>{t('guided.extract')}</button>}
+      <div className="parts-toolbar"><label>{t('guided.filter')}<select value={filter} onChange={event => setFilter(event.target.value as typeof filter)}>
+        {(['all', 'attention', 'accepted'] as const).map(value => <option value={value} key={value}>{t(`guided.${value}`)}</option>)}
+      </select></label><label>{t('common.search')}<input value={search} onChange={event => setSearch(event.target.value)} /></label>
+        <button className="secondary" disabled={busy || unsaved || !visible.some(canSelect)} onClick={() => visible.filter(canSelect).forEach(({ source, index }) => edit(source, index, { selected: true }))}>{t('catalogUx.selectVisible')}</button>
+        <button className="secondary" disabled={busy || unsaved} onClick={() => { setEditPartId(undefined); setTools(true) }}>{t('catalogUx.partTools')}</button>
+      </div>
+      <p className="muted">{t('catalogUx.selectHelp')}</p>
+      <p role="status">{t('guided.summary', { count: allRows.length, selected: allRows.filter(entry => entry.row.selected && canSelect(entry)).length })}</p>
+      <div className="unified-parts table-wrap"><table><thead><tr>
+        <th>{t('guided.selected', { count: allRows.filter(entry => entry.row.selected).length })}</th>
+        {fields.slice(0, 4).map(field => <th key={field}>{t(`guided.${field}`)}</th>)}<th>{t('catalogUx.source')}</th>
+      </tr></thead><tbody>{visible.map(entry => {
+        const { row, item, source, index, candidate, key } = entry
+        return <tr key={key} aria-selected={activeRow === key} className={candidate.warnings.length || !valid(row) || candidate.candidate_state === 'CONFLICT' ? 'part-attention' : ''}>
+          <td><input type="checkbox" aria-label={`${t('guided.position')} ${row.part.position} · ${item.preview.source.filename} · ${item.preview.source.page_number}`} disabled={busy || unsaved || !canSelect(entry)} checked={row.selected} onChange={event => edit(source, index, { selected: event.target.checked })} /></td>
+          <td><button className="secondary part-open" aria-label={t('catalogUx.openPart', { position: row.part.position, number: row.part.part_number, page: item.preview.source.page_number })} onClick={() => {
+            pending.current.forEach(value => saveRow(value.source, value.index)); setActiveRow(key)
+          }}>{row.part.position || '—'}<small>{t(row.confirmed ? 'guided.accepted' : candidate.candidate_state === 'CONFLICT' ? 'guided.rowConflict' : 'guided.attention')}</small></button></td>
+          <td>{row.part.part_number || '—'}</td><td>{row.part.description || '—'}</td><td>{row.part.quantity ?? '—'}</td>
+          <td><span title={item.preview.source.filename}>{t('guided.physicalPage', { number: item.preview.source.page_number })}</span><small>{item.preview.source.filename}</small></td>
+        </tr>
+      })}</tbody></table></div>
+      {active ? <section className="part-comparison" aria-label={t('catalogUx.editPart')}>
+        <div className="part-original"><SourcePageViewer artifactId={active.item.preview.source.artifact_id} number={active.item.preview.source.page_number} pageCount={active.item.preview.source.page_number} fixed onPage={() => {}} region={evidenceRegion(active.item.preview, active.candidate.bbox)} /><p className="muted">{t('catalogUx.originalHint')}</p><button className="secondary" disabled={busy} onClick={() => {
+          setBusy(true); void downloadApiFile(`${builderBase}/artifacts/${active.item.preview.source.artifact_id}/download`, active.item.preview.source.filename).catch(caught => setError(t(guidedError(caught)))).finally(() => setBusy(false))
+        }}>{t('builder.downloadSource')}</button></div>
+        <div className="part-edit"><div className="source-heading"><h4 ref={editorTitle} tabIndex={-1}>{t('catalogUx.editPart')} · {active.row.part.position}</h4><button className="secondary" onClick={() => { saveRow(active.source, active.index); setActiveRow(null) }}>{t('common.close')}</button></div>
+          <p>{active.item.preview.source.filename} · {t('guided.physicalPage', { number: active.item.preview.source.page_number })}</p>
+          {fields.slice(0, 4).map(field => <label key={field}>{t(`guided.${field}`)}<input aria-label={t(`guided.${field}`)} disabled={busy || active.row.rejected || active.row.confirmed || active.candidate.candidate_state === 'CONFLICT'} value={active.row.part[field] ?? ''} onChange={event => edit(active.source, active.index, { part: { ...active.row.part, [field]: event.target.value || null } })} onBlur={() => saveRow(active.source, active.index)} /></label>)}
+          {active.candidate.candidate_id && saveStates[active.candidate.candidate_id] && <p role={['conflict', 'saveError'].includes(saveStates[active.candidate.candidate_id]) ? 'alert' : 'status'}>{t(`catalogUx.${saveStates[active.candidate.candidate_id]}`)}</p>}
+          {active.candidate.candidate_id && saveStates[active.candidate.candidate_id] === 'saveError' && <button className="secondary" onClick={() => { pending.current.set(active.candidate.candidate_id!, active); saveRow(active.source, active.index) }}>{t('wizard.retry')}</button>}
+          {active.candidate.candidate_id && saveStates[active.candidate.candidate_id] === 'conflict' && <button className="secondary" disabled={busy} onClick={() => void reloadRow(active.candidate.candidate_id!)}>{t('catalogUx.reloadRow')}</button>}
+          {active.row.confirmed && <button className="secondary" disabled={busy || unsaved} onClick={() => {
+            setEditPartId(session?.sources.flatMap(source => source.candidates).find(candidate => candidate.id === active.candidate.candidate_id)?.part_id || undefined); setTools(true)
+          }}>{t('common.edit')}</button>}
+          {!valid(active.row) && <p role="alert">{t('catalogUx.invalidRow')}</p>}
+          {active.candidate.warnings.length > 0 && !active.row.confirmed && <p role="status">{t('guided.attention')}</p>}
+          {active.candidate.candidate_state === 'CONFLICT' && <p role="alert">{t('guided.rowConflict')}</p>}
+          <details><summary>{t('catalogUx.rowTools')}</summary>
+            {fields.slice(4).map(field => <label key={field}>{t(`guided.${field}`)}<input value={active.row.part[field] ?? ''} disabled={busy || active.row.confirmed || active.row.rejected || active.candidate.candidate_state === 'CONFLICT'} onChange={event => edit(active.source, active.index, { part: { ...active.row.part, [field]: event.target.value || null } })} onBlur={() => saveRow(active.source, active.index)} /></label>)}
+            <label>{t('guided.reviewReason')}<input value={active.row.reason} onChange={event => edit(active.source, active.index, { reason: event.target.value })} /></label>
+            <button className="secondary" disabled={busy || unsaved || active.row.confirmed || active.candidate.candidate_state === 'CONFLICT' || !active.row.rejected && active.row.reason.trim().length < 10} onClick={() => saveRow(active.source, active.index, active.row.rejected ? 'RESTORE' : 'REJECT')}>{t(active.row.rejected ? 'guided.restore' : 'guided.reject')}</button>
+            <pre className="raw-evidence">{active.candidate.raw_text}</pre><pre className="raw-evidence">{JSON.stringify({ source: active.item.preview.source, geometry: active.item.preview.page_geometry, row: active.candidate, method: active.item.preview.method, quality: active.item.preview.quality, warnings: active.item.preview.warnings, version: active.item.preview.pipeline_version }, null, 2)}</pre>
+          </details>
+          <details><summary>{t('catalogUx.sourceTools')}</summary>
+            {active.item.preview.tables.map((_, tableIndex) => <Mapping key={`${active.item.preview.token.slice(-12)}-${tableIndex}`} preview={active.item.preview} tableIndex={tableIndex} busy={busy || unsaved || active.item.rows.some(row => row.confirmed)} apply={mapping => void remap(active.source, tableIndex, mapping)} />)}
+          </details>
+        </div>
+      </section> : <p>{t('catalogUx.pickRow')}</p>}
+      {reviews.filter(item => !item.rows.length || item.preview.quality?.state === 'NEEDS_REVIEW').map(item => <div key={item.preview.source.visual_page_id} role="alert">
+        <b>{item.preview.source.filename} · {t('guided.physicalPage', { number: item.preview.source.page_number })}</b><p>{t('guided.coverageIncomplete')}</p>
+        {item.preview.tables.some(table => table.schema.state !== 'RESOLVED') && <details><summary>{t('guided.mapping')}</summary>{item.preview.tables.map((_, index) => <Mapping key={index} preview={item.preview} tableIndex={index} busy={busy || unsaved} apply={mapping => void remap(reviews.indexOf(item), index, mapping)} />)}</details>}
+        <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(sources.find(source => source.id === item.preview.source.visual_page_id)!)}>{t('wizard.retry')}</button>
+      </div>)}
+      <div className="actions"><button className="primary" disabled={busy || unsaved || !allRows.some(entry => entry.row.selected && canSelect(entry))} onClick={() => void confirm()}>{t('guided.confirm')}</button></div>
+      <DurableSourceReview session={session} targetSourceId={targetSourceId} reload={async () => { await load(); await changed() }} parts={accepted} busy={busy || unsaved} onDirtyChange={setSourceReviewDirty} />
+      {onContinue && !!session?.sources.length && session.sources.every(source => source.review_state === 'VERIFIED') && <button className="primary" disabled={busy || unsaved} onClick={onContinue}>{t('catalogUx.step.hotspots')}</button>}
+    </>}
+    {tools && <Modal wide title={t('catalogUx.partTools')} onClose={() => { if (!advancedDirty || window.confirm(t('wizard.unsaved'))) setTools(false) }}>
+      <RevisionParts initialPartId={editPartId} assemblyId={page.assembly_id} referencePageId={page.id} editable onChanged={async () => { await load(); await changed() }} onDirtyChange={setAdvancedDirty} />
+    </Modal>}
   </section>
 }

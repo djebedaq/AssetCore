@@ -55,7 +55,8 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   const currentAssembly = useRef(`${assemblyId}/${referencePageId ?? "legacy"}`)
   currentAssembly.current = `${assemblyId}/${referencePageId ?? "legacy"}`
   const [zoom, setZoom] = useState(100)
-  const [expanded, setExpanded] = useState(simple)
+  const [expanded, setExpanded] = useState(false)
+  const [tools, setTools] = useState(!simple)
   const [showMarkers, setShowMarkers] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -90,7 +91,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     if (currentAssembly.current !== `${assemblyId}/${referencePageId ?? "legacy"}`) return positionRows
     setPages(pageRows); setCoverage(positionRows)
     setPageId(current => pageRows.some(item => item.visual_page_id === current) ? current : pageRows.find(item => item.visual_page_id === initialPageId)?.visual_page_id ?? pageRows[0]?.visual_page_id ?? null)
-    setPosition(current => positionRows.some(item => item.position === current) ? current : initialPosition && positionRows.some(item => item.position === initialPosition) ? initialPosition : positionRows.find(item => item.hotspot_count === 0)?.position ?? positionRows[0]?.position ?? '')
+    setPosition(current => positionRows.some(item => item.position === current) ? current : initialPosition && positionRows.some(item => item.position === initialPosition) ? initialPosition : positionRows.find(item => item.state !== 'VERIFIED')?.position ?? positionRows[0]?.position ?? '')
     return positionRows
   }
   async function loadHotspots(id: number) {
@@ -237,8 +238,8 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       setDraft({ ...saved, id: saved.id }); setSaveState('saved')
       if (simple) {
         const index = rows.findIndex(row => row.position === candidate.position)
-        const next = [...rows.slice(index + 1), ...rows.slice(0, index + 1)].find(row => row.hotspot_count === 0)
-        if (next) { setPosition(next.position); setDraft(null) }
+        const next = [...rows.slice(index + 1), ...rows.slice(0, index + 1)].find(row => row.state !== 'VERIFIED' && row.position !== candidate.position)
+        if (autoVerify && next) { setPosition(next.position); setDraft(null) }
       }
     } catch (caught) {
       setSaveState('retry')
@@ -259,7 +260,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       if (simple) {
         setSaveState('saved')
         const index = rows.findIndex(row => row.position === saved.position)
-        const next = [...rows.slice(index + 1), ...rows.slice(0, index + 1)].find(row => row.hotspot_count === 0)
+        const next = [...rows.slice(index + 1), ...rows.slice(0, index + 1)].find(row => row.state !== 'VERIFIED' && row.position !== saved.position)
         if (verified && next) { setPosition(next.position); setDraft(null) }
       }
     } catch (caught) { setError(message(caught)); setDraft(null); await refresh() } finally { setBusy(false) }
@@ -298,36 +299,37 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
   const filtered = coverage.filter(row => (filter === 'all' || filter === 'unmarked' && row.hotspot_count === 0 || filter === 'unverified' && row.state === 'UNVERIFIED' || filter === 'completed' && row.state === 'VERIFIED') && [row.position, ...row.part_numbers, ...(row.names || []).flatMap(name => [name.name_bg, name.name_en, name.name_ru, name.description])].some(value => (value || '').toLocaleLowerCase().includes(search.toLocaleLowerCase())))
   const changePage = (id: number) => { if (!dirty || simple || window.confirm(t('wizard.unsaved'))) setPageId(id) }
   const shown = draft ? hotspots.filter(item => item.id !== draft.id) : hotspots
-  return <div className={`builder-workspace ${expanded ? 'mapping-expanded' : ''}`}>
+  return <div className={`builder-workspace ${simple ? 'hotspot-simple' : ''} ${expanded ? 'mapping-expanded' : ''}`}>
     {simple && <div className="source-heading"><strong>{contextLabel}</strong><button className="secondary" onClick={() => setExpanded(value => !value)}>{t(expanded ? 'workspace.collapse' : 'workspace.expand')}</button></div>}
     {saveState && <p role="status">{t(`wizard.${saveState}`)}</p>}
     {error && <p className="error" role="alert">{error}</p>}
     {!pages.length && <p>{t('builder.mapping.noPages')}</p>}
     {editable && !coverage.length && <p role="status">{t('guided.noPositions')}</p>}
     {!!pages.length && <>
-      <label>{t('builder.mapping.page')}<select disabled={busy || simple && dirty} value={pageId ?? ''} onChange={event => changePage(Number(event.target.value))}>
+      <label hidden={simple && pages.length < 2 && !tools}>{t('builder.mapping.page')}<select disabled={busy || simple && dirty} value={pageId ?? ''} onChange={event => changePage(Number(event.target.value))}>
         {pages.map(item => <option key={item.visual_page_id} value={item.visual_page_id}>{item.artifact_title} · {t('builder.pageNumber', { count: item.page_number })}</option>)}
       </select></label>
       {!simple && <small>{page?.filename} · {t('builder.mapping.sha', { hash: page?.sha256 || '' })}</small>}
-      <div className="actions builder-tabs">
-        {editable && <>{simple && <button disabled={busy || dirty} className={mode === 'point' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('point')}>{t('wizard.point')}</button>}<button disabled={busy || simple && dirty} className={mode === 'select' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('select')}>{t('builder.mapping.select')}</button>
-          <button disabled={busy || simple && dirty} className={mode === 'draw' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('draw')}>{t(simple ? 'wizard.rectangle' : 'builder.mapping.draw')}</button></>}
+      <div className="actions builder-tabs"><button className="secondary" aria-expanded={tools} onClick={() => setTools(value => !value)}>{t('catalogUx.geometryTools')}</button>
+        {editable && <>{simple && <button disabled={busy || dirty} className={mode === 'point' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('point')}>{t('wizard.point')}</button>}{tools && <><button disabled={busy || simple && dirty} className={mode === 'select' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('select')}>{t('builder.mapping.select')}</button>
+          <button disabled={busy || simple && dirty} className={mode === 'draw' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('draw')}>{t(simple ? 'wizard.rectangle' : 'builder.mapping.draw')}</button></>}</>}
         <button disabled={busy || simple && dirty} className={mode === 'pan' ? 'primary compact' : 'secondary compact'} onClick={() => setMode('pan')}>{t('builder.mapping.pan')}</button>
         <button className="secondary compact" onClick={() => setZoom(value => Math.max(10, value - 25))}>{t('builder.mapping.zoomOut')}</button>
         <span>{Math.round(zoom)}%</span>
         <button className="secondary compact" onClick={() => setZoom(value => Math.min(800, value + 25))}>{t('builder.mapping.zoomIn')}</button>
         <button className="secondary compact" onClick={fitPage}>{t('workspace.fitPage')}</button>
-        <button className="secondary compact" onClick={() => setZoom(100)}>{t('workspace.fitWidth')}</button>
-        <label><input type="checkbox" checked={showMarkers} onChange={event => setShowMarkers(event.target.checked)} />{t('workspace.overlayVisibility')}</label>
+        {tools && <><button className="secondary compact" onClick={() => setZoom(100)}>{t('workspace.fitWidth')}</button>
+        <label><input type="checkbox" checked={showMarkers} onChange={event => setShowMarkers(event.target.checked)} />{t('workspace.overlayVisibility')}</label></>}
       </div>
+      {simple && <p role="status">{t('catalogUx.progress', { done: coverage.filter(row => row.state === 'VERIFIED').length, total: coverage.length })}</p>}
       {simple && editable && position && <p role="status">{t('guided.clickPosition', { position })}</p>}
       {simple && editable && <div className="actions">
-        <button className="secondary" disabled={busy || dirty || !coverage.length} onClick={() => nextPosition(-1)}>{t('wizard.back')}</button>
+        {tools && <button className="secondary" disabled={busy || dirty || !coverage.length} onClick={() => nextPosition(-1)}>{t('wizard.back')}</button>}
         <button className="secondary" disabled={busy || dirty || !coverage.length} onClick={() => nextPosition(1)}>{t('guided.skip')}</button>
-        <button className="secondary" disabled={busy || dirty || !position} onClick={() => { setMode('point'); setDraft(null) }}>{t('guided.another')}</button>
+        {tools && <button className="secondary" disabled={busy || dirty || !position} onClick={() => { setMode('point'); setDraft(null) }}>{t('guided.another')}</button>}
         <button className="secondary" disabled={busy || dirty || !lastPlaced} onClick={() => void undoPlacement()}>{t('guided.undo')}</button>
       </div>}
-      {simple && editable && <div className="actions"><label>{t('wizard.pointSize')}<input type="number" min="0.2" max="12" step="0.05" value={pointSize} disabled={busy} onChange={event => setPointSize(Number(event.target.value))} /></label>
+      {simple && editable && tools && <div className="actions"><label>{t('wizard.pointSize')}<input type="number" min="0.2" max="12" step="0.05" value={pointSize} disabled={busy} onChange={event => setPointSize(Number(event.target.value))} /></label>
         <label><input type="checkbox" checked={autoVerify} disabled={busy} onChange={event => setAutoVerify(event.target.checked)} />{t('wizard.autoVerify')}</label></div>}
       <div className="builder-scheme-layout">
         <div ref={viewport} className="builder-scheme-viewport">
@@ -369,16 +371,16 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
               <b>{t('builder.mapping.hotspotLabel', { position: row.position })}</b><span>{row.part_numbers.join(', ')}</span>
               <span>{(row.names || []).map(name => name[`name_${locale}`] || name.name_bg || name.name_en || name.name_ru || name.description).filter(Boolean).join(', ')}</span>
               <small>{t(`builder.mapping.state.${row.state}`)}</small></button>)}</div></>}
-          <label>{t('builder.mapping.position')}<select value={position} onChange={event => {
+          <div hidden={simple && !tools}><label>{t('builder.mapping.position')}<select value={position} onChange={event => {
             setPosition(event.target.value); if (simple) setDraft(null); else if (draft) setDraft({ ...draft, position: event.target.value })
           }} disabled={!editable || busy || simple && dirty || !!highlightPositions.length}>
             {coverage.map(row => <option key={row.position} value={row.position}>{row.position} · {t('builder.mapping.variants', { count: row.part_count })}</option>)}
           </select></label>
-          {chosen && <><b>{t('builder.mapping.variants', { count: chosen.part_count })}</b>
+          </div>{chosen && <><b>{t('builder.mapping.variants', { count: chosen.part_count })}</b>
             <ul>{chosen.part_numbers.map(number => <li key={number}>{number}</li>)}</ul>
             <p>{t(`builder.mapping.state.${chosen.state}`)}</p></>}
           {draft && editable && <>
-            <div className="builder-geometry-fields">{(['x', 'y', 'width', 'height'] as const).map(key =>
+            <div className="builder-geometry-fields" hidden={simple && !tools}>{(['x', 'y', 'width', 'height'] as const).map(key =>
               <label key={key}>{t(`builder.mapping.${key}`)}<input type="number" min="0" max="1" step="0.0001"
                 value={draft[key]} onChange={event => setDraft({ ...draft, [key]: Number(event.target.value) })} /></label>)}</div>
             <div className="actions"><button className="primary compact" disabled={busy || !dirty || draft.width < minimum || draft.height < minimum}
@@ -391,7 +393,8 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
           {!!highlightPositions.length && <p>{t('builder.mapping.highlighted', { count: highlightPositions.length })}</p>}
         </aside>
       </div>
-      <div className="builder-hotspot-list">{hotspots.map(item => <button key={item.id} type="button" className="secondary compact"
+      {simple && <p className="muted">{t('catalogUx.unmatched')}</p>}
+      <div className="builder-hotspot-list" hidden={simple && !tools}>{hotspots.map(item => <button key={item.id} type="button" className="secondary compact"
         disabled={busy || simple && dirty} onClick={() => { if (simple) setMode('select'); setDraft({ id: item.id, position: item.position, version: item.version, x: item.x, y: item.y,
           width: item.width, height: item.height }); setPosition(item.position) }}>
         {item.position} · {t(item.is_verified ? 'builder.mapping.verified' : 'builder.mapping.unverified')}

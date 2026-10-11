@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api'
+import useDraftGuard from './useDraftGuard'
 import AuthenticatedImage from '../../AuthenticatedImage'
 import { useI18n } from '../../i18n'
 import { Select } from '../../ui/Select'
@@ -25,6 +26,8 @@ export default function ReferenceLinker({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(false)
+  const dirty = !saved && (!!sourceKey || !!machineId || !!machineIds.length || !!reason)
+  useDraftGuard(dirty || loading)
   const source = sources.find(item => `${item.source_id}:${item.revision}` === sourceKey)
   const scheme = source?.pages.find(page => String(page.id) === schemeId)
   const list = source?.pages.find(page => String(page.id) === listId)
@@ -52,7 +55,7 @@ export default function ReferenceLinker({ onClose }: { onClose: () => void }) {
   }
   const pageOptions = (role: string) => (source?.pages || []).filter(page => page.role === role).map(page => ({ value: String(page.id), label: t('ref.page', { number: page.page_number }) }))
   return <section className="panel reference-linker" aria-label={t('ref.link')}>
-    <div className="toolbar"><h3>{t('ref.link')}</h3><button className="secondary" disabled={loading} onClick={onClose}>{t('common.close')}</button></div>
+    <div className="toolbar"><h3>{t('ref.link')}</h3><button className="secondary" disabled={loading} onClick={() => { if (!dirty || window.confirm(t('wizard.unsaved'))) onClose() }}>{t('common.close')}</button></div>
     <p className="muted">{t('ref.warning')}</p>
     <div className="ac-filter-toolbar">
       <MachineSelect module="catalog" value={machineId} onChange={value => { setMachineId(value); setConfirmed(false) }} label={t('ref.target')} />

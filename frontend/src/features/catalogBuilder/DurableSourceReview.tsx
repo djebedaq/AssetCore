@@ -5,8 +5,9 @@ import { guidedError } from './guidedErrors'
 import type { PartValues, ReviewSession, ReviewSource } from './guidedTypes'
 import { builderBase } from './wizardTypes'
 
-export default function DurableSourceReview({ session, reload, parts, busy, targetSourceId }: {
+export default function DurableSourceReview({ session, reload, parts, busy, targetSourceId, onDirtyChange }: {
   targetSourceId?: number;
+  onDirtyChange?: (dirty: boolean) => void;
   session: ReviewSession | null; reload: () => Promise<void>; parts: Array<PartValues & { id: number }>; busy: boolean
 }) {
   const { t } = useI18n()
@@ -18,6 +19,7 @@ export default function DurableSourceReview({ session, reload, parts, busy, targ
   const [working, setWorking] = useState(false)
   const [error, setError] = useState('')
   const [link, setLink] = useState('')
+  useEffect(() => { onDirtyChange?.(working || selected !== null && !!(reason.trim() || manual || link)); return () => onDirtyChange?.(false) }, [working, selected, reason, manual, link, onDirtyChange])
   useEffect(() => () => { if (original) URL.revokeObjectURL(original.url) }, [original])
   const source = session?.sources?.find(item => item.visual_page_id === selected)
   useEffect(() => {
@@ -51,18 +53,18 @@ export default function DurableSourceReview({ session, reload, parts, busy, targ
       setOriginal(null); await reload()
     } catch (caught) { setError(t(guidedError(caught))) } finally { setWorking(false) }
   }
-  return <section className="guided-source-results" aria-label={t('guided.sourceReview')}>
-    <h4>{t('guided.sourceReview')}</h4><p>{t('guided.sourceReviewHelp')}</p>
+  return <section className="guided-source-results durable-review" aria-label={t('guided.sourceReview')}>
+    <h4>{t('guided.sourceReview')}</h4><p className="muted">{t('guided.sourceReviewHelp')}</p>
     {error && <p role="alert" className="error">{error}</p>}
-    {session?.sources?.map(item => <div key={item.id}>
+    {session?.sources?.map(item => <div key={item.id} className="source-review-row">
       <b>{item.source.filename} · {t('guided.physicalPage', { number: item.source.page_number })}</b>
-      {' · '}{t(`guided.processing.${item.processing_state}`)}{' · '}{t(`guided.reviewState.${item.review_state}`)}
+      <span>{t(item.review_state === 'VERIFIED' ? 'guided.reviewState.VERIFIED' : item.processing_state === 'FAILED' || item.processing_state === 'CANCELLED' ? 'guided.processing.FAILED' : item.processing_state === 'RUNNING' ? 'guided.processing.RUNNING' : item.attempts.length ? 'guided.attention' : 'guided.processing.QUEUED')}</span>
       <details><summary>{t('guided.attemptCount', { count: item.attempts.length })}</summary>
         {item.attempts.map(attempt => <p key={attempt.id}>{t(`guided.processing.${attempt.state}`)} · {t('guided.sourceRows', { count: attempt.row_count })}</p>)}
       </details>
       <button id={`source-review-${item.visual_page_id}`} className="secondary" disabled={busy || working || item.processing_state === 'RUNNING'} onClick={() => void inspect(item)}>{t('guided.sourceView')}</button>
     </div>)}
-    {source && <section>
+    {source && <section className="source-attestation">
       {original && <><div className="guided-original"><a href={original.url} target="_blank" rel="noopener noreferrer" aria-label={t('guided.zoomOriginal')}>
         <img src={original.url} alt={t('guided.physicalPage', { number: source.source.page_number })}
           onLoad={() => setLoaded(true)} onError={() => { setLoaded(false); setError(t('builder.previewError')) }} /></a></div>

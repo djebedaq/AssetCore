@@ -1,7 +1,7 @@
 import type { TranslationKey } from '../../i18n'
 
 export const builderBase = '/admin/catalog-builder'
-export type Step = 'catalog' | 'references' | 'documents' | 'parts' | 'hotspots' | 'review'
+export type Step = 'catalog' | 'references' | 'documents' | 'extract' | 'parts' | 'hotspots' | 'review'
 export type Names = { name_bg: string; name_en: string; name_ru: string }
 export type Category = Names & { id: number; code: string; is_active: boolean; capabilities: string[] }
 export type Catalog = Names & { id: number; code: string; asset_category_id: number; asset_category: Category;
@@ -15,7 +15,7 @@ export type Document = { id: number; filename: string; title: string; sha256: st
   assignments: Array<{ id: number; artifact_id: number; page_number: number; assembly_id: number; role: Role }> }
 export type Role = 'EXPLODED_SCHEME' | 'SPARE_PARTS_LIST'
 export type Issue = { code: string; step?: Step | 'kits'; assembly_id?: number; part_id?: number; reference_page_id?: number;
-  visual_page_id?: number; position?: string; artifact_id?: number; missing_positions?: number }
+  visual_page_id?: number; position?: string; artifact_id?: number; missing_positions?: number; page_number?: number; filename?: string }
 export type Workflow = { ready: boolean; publication_digest: string; current_published_revision_id: number | null;
   errors: Issue[]; warnings: Issue[]; summary: Record<string, number>;
   progress: { position_count: number; completed_positions: number }; resume_step: Step }

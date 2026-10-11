@@ -1,3 +1,4 @@
+import { catalogUxBg, catalogUxEn, catalogUxRu } from './features/catalogBuilder/catalogUxTranslations'
 import { referenceBg, referenceEn, referenceRu } from './features/catalogBuilder/referenceTranslations'
 import { workspaceBg, workspaceEn, workspaceRu } from './features/catalogBuilder/workspaceTranslations'
 import { uxBg, uxEn, uxRu } from './ui/translations'
@@ -20,6 +21,7 @@ export const bg = {
   ...referenceBg,
   ...workspaceBg,
   ...guidedBg,
+  ...catalogUxBg,
   ...wizardBg,
   "ownerDeletion.action": "Изтрий окончателно",
   "ownerDeletion.actionFor": "Изтрий окончателно: {{identity}}",
@@ -1315,6 +1317,7 @@ Object.assign(en, {
   ...wizardEn,
   ...workspaceEn,
   ...guidedEn,
+  ...catalogUxEn,
   "ownerDeletion.action": "Delete permanently",
   "ownerDeletion.actionFor": "Delete permanently: {{identity}}",
   "ownerDeletion.title": "Permanent deletion",
@@ -1980,6 +1983,7 @@ Object.assign(ru, {
   ...wizardRu,
   ...workspaceRu,
   ...guidedRu,
+  ...catalogUxRu,
   "ownerDeletion.action": "Удалить навсегда",
   "ownerDeletion.actionFor": "Удалить навсегда: {{identity}}",
   "ownerDeletion.title": "Окончательное удаление",

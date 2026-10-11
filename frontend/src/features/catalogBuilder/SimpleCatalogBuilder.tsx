@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api'
-import { Modal } from '../../industrialUi'
+import Modal from './CatalogDialog'
 import { useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
+import './catalogBuilder.css'
+import CatalogMaintenance from './CatalogMaintenance'
 import GuidedWorkspace from './GuidedWorkspace'
 import WizardReview from './WizardReview'
 import WizardMachines from './WizardMachines'
 import useDraftGuard from './useDraftGuard'
 import { builderBase, problemKeys, type Catalog, type Category, type Group, type Issue, type Revision, type Step, type Workflow } from './wizardTypes'
 
-export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+const newCatalog = { name: '', asset_category_id: '', manufacturer: '', model_reference: '', code: '', name_en: '', name_ru: '', description: '' }
+
+export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirtyChange: (dirty: boolean) => void; onLink?: () => void }) {
   const { locale, t, date } = useI18n()
   const [catalogs, setCatalogs] = useState<Catalog[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -20,10 +24,11 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
   const [target, setTarget] = useState<Issue | undefined>()
   const [step, setStep] = useState<Step>('catalog')
+  const [maintenance, setMaintenance] = useState(false)
   const [creating, setCreating] = useState(false)
   const [editingMetadata, setEditingMetadata] = useState(false)
   const [metadata, setMetadata] = useState({ name: '', manufacturer: '', model_reference: '' })
-  const [form, setForm] = useState({ name: '', asset_category_id: '', manufacturer: '', model_reference: '' })
+  const [form, setForm] = useState(newCatalog)
   const [dirtyChildren, setDirtyChildren] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -84,9 +89,19 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
     if (busy) return
     setBusy(true); setError('')
     try {
-      const catalog = await api<Catalog>(`${builderBase}/simple/catalogs`, { method: 'POST', body: JSON.stringify({
-        ...form, asset_category_id: Number(form.asset_category_id), manufacturer: form.manufacturer || null, model_reference: form.model_reference || null,
+      const catalog = form.code.trim() ? await api<Catalog>(`${builderBase}/catalogs`, { method: 'POST', body: JSON.stringify({
+        code: form.code.trim(), name_bg: form.name.trim(), name_en: form.name_en.trim() || form.name.trim(), name_ru: form.name_ru.trim() || form.name.trim(),
+        description: form.description || null, asset_category_id: Number(form.asset_category_id), manufacturer: form.manufacturer || null, model_reference: form.model_reference || null,
+      }) }) : await api<Catalog>(`${builderBase}/simple/catalogs`, { method: 'POST', body: JSON.stringify({
+        name: form.name, asset_category_id: Number(form.asset_category_id), manufacturer: form.manufacturer || null, model_reference: form.model_reference || null,
       }) })
+      if (!form.code.trim() && (form.name_en.trim() || form.name_ru.trim() || form.description)) {
+        await api(`${builderBase}/catalogs/${catalog.id}`, { method: 'PATCH', body: JSON.stringify({
+          ...(form.name_en.trim() ? { name_en: form.name_en.trim() } : {}),
+          ...(form.name_ru.trim() ? { name_ru: form.name_ru.trim() } : {}), description: form.description || null,
+        }) })
+      }
+      if (form.code.trim()) await api(`${builderBase}/catalogs/${catalog.id}/edit`, { method: 'POST' })
       await load(); setCreating(false); setSelectedId(catalog.id)
     } catch (caught) { report(caught) } finally { setBusy(false) }
   }
@@ -133,8 +148,8 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
   if (!hasPermission('parts.manage')) return null
   return <div className="builder-page catalog-workbench">
     {error && <p className="error" role="alert">{error}</p>}
-    <section className={`panel catalog-picker ${selected ? 'catalog-picker-open' : ''}`}><div className="panel-title"><h3>{t('builder.catalogs')}</h3>
-      <button className="primary" disabled={!!selected} onClick={() => { setCreating(true); setForm({ name: '', asset_category_id: '', manufacturer: '', model_reference: '' }) }}>{t('builder.create')}</button></div>
+    <section hidden={!!selected} className={`panel catalog-picker ${selected ? 'catalog-picker-open' : ''}`}><div className="panel-title"><h3>{t('builder.catalogs')}</h3>
+      {!selected && onLink && <button className="secondary" onClick={onLink}>{t('ref.link')}</button>}<button className="primary" disabled={!!selected} onClick={() => { setCreating(true); setForm(newCatalog) }}>{t('builder.create')}</button></div>
       {!catalogs.length && <p>{t('builder.empty')}</p>}
       <div className="builder-list">{catalogs.map(catalog => <article className="builder-list-item" key={catalog.id}>
         <div><strong>{label(catalog)}</strong><small>{label(catalog.asset_category)} · {catalog.manufacturer} {catalog.model_reference}</small></div>
@@ -146,13 +161,16 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
       </article>)}</div>
     </section>
     {selected && <section className="panel"><div className="panel-title"><h3>{label(selected)}</h3>
+      <button className="secondary" disabled={busy || dirty} onClick={() => setMaintenance(true)}>{t('catalogUx.manage')}</button>
       <button className="secondary" disabled={busy} onClick={close}>{t('common.close')}</button></div>
-      <nav aria-label={t('wizard.title')} className="catalog-navigation">{(['references', 'catalog', 'review'] as const).map(value => <button key={value}
-        className="secondary" aria-current={(value === 'references' ? !['catalog', 'review'].includes(step) : step === value) ? 'page' : undefined}
-        disabled={!revision || busy || !editable && value === 'references'} onClick={() => navigate(value)}>
-        {t(value === 'references' ? 'workspace.work' : `wizard.${value}`)}
+      <p className="catalog-context">{label(selected.asset_category)} · {selected.manufacturer} {selected.model_reference} · {t('catalogUx.revision')} {revision?.revision_code} · {revision && t(`builder.status.${revision.status}`)}</p>
+      <nav aria-label={t('wizard.title')} className="catalog-navigation">{(['references', 'documents', 'extract', 'parts', 'hotspots', 'review'] as const).map((value, index) => <button key={value}
+        className="secondary" aria-current={step === value ? 'step' : undefined}
+        disabled={!revision || !workflow || busy || !editable && value !== 'review'} onClick={() => navigate(value)}>
+        <span>{index + 1}</span> {t(`catalogUx.step.${value}`)}
       </button>)}</nav>
       {dirty && <p className="muted" role="status">{t('wizard.unsavedNotice')}</p>}
+      {!revision && <button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>}
       {!workflow && <p>{t('wizard.loading')}</p>}
       <div hidden={step !== 'catalog'}><p><b>{t('builder.category')}:</b> {label(selected.asset_category)}</p>
         <p className="muted">{t('wizard.categoryLocked')}</p>
@@ -171,8 +189,8 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
         {!revision && <button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>}
       </div>
       {editable && revision && <div hidden={['catalog', 'review'].includes(step)}><GuidedWorkspace
-        target={target} revisionId={revision.id} groups={groups} task={step} changed={refresh} onDirtyChange={documentsDirty} /></div>}
-      <div hidden={step !== 'review'}><WizardReview workflow={workflow} editable={!!editable} busy={busy || editingMetadata || Object.values(dirtyChildren).some(Boolean)} onFix={fixIssue} onPublish={() => void publish()} /></div>
+        onNavigate={navigate} target={target} revisionId={revision.id} groups={groups} task={step} changed={refresh} onDirtyChange={documentsDirty} /></div>}
+      <div hidden={step !== 'review'}><WizardReview groups={groups} catalogName={label(selected)} revisionCode={revision?.revision_code} workflow={workflow} editable={!!editable} busy={busy || editingMetadata || Object.values(dirtyChildren).some(Boolean)} onFix={fixIssue} onPublish={() => void publish()} /></div>
       {revision?.status === 'PUBLISHED' && <><p role="status">{t('wizard.published')}</p><button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>
         <WizardMachines catalogId={selected.id} onChanged={load} /></>}
       <details><summary>{t('wizard.history')}</summary>{revisions.map((row, index) => <p key={row.id}>
@@ -182,6 +200,9 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
         }}>{t('wizard.version', { number: revisions.length - index })}</button> · {t(`builder.status.${row.status}`)} · {date(row.created_at)}
       </p>)}</details>
     </section>}
+    {maintenance && selected && <Modal wide title={t('catalogUx.manage')} onClose={() => { if (!dirty || window.confirm(t('wizard.unsaved'))) setMaintenance(false) }}>
+      <CatalogMaintenance catalogId={selected.id} onDirtyChange={documentsDirty} onChanged={async () => { await load(); if (revisionId) await refresh(); setRevisions(await api<Revision[]>(`${builderBase}/catalogs/${selected.id}/revisions`)) }} />
+    </Modal>}
     {creating && <Modal title={t('builder.create')} onClose={() => { if (!dirty || window.confirm(t('wizard.unsaved'))) setCreating(false) }}>
       <form className="form-grid" onSubmit={event => void create(event)}>
         <label>{t('wizard.name')}<input required maxLength={255} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
@@ -189,6 +210,11 @@ export default function SimpleCatalogBuilder({ onDirtyChange }: { onDirtyChange:
           <option value="">{t('builder.category')}</option>{categories.map(category => <option key={category.id} value={category.id}>{label(category)}</option>)}</select></label>
         <label>{t('builder.manufacturer')}<input maxLength={255} value={form.manufacturer} onChange={event => setForm({ ...form, manufacturer: event.target.value })} /></label>
         <label>{t('builder.modelReference')}<input maxLength={255} value={form.model_reference} onChange={event => setForm({ ...form, model_reference: event.target.value })} /></label>
+        <details className="wide"><summary>{t('catalogUx.catalogFields')}</summary>
+          <label>{t('builder.code')}<input pattern="[A-Z][A-Z0-9_]+" value={form.code} onChange={event => setForm({ ...form, code: event.target.value.toUpperCase() })} /></label>
+          {(['en', 'ru'] as const).map(language => <label key={language}>{t(`builder.name.${language}`)}<input value={form[`name_${language}`]} onChange={event => setForm({ ...form, [`name_${language}`]: event.target.value })} /></label>)}
+          <label>{t('builder.description')}<textarea value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label>
+        </details>
         <button className="primary" disabled={busy || !form.name.trim()}>{t('wizard.continue')}</button>
       </form>
     </Modal>}

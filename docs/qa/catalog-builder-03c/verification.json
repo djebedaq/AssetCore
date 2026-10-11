@@ -1,0 +1,50 @@
+{
+  "scope": "CATALOG_BUILDER_03C",
+  "base_commit": "9048bee81888aad31fb520d0b0d5e03a8b2d89d6",
+  "production_access": false,
+  "schema_changes": false,
+  "ocr_algorithm_changes": false,
+  "local": {
+    "frontend_vitest": {
+      "passed": 603,
+      "files": 66,
+      "wall_seconds": 99.9,
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=2"
+    },
+    "backend_targeted": {
+      "passed": 69,
+      "skipped": 2,
+      "platform": "Windows",
+      "skip_reason": "Unix process groups; covered by Linux CI",
+      "wall_seconds": 265.73
+    },
+    "evidence_final": {
+      "passed": 2,
+      "wall_seconds": 22.11,
+      "tampered_claim_rejected": true
+    },
+    "typecheck": "PASS",
+    "eslint": "PASS",
+    "ruff": "PASS",
+    "protected_migration_history": "PASS",
+    "authorization_inventory": "PASS",
+    "catalog_integrity": {
+      "valid": true,
+      "records": 611,
+      "unchanged_source_fingerprints": 9
+    },
+    "catalog_translation_gate": "PASS",
+    "release_verification": "PASS",
+    "docker_build": "PASS",
+    "linux_runtime_smokes": "PASS",
+    "postgres_clients": "16.15"
+  },
+  "ci": "Authoritative full backend / PostgreSQL / security / exact image checks are the Build check jobs on the pull request HEAD; see PR checks.",
+  "limitations": [
+    "D13 extraction is exact but hotspots/publication are not approved",
+    "Automated keyboard/focus/responsive checks do not constitute full WCAG certification",
+    "Cold local benchmark is not production multi-user load",
+    "One unbounded local Vitest attempt was interrupted; the completed bounded full rerun is reported",
+    "OEM PDF/control/screenshots are local only; committed screenshots use the generated synthetic PDF"
+  ]
+}

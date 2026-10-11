@@ -144,22 +144,23 @@ it('places a scoped point by clicking the rendered image, verifies, advances and
     pointerId: number; pointerType: string
     constructor(type: string, init: PointerEventInit = {}) { super(type, init); this.pointerId = init.pointerId || 0; this.pointerType = init.pointerType || 'mouse' }
   })
-  let rows: Array<Record<string, unknown>> = []
+  let rows: Array<Record<string, unknown>> = [{ id: 2, position: '2', visual_page_id: 5, version: 1, is_verified: false,
+    x: .7, y: .7, width: .02, height: .02, part_id: null, coordinate_system: 'NORMALIZED', provenance: 'MANUAL_BUILDER' }]
   const writes: Array<{ path: string; body: Record<string, unknown> }> = []
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input); const method = init?.method || 'GET'
     const body = init?.body ? JSON.parse(String(init.body)) : {}
     if (method !== 'GET') writes.push({ path, body })
     if (path.endsWith('/reference-pages/9/exploded-pages')) return json([{ visual_page_id: 5, artifact_id: 8, artifact_title: 'QA', filename: 'qa.pdf', page_number: 1 }])
-    if (path.endsWith('/reference-pages/9/coverage')) return json(['1', '2'].map(position => ({ position, part_count: 1, part_numbers: [`QA-PAGE9-${position}`], hotspot_count: rows.filter(row => row.position === position).length,
-      state: rows.some(row => row.position === position && row.is_verified) ? 'VERIFIED' : 'NO_HOTSPOT' })))
+    if (path.endsWith('/reference-pages/9/coverage')) return json(['1', '2', '3'].map(position => ({ position, part_count: 1, part_numbers: [`QA-PAGE9-${position}`], hotspot_count: rows.filter(row => row.position === position).length,
+      state: rows.some(row => row.position === position && row.is_verified) ? 'VERIFIED' : rows.some(row => row.position === position) ? 'UNVERIFIED' : 'NO_HOTSPOT' })))
     if (path.endsWith('/preview')) return new Response(new Blob(['qa']), { headers: { 'Content-Type': 'image/png' } })
     if (path.endsWith('/visual-pages/5/hotspots')) {
       if (method === 'POST') { const row = { ...body, id: 1, version: 1, is_verified: false }; rows.push(row); return json(row, 201) }
       return json(rows)
     }
-    if (path.endsWith('/hotspots/1/verify')) { rows[0] = { ...rows[0], is_verified: true, version: 2 }; return json(rows[0]) }
-    if (path.endsWith('/hotspots/1?expected_version=2') && method === 'DELETE') { rows = []; return new Response(null, { status: 204 }) }
+    if (path.endsWith('/hotspots/1/verify')) { rows = rows.map(row => row.id === 1 ? { ...row, is_verified: true, version: 2 } : row); return json(rows.find(row => row.id === 1)) }
+    if (path.endsWith('/hotspots/1?expected_version=2') && method === 'DELETE') { rows = rows.filter(row => row.id !== 1); return new Response(null, { status: 204 }) }
     return json({}, 404)
   }))
   render(<I18nProvider><RevisionHotspotEditor assemblyId={7} referencePageId={9} editable simple /></I18nProvider>)
@@ -170,13 +171,14 @@ it('places a scoped point by clicking the rendered image, verifies, advances and
   fireEvent.pointerDown(image, { pointerId: 1, clientX: 40, clientY: 30 })
   fireEvent.pointerUp(image, { pointerId: 1, clientX: 40, clientY: 30 })
   expect(canvas.querySelector('.builder-hotspot.draft')).toBeVisible()
-  await waitFor(() => expect(rows[0]?.is_verified).toBe(true))
+  await waitFor(() => expect(rows.find(row => row.id === 1)?.is_verified).toBe(true))
   expect(writes[0].body.position).toBe('1')
   expect(canvas.querySelector('.builder-hotspot.verified')).toBeVisible()
   await waitFor(() => expect(screen.getByLabelText('Позиция')).toHaveValue('2'))
   expect(screen.queryByText('QA-PAGE8-1')).toBeNull()
   await user.click(screen.getByRole('button', { name: 'Отмени последното поставяне' }))
-  await waitFor(() => expect(rows).toHaveLength(0))
+  await waitFor(() => expect(rows).toHaveLength(1))
+  expect(rows[0].id).toBe(2)
   expect(screen.getByLabelText('Позиция')).toHaveValue('1')
 })
 

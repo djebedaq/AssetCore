@@ -66,9 +66,10 @@ function PagePreview({ page }: { page: Page }) {
     <span>{t(url === 'error' ? 'builder.previewError' : 'builder.previewPending')}</span>}</div>
 }
 
-export default function RevisionParts({ assemblyId, editable, simple = false, incompleteOnly = false, onDirtyChange, onChanged, referencePageId }: { assemblyId: number; referencePageId?: number; editable: boolean; simple?: boolean; incompleteOnly?: boolean; onDirtyChange?: (dirty: boolean) => void; onChanged?: () => Promise<void> }) {
+export default function RevisionParts({ assemblyId, editable, simple = false, incompleteOnly = false, onDirtyChange, onChanged, referencePageId, initialPartId }: { assemblyId: number; referencePageId?: number; initialPartId?: number; editable: boolean; simple?: boolean; incompleteOnly?: boolean; onDirtyChange?: (dirty: boolean) => void; onChanged?: () => Promise<void> }) {
   const { locale, t } = useI18n()
   const scope = referencePageId ? `/admin/catalog-builder/reference-pages/${referencePageId}` : `/admin/catalog-builder/assemblies/${assemblyId}`
+  const initializedPart = useRef<number | null>(null)
   const [parts, setParts] = useState<Part[]>([])
   const [pages, setPages] = useState<Page[]>([])
   const [editing, setEditing] = useState<Part | 'new' | null>(null)
@@ -82,7 +83,7 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [reviewSession, setReviewSession] = useState<ReviewSession | null>(null)
-  useDraftGuard(!!editing || !!mapping || busy, onDirtyChange)
+  useDraftGuard(!!editing || !!mapping || importOpen && !!file || busy, onDirtyChange)
   const visibleFields = simple ? (['position', 'part_number', `name_${locale}`, 'description', 'quantity', 'unit'] as (keyof PartForm)[]) : fields
   const problem = (code: string) => t(problemKeys[code] || 'builder.error.generic')
   const message = (caught: unknown) => problem(caught instanceof ApiError ? caught.code || '' : '')
@@ -92,6 +93,7 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
       api<Page[]>(`${scope}/spare-list-pages`),
     ])
     setParts(rows); setPages(options)
+    if (initialPartId && editable && initializedPart.current !== initialPartId) { const chosen = rows.find(row => row.id === initialPartId); if (chosen) { initializedPart.current = initialPartId; openForm(chosen) } }
     if (editable && !referencePageId) setReviewSession(await api<ReviewSession>(`${scope}/source-review`, { method: 'POST' }))
   }
   useEffect(() => { void load().catch(caught => setError(message(caught))) }, [assemblyId, referencePageId])

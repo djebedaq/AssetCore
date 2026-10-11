@@ -27,7 +27,7 @@ it('requires an inspected original and reason, and submits the exact durable ver
   const reload = vi.fn(async () => {})
   render(<I18nProvider><DurableSourceReview session={session} reload={reload} parts={[]} busy={false} /></I18nProvider>)
   const user = userEvent.setup()
-  expect(screen.getByText(/Изисква проверка/)).toBeVisible()
+  expect(screen.getByText(/Нуждае се от проверка/)).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'Покажи оригинала' }))
   const verify = screen.getByRole('button', { name: 'Потвърди проверения източник' })
   expect(verify).toBeDisabled()

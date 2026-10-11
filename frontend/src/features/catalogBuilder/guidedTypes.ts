@@ -5,6 +5,7 @@ export type ReferencePage = { id: number; assembly_id: number; version: number; 
 export type PartValues = { position: string; part_number: string; description: string | null; quantity: string | number | null;
   quantity_raw?: string | null; technical_notes?: string | null; technical_specification?: string | null }
 export type Preview = { token: string; source: { visual_page_id: number; artifact_id: number; page_number: number; filename: string };
+  page_geometry?: { width?: number; height?: number; rotation_matrix?: number[] } | null;
   quality?: { state: string; observed_rows: number; candidate_rows: number; missing_rows: number; partial_rows: number; needs_context?: boolean } | null;
   pipeline_version?: string | null;
   warnings: string[]; method: string; rows: Array<{ payload: PartValues; warnings: string[]; raw_text: string; bbox?: number[];
@@ -12,7 +13,7 @@ export type Preview = { token: string; source: { visual_page_id: number; artifac
   tables: Array<{ bbox?: number[]; headers: string[]; sample_cells: string[][]; schema: { state: string; mapping: Record<string, string> } }> }
 
 export type ReviewCandidate = { id: number; version: number; state: string; part_id: number | null;
-  values: PartValues; reason: string | null; original: { payload: PartValues } }
+  values: PartValues; reason: string | null; original: { payload: PartValues; bbox?: number[]; raw_text?: string; warnings?: string[] } }
 export type ReviewSource = { id: number; visual_page_id: number; version: number; fingerprint: string;
   processing_state: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
   review_state: 'NOT_REVIEWED' | 'NEEDS_REVIEW' | 'VERIFIED'; source: Preview['source']; preview: Preview | null;
