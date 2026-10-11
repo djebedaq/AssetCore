@@ -257,11 +257,12 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
           expected_version: candidateVersions.current.get(item.preview.rows[index].candidate_id!) ?? item.preview.rows[index].candidate_version }] : [])
         if (!rows.length) continue
         const current = fresh.sources.find(value => value.visual_page_id === item.preview.source.visual_page_id)?.preview
-        if (!current || rows.some(row => {
-          const candidate = item.preview.rows[row.index], latest = current.rows[row.index]
-          return latest?.candidate_id !== candidate.candidate_id || latest?.candidate_version !== row.expected_version
-        })) {
-          for (const row of rows) {
+        const conflicting = rows.filter(row => {
+          const candidate = item.preview.rows[row.index], latest = current?.rows[row.index]
+          return !current || latest?.candidate_id !== candidate.candidate_id || latest?.candidate_version !== row.expected_version
+        })
+        if (!current || conflicting.length) {
+          for (const row of conflicting) {
             const id = item.preview.rows[row.index].candidate_id
             if (id) { dirtyIds.current.add(id); setSaveStates(value => ({ ...value, [id]: 'conflict' })) }
           }

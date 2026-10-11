@@ -107,7 +107,9 @@ it('retains unsaved human values after a stale version and blocks confirmation',
 
 it.each([false, true])('renews an expired preview without silently adopting concurrent versions (concurrent=%s)', async concurrent => {
   const durable = new ReviewTestTransport(), p = preview(11)
-  p.rows[0].warnings = []; durable.record(p)
+  p.rows[0].warnings = []
+  p.rows.push({ ...p.rows[0], payload: { ...p.rows[0].payload, position: '2', part_number: '002-QA' } })
+  durable.record(p)
   const confirmations: Record<string, unknown>[] = []
   let resumes = 0
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -129,6 +131,9 @@ it.each([false, true])('renews an expired preview without silently adopting conc
     await screen.findByText(/Страницата е променена/)
     expect(confirmations).toHaveLength(0)
     expect(screen.getByRole('button', { name: 'Потвърди избраните части' })).toBeDisabled()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await user.click(screen.getByRole('button', { name: 'Зареди текущия ред' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Избери валидните видими редове' })).toBeEnabled())
   } else {
     await waitFor(() => expect(confirmations).toHaveLength(1))
     expect(confirmations[0].token).toBe('fresh-actor-bound-preview')

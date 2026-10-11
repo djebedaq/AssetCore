@@ -237,7 +237,11 @@ OEM screenshots остават локални; не се публикуват и
 Новите тестове покриват една таблица с отделни еднакви occurrences, partial кандидати, bulk selection,
 две бързи редакции, stale SAVE, отказ/потвърждение на reload, token renewal със/без concurrent change,
 невалиден пропуснат ред след частично потвърждение и неуспешен refresh,
+възобновяване след stale confirmation с презареждане само на действително променения кандидат,
 retained candidates след failed retry, empty-page creation race, BG/EN/RU и rotated/invalid geometry.
+Реалният Edge сценарий с два едновременно отворени таба доказва запазването на несъхранения
+текст при stale autosave, нула създадени части при stale confirmation и успешно продължаване
+след изрично зареждане на текущия ред. Непроменените редове не се маркират като конфликтни.
 Съществуващите GuidedParts тестове обработват 1/2/3/4/7 списъка и failed middle source/context retry.
 CatalogMaintenance и реалният CatalogBuilder проверяват запазените административни операции,
 immutable кодове, clone/unbind confirmations и актуалния publication digest.
