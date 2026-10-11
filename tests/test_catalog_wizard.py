@@ -21,6 +21,7 @@ from app.models import (
     PartVisualSnapshot,
 )
 from app.part_requests.service import load_request
+from catalog_review_helpers import verify_http_revision
 from docx import Document
 from reportlab.pdfgen import canvas
 from sqlalchemy import func, select
@@ -91,6 +92,7 @@ def confirm(client, headers, revision, result):
 
 
 def publish(client, headers, revision_id):
+    verify_http_revision(client, headers, revision_id)
     ready = checked(client.get(f"{BASE}/revisions/{revision_id}/workflow", headers=headers))
     assert ready["ready"], ready
     return checked(client.post(f"{BASE}/revisions/{revision_id}/publish", headers=headers, json={
@@ -139,6 +141,7 @@ def test_simple_flow_late_binding_update_and_immutable_official_evidence(
                           json={"position": part["position"], "x": .4, "y": .4, "width": .03, "height": .03}), 201)
         checked(client.post(f"{BASE}/hotspots/{hotspot['id']}/verify", headers=auth_headers,
                             json={"expected_version": hotspot["version"]}))
+    verify_http_revision(client, auth_headers, revision['id'])
     summary = checked(client.get(f"{BASE}/revisions/{revision['id']}/workflow", headers=auth_headers))
     assert summary["resume_step"] == "review" and summary["progress"]["completed_positions"] == 2
     unused = checked(client.post(f"{BASE}/revisions/{revision['id']}/groups", headers=auth_headers,

@@ -83,6 +83,14 @@ def classify(db: Session, actor: User, artifact_id: int, data: ClassifyDocumentP
     removed = [page for page in current if alias_by_id[page.artifact_id].assembly_id != target.id
                or page.role not in data.roles]
     removed_ids = [page.id for page in removed]
+    from .parts_extraction import ledger
+    if db.scalar(select(ledger.Attempt.id).join(ledger.Source, ledger.Attempt.source_id == ledger.Source.id)
+            .where(ledger.Source.visual_page_id.in_(removed_ids)).limit(1)):
+        raise service.fail("catalog_source_correction_review_required")
+    scopes = {(alias_by_id[page.artifact_id].assembly_id, page.reference_page_id) for page in current}
+    scopes.add((target.id, None))
+    for assembly_id, reference_page_id in scopes:
+        ledger.invalidate_scope(db, actor, assembly_id, reference_page_id, "SOURCE_CLASSIFICATION_CHANGED")
     from .repair_kits import source_page_reference_count
     if (removed_ids and (source_page_reference_count(db, removed_ids)
             or db.scalar(select(CatalogRevisionPartPageMap.id).where(

@@ -1067,6 +1067,99 @@ class CatalogRevisionVisualPage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
+class CatalogExtractionSession(Base):
+    """An exact selection snapshot; historical identifiers survive source removal."""
+    __tablename__ = "catalog_extraction_sessions"
+    __table_args__ = (UniqueConstraint("revision_id", "scope_key", "selection_digest", name="uq_extraction_selection"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    revision_id: Mapped[int] = mapped_column(ForeignKey("catalog_revisions.id"), index=True)
+    assembly_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    reference_page_id: Mapped[int | None] = mapped_column(Integer)
+    scope_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    selection_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    selection: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class CatalogExtractionSource(Base):
+    __tablename__ = "catalog_extraction_sources"
+    __table_args__ = (
+        UniqueConstraint("session_id", "visual_page_id", name="uq_extraction_source"),
+        CheckConstraint("processing_state IN ('QUEUED','RUNNING','SUCCEEDED','FAILED','CANCELLED')", name="ck_extraction_processing"),
+        CheckConstraint("review_state IN ('NOT_REVIEWED','NEEDS_REVIEW','VERIFIED')", name="ck_extraction_review"),
+        CheckConstraint("version >= 1", name="ck_extraction_version"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("catalog_extraction_sessions.id"), index=True)
+    visual_page_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    source_blob_id: Mapped[int] = mapped_column(ForeignKey("catalog_source_blobs.id"), nullable=False)
+    source: Mapped[dict] = mapped_column(JSON, nullable=False)
+    processing_state: Mapped[str] = mapped_column(String(24), default="QUEUED", nullable=False)
+    review_state: Mapped[str] = mapped_column(String(24), default="NOT_REVIEWED", nullable=False)
+    current_attempt_id: Mapped[int | None] = mapped_column(Integer)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    approved_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    __mapper_args__ = {"version_id_col": version, "version_id_generator": False}
+
+
+class CatalogExtractionAttempt(Base):
+    __tablename__ = "catalog_extraction_attempts"
+    __table_args__ = (
+        CheckConstraint("state IN ('RUNNING','SUCCEEDED','FAILED','CANCELLED')", name="ck_extraction_attempt_state"),
+        CheckConstraint("kind IN ('EXTRACTION','MAPPING','CARRY_FORWARD','MANUAL')", name="ck_extraction_attempt_kind"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("catalog_extraction_sources.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(24), default="EXTRACTION", nullable=False)
+    state: Mapped[str] = mapped_column(String(24), nullable=False)
+    extractor: Mapped[str] = mapped_column(String(80), nullable=False)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    deadline_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    evidence: Mapped[dict | None] = mapped_column(JSON)
+    evidence_digest: Mapped[str | None] = mapped_column(String(64))
+    error_code: Mapped[str | None] = mapped_column(String(120))
+
+
+class CatalogExtractionCandidate(Base):
+    __tablename__ = "catalog_extraction_candidates"
+    __table_args__ = (
+        UniqueConstraint("source_id", "stable_key", name="uq_extraction_candidate"),
+        CheckConstraint("state IN ('PENDING','ACCEPTED','REJECTED','CONFLICT')", name="ck_extraction_candidate_state"),
+        CheckConstraint("version >= 1", name="ck_extraction_candidate_version"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("catalog_extraction_sources.id"), index=True)
+    stable_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    original: Mapped[dict] = mapped_column(JSON, nullable=False)
+    values: Mapped[dict] = mapped_column(JSON, nullable=False)
+    state: Mapped[str] = mapped_column(String(24), default="PENDING", nullable=False)
+    part_id: Mapped[int | None] = mapped_column(Integer)
+    part_created_at: Mapped[datetime | None] = mapped_column(DateTime)
+    reason: Mapped[str | None] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    updated_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class CatalogSourceReviewDecision(Base):
+    __tablename__ = "catalog_source_review_decisions"
+    __table_args__ = (CheckConstraint("decision = 'VERIFIED'", name="ck_source_review_decision"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("catalog_extraction_sources.id"), index=True)
+    source_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    decision: Mapped[str] = mapped_column(String(24), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    inspection_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class CatalogRevisionPart(Base):
     __tablename__ = "catalog_revision_parts"
     __table_args__ = (

@@ -3,6 +3,8 @@ import { api, ApiError, createApiObjectUrl } from '../../api'
 import { filePayload, Modal } from '../../industrialUi'
 import { useI18n, type TranslationKey } from '../../i18n'
 import useDraftGuard from './useDraftGuard'
+import DurableSourceReview from './DurableSourceReview'
+import type { ReviewSession } from './guidedTypes'
 
 type Page = { visual_page_id: number; artifact_id: number; artifact_title: string; filename: string; sha256: string; page_number: number }
 type Map = Page & { id: number }
@@ -79,6 +81,7 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [reviewSession, setReviewSession] = useState<ReviewSession | null>(null)
   useDraftGuard(!!editing || !!mapping || busy, onDirtyChange)
   const visibleFields = simple ? (['position', 'part_number', `name_${locale}`, 'description', 'quantity', 'unit'] as (keyof PartForm)[]) : fields
   const problem = (code: string) => t(problemKeys[code] || 'builder.error.generic')
@@ -89,6 +92,7 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
       api<Page[]>(`${scope}/spare-list-pages`),
     ])
     setParts(rows); setPages(options)
+    if (editable && !referencePageId) setReviewSession(await api<ReviewSession>(`${scope}/source-review`, { method: 'POST' }))
   }
   useEffect(() => { void load().catch(caught => setError(message(caught))) }, [assemblyId, referencePageId])
   function openForm(part: Part | 'new') {
@@ -150,6 +154,8 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
   const partName = (part: Part) => part[`name_${locale}`] || part.name_bg || part.name_en || part.name_ru || part.description
   return <div className="builder-workspace">
     {error && <p className="error" role="alert">{error}</p>}
+    {editable && !referencePageId && <DurableSourceReview session={reviewSession} parts={parts} busy={busy || !!editing || !!mapping}
+      reload={async () => { await load(); await onChanged?.() }} />}
     <div className="actions">{editable && <><button className="primary compact" onClick={() => openForm('new')}>{t('builder.part.add')}</button>
       {!simple && <button className="secondary compact" onClick={() => { setImportOpen(true); setPreview(null) }}>{t('builder.part.import')}</button>}</>}</div>
     <input aria-label={t('builder.part.search')} placeholder={t('builder.part.search')} value={search} onChange={event => setSearch(event.target.value)} />

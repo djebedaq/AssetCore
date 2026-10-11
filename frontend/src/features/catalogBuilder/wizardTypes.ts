@@ -21,6 +21,7 @@ export type Workflow = { ready: boolean; publication_digest: string; current_pub
   progress: { position_count: number; completed_positions: number }; resume_step: Step }
 
 export const problemKeys: Record<string, TranslationKey> = {
+  catalog_publication_source_review_required: 'guided.sourceReviewBlocked',
   catalog_publication_reference_page_incomplete: 'guided.incomplete',
   catalog_reference_page_stale: 'guided.stale', catalog_reference_page_in_use: 'guided.inUse',
   catalog_invalid_update: 'builder.error.invalid', catalog_category_not_supported: 'builder.error.capability',

@@ -1298,6 +1298,7 @@ export const bg = {
   'ownerDeletion.references.builderRepairKitComponents': 'Компоненти на чернови комплекти',
   'ownerDeletion.references.builderCatalogs': 'Каталози в конструктора',
   'ownerDeletion.references.builderRevisions': 'Чернови ревизии на каталога',
+  'ownerDeletion.references.builderReviewHistory': 'История на каталожната обработка и проверка',
   'ownerDeletion.references.builderBindings': 'Връзки на каталога с активи',
 } as const
 
@@ -1965,6 +1966,7 @@ Object.assign(en, {
   'ownerDeletion.references.builderRepairKitComponents': 'Draft repair kit components',
   'ownerDeletion.references.builderCatalogs': 'Builder catalogs',
   'ownerDeletion.references.builderRevisions': 'Draft catalog revisions',
+  'ownerDeletion.references.builderReviewHistory': 'Catalog processing and review history',
   'ownerDeletion.references.builderBindings': 'Catalog asset bindings',
 } satisfies Partial<Catalog>)
 
@@ -2632,6 +2634,7 @@ Object.assign(ru, {
   'ownerDeletion.references.builderRepairKitComponents': 'Компоненты черновых комплектов',
   'ownerDeletion.references.builderCatalogs': 'Каталоги конструктора',
   'ownerDeletion.references.builderRevisions': 'Черновые редакции каталога',
+  'ownerDeletion.references.builderReviewHistory': 'История обработки и проверки каталога',
   'ownerDeletion.references.builderBindings': 'Привязки каталога к активам',
 } satisfies Partial<Catalog>)
 

@@ -73,6 +73,14 @@ def serialize(db: Session, page) -> dict:
             CatalogRevisionPartPageMap.part_id == CatalogRevisionPart.id).exists()).limit(1))
     complete = bool(schemes and lists and count and unmapped_parts is None
                     and positions <= mapped and all(verified for _, verified in hotspots))
+    if complete:
+        from ..models import CatalogRevision
+        from .parts_extraction import ledger
+        assembly, revision, _ = visual_sources._assembly(db, page.assembly_id)
+        if revision.status == "DRAFT":
+            active = ledger.session(db, None, assembly, db.get(CatalogRevision, assembly.revision_id), page.id)
+            reviewed = list(db.scalars(select(ledger.Source).where(ledger.Source.session_id == active.id))) if active else []
+            complete = bool(len(reviewed) == lists and all(ledger.valid(db, source, active) for source in reviewed))
     return {"id": page.id, "assembly_id": page.assembly_id, "stable_key": page.stable_key,
             "sort_order": page.sort_order, "title": page.title, "version": page.version,
             "sources": sources, "part_count": count, "position_count": len(positions),
@@ -104,6 +112,8 @@ def create(db: Session, actor: User, assembly_id: int, data) -> dict:
 def update(db: Session, actor: User, page_id: int, data) -> dict:
     page, assembly, revision, catalog = load(db, page_id, mutate=True)
     check_version(page, data.expected_version)
+    from .parts_extraction.ledger import invalidate_scope
+    invalidate_scope(db, actor, assembly.id, page.id, "REFERENCE_PAGE_UPDATED")
     for key, value in data.model_dump(exclude_unset=True, exclude={"expected_version"}).items():
         if key == "sort_order" and value is None:
             raise fail("catalog_invalid_update", 422)
@@ -121,6 +131,11 @@ def delete_page(db: Session, actor: User, page_id: int, expected_version: int) -
     sources = assignments(db, page.id)
     if page_has_dependents(db, page.id):
         raise fail("catalog_reference_page_in_use")
+    from .parts_extraction import ledger
+    if db.scalar(select(ledger.Attempt.id).join(ledger.Source, ledger.Attempt.source_id == ledger.Source.id)
+            .where(ledger.Source.visual_page_id.in_([source["id"] for source in sources])).limit(1)):
+        raise fail("catalog_source_correction_review_required")
+    ledger.invalidate_scope(db, actor, assembly.id, page.id, "REFERENCE_PAGE_REMOVED")
     for source in sources:
         db.delete(db.get(CatalogRevisionVisualPage, source["id"]))
     add_audit_log(db, actor, "catalog_reference_page", page.id, "REFERENCE_PAGE_DELETED",
@@ -153,6 +168,8 @@ def assign(db: Session, actor: User, page_id: int, data) -> dict:
         raise fail("catalog_visual_page_invalid", 422)
     if len(data.page_numbers) != len(set(data.page_numbers)) or len(data.roles) != len(set(data.roles)):
         raise fail("catalog_visual_page_invalid", 422)
+    from .parts_extraction.ledger import invalidate_scope
+    invalidate_scope(db, actor, assembly.id, page.id, "SOURCE_ASSIGNMENT_ADDED")
     alias = db.scalar(select(CatalogRevisionArtifact).where(
         CatalogRevisionArtifact.assembly_id == assembly.id, CatalogRevisionArtifact.sha256 == source.sha256))
     if alias is None:
@@ -200,6 +217,8 @@ def reorder_pages(db: Session, actor: User, assembly_id: int, data) -> list[dict
     for item in data.pages:
         check_version(by_id[item.id], item.expected_version)
     for index, item in enumerate(data.pages):
+        from .parts_extraction.ledger import invalidate_scope
+        invalidate_scope(db, actor, assembly.id, item.id, "REFERENCE_PAGES_REORDERED")
         by_id[item.id].sort_order = index
         touch(by_id[item.id])
     add_audit_log(db, actor, "catalog_revision_assembly", assembly.id, "REFERENCE_PAGES_REORDERED",
@@ -233,6 +252,8 @@ def reorder_sources(db: Session, actor: User, page_id: int, data) -> dict:
     by_id = {row.id: row for row in rows}
     if not _same_ids(by_id, data.ordered_ids):
         raise fail("catalog_visual_page_invalid", 422)
+    from .parts_extraction.ledger import invalidate_scope
+    invalidate_scope(db, actor, assembly.id, page.id, "SOURCES_REORDERED")
     for index, identity in enumerate(data.ordered_ids):
         by_id[identity].sort_order = index
     touch(page)

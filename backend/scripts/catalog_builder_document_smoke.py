@@ -10,6 +10,8 @@ import fitz
 from app import models as m
 from app.catalog import service as runtime
 from app.catalog_admin import publication
+from app.catalog_admin.parts_extraction import review
+from app.catalog_admin.parts_extraction.schemas import SourceReview
 from app.catalog_admin.service import bind_asset
 from app.documents import part_request_documents
 from app.documents.part_request_grouped_visuals import prepare_appendix
@@ -63,7 +65,10 @@ def main() -> None:
             db.flush()
             with fitz.open() as pdf:
                 pdf.new_page().insert_text((60, 80), "QA-ONLY Builder scheme")
-                pdf.new_page().insert_text((60, 80), "QA-ONLY Builder exact spare list")
+                spare_page = pdf.new_page()
+                spare_page.insert_text((60, 80), "QA-ONLY Builder exact spare list")
+                spare_page.insert_text((60, 110), "Position: " + "P" * 80, fontsize=6)
+                spare_page.insert_text((60, 130), "Part Number: QA-ONLY-PART; Description: QA test part; Quantity: 1")
                 raw = pdf.tobytes()
             artifact = m.CatalogRevisionArtifact(assembly_id=assembly.id, title="QA-ONLY",
                 filename="qa-only.pdf", media_type="application/pdf", content=raw,
@@ -76,7 +81,7 @@ def main() -> None:
                 role="SPARE_PARTS_LIST", created_by_id=actor.id)
             part = m.CatalogRevisionPart(assembly_id=assembly.id, position="P" * 80,
                 part_number="QA-ONLY-PART", name_bg="QA тестова част", name_en="QA test part",
-                name_ru="QA тестовая деталь", created_by_id=actor.id)
+                name_ru="QA тестовая деталь", description="QA test part", quantity=1, created_by_id=actor.id)
             db.add_all([scheme, spare, part])
             db.flush()
             db.add(m.CatalogRevisionPartPageMap(part_id=part.id, visual_page_id=spare.id, created_by_id=actor.id))
@@ -84,6 +89,12 @@ def main() -> None:
                 x=.1, y=.1, width=.1, height=.1, provenance="MANUAL_VERIFIED", is_verified=True,
                 verified_by_id=actor.id, verified_at=m.utcnow(), version=1, created_by_id=actor.id))
             db.commit()
+            state = review.workspace(db, actor, assembly.id)["sources"][0]
+            image, receipt = review.original(db, actor, spare.id)
+            assert image.startswith(b"\x89PNG")
+            review.verify(db, actor, spare.id, SourceReview(expected_version=state["version"],
+                fingerprint=state["fingerprint"], inspection_token=receipt, manual_transcription=True,
+                reason="QA inspected the exact synthetic list and its manually transcribed part"))
             preview = publication.readiness(db, revision.id)
             assert preview["ready"], preview["errors"]
             publication.publish(db, actor, revision.id, preview["publication_digest"], None, True)

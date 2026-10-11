@@ -45,5 +45,8 @@ def test_multisource_confirmation_and_exact_page_maps(pg_factory, count, headerl
         for part in parts:
             result = previews[(int(part.position) - 1) // 5]
             assert part.extraction_evidence["source"] == result["source"]
-            assert part.extraction_evidence["row"] == result["rows"][(int(part.position) - 1) % 5]
+            returned = result["rows"][(int(part.position) - 1) % 5]
+            # Durable UI state is versioned separately from immutable raw evidence.
+            assert part.extraction_evidence["row"] == {key: value for key, value in returned.items()
+                if key not in {"candidate_version", "candidate_state"}}
             assert list(db.scalars(select(CatalogRevisionPartPageMap.visual_page_id).where(CatalogRevisionPartPageMap.part_id == part.id))) == [result["source"]["visual_page_id"]]

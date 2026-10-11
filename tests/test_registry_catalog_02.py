@@ -24,6 +24,7 @@ from app.models import (
 )
 from app.registry_correction import apply_correction, preflight
 from app.seed import seed_database
+from catalog_review_helpers import verify_http_revision
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from test_catalog_builder_parts import BASE, part, source, workspace
@@ -214,6 +215,7 @@ def test_builder_drafts_excluded_published_revision_pinned(client, auth_headers,
     assert client.post(f"{BASE}/parts/{part_id}/source-pages", headers=auth_headers,
                        json={"visual_page_ids": [spare]}).status_code == 201
     assert all(not item["revision"].startswith("CATALOG_BUILDER") for item in client.get(f"{BASE}/reference-sources", headers=auth_headers).json())
+    verify_http_revision(client, auth_headers, revision_id)
     readiness = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness", headers=auth_headers).json()
     published = client.post(f"{BASE}/revisions/{revision_id}/publish", headers=auth_headers, json={
         "expected_publication_digest": readiness["publication_digest"], "expected_current_published_revision_id": None, "confirmed": True})

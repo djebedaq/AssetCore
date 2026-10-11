@@ -7,7 +7,7 @@ import binascii
 import hashlib
 
 from fastapi import HTTPException
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -37,14 +37,29 @@ MAX_PDF_PAGES = settings.catalog_pdf_max_pages
 ROLES = {"EXPLODED_SCHEME", "SPARE_PARTS_LIST"}
 
 
+def lock_catalog(db: Session, catalog_id: int):
+    db.flush()
+    # SQLite ignores FOR UPDATE. Acquire its write lock before authoritative reads.
+    # PostgreSQL serializes all Builder mutations/publication on the catalog row.
+    if db.get_bind().dialect.name == "sqlite":
+        db.execute(update(CatalogDefinition).where(CatalogDefinition.id == catalog_id)
+                   .values(id=catalog_id, updated_at=CatalogDefinition.updated_at)
+                   .execution_options(synchronize_session=False))
+    catalog = db.scalar(select(CatalogDefinition).where(CatalogDefinition.id == catalog_id)
+        .with_for_update().execution_options(populate_existing=True))
+    # A long-lived ORM session may have read the graph before waiting for this
+    # lock. The explicit flush preserves local writes with autoflush disabled;
+    # reread cached rows afterwards.
+    db.expire_all()
+    return catalog
+
+
 def _revision(db: Session, revision_id: int, *, mutate: bool = False):
     revision = db.scalar(select(CatalogRevision).where(CatalogRevision.id == revision_id))
     if revision is None:
         raise fail("catalog_revision_not_found", 404)
     catalog_query = select(CatalogDefinition).where(CatalogDefinition.id == revision.catalog_id)
-    if mutate:
-        catalog_query = catalog_query.with_for_update().execution_options(populate_existing=True)
-    catalog = db.scalar(catalog_query)
+    catalog = lock_catalog(db, revision.catalog_id) if mutate else db.scalar(catalog_query)
     if catalog is None:
         raise fail("catalog_definition_not_found", 404)
     if mutate:
@@ -181,6 +196,15 @@ def delete_assembly(db: Session, actor: User, assembly_id: int) -> None:
     if db.scalar(select(CatalogRevisionReferencePage.id).where(
             CatalogRevisionReferencePage.assembly_id == item.id).limit(1)):
         raise fail("catalog_reference_page_in_use")
+    from .parts_extraction import ledger
+    if db.scalar(select(ledger.Attempt.id).join(ledger.Source, ledger.Attempt.source_id == ledger.Source.id)
+            .join(ledger.ExtractionSession, ledger.Source.session_id == ledger.ExtractionSession.id)
+            .join(CatalogRevisionVisualPage, ledger.Source.visual_page_id == CatalogRevisionVisualPage.id)
+            .join(CatalogRevisionArtifact, CatalogRevisionVisualPage.artifact_id == CatalogRevisionArtifact.id)
+            .where(ledger.ExtractionSession.revision_id == revision.id,
+                CatalogRevisionArtifact.assembly_id == item.id).limit(1)):
+        raise fail("catalog_source_correction_review_required")
+    ledger.invalidate_scope(db, actor, assembly_id, None, "ASSEMBLY_REMOVED")
     artifacts = db.scalars(select(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == item.id)).all()
     artifact_audit = [{"artifact_id": artifact.id, "filename": artifact.filename,
                        "sha256": artifact.sha256, "visual_pages": _role_pages(db, artifact.id)}
@@ -288,6 +312,11 @@ def delete_artifact(db: Session, actor: User, artifact_id: int) -> None:
         raise fail("catalog_reference_page_in_use")
     if source_page_reference_count(db, page_ids):
         raise fail("catalog_repair_kit_source_page_in_use")
+    from .parts_extraction import ledger
+    if db.scalar(select(ledger.Attempt.id).join(ledger.Source, ledger.Attempt.source_id == ledger.Source.id)
+            .where(ledger.Source.visual_page_id.in_(page_ids)).limit(1)):
+        raise fail("catalog_source_correction_review_required")
+    ledger.invalidate_scope(db, actor, assembly.id, None, "SOURCE_DOCUMENT_REMOVED")
     mapped = db.execute(select(CatalogRevisionPartPageMap.part_id, CatalogRevisionPartPageMap.visual_page_id)
                         .where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids))).all()
     hotspot_counts = remove_page_hotspots(db, actor, page_ids, catalog, revision, assembly)
@@ -326,6 +355,8 @@ def assign_visual_pages(db: Session, actor: User, artifact_id: int, data: Visual
         CatalogRevisionVisualPage.role == data.role).limit(1))
     if existing:
         raise fail("catalog_visual_page_duplicate")
+    from .parts_extraction.ledger import invalidate_scope
+    invalidate_scope(db, actor, assembly.id, None, "SOURCE_ASSIGNMENT_ADDED")
     rows = [CatalogRevisionVisualPage(artifact_id=item.id, page_number=number,
                                       role=data.role, created_by_id=actor.id) for number in numbers]
     db.add_all(rows)
@@ -340,7 +371,7 @@ def assign_visual_pages(db: Session, actor: User, artifact_id: int, data: Visual
     return [_page_dict(row) for row in rows]
 
 
-def remove_visual_page(db: Session, actor: User, assignment_id: int) -> None:
+def remove_visual_page(db: Session, actor: User, assignment_id: int, *, reviewed_correction: bool = False) -> None:
     from .hotspots import remove_page_hotspots
     from .repair_kits import source_page_reference_count
 
@@ -348,6 +379,14 @@ def remove_visual_page(db: Session, actor: User, assignment_id: int) -> None:
     if page is None:
         raise fail("catalog_visual_page_invalid", 404)
     item, assembly, revision, catalog = _artifact(db, page.artifact_id, mutate=True)
+    from .parts_extraction.ledger import invalidate_scope
+    invalidate_scope(db, actor, assembly.id, page.reference_page_id, "SOURCE_ASSIGNMENT_REMOVED")
+    if page.role == "SPARE_PARTS_LIST" and not reviewed_correction:
+        from .parts_extraction import ledger
+        attempted = db.scalar(select(ledger.Attempt.id).join(ledger.Source,
+            ledger.Attempt.source_id == ledger.Source.id).where(ledger.Source.visual_page_id == page.id).limit(1))
+        if attempted:
+            raise fail("catalog_source_correction_review_required")
     if page.reference_page_id is not None:
         from .reference_pages import load, sources_in_use, touch
         reference, _, _, _ = load(db, page.reference_page_id, mutate=True)

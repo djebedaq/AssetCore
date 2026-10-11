@@ -6,13 +6,14 @@ import GuidedParts from './GuidedParts'
 import GuidedSources from './GuidedSources'
 import RevisionHotspotEditor from './RevisionHotspotEditor'
 import RevisionRepairKits from './RevisionRepairKits'
+import RevisionParts from './RevisionParts'
 import type { ReferencePage } from './guidedTypes'
 import { builderBase, type Group, type Step } from './wizardTypes'
 
 const localTask = (step: Step): Step => step === 'parts' || step === 'hotspots' ? step : 'documents'
 
 export default function GuidedWorkspace({ revisionId, groups, task: initialTask, changed, onDirtyChange, target }: {
-  revisionId: number; groups: Group[]; task: Step; changed: () => Promise<void>; onDirtyChange: (dirty: boolean) => void; target?: { assembly_id?: number; reference_page_id?: number }
+  revisionId: number; groups: Group[]; task: Step; changed: () => Promise<void>; onDirtyChange: (dirty: boolean) => void; target?: { assembly_id?: number; reference_page_id?: number; visual_page_id?: number }
 }) {
   const { t, locale } = useI18n()
   const [task, setTask] = useState<Step>(localTask(initialTask))
@@ -134,12 +135,12 @@ export default function GuidedWorkspace({ revisionId, groups, task: initialTask,
             <button className="secondary" disabled={busy || dirty} onClick={() => { if (window.confirm(t('workspace.deletePageConfirm'))) void action(() => api(`${builderBase}/reference-pages/${page.id}?expected_version=${page.version}`, { method: 'DELETE' })) }}>{t('guided.delete')}</button>
           </div></details>
         </>}
-        {task === 'parts' && <GuidedParts key={page.id} page={page} changed={refresh} onDirtyChange={setDirty} />}
+        {task === 'parts' && <GuidedParts key={page.id} page={page} targetSourceId={target?.visual_page_id} changed={refresh} onDirtyChange={setDirty} />}
         {task === 'hotspots' && <>
           <RevisionHotspotEditor key={page.id} assemblyId={assembly.id} contextLabel={`${label(assembly)} › ${t('guided.page', { number: pages.indexOf(page) + 1 })}`} referencePageId={page.id} editable simple onDirtyChange={setDirty} onChanged={refresh} />
           <details><summary>{t('wizard.optionalKits')}</summary><RevisionRepairKits assemblyId={assembly.id} editable onDirtyChange={setKitDirty} /></details>
         </>}
-      </> : <p role="status">{t('guided.choosePage')}</p>}
+      </> : assemblyId && task === 'parts' ? <RevisionParts assemblyId={assemblyId} editable onChanged={refresh} onDirtyChange={setDirty} /> : <p role="status">{t('guided.choosePage')}</p>}
     </fieldset>
   </section>
 }

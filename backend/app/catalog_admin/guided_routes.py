@@ -1,14 +1,16 @@
 """Permissioned reference-page editing and selected-list preview/confirm API."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import User
 from ..permissions import Permission, require_permission
 from . import hotspots, parts, reference_pages, visual_sources
+from .parts_extraction import review
 from .parts_extraction import service as extraction
 from .parts_extraction.schemas import (
+    CandidateEdit,
     ColumnMapping,
     ExtractConfirm,
     ExtractSelection,
@@ -18,11 +20,51 @@ from .parts_extraction.schemas import (
     ReferenceOrder,
     SourceAssign,
     SourceOrder,
+    SourceReview,
 )
 from .schemas import PartCreate, PartImportConfirm, PartImportPreview
 
 router = APIRouter(prefix="/api/admin/catalog-builder", tags=["catalog-builder"])
 manager = require_permission(Permission.PARTS_MANAGE)
+
+
+@router.post("/reference-pages/{page_id}/review-session")
+def resume_review(page_id: int, actor: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    page, assembly, *_ = reference_pages.load(db, page_id)
+    return review.workspace(db, actor, assembly.id, page.id)
+
+
+@router.post("/assemblies/{assembly_id}/source-review")
+def resume_legacy_review(assembly_id: int, actor: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    return review.workspace(db, actor, assembly_id)
+
+
+@router.get("/visual-pages/{source_id}/review-original")
+def review_original(source_id: int, actor: User = Depends(manager), db: Session = Depends(get_db)) -> Response:
+    image, receipt = review.original(db, actor, source_id)
+    return Response(image, media_type="image/png", headers={"Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff", "X-Catalog-Review-Receipt": receipt})
+
+
+@router.post("/visual-pages/{source_id}/review")
+def verify_source(source_id: int, data: SourceReview, actor: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    return review.verify(db, actor, source_id, data)
+
+
+@router.get("/extraction-sources/{source_id}/original")
+def historical_source_original(source_id: int, _: User = Depends(manager), db: Session = Depends(get_db)) -> Response:
+    return Response(review.historical_original(db, source_id), media_type="image/png",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@router.post("/visual-pages/{source_id}/selection-correction", status_code=204)
+def correct_selection(source_id: int, data: SourceReview, actor: User = Depends(manager), db: Session = Depends(get_db)) -> None:
+    review.correct_selection(db, actor, source_id, data)
+
+
+@router.patch("/extraction-candidates/{candidate_id}")
+def edit_candidate(candidate_id: int, data: CandidateEdit, actor: User = Depends(manager), db: Session = Depends(get_db)) -> dict:
+    return review.edit_candidate(db, actor, candidate_id, data)
 
 
 @router.get("/assemblies/{assembly_id}/reference-pages")

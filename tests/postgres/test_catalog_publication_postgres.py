@@ -36,6 +36,7 @@ from app.models import (
     User,
     utcnow,
 )
+from catalog_review_helpers import verify_service_sources
 from fastapi import HTTPException
 from reportlab.pdfgen import canvas
 from sqlalchemy import func, select
@@ -111,6 +112,9 @@ def _setup(factory, revision_codes=("A",), suffix=""):
                                                      created_by_id=actor.id))
             revisions.append((revision.id, part.id))
         db.commit()
+        for revision_id, _ in revisions:
+            assembly_id = db.scalar(select(CatalogRevisionAssembly.id).where(CatalogRevisionAssembly.revision_id == revision_id))
+            verify_service_sources(db, actor, assembly_id)
         return catalog.id, revisions
 
 

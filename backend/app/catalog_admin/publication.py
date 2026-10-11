@@ -119,8 +119,8 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
     if catalog is None:
         raise fail("catalog_definition_not_found", 404)
     if locked:
-        catalog = db.scalar(select(CatalogDefinition).where(CatalogDefinition.id == catalog.id)
-                            .with_for_update().execution_options(populate_existing=True))
+        from .visual_sources import lock_catalog
+        catalog = lock_catalog(db, catalog.id)
         revision = db.scalar(select(CatalogRevision).where(CatalogRevision.id == revision_id)
                              .with_for_update().execution_options(populate_existing=True))
     current = db.scalar(select(CatalogRevision).where(CatalogRevision.catalog_id == catalog.id,
@@ -215,6 +215,10 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         if (not owned_parts or {"EXPLODED_SCHEME", "SPARE_PARTS_LIST"} - {page.role for page in owned}):
             errors.append(_error("catalog_publication_reference_page_incomplete", reference_page_id=reference.id))
     components_by_kit = defaultdict(list)
+    from .parts_extraction.ledger import publication_state
+    review_errors, review_proof = publication_state(db, content)
+    if revision.status == "DRAFT":
+        errors.extend(review_errors)
     for component in content["components"]:
         components_by_kit[component.kit_id].append(component)
         kit, part = kit_by_id.get(component.kit_id), part_by_id.get(component.part_id)
@@ -240,7 +244,8 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         "repair_kit_component_count": len(content["components"]),
     }
     return {"ready": not errors, "errors": errors, "warnings": warnings,
-            "publication_digest": digest(catalog, revision, content),
+            "publication_digest": hashlib.sha256((digest(catalog, revision, content) + json.dumps(
+                review_proof, sort_keys=True, separators=(",", ":"))).encode()).hexdigest() if revision.status == "DRAFT" else digest(catalog, revision, content),
             "current_published_revision_id": current.id if current else None,
             "summary": summary}
 

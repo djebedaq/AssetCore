@@ -159,6 +159,8 @@ def create_part(db: Session, actor: User, assembly_id: int, data: PartCreate, *,
         if reference.assembly_id != assembly.id:
             raise fail("catalog_part_page_invalid", 422)
     values = _clean(data.model_dump())
+    from .parts_extraction.ledger import invalidate_scope
+    invalidate_scope(db, actor, assembly.id, reference_page_id, "PART_CREATED")
     item = CatalogRevisionPart(assembly_id=assembly.id, reference_page_id=reference_page_id, created_by_id=actor.id, **values)
     db.add(item)
     try:
@@ -183,6 +185,8 @@ def update_part(db: Session, actor: User, part_id: int, data: PartUpdate) -> dic
         setattr(item, key, values[key])
     if changes:
         item.updated_at = utcnow()
+        from .parts_extraction.ledger import invalidate_scope
+        invalidate_scope(db, actor, assembly.id, item.reference_page_id, "PART_UPDATED")
     try:
         db.flush()
     except IntegrityError as exc:
@@ -204,6 +208,8 @@ def delete_part(db: Session, actor: User, part_id: int) -> None:
     if _last_position_in_use(db, item):
         raise fail("catalog_part_position_in_use")
     removed = [row["visual_page_id"] for row in _maps(db, item.id)]
+    from .parts_extraction.ledger import invalidate_scope
+    invalidate_scope(db, actor, assembly.id, item.reference_page_id, "PART_DELETED")
     db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.part_id == item.id))
     add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_DELETED",
                   _meta(catalog, revision, assembly, position=item.position,
@@ -233,6 +239,8 @@ def map_pages(db: Session, actor: User, part_id: int, data: PartPageMapCreate) -
         CatalogRevisionPartPageMap.visual_page_id.in_(ids)).limit(1))
     if existing:
         raise fail("catalog_part_page_duplicate")
+    from .parts_extraction.ledger import invalidate_scope
+    invalidate_scope(db, actor, assembly.id, item.reference_page_id, "PART_MAPPING_CHANGED")
     db.add_all(CatalogRevisionPartPageMap(part_id=item.id, visual_page_id=page_id,
                                            created_by_id=actor.id) for page_id in ids)
     try:
@@ -256,6 +264,8 @@ def unmap_page(db: Session, actor: User, mapping_id: int) -> None:
     if mapping is None or mapping.part_id != item.id:
         raise fail("catalog_part_page_not_found", 404)
     page_id = mapping.visual_page_id
+    from .parts_extraction.ledger import invalidate_scope
+    invalidate_scope(db, actor, assembly.id, item.reference_page_id, "PART_MAPPING_CHANGED")
     db.delete(mapping)
     add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_SOURCE_UNMAPPED",
                   _meta(catalog, revision, assembly, visual_page_ids=[page_id]))
@@ -410,6 +420,9 @@ def import_confirm(db: Session, actor: User, assembly_id: int, token: str,
 
 
 def insert_preview_rows(db: Session, actor: User, assembly, revision, catalog, rows: list[dict], reference_page_id: int | None = None) -> list[int]:
+    if rows:
+        from .parts_extraction.ledger import invalidate_scope
+        invalidate_scope(db, actor, assembly.id, reference_page_id, "PARTS_IMPORTED")
     created = []
     for preview_row in rows:
         values = preview_row["normalized"]
