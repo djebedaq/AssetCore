@@ -1,0 +1,11 @@
+{
+  "checks": [
+    "Single UI action: page 13 exact 20/20, page 15 exact 10/10; all four fields and SHA/page provenance",
+    "Human draft correction survives refresh; restored to inspected original before confirmation",
+    "Thirty confirmed parts remain blocked until both original sources receive explicit human review",
+    "Re-extraction keeps all candidate identities and creates no duplicate parts",
+    "Source decisions survive refresh; publication still blocked by unverified hotspot work (48/38 untouched)"
+  ],
+  "pageErrors": [],
+  "productionAccess": false
+}

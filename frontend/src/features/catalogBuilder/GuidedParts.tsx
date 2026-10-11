@@ -79,15 +79,17 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
   useEffect(() => { onDirtyChange(busy || unsaved || advancedDirty); return () => onDirtyChange(false) }, [busy, unsaved, advancedDirty, onDirtyChange])
   const sources = page.sources.filter(source => source.role === 'SPARE_PARTS_LIST')
     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-  async function extractSource(source: Source, previous: string | null): Promise<string | null> {
+  async function extractSource(source: Source, previous: string | null, groupContext = false, contextOnly = false): Promise<Preview | null> {
     try {
       const result = await api<Preview>(`${builderBase}/reference-pages/${page.id}/extract`, { method: 'POST', body: JSON.stringify({
         visual_page_id: source.id, continuation_token: previous,
+        expected_version: page.version, group_context: groupContext,
+        context_only: contextOnly,
       }) })
       setReviews(current => [...current.filter(item => item.preview.source.visual_page_id !== source.id), review(result)]
         .sort((a, b) => sources.findIndex(s => s.id === a.preview.source.visual_page_id) - sources.findIndex(s => s.id === b.preview.source.visual_page_id)))
       setSourceResults(current => current.map(item => item.source.id === source.id ? { source, state: 'processed' } : item))
-      return result.token
+      return result
     } catch (caught) {
       setSourceResults(current => current.map(item => item.source.id === source.id ? { source, state: 'failed', error: guidedError(caught) } : item))
       return null
@@ -96,7 +98,7 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
   async function retrySource(source: Source) {
     setBusy(true)
     const prior = sources[sources.findIndex(item => item.id === source.id) - 1]
-    try { await extractSource(source, reviews.find(item => item.preview.source.visual_page_id === prior?.id)?.preview.token ?? null) }
+    try { await extractSource(source, reviews.find(item => item.preview.source.visual_page_id === prior?.id)?.preview.token ?? null, true) }
     finally {
       try { await load() } catch (caught) { setError(t(guidedError(caught))) }
       setBusy(false)
@@ -107,10 +109,19 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
     setBusy(true); setError(''); setReviews([])
     setSourceResults(sources.map(source => ({ source, state: 'pending' })))
     let previous: string | null = null
+    const contextRetry: Source[] = []
     try {
       for (const [index, source] of sources.entries()) {
         setProgress({ current: index + 1, total: sources.length })
-        previous = await extractSource(source, previous)
+        const result = await extractSource(source, previous)
+        previous = result?.token ?? null
+        if (result?.quality?.needs_context) contextRetry.push(source)
+      }
+      // The later successful pages may supply semantic roles to an earlier
+      // headerless list. The server derives context from the exact ledger scope.
+      for (const [index, source] of contextRetry.entries()) {
+        setProgress({ current: index + 1, total: contextRetry.length })
+        await extractSource(source, null, true, true)
       }
     } catch (caught) { setError(t(guidedError(caught))) } finally {
       try { await load() } catch (caught) { setError(t(guidedError(caught))) }
@@ -198,7 +209,8 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
           {' · '}{t(result.state === 'pending' ? 'builder.previewPending' : attention ? 'guided.NEEDS_ATTENTION' : 'guided.clean')}
           {item && <> · {t('guided.sourceRows', { count: item.rows.length })}</>}
           {result.error && <p>{t(result.error)}</p>}
-          {result.state === 'failed' && <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(result.source)}>{t('wizard.retry')}</button>}
+          {(result.state === 'failed' || result.state === 'processed' && item?.preview.quality?.state === 'NEEDS_REVIEW') &&
+            <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(result.source)}>{t('wizard.retry')}</button>}
         </div>
       })}
       <p role="status">{t('guided.sourceTotal', { count: reviews.reduce((total, item) => total + item.rows.length, 0), processed: sourceResults.filter(item => item.state !== 'pending').length, total: sourceResults.length })}</p>
@@ -218,7 +230,13 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
       </div>
       {reviews.map((item, source) => <section key={source}>
         <h4>{item.preview.source.filename} · {t('guided.physicalPage', { number: item.preview.source.page_number })} ({item.rows.length})</h4>
-        {(['OCR_UNAVAILABLE', 'OCR_DISABLED', 'OCR_PIXEL_LIMIT', 'TABLE_DETECTION_FAILED', 'CONTINUATION_UNRESOLVED'] as const)
+        {item.preview.quality && <p role={item.preview.quality.state === 'NEEDS_REVIEW' ? 'alert' : 'status'}>
+          {t('guided.coverage', { observed: item.preview.quality.observed_rows, count: item.preview.quality.candidate_rows })}
+          {item.preview.quality.state === 'NEEDS_REVIEW' && <> {t('guided.coverageIncomplete')}</>}
+        </p>}
+        {(['OCR_UNAVAILABLE', 'OCR_DISABLED', 'OCR_PIXEL_LIMIT', 'TABLE_DETECTION_FAILED', 'CONTINUATION_UNRESOLVED',
+          'ROW_COVERAGE_INCOMPLETE', 'BORDERLESS_COVERAGE_UNCERTAIN', 'RASTER_COVERAGE_UNRESOLVED',
+          'CELL_OCR_UNAVAILABLE', 'OCR_CELL_LIMIT', 'OCR_TIME_BUDGET', 'PAGE_WORD_LIMIT'] as const)
           .filter(warning => item.preview.warnings.includes(warning)).map(warning => <p role="alert" key={warning}>{t(`guided.${warning}`)}</p>)}
         {!item.rows.length && <p role="status">{t('guided.noRows')}</p>}
         {item.preview.tables.map((table, tableIndex) => table.schema.state !== 'RESOLVED' ? <Mapping

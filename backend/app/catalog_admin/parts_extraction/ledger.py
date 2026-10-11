@@ -266,7 +266,7 @@ def start(db, actor, source, extractor):
 
 def row_key(row):
     # Geometry is evidence, not identity. Exact original cell values preserve variants.
-    return hashed(row["payload"])
+    return hashed([row["payload"], row["occurrence_key"]]) if "occurrence_key" in row else hashed(row["payload"])
 
 
 def reconcile(db, actor, source, evidence, active):
@@ -274,6 +274,17 @@ def reconcile(db, actor, source, evidence, active):
     known = {c.stable_key: c for c in previous}
     current_keys = [row_key(row) for row in evidence["rows"]]
     counts = Counter(current_keys)
+    visible_identities = set()
+    original_groups = {}
+    for candidate in previous:
+        original_groups.setdefault(hashed(candidate.original["payload"]), []).append(candidate)
+    current_groups = {}
+    for row in evidence["rows"]:
+        current_groups.setdefault(hashed(row["payload"]), set()).add(row_key(row))
+    uncertain_occurrences = {key for key, group in original_groups.items()
+        if max(len(group), len(current_groups.get(key, set()))) > 1
+        and {c.stable_key for c in group} != current_groups.get(key, set())
+        and any(c.part_id or c.state == "REJECTED" or c.values != c.original["payload"] for c in group)}
     legacy = list(db.scalars(select(CatalogRevisionPart).join(CatalogRevisionPartPageMap,
         CatalogRevisionPartPageMap.part_id == CatalogRevisionPart.id).where(
         CatalogRevisionPartPageMap.visual_page_id == source.visual_page_id)))
@@ -296,16 +307,28 @@ def reconcile(db, actor, source, evidence, active):
                 part_id=matching[0].id if len(matching) == 1 else None,
                 part_created_at=matching[0].created_at if len(matching) == 1 else None,
                 reason="SOURCE_ROW_CHANGED" if uncertain and not matching else None, updated_by_id=actor.id)
+            identity = (position, row["payload"].get("part_number"))
+            if (all(identity) and identity in visible_identities and candidate.state == "PENDING"
+                    and not any(w in row["warnings"] for w in ("MISSING_POSITION", "MISSING_PART_NUMBER"))):
+                candidate.state, candidate.reason = "CONFLICT", "DUPLICATE_VISIBLE_PART_IDENTITY"
             db.add(candidate)
             db.flush()
             known[key] = candidate
+        visible_identities.add((row["payload"].get("position"), row["payload"].get("part_number")))
         row["candidate_id"] = candidate.id
         if counts[key] > 1:
             candidate.state, candidate.reason = "CONFLICT", "DUPLICATE_SOURCE_ROW"
             candidate.version += 1
+        if hashed(row["payload"]) in uncertain_occurrences:
+            candidate.state, candidate.reason = "CONFLICT", "OCCURRENCE_SET_CHANGED"
+            candidate.version += 1
+        if row.get("reconciliation_required") and candidate.state != "ACCEPTED":
+            candidate.state, candidate.reason = "CONFLICT", "COMPETING_SOURCE_READINGS"
+            candidate.version += 1
     # Disappearing unresolved rows must not silently disappear from the review task.
     for candidate in previous:
-        if candidate.stable_key not in current_keys and candidate.state == "PENDING":
+        if candidate.stable_key not in current_keys and (candidate.state == "PENDING"
+                or hashed(candidate.original["payload"]) in uncertain_occurrences):
             candidate.state, candidate.reason = "CONFLICT", "SOURCE_ROW_DISAPPEARED"
             candidate.version += 1
     return evidence

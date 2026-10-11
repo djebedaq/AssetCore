@@ -35,7 +35,7 @@ it('extracts only explicit lists, edits a preview and confirms in bulk with its 
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Извлечи резервните части' }))
   await screen.findByRole('button', { name: 'Потвърди избраните части' })
-  expect(requests[0].body).toEqual({ visual_page_id: 11, continuation_token: null })
+  expect(requests[0].body).toEqual({ visual_page_id: 11, continuation_token: null, expected_version: 1, group_context: false, context_only: false })
   expect(requests.some(item => item.path.includes('/analysis'))).toBe(false)
   await user.selectOptions(screen.getByLabelText('Покажи'), 'all')
   const description = screen.getByLabelText('Описание 1')

@@ -1,0 +1,272 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "case": {},
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 0.8526,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "alpha": true
+      },
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 0.872,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "rotation": 90
+      },
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 0.8617,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "rotation": 180
+      },
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 0.8044,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "rotation": 270
+      },
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 0.809,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "skew": 1.5
+      },
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 1.3806,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "scale": 0.75
+      },
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 0.6552,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "scale": 1.5
+      },
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 1.1626,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "ruled": false
+      },
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "TEXT_LINE_REGIONS",
+        "observed_rows": 4,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false
+      },
+      "metrics": {
+        "wall_seconds": 1.1683,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "partial": true
+      },
+      "rows": 3,
+      "quality": {
+        "state": "NEEDS_REVIEW",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 1,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 1.7351,
+        "ocr_used": true
+      }
+    },
+    {
+      "case": {
+        "language": "de"
+      },
+      "rows": 3,
+      "quality": {
+        "state": "COMPLETE_CANDIDATES",
+        "basis": "PHYSICAL_ROW_BANDS",
+        "observed_rows": 3,
+        "candidate_rows": 3,
+        "missing_rows": 0,
+        "partial_rows": 0,
+        "needs_context": false,
+        "physical_coverage": {
+          "observed_rows": 3,
+          "covered_rows": 3,
+          "missing_rows": 0,
+          "truncated": false
+        }
+      },
+      "metrics": {
+        "wall_seconds": 1.1766,
+        "ocr_used": true
+      }
+    }
+  ]
+}

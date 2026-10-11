@@ -125,15 +125,16 @@ def verify(db, actor, visual_page_id, data):
         CatalogRevisionPart.reference_page_id == active.reference_page_id).limit(1))
     attempt = db.get(ledger.Attempt, source.current_attempt_id) if source.current_attempt_id else None
     zero = not attempt or not (attempt.evidence or {}).get("rows")
+    incomplete = ((attempt.evidence or {}).get("quality") or {}).get("state") == "NEEDS_REVIEW" if attempt else False
     if source.processing_state == "RUNNING" or unresolved or mapped is None:
         raise fail("catalog_source_review_incomplete", 422)
-    if (zero or source.processing_state != "SUCCEEDED") and not data.manual_transcription:
+    if (zero or incomplete or source.processing_state != "SUCCEEDED") and not data.manual_transcription:
         raise fail("catalog_source_review_manual_required", 422)
     if not data.reason.strip() or len(data.reason.strip()) < 10:
         raise fail("catalog_source_review_reason_required", 422)
     # A failed/zero OCR page can only be completed by explicit transcription with
     # mapped parts and an inspected original, never by excluding it from the gate.
-    if data.manual_transcription and (zero or source.processing_state != "SUCCEEDED"):
+    if data.manual_transcription and (zero or incomplete or source.processing_state != "SUCCEEDED"):
         attempt = ledger.start(db, actor, source, service.EXTRACTOR_VERSION)
         attempt.kind = "MANUAL"
         ledger.finish(db, actor, source, active, attempt,

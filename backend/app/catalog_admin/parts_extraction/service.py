@@ -23,10 +23,11 @@ from ...settings import settings
 from .. import parts, reference_pages
 from ..service import fail
 from ..visual_sources import _meta
-from . import ledger, process
+from . import context as group_context
+from . import ledger, process, quality
 from .tables import parse_region
 
-EXTRACTOR_VERSION = "SPARE_PARTS_1"
+EXTRACTOR_VERSION = "SPARE_PARTS_2"
 
 
 def resumable_attempt(db, source):
@@ -102,7 +103,8 @@ def _result(claim: dict, db: Session) -> dict:
         rows.append({**row, "payload": payload, "candidate_id": candidate.id,
             "candidate_version": candidate.version, "candidate_state": candidate.state})
     return {"token": _sign(claim), "source": claim["source"], "rows": rows,
-            "tables": claim["tables"], "warnings": claim["warnings"], "method": claim["method"]}
+            "tables": claim["tables"], "warnings": claim["warnings"], "method": claim["method"],
+            "quality": claim.get("quality"), "pipeline_version": claim.get("pipeline_version")}
 
 
 def claim_for(db, actor, page, source, active, attempt):
@@ -111,14 +113,38 @@ def claim_for(db, actor, page, source, active, attempt):
     return {"actor_id": actor.id, "page_id": page.id, "page_version": page.version,
         "created": int(time.time()), "extractor": EXTRACTOR_VERSION, "source": exact,
         "attempt_id": attempt.id, "session_id": active.id, "evidence_digest": attempt.evidence_digest,
+        "attempt_extractor": attempt.extractor,
         "rows": evidence["rows"], "tables": evidence["tables"], "warnings": evidence["warnings"],
-        "method": evidence["method"]}
+        "method": evidence["method"], "quality": evidence.get("quality"), "pipeline_version": evidence.get("pipeline_version")}
+
+
+def selected_profiles(db, active, source):
+    profiles, seen = [], set()
+    sources = list(db.scalars(select(ledger.Source).where(ledger.Source.session_id == active.id,
+        ledger.Source.id != source.id, ledger.Source.processing_state == "SUCCEEDED")))
+    sources.sort(key=lambda s: s.source["sha256"] != source.source["sha256"])
+    for sibling in sources:
+        attempt = db.get(CatalogExtractionAttempt, sibling.current_attempt_id)
+        if not attempt or attempt.state != "SUCCEEDED" or ledger.hashed(attempt.evidence) != attempt.evidence_digest:
+            continue
+        for profile in group_context.profiles(attempt.evidence, sibling.source["sha256"]):
+            profile["headers"] = [header[:80] for header in profile["headers"]]
+            key = ledger.hashed(profile)
+            if key not in seen and len(profiles) < 8:
+                seen.add(key)
+                profiles.append({**profile, "attempt_id": attempt.id, "evidence_digest": attempt.evidence_digest})
+    return profiles
 
 
 def preview(db: Session, actor, page_id: int, data) -> dict:
     page, assembly, revision, catalog = reference_pages.load(db, page_id, mutate=True)
+    if data.expected_version is not None:
+        reference_pages.check_version(page, data.expected_version)
     artifact, source = _source(db, page_id, data.visual_page_id)
     config = process.configuration(settings)
+    if hashlib.sha256(artifact.content).hexdigest() != source["sha256"]:
+        raise fail("catalog_source_integrity", 422)
+    config["source_sha256"] = source["sha256"]
     if data.continuation_token:
         previous, _ = _read(db, actor, page_id, data.continuation_token)
         if previous["source"]["sha256"] == source["sha256"] and previous["source"]["page_number"] + 1 == source["page_number"]:
@@ -126,6 +152,14 @@ def preview(db: Session, actor, page_id: int, data) -> dict:
             # cells/rows are preview evidence, never subprocess configuration.
             config["continuation_tables"] = process.continuation_configuration(previous["tables"])
     state, active, *_ = ledger.source_context(db, source["visual_page_id"], actor, create=True)
+    if data.group_context:
+        config["context_profiles"] = selected_profiles(db, active, state)
+    if data.context_only:
+        prior = resumable_attempt(db, state)
+        if prior and (not config.get("context_profiles") or not (prior.evidence.get("quality") or {}).get("needs_context")):
+            result = _result(claim_for(db, actor, page, state, active, prior), db)
+            db.commit()
+            return result
     attempt = ledger.start(db, actor, state, EXTRACTOR_VERSION)
     attempt_id, session_id = attempt.id, active.id
     raw = artifact.content
@@ -189,7 +223,10 @@ def remap(db: Session, actor, page_id: int, data) -> dict:
         and bbox[1] <= row["bbox"][1] and row["bbox"][3] <= bbox[3])]
     for row in rows:
         row["human_mapping"] = mapping
-        if claim["method"] == "OCR":
+        if claim.get("pipeline_version"):
+            row["provenance"] = {"sha256": claim["source"]["sha256"],
+                "physical_page": claim["source"]["page_number"], "pipeline_version": claim["pipeline_version"]}
+        elif claim["method"] == "OCR":
             row["method"] = "OCR_WORD_LAYOUT"
         row["warnings"] = sorted(set(row["warnings"] + table.get("geometry", {}).get("warnings", [])
             + (["OCR_REQUIRES_REVIEW"] if claim["method"] == "OCR" else [])))
@@ -198,12 +235,15 @@ def remap(db: Session, actor, page_id: int, data) -> dict:
     claim["tables"][data.table_index] = updated
     claim["warnings"] = sorted((set(claim["warnings"]) - schema_warnings)
         | {warning for item in claim["tables"] for warning in item["schema"]["warnings"]})
+    if claim.get("pipeline_version"):
+        claim["rows"], claim["tables"], claim["quality"], _ = quality.choose([
+            ("HUMAN_MAPPING", claim["rows"], claim["tables"])])
     add_audit_log(db, actor, "catalog_reference_page", page_id, "SPARE_PARTS_COLUMNS_MAPPED",
         _meta(context[3], context[2], context[1], table_index=data.table_index, mapping=mapping))
     state, active, *_ = ledger.source_context(db, claim["source"]["visual_page_id"])
     attempt = ledger.start(db, actor, state, EXTRACTOR_VERSION)
     attempt.kind = "MAPPING"
-    evidence = {key: claim[key] for key in ("rows", "tables", "warnings", "method")}
+    evidence = {key: claim[key] for key in ("rows", "tables", "warnings", "method", "quality", "pipeline_version")}
     ledger.finish(db, actor, state, active, attempt, evidence)
     claim = claim_for(db, actor, context[0], state, active, attempt)
     result = _result(claim, db)
@@ -238,7 +278,7 @@ def confirm(db: Session, actor, page_id: int, data) -> dict:
             values = parts._clean(selection.part.model_dump())
             item = CatalogRevisionPart(assembly_id=assembly.id, reference_page_id=page.id,
                 extraction_key=key, extraction_evidence={"source": claim["source"], "row": row,
-                "extractor": EXTRACTOR_VERSION, "confirmed_by_id": actor.id}, created_by_id=actor.id, **values)
+                "extractor": claim.get("attempt_extractor", EXTRACTOR_VERSION), "confirmed_by_id": actor.id}, created_by_id=actor.id, **values)
             db.add(item)
             db.flush()
             db.add(CatalogRevisionPartPageMap(part_id=item.id,

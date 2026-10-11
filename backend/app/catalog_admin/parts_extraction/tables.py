@@ -1,6 +1,7 @@
 """Geometry first, contextual schemas second, exact source rows throughout."""
 
 import re
+from decimal import Decimal
 
 from .columns import assign_words, header_geometry, infer_columns
 from .schema import header_candidates, infer_schema
@@ -16,13 +17,12 @@ def document_metadata(cells: list[str]) -> bool:
             and all(version.fullmatch(value) or date.fullmatch(value) or value.isdigit() for value in values))
 
 
-def make_row(values: dict, bbox: list[float], raw: str, *, method: str) -> dict | None:
+def make_row(values: dict, bbox: list[float], raw: str, *, method: str, physical=False) -> dict | None:
     position = values.get("position", "").strip()
     uncertain_position = not POSITION.fullmatch(position)
-    if uncertain_position and not (position in PLACEHOLDERS and values.get("part_number", "") not in PLACEHOLDERS
-                                  and values.get("description")):
+    if uncertain_position and values.get("part_number", "").strip() in PLACEHOLDERS and not physical:
         return None
-    if not any(values.get(key, "") not in PLACEHOLDERS for key in ("part_number", "description")):
+    if not any(values.get(key, "") not in PLACEHOLDERS for key in ("part_number", "description")) and not physical:
         return None
     warnings = ["MISSING_POSITION"] if uncertain_position else []
     if any(len(value) > (80 if key == "position" else 120 if key in {"part_number", "quantity"} else 4000)
@@ -30,12 +30,21 @@ def make_row(values: dict, bbox: list[float], raw: str, *, method: str) -> dict 
         warnings.append("FIELD_TOO_LONG")
     if values.get("part_number", "").strip() in PLACEHOLDERS:
         warnings.append("MISSING_PART_NUMBER")
+    identifier = values.get("part_number", "")
+    if re.search(r"[A-Za-z]", identifier) and re.search(r"[А-Яа-яЁё]", identifier):
+        warnings.append("IDENTIFIER_MIXED_SCRIPTS")
+    if "\ufffd" in identifier or any(ord(c) < 32 for c in identifier):
+        warnings.append("UNREADABLE_IDENTIFIER")
+    if any(c.isspace() for c in identifier):
+        warnings.append("IDENTIFIER_SPACING")
     if values.get("description", "").strip() in PLACEHOLDERS:
         warnings.append("MISSING_DESCRIPTION")
     raw_qty = values.get("quantity", "").strip()
     numeric = quantity(raw_qty)
     if numeric is None:
         warnings.append("QUANTITY_UNCERTAIN")
+    elif Decimal(numeric) <= 0 or Decimal(numeric) > 1_000_000:
+        warnings.append("QUANTITY_IMPLAUSIBLE")
     payload = {"position": position, "part_number": values.get("part_number", "").strip(),
                "description": values.get("description", "").strip() or None,
                "quantity": numeric, "quantity_raw": raw_qty or None}
@@ -54,7 +63,7 @@ def parse_region(headers: list[str], cells: list[list[str]], boxes: list[list[fl
              "row_count": len(cells), "cells": cells, "row_boxes": boxes, "anchors": anchors or [],
              "bom_evidence": sum(bool(header_candidates(header)) for header in headers) >= 2}
     rows, previous = [], None
-    for raw_cells, box in zip(cells, boxes, strict=True):
+    for ordinal, (raw_cells, box) in enumerate(zip(cells, boxes, strict=True)):
         if schema["state"] != "RESOLVED":
             break
         if document_metadata(raw_cells):
@@ -64,11 +73,14 @@ def parse_region(headers: list[str], cells: list[list[str]], boxes: list[list[fl
         values = {role: raw_cells[int(col)] if int(col) < len(raw_cells) else ""
                   for col, role in schema["mapping"].items() if role != "unknown"}
         if sum(bool(header_candidates(value)) for value in raw_cells) >= 3:
+            table.setdefault("excluded_rows", []).append({"raw_cells": raw_cells, "bbox": box, "reason": "REPEATED_HEADER", "index": ordinal})
             previous = None
             continue
         raw = " | ".join(raw_cells) if method == "NATIVE_TABLE" else " ".join(value for value in raw_cells if value)
-        row = make_row(values, box, raw, method=method)
+        row = make_row(values, box, raw, method=method, physical=method in {"NATIVE_TABLE", "IMAGE_CELL_OCR"})
         if row:
+            row["source_row_index"] = ordinal
+            row["source_row_indices"] = [ordinal]
             row["schema"] = {"headers": headers, "mapping": schema["mapping"], "score": schema["score"]}
             row["raw_cells"] = raw_cells
             row["warnings"].extend(schema["warnings"])
@@ -84,6 +96,7 @@ def parse_region(headers: list[str], cells: list[list[str]], boxes: list[list[fl
                     previous["raw_values"][key] = previous["payload"][key]
             previous["raw_text"] += "\n" + (" | ".join(raw_cells) if method == "NATIVE_TABLE" else " ".join(value for value in raw_cells if value))
             previous.setdefault("continuation_cells", []).append(raw_cells)
+            previous["source_row_indices"].append(ordinal)
             previous["bbox"][3] = box[3]
         else:
             previous = None
@@ -149,7 +162,13 @@ def ruled_rows(page, *, continuation: list[dict] | None = None) -> tuple[list[di
 def word_lines(words: list[dict]) -> list[list[dict]]:
     lines: list[list[dict]] = []
     for word in sorted(words, key=lambda word: (word["bbox"][1], word["bbox"][0])):
-        line = next((line for line in reversed(lines[-4:]) if abs(line[0]["bbox"][1] - word["bbox"][1]) <= 3), None)
+        def same_band(line):
+            first, box = line[0]["bbox"], word["bbox"]
+            height = max(1, min(first[3] - first[1], box[3] - box[1]))
+            overlap = min(first[3], box[3]) - max(first[1], box[1])
+            centers = abs(first[1] + first[3] - box[1] - box[3]) / 2
+            return abs(first[1] - box[1]) <= 3 or overlap / height >= .6 and centers <= max(3, height * .45)
+        line = next((line for line in reversed(lines[-4:]) if same_band(line)), None)
         if line is None:
             lines.append([word])
         else:
