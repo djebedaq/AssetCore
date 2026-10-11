@@ -2,6 +2,7 @@
 
 import json
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,14 @@ from ...settings import settings
 from ..service import fail
 
 SLOTS = BoundedSemaphore(settings.catalog_extraction_max_processes)
+
+
+def kill_group(pid):
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
 
 def extract(content: bytes, operation: str, number: int, config: dict) -> dict:
     if not SLOTS.acquire(blocking=False):
@@ -32,11 +41,13 @@ def _extract(content: bytes, operation: str, number: int, config: dict) -> dict:
                           "LANG", "LC_ALL", "TESSDATA_PREFIX", "LD_LIBRARY_PATH", "PYTHONUTF8"}
         env = {key: value for key, value in os.environ.items() if key.upper() in public_runtime}
         env["PYTHONPATH"] = str(Path(__file__).resolve().parents[3])
+        env["OMP_THREAD_LIMIT"] = "1"
         try:
             completed = subprocess.Popen([sys.executable, "-m", "app.catalog_admin.parts_extraction.worker",
                 str(source), str(output), operation, str(number), json.dumps(config)],
                 env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                start_new_session=sys.platform != "win32",
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
             lease = None
             try:
@@ -45,12 +56,18 @@ def _extract(content: bytes, operation: str, number: int, config: dict) -> dict:
                     lease = attach(completed)
                 completed.wait(timeout=config["timeout"])
             except BaseException:
-                completed.kill()
+                if sys.platform != "win32":
+                    # Kill OCR descendants too; all inherit the private group.
+                    kill_group(completed.pid)
+                else:
+                    completed.kill()
                 completed.wait()
                 raise
             finally:
                 if lease:
                     lease.close()
+            if completed.returncode != 0 and sys.platform != "win32":
+                kill_group(completed.pid)  # A crashed worker may leave OCR alive.
             if completed.returncode != 0 or not output.is_file() or output.stat().st_size > 16 * 1024 * 1024:
                 raise fail("catalog_extraction_resource_limit", 422)
             return json.loads(output.read_text(encoding="utf-8"))

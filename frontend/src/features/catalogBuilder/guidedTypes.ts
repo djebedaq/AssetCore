@@ -5,6 +5,8 @@ export type ReferencePage = { id: number; assembly_id: number; version: number; 
 export type PartValues = { position: string; part_number: string; description: string | null; quantity: string | number | null;
   quantity_raw?: string | null; technical_notes?: string | null; technical_specification?: string | null }
 export type Preview = { token: string; source: { visual_page_id: number; artifact_id: number; page_number: number; filename: string };
+  quality?: { state: string; observed_rows: number; candidate_rows: number; missing_rows: number; partial_rows: number; needs_context?: boolean } | null;
+  pipeline_version?: string | null;
   warnings: string[]; method: string; rows: Array<{ payload: PartValues; warnings: string[]; raw_text: string; bbox?: number[];
     candidate_id?: number; candidate_version?: number; candidate_state?: string }>;
   tables: Array<{ bbox?: number[]; headers: string[]; sample_cells: string[][]; schema: { state: string; mapping: Record<string, string> } }> }

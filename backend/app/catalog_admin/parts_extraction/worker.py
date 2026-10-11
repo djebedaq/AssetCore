@@ -4,6 +4,7 @@ Only generated paths and fixed arguments are used. Never prints native error tex
 """
 
 import base64
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -59,6 +60,12 @@ def main() -> None:
                 if not 0 < page.rect.width <= 14400 or not 0 < page.rect.height <= 14400:
                     raise ValueError("invalid page")
                 result = extract_page(page, config)
+                digest = hashlib.sha256(Path(source).read_bytes()).hexdigest()
+                if config.get("source_sha256") and config["source_sha256"] != digest:
+                    raise ValueError("source integrity")
+                for row in result["rows"]:
+                    row["provenance"] = {"sha256": digest, "physical_page": int(page_number),
+                        "pipeline_version": result["pipeline_version"]}
     except Exception:
         result = {"error": "catalog_extraction_page_failed" if operation == "page" else "catalog_source_invalid_pdf"}
     Path(output).write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

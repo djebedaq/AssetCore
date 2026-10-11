@@ -9,9 +9,9 @@ from pathlib import Path
 from uuid import uuid4
 
 
-def main():
+def main(*, scenario="durable", pdf_path=None, expected_path=None):
     root = Path(__file__).resolve().parents[2]
-    qa = root / ".tmp" / ("catalog03a-browser-" + uuid4().hex)
+    qa = root / ".tmp" / (f"catalog03-{scenario}-browser-" + uuid4().hex)
     qa.mkdir()
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -43,12 +43,13 @@ def main():
         owner.password_hash, owner.preferred_language = hash_password(password), "bg"
         owner.must_change_password, owner.profile_status = False, "PROFILE_COMPLETE"
         db.commit()
-    import fitz
-    with fitz.open(stream=multipage_pdf(), filetype="pdf") as pdf:
-        # Visible synthetic callouts make the browser hotspot exercise verifiable.
-        for index in range(10):
-            pdf[0].insert_text((80 + index % 5 * 140, 150 + index // 5 * 140), str(index + 1), fontsize=18)
-        (qa / "synthetic.pdf").write_bytes(pdf.tobytes())
+    if scenario == "durable":
+        import fitz
+        with fitz.open(stream=multipage_pdf(), filetype="pdf") as pdf:
+            # Visible synthetic callouts make the browser hotspot exercise verifiable.
+            for index in range(10):
+                pdf[0].insert_text((80 + index % 5 * 140, 150 + index // 5 * 140), str(index + 1), fontsize=18)
+            (qa / "synthetic.pdf").write_bytes(pdf.tobytes())
     env["QA_BROWSER_CHANNEL"] = "msedge" if os.name == "nt" else ""
     server = None
     try:
@@ -68,8 +69,14 @@ def main():
                 time.sleep(1)
             else:
                 raise RuntimeError("Disposable browser QA readiness failed")
-            result = subprocess.run(["node", str(root / "tests/browser/catalog_durable_review.mjs")], cwd=root, env=env)
-        print("Catalog 03A browser QA exit code:", result.returncode)
+            browser_env = env.copy()
+            if scenario == "adaptive":
+                # The independent expected control is available ONLY to the
+                # browser comparator, never the app server or parser worker.
+                browser_env.update(QA_PDF=str(pdf_path), QA_EXPECTED=str(expected_path))
+            script_name = "catalog_adaptive_extraction.mjs" if scenario == "adaptive" else "catalog_durable_review.mjs"
+            result = subprocess.run(["node", str(root / "tests/browser" / script_name)], cwd=root, env=browser_env)
+        print("Catalog browser QA exit code:", result.returncode)
         return result.returncode
     finally:
         if server:

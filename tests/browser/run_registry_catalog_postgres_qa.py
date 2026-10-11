@@ -10,9 +10,11 @@ from pathlib import Path
 from uuid import uuid4
 
 
-def main():
+def main(*, output_name="registry02-postgres"):
     root = Path(__file__).resolve().parents[2]
-    output = root / ".tmp" / "registry02-postgres"
+    if Path(output_name).name != output_name or output_name in {"", ".", ".."}:
+        raise ValueError("QA output must be a single directory name")
+    output = root / ".tmp" / output_name
     output.mkdir(exist_ok=True)
     name = "assetcore-registry02-qa-" + uuid4().hex[:12]
     with socket.socket() as listener:
@@ -40,7 +42,7 @@ def main():
             raise RuntimeError("QA PostgreSQL readiness failed")
         with (output / "pytest.log").open("w", encoding="utf-8") as log:
             result = subprocess.run([sys.executable, "-m", "pytest", "-q", *(sys.argv[1:] or ["tests/postgres"]), "--tb=short",
-                "--durations=10", "--junitxml=.tmp/registry02-postgres/results.xml"], cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT)
+                "--durations=10", f"--junitxml=.tmp/{output_name}/results.xml"], cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT)
         print("Dedicated PostgreSQL suite exit code:", result.returncode)
         return result.returncode
     finally:

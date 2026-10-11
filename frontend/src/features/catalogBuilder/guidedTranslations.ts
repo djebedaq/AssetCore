@@ -1,5 +1,13 @@
 // Task-oriented language for the guided reference/page workflow.
 export const guidedBg = {
+  "guided.ROW_COVERAGE_INCOMPLETE": "Някои видими редове не са разпознати. Проверете целия списък и добавете липсващите части.",
+  "guided.BORDERLESS_COVERAGE_UNCERTAIN": "Таблицата няма надеждни физически граници на редовете. Сравнете целия оригинал.",
+  "guided.RASTER_COVERAGE_UNRESOLVED": "Част от изображението остава неразпозната. Запазените редове не доказват пълнота.",
+  "guided.CELL_OCR_UNAVAILABLE": "Клетъчното OCR не е налично или не завърши. Проверете оригинала и запазените кандидати.",
+  "guided.OCR_CELL_LIMIT": "Таблицата надвишава безопасния бюджет за клетки. Запазените резултати изискват проверка.",
+  "guided.OCR_TIME_BUDGET": "Времето за OCR е изчерпано. Проверете запазените резултати или опитайте отново.",
+  "guided.coverage": "Видими редове: {{observed}} · Кандидати: {{count}}.",
+  "guided.coverageIncomplete": "Покритието или клетките са неясни. Сравнете целия оригинал и попълнете липсващите данни преди потвърждение.",
   "guided.zoomOriginal": "Отвори изображението в пълен размер за увеличение",
   "guided.savingChanges": "Промените се запазват…",
   "guided.correctSelection": "Грешно избрана страница — коригирай избора",
@@ -104,6 +112,14 @@ export const guidedBg = {
 } as const
 
 export const guidedEn = {
+  "guided.ROW_COVERAGE_INCOMPLETE": "Some visible rows were not recognized. Check the entire list and add missing parts.",
+  "guided.BORDERLESS_COVERAGE_UNCERTAIN": "The table has no reliable physical row boundaries. Compare the entire original.",
+  "guided.RASTER_COVERAGE_UNRESOLVED": "Part of the image remains unread. Saved rows do not establish completeness.",
+  "guided.CELL_OCR_UNAVAILABLE": "Cell OCR is unavailable or did not finish. Check the original and saved candidates.",
+  "guided.OCR_CELL_LIMIT": "The table exceeds the safe cell budget. Saved results require review.",
+  "guided.OCR_TIME_BUDGET": "The OCR time budget was exhausted. Check saved results or retry.",
+  "guided.coverage": "Visible rows: {{observed}} · Candidates: {{count}}.",
+  "guided.coverageIncomplete": "Coverage or cells are uncertain. Compare the entire original and complete missing data before approval.",
   "guided.zoomOriginal": "Open the full-size image to zoom",
   "guided.savingChanges": "Saving changes…",
   "guided.correctSelection": "Incorrectly selected page — correct selection",
@@ -208,6 +224,14 @@ export const guidedEn = {
 } as const
 
 export const guidedRu = {
+  "guided.ROW_COVERAGE_INCOMPLETE": "Некоторые видимые строки не распознаны. Проверьте весь список и добавьте недостающие детали.",
+  "guided.BORDERLESS_COVERAGE_UNCERTAIN": "У таблицы нет надёжных физических границ строк. Сравните весь оригинал.",
+  "guided.RASTER_COVERAGE_UNRESOLVED": "Часть изображения не прочитана. Сохранённые строки не доказывают полноту.",
+  "guided.CELL_OCR_UNAVAILABLE": "Ячеечное OCR недоступно или не завершено. Проверьте оригинал и сохранённые кандидаты.",
+  "guided.OCR_CELL_LIMIT": "Таблица превышает безопасный бюджет ячеек. Сохранённые результаты требуют проверки.",
+  "guided.OCR_TIME_BUDGET": "Время OCR исчерпано. Проверьте сохранённые результаты или повторите попытку.",
+  "guided.coverage": "Видимые строки: {{observed}} · Кандидаты: {{count}}.",
+  "guided.coverageIncomplete": "Покрытие или ячейки неясны. Сравните весь оригинал и заполните недостающие данные до подтверждения.",
   "guided.zoomOriginal": "Открыть изображение в полном размере для увеличения",
   "guided.savingChanges": "Изменения сохраняются…",
   "guided.correctSelection": "Ошибочно выбранная страница — исправить выбор",

@@ -26,6 +26,9 @@ class SourceAssign(Payload):
 class ExtractSelection(Payload):
     visual_page_id: int = Field(gt=0)
     continuation_token: str | None = Field(default=None, max_length=4_000_000)
+    expected_version: int | None = Field(default=None, ge=1)
+    group_context: bool = False
+    context_only: bool = False
 
 
 class ColumnMapping(Payload):

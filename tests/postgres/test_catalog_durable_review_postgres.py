@@ -147,3 +147,43 @@ def test_existing_postgres_upgrade_creates_ledger_constraints_without_backfill(p
     with pytest.raises(IntegrityError, match="ck_extraction_processing"):
         with engine.begin() as connection:
             connection.execute(text("UPDATE catalog_extraction_sources SET processing_state='INVALID'"))
+
+
+def test_group_ocr_releases_transaction_and_rejects_concurrent_review(pg_factory, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from app.catalog_admin.parts_extraction import process
+    from app.catalog_admin.parts_extraction.schemas import ExtractSelection
+    from fastapi import HTTPException
+    page, state, receipt, catalog_id, _ = prepared(pg_factory)
+    entered, release = Event(), Event()
+    real = process.extract
+    def delayed(*args):
+        entered.set()
+        assert release.wait(20)
+        return real(*args)
+    monkeypatch.setattr(process, "extract", delayed)
+    def run():
+        with pg_factory() as db:
+            actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            return service.preview(db, actor, page["id"], ExtractSelection(visual_page_id=state["visual_page_id"],
+                expected_version=page["version"], group_context=True))
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(run)
+        try:
+            assert entered.wait(20)
+            with pg_factory() as db:
+                # A real NOWAIT lock proves no long transaction spans OCR.
+                assert db.scalar(select(CatalogDefinition).where(CatalogDefinition.id == catalog_id).with_for_update(nowait=True))
+                assert db.get(ledger.Source, state["id"]).processing_state == "RUNNING"
+                actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+                with pytest.raises(HTTPException) as rejected:
+                    review.verify(db, actor, state["visual_page_id"], SourceReview(expected_version=state["version"],
+                        fingerprint=state["fingerprint"], inspection_token=receipt, reason="QA stale approval during group OCR"))
+                assert rejected.value.status_code == 409
+        finally:
+            release.set()
+        assert len(future.result(timeout=45)["rows"]) > 0
+    with pg_factory() as db:
+        assert db.get(ledger.Source, state["id"]).review_state != "VERIFIED"

@@ -50,3 +50,23 @@ def test_multisource_confirmation_and_exact_page_maps(pg_factory, count, headerl
             assert part.extraction_evidence["row"] == {key: value for key, value in returned.items()
                 if key not in {"candidate_version", "candidate_state"}}
             assert list(db.scalars(select(CatalogRevisionPartPageMap.visual_page_id).where(CatalogRevisionPartPageMap.part_id == part.id))) == [result["source"]["visual_page_id"]]
+
+
+def test_later_selected_page_supplies_context_to_four_earlier_lists(pg_factory):
+    assembly_id, _ = setup(pg_factory)
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        artifact = visual_sources.store_artifact(db, actor, assembly_id, multipage_pdf(count=5, headerless=True), "qa-group.pdf", "Synthetic QA")
+        page = reference_pages.create(db, actor, assembly_id, PageCreate())
+        page = reference_pages.assign(db, actor, page["id"], SourceAssign(expected_version=page["version"],
+            artifact_id=artifact["id"], page_numbers=[3, 4, 5, 6, 2], roles=["SPARE_PARTS_LIST"]))
+        sources = page["sources"]
+        first = [service.preview(db, actor, page["id"], ExtractSelection(visual_page_id=s["id"],
+            expected_version=page["version"])) for s in sources]
+        assert [len(p["rows"]) for p in first] == [0, 0, 0, 0, 5]
+        for source in sources[:4]:
+            preview = service.preview(db, actor, page["id"], ExtractSelection(visual_page_id=source["id"],
+                expected_version=page["version"], group_context=True, context_only=True))
+            assert len(preview["rows"]) == 5
+            assert preview["source"]["page_number"] == source["page_number"]
+            assert all(r["provenance"]["sha256"] == preview["source"]["sha256"] for r in preview["rows"])

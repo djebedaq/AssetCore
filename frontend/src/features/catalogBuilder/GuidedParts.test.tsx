@@ -18,6 +18,34 @@ const preview = (item: Source, start: number): Preview => ({ token: `signed-${it
   })) })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
+it('one action retries an earlier unresolved list after the later sources and preserves a failed source', async () => {
+  const sources = [source(10, 0), source(11, 1), source(12, 2)]
+  const requests: Record<string, unknown>[] = [], durable = new ReviewTestTransport()
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const resumed = durable.handle(String(input), init); if (resumed) return resumed
+    if (String(input).endsWith('/extract')) {
+      const body = JSON.parse(String(init?.body)); requests.push(body)
+      if (body.visual_page_id === 11) return json({ detail: { code: 'catalog_extraction_page_failed' } }, 422)
+      const item = sources.find(s => s.id === body.visual_page_id)!
+      const result = preview(item, item.id === 10 ? 1 : 6)
+      if (item.id === 10 && !body.group_context) {
+        result.rows = []
+        result.quality = { state: 'NEEDS_REVIEW', observed_rows: 5, candidate_rows: 0, missing_rows: 5, partial_rows: 0, needs_context: true }
+      }
+      return json(durable.record(result))
+    }
+    return json([])
+  }))
+  render(<I18nProvider><GuidedParts page={makePage(sources)} changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Извлечи резервните части' }))
+  await waitFor(() => expect(requests).toHaveLength(4))
+  expect(requests.map(body => body.visual_page_id)).toEqual([10, 11, 12, 10])
+  expect(requests[3]).toEqual({ visual_page_id: 10, continuation_token: null, expected_version: 1, group_context: true, context_only: true })
+  await screen.findByText('Общо части: 10 · Обработени източници: 3 / 3')
+  expect(screen.getByRole('button', { name: 'Грешка — опитайте отново' })).toBeEnabled()
+  expect(screen.getAllByRole('checkbox')).toHaveLength(10)
+})
+
 it('saves technical corrections on both rows when focus changes before the debounce', async () => {
   const item = source(10, 0), durable = new ReviewTestTransport()
   durable.record(preview(item, 1))
@@ -57,7 +85,8 @@ it.each([2, 3])('one click processes %i ordered sources and confirms every sourc
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Извлечи резервните части' }))
   await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(count * 5))
-  expect(requests).toEqual(sources.map((item, index) => ({ visual_page_id: item.id, continuation_token: index ? `signed-${sources[index - 1].id}` : null })))
+  expect(requests).toEqual(sources.map((item, index) => ({ visual_page_id: item.id, continuation_token: index ? `signed-${sources[index - 1].id}` : null,
+    expected_version: 1, group_context: false, context_only: false })))
   expect(screen.getByText(`Общо части: ${count * 5} · Обработени източници: ${count} / ${count}`)).toBeVisible()
   for (let i = 1; i <= count * 5; i++) expect(screen.getByRole('checkbox', { name: `Позиция ${i}` })).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'Потвърди избраните части' }))
@@ -85,7 +114,7 @@ it('accounts for a failed middle source, continues, and retries that source with
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Извлечи резервните части' }))
   await screen.findByText('Общо части: 10 · Обработени източници: 3 / 3')
-  expect(requests[2]).toEqual({ visual_page_id: 12, continuation_token: null })
+  expect(requests[2]).toEqual({ visual_page_id: 12, continuation_token: null, expected_version: 1, group_context: false, context_only: false })
   expect(within(screen.getByLabelText('Списъци с резервни части')).getByRole('alert')).toHaveTextContent('PDF страница 3')
   const first = screen.getAllByLabelText('Описание 1')[0]
   await user.clear(first); await user.type(first, 'Human correction')

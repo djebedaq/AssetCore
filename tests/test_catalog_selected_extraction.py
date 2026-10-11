@@ -2,7 +2,7 @@
 
 import fitz
 import pytest
-from app.catalog_admin.parts_extraction import extraction
+from app.catalog_admin.parts_extraction import cell_ocr, extraction
 from app.catalog_admin.parts_extraction.process import configuration
 from app.models import AssetCategory
 from app.settings import settings
@@ -84,6 +84,7 @@ def test_selective_ocr_disabled_and_unavailable(monkeypatch):
         def unavailable(*args, **kwargs):
             raise RuntimeError("QA unavailable")
         monkeypatch.setattr(fitz.Page, "get_textpage_ocr", unavailable)
+        monkeypatch.setattr(cell_ocr, "recognize", unavailable)
         result = extraction.extract_page(pdf[0], configuration(settings))
         assert "OCR_UNAVAILABLE" in result["warnings"] and not result["ocr_used"]
 
@@ -100,6 +101,9 @@ def test_cyrillic_native_bom(language):
 
 
 def test_ocr_layout_is_distinct_cached_evidence_and_never_native_confidence(monkeypatch):
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("QA CLI unavailable; exercise the embedded adapter")
+    monkeypatch.setattr(cell_ocr, "recognize", unavailable)
     with fitz.open(stream=manual(), filetype="pdf") as native, fitz.open(stream=scanned(mixed=True), filetype="pdf") as scan:
         calls = []
         native_page = native[1]
