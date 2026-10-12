@@ -1,5 +1,19 @@
 # Catalog Builder 03D — QA evidence
 
+## Current combined-code acceptance
+
+Merged #105 is integrated into #104. New OEM 611/611, D13 3×30/30, browser,
+capacity/crash, PostgreSQL/restore and CI evidence is in [final/](final/README.md).
+The current [readiness matrix](release-readiness.json) recommends a limited scope,
+subject to independent review and successful final-HEAD CI. PR #104 remains Draft,
+unmerged; no production operations are authorized.
+
+## Historical initial 03D audit
+
+Everything below describes the pre-#105 audit. FAIL/NO-GO findings are retained
+as history, not current combined-code measurements. The old matrix is preserved
+in [historical-release-readiness.json](historical-release-readiness.json).
+
 Baseline: `1bdb74b1c6d78d99ac4072690b66b5bf7b8d6be0`; PRs 101/102/103 are ancestors.
 
 Initial audit matrix (prior-stage evidence is not a new 03D PASS):

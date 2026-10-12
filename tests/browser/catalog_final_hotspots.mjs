@@ -67,9 +67,16 @@ export async function finalHotspotAcceptance({ page, expect, api, button, refere
   await button('По ширина').click()
   for (let count = 0; count < 3; count++) await button('Увеличи').click()
   await button('Преместване на изгледа').click()
-  const view = page.locator('.builder-scheme-viewport'), viewport = await view.boundingBox()
-  await page.mouse.move(viewport.x + viewport.width * .6, viewport.y + viewport.height * .6); await page.mouse.down()
-  await page.mouse.move(viewport.x + viewport.width * .6 - 40, viewport.y + viewport.height * .6 - 30, { steps: 5 }); await page.mouse.up()
+  const view = page.locator('.builder-scheme-viewport')
+  await expect.poll(() => view.evaluate(node => node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight)).toBe(true)
+  await view.scrollIntoViewIfNeeded()
+  const viewport = await view.boundingBox(), screen = page.viewportSize()
+  // The editor may extend below the browser window. Dispatch the drag inside
+  // the visible intersection, not an off-screen fraction of its full box.
+  const x = Math.max(0, viewport.x) + (Math.min(screen.width, viewport.x + viewport.width) - Math.max(0, viewport.x)) * .75
+  const y = Math.max(0, viewport.y) + (Math.min(screen.height, viewport.y + viewport.height) - Math.max(0, viewport.y)) * .75
+  await page.mouse.move(x, y); await page.mouse.down()
+  await page.mouse.move(x - 40, y - 30, { steps: 5 }); await page.mouse.up()
   expect(await view.evaluate(node => node.scrollLeft > 0 || node.scrollTop > 0)).toBe(true)
   expect((await rows())[0]).toEqual(normalized)
   await button('Цяла страница').click()

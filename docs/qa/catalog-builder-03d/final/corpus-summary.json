@@ -1,0 +1,157 @@
+{
+  "status": "PASS",
+  "expected": 611,
+  "exact": 611,
+  "pages": 24,
+  "cases": [
+    {
+      "case": "falch_1000/drive_pump",
+      "physical_pages": [
+        2,
+        3
+      ],
+      "expected": 34,
+      "exact": 34,
+      "missing": 0,
+      "additional": 0,
+      "historical_03c_exact": 0,
+      "control_blank_part_numbers": 0,
+      "control_nonnumeric_quantities": 0,
+      "unchanged_source_and_control_hashes": true,
+      "review_state": "NOT_REVIEWED",
+      "status": "PASS"
+    },
+    {
+      "case": "falch_1000/liquid_part",
+      "physical_pages": [
+        2,
+        3
+      ],
+      "expected": 46,
+      "exact": 46,
+      "missing": 0,
+      "additional": 0,
+      "historical_03c_exact": 0,
+      "control_blank_part_numbers": 0,
+      "control_nonnumeric_quantities": 0,
+      "unchanged_source_and_control_hashes": true,
+      "review_state": "NOT_REVIEWED",
+      "status": "PASS"
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "physical_pages": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "expected": 164,
+      "exact": 164,
+      "missing": 0,
+      "additional": 0,
+      "historical_03c_exact": 0,
+      "control_blank_part_numbers": 0,
+      "control_nonnumeric_quantities": 0,
+      "unchanged_source_and_control_hashes": true,
+      "review_state": "NOT_REVIEWED",
+      "status": "PASS"
+    },
+    {
+      "case": "falch_500/pump",
+      "physical_pages": [
+        2,
+        3,
+        4
+      ],
+      "expected": 65,
+      "exact": 65,
+      "missing": 0,
+      "additional": 0,
+      "historical_03c_exact": 0,
+      "control_blank_part_numbers": 0,
+      "control_nonnumeric_quantities": 0,
+      "unchanged_source_and_control_hashes": true,
+      "review_state": "NOT_REVIEWED",
+      "status": "PASS"
+    },
+    {
+      "case": "falch_500/unloader_valve",
+      "physical_pages": [
+        2,
+        3,
+        4
+      ],
+      "expected": 65,
+      "exact": 65,
+      "missing": 0,
+      "additional": 0,
+      "historical_03c_exact": 0,
+      "control_blank_part_numbers": 0,
+      "control_nonnumeric_quantities": 0,
+      "unchanged_source_and_control_hashes": true,
+      "review_state": "NOT_REVIEWED",
+      "status": "PASS"
+    },
+    {
+      "case": "falch_500/valve_500bar",
+      "physical_pages": [
+        2,
+        3
+      ],
+      "expected": 32,
+      "exact": 32,
+      "missing": 0,
+      "additional": 0,
+      "historical_03c_exact": 0,
+      "control_blank_part_numbers": 0,
+      "control_nonnumeric_quantities": 0,
+      "unchanged_source_and_control_hashes": true,
+      "review_state": "NOT_REVIEWED",
+      "status": "PASS"
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "physical_pages": [
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "expected": 147,
+      "exact": 147,
+      "missing": 0,
+      "additional": 0,
+      "historical_03c_exact": 0,
+      "control_blank_part_numbers": 0,
+      "control_nonnumeric_quantities": 0,
+      "unchanged_source_and_control_hashes": true,
+      "review_state": "NOT_REVIEWED",
+      "status": "PASS"
+    },
+    {
+      "case": "hydwin_fussen_500/plunger_pump",
+      "physical_pages": [
+        22
+      ],
+      "expected": 58,
+      "exact": 58,
+      "missing": 0,
+      "additional": 0,
+      "historical_03c_exact": 0,
+      "control_blank_part_numbers": 3,
+      "control_nonnumeric_quantities": 1,
+      "unchanged_source_and_control_hashes": true,
+      "review_state": "NOT_REVIEWED",
+      "status": "PASS"
+    }
+  ],
+  "comparison": "corpus-comparison.json",
+  "oracle_usage": "SEPARATE_POST_EXTRACTION_COMPARATOR_ONLY",
+  "verified_controls_modified": false,
+  "original_blank_fields_preserved": true,
+  "automatically_verified": 0
+}

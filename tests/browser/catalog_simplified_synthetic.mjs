@@ -189,7 +189,7 @@ try {
   // A failed new inspection cannot reuse the prior source's image or receipt.
   await page.route('**/visual-pages/*/review-original', route => route.abort('connectionreset'), { times: 1 })
   await showOriginal(1)
-  await expect(panel.getByRole('alert').filter({ hasText: /./ })).not.toHaveCount(0)
+  await expect(panel.locator('p.error[role="alert"]')).toHaveCount(1)
   await expect(panel.locator('img')).toHaveCount(0)
   await expect(panel.getByRole('button', { name: 'Потвърди проверения източник', exact: true })).toBeDisabled()
   await expect(panel.getByRole('textbox')).toHaveValue('')

@@ -1,3 +1,258 @@
+# CATALOG BUILDER 03D FINAL — интеграция и окончателно приемане
+
+## Текуща оценка и обхват
+
+**Препоръка: GO за ограничен, контролиран release scope след независим review,
+успешен CI на окончателния HEAD и отделно разрешение за внедряване.** PR #104
+остава **Draft, неслят**. Това не е разрешение за merge или deployment.
+
+Core приемането включва шестстъпковия процес, durable ledger, човешки поправки,
+publication gate, authorization, SQLite/PostgreSQL, encrypted restore, официални
+документи и ограничено локално OCR изпълнение. Автоматичната exact точност е
+доказана за осемте Falch/HYDWIN каталога и D13 по-долу. Няма твърдение за
+универсална точност за непознати OEM оформления.
+
+Актуалните доказателства са във [final/](qa/catalog-builder-03d/final/README.md) и
+[readiness матрицата](qa/catalog-builder-03d/release-readiness.json).
+Старите 03D измервания и първоначалният NO-GO са запазени под историческия раздел
+по-долу и в оригиналните QA файлове. Те не са текущи измервания на комбинирания код.
+
+## Git интеграция
+
+- Потвърден `origin/main`: `0c6101d624bbc06553b6a047060ca5c4c91f9128`, merge на #105.
+- Начален #104 HEAD: `0dec19a37ac08ed78f938400503207dd76d97dc5`.
+- Локална backup reference: `backup/catalog-builder-03d-before-03e-integration`.
+- Безопасен merge в съществуващия branch: `6b84483d1e36e72494d8c6b24e71b5bdea7df073`.
+- Единственият конфликт беше коментар в `process.py`; няма автоматично ours/theirs
+  разрешаване, reset/clean, rebase или force push.
+- Последна продуктова поправка: `cb4e4a32f450aff5ef7609b5562a430fc92b53b5`.
+  След нея се променят само QA/документация; [module hashes](qa/catalog-builder-03d/final/implementation.json)
+  свързват Linux измерванията с актуалния код.
+
+`capacity.py` и тестовете му съвпадат с main. Има един каноничен OS lease механизъм;
+локалният предварителен semaphore е част от същата process boundary. Native-grid,
+native tables и OCR използват `process.extract`, същите slots и същите бюджети.
+Не са пренасяни паралелни capacity реализации. #105 не е променян.
+
+## Четирите запазени поправки
+
+| Поправка | Актуално доказателство |
+|---|---|
+| Late original response след unmount освобождава Blob URL | Component regression и реален Edge: задържан авторизиран response, navigation, release след unmount и наблюдаван revoke |
+| Retry на непочната страница след прекъсване | Edge N=7: шест успешни източника/30 кандидата остават; refresh и retry само на липсващата страница дават 35 отделни IDs |
+| Malformed worker UTF-8/JSON/shape се отказва контролирано | Шест real-subprocess fault случая; sanitized 422, без native exception/details |
+| Undo следва собствената последна acknowledged version | Component и Edge: place/move/resize/verify/unverify/Undo; чуждата stale версия продължава да връща 409 |
+
+При final audit беше доказан още един случай в третата поправка: `{}` и
+`{"rows": {}}` минаваха първоначалната object проверка. Новите тестове първо дадоха
+**2 FAIL / 3 PASS**. Worker envelope вече проверява типовете на необходимите полета
+и контролирани error codes преди consumer access; включено е и невалидно `error: []`.
+Локално: **6 PASS / 1 Windows POSIX SKIP**. Алгоритъмът, review решенията,
+fingerprints, версии, inspection receipts и publication gate не са променени.
+
+## Реални OEM каталози: ново Linux приемане
+
+Независимо извличане → private записан резултат → отделен comparator. Verified
+JSON контролите са скрити чрез read-only tmpfs в extraction контейнерите; D13
+expected JSON не е монтиран. Няма oracle стойности в extractor-а.
+
+| Каталог | Страници | Точни записи | Липсващи / допълнителни |
+|---|---:|---:|---:|
+| Falch 1000 drive pump | 2 | 34/34 | 0/0 |
+| Falch 1000 liquid part | 2 | 46/46 | 0/0 |
+| Falch 1000 wheel jet | 6 | 164/164 | 0/0 |
+| Falch 500 pump | 3 | 65/65 | 0/0 |
+| Falch 500 unloader valve | 3 | 65/65 | 0/0 |
+| Falch 500 valve 500bar | 2 | 32/32 | 0/0 |
+| Falch 500 wheel jet | 5 | 147/147 | 0/0 |
+| HYDWIN Fussen plunger pump | 1 | 58/58 | 0/0 |
+| **Общо** | **24** | **611/611** | **0/0** |
+
+Проверени са position, Part Number, exact оригинално описание, quantity и
+quantity_raw, както и source SHA/physical page/multiplicity. Comparator отказва
+пропуснати/дублирани каталози или страници и подменен SHA. Няма измислени части,
+загубени leading zeros или слети физически occurrences.
+
+Трите празни Part Numbers и едното ненумерично количество на Fussen са запазени.
+Тези непълни кандидати остават за човешки review. **611 exact source records не
+означава 611 валидни или VERIFIED части.** Нито OCR success, нито броят редове
+одобрява източника. [Per-page comparison](qa/catalog-builder-03d/final/corpus-comparison.json),
+[summary и 03C сравнение](qa/catalog-builder-03d/final/corpus-summary.json).
+Първоначалният 03C резултат остава 0/611 exact; поправката е merged #105,
+а настоящият PR доказва съвместната ѝ работа с четирите reliability поправки.
+
+## D13: Linux и реален Edge
+
+Original SHA `e9540c2af79802d000f186381c403dfbca6ae6b58ecb6cb13b9ecec862558e42`;
+схема 12, списъци 13/15, `TCD13A.01 Chassis Assembly-2`.
+Три нови Linux повторения: **3 × (20/20 + 10/10)**, всички exact полета и provenance,
+нула допълнителни редове или останали descendants.
+[Linux exact](qa/catalog-builder-03d/final/d13-linux-exact.json).
+
+Edge премина 7 проверки: едно разпознаване/една обща таблица, 20+10 exact source
+occurrences, 390/768/1440 и keyboard, human correction/refresh/възстановяване на
+оригинала, re-extraction със същите IDs и без дубликати, durable source review,
+server blockers и оригиналната схема. [Browser D13](qa/catalog-builder-03d/final/browser-d13.json).
+QA review се упражнява само с временен QA actor/база; няма бизнес одобрение.
+Callout 48 / списъчна позиция 38 остава нерешен OEM въпрос. **D13 не е публикуван**,
+няма фабрикувани markers или подмяна на оригинални номера.
+
+## Browser, lifecycle и N-page интеграция
+
+Synthetic normal UI/API: създаване → PDF → extraction → поправки → confirmation →
+source review → touch hotspots → readiness → публикация → read-only reopen.
+**11 PASS**, нула page errors. Проверени са две действителни browser tabs,
+stale autosave/confirmation, logout/login, BG/EN/RU, focus trap/Escape/keyboard,
+source-switch cancel/accept и reason/manual/link isolation. Failed inspection
+премахва стария оригинал и блокира review; late response след unmount освобождава
+Blob URL; reopening изисква нова inspection.
+
+Hotspots: point/rectangle, move/resize, Undo/delete, multiple occurrences/схеми,
+verify/unverify, 409 stale version, pointer cancellation, zoom/pan и normalized
+geometry при touch/390/768/1440. След publication всички original assignments,
+части, coverage и hotspot records съвпадат точно с pre-publication graph.
+[Synthetic browser](qa/catalog-builder-03d/final/browser-synthetic.json).
+
+N-page Edge: **1 → 5**, **4 → 20**, **7 → 35** кандидата; N=7 включва прекъснат
+middle request, refresh и single-source retry. Нула auto-VERIFIED, един успешен
+attempt на source. Backend/PG покриват и 2/3, различни документи, несъседни
+страници, съвместим/несъвместим контекст и second pass към по-ранна страница.
+[N-page browser](qa/catalog-builder-03d/final/browser-multipage.json).
+
+Screenshots са реални, само synthetic: [390 parts](qa/catalog-builder-03d/final/screenshots/parts-390.png),
+[768 touch](qa/catalog-builder-03d/final/screenshots/touch-hotspots-768.png),
+[rectangle](qa/catalog-builder-03d/final/screenshots/rectangle-second-scheme-1440.png),
+[published reopen](qa/catalog-builder-03d/final/screenshots/published-reopened-1440.png).
+Няма OEM PDF/страници/crops/редове, credentials или production данни в новите artifacts.
+
+## Concurrency, fault injection и ресурси
+
+Новият Linux live тест стартира **три независими controllers**, два заемат OS slots
+и изпълняват реален D13 OCR; третият получава busy за ~0.00034 s при извикването.
+Двата OCR резултата са independently exact 20/20. Отделно е SIGKILL-нат точният
+собствен worker при активен Tesseract: controlled 422, нула OCR orphans, следващ
+native parse използва същия освободен slot и е exact 10/10.
+[Live capacity/crash proof](qa/catalog-builder-03d/final/live-capacity-exact.json).
+Не е симулирано успешно OCR чрез готови части в DB.
+
+Runtime budget: **2 CPU / 1 GiB / 64 PID / 192 MiB tmpfs**, non-root/read-only,
+network-none, worker 45 s / 1 GiB AS. Лимитите не са увеличени.
+
+| Измерване | Нов резултат |
+|---|---|
+| 24 native OEM страници, median | 2.5818 s, без тежък OCR |
+| D13 13, три fresh workers | 5.0543 / 4.3956 / 4.3454 s; max sampled tree RSS 348.49 MiB |
+| D13 15 native | 0.7808 / 0.8835 / 0.7277 s; max sampled tree RSS 172.91 MiB |
+| Два concurrent OCR workers | 4.9702 s общо; sampled CPU 8.74 s; sampled tree RSS 600.79 MiB |
+| Concurrent cgroup peak | 551825408 bytes (~526 MiB); peak PID/thread count 13; нула OOM/max events |
+
+RSS sampling е на 20 ms и сумата брои shared pages повече от веднъж; container
+memory.peak е отделна мярка. OS cache не е reset-ван; няма certified cold boot,
+надежден production P95 или дълъг soak. Спрямо 03E няма доказана съществена
+регресия; малките разлики са в натоварена 8 GiB development машина.
+[Performance](qa/catalog-builder-03d/final/performance.json).
+
+## Backend, PostgreSQL, история и security
+
+Publication остава authoritative/fail-closed. Full suites повтарят 5/0/5:
+непроверен source 2, COMPLETE/readiness отказ, direct publish 409, нула нови
+published revisions. Fingerprint/assignment/mapping/part/review промяна,
+PENDING/CONFLICT, неподходяща роля, legacy draft и stale digest остават blockers.
+PG overlapping transactions включват publish/edit, group processing/review,
+assignment/review и двама отделни actors с actor-bound receipts/audit.
+
+Няма нова DB схема/migration. Protected history е 33 migrations, head 0033;
+constraints/indexes/FK assertions се изпълняват на SQLite и PG. Encrypted QA restore
+сравнява всички historical rows/columns, original bytes/SHA, audit и човешки решения.
+Ledger counts: 3 sessions, 3 sources, 5 attempts, 4 candidates, 4 decisions.
+Запазени anchors: 19 verified assets, 611 части, 7 kits, 84 components, 12 diagrams,
+818 hotspots и 2 shared bindings. PARTS-DOC/snapshots/официални DOCX/PDF остават
+immutable; LibreOffice и normal-service document generation са отделни Docker checks.
+
+Повторен е review на native_grid/panels/schema/quality/extraction/service/capacity/
+process: bounded 12000 segments/24000 cells/80 signatures/ограничени partitions,
+неясните schema/coverage остават review, fixed argv/no shell, env allowlist,
+private temp/lease files, process-group cleanup, HMAC/actor/version/expiry binding,
+централизирани permissions, authorized originals/evidence и Blob lifecycle.
+Няма cloud OCR, нови зависимости/роли/permissions, промени в verified controls,
+inventory/Falch номерация, source register, OEM оригинали или historical artifacts.
+[Security и regressions](qa/catalog-builder-03d/final/security.json).
+
+## Проверки, първоначални неуспехи и ограничения
+
+Combined CI `38245128678` (`1040a41`): **1247 backend PASS / 3 SKIP / 97 PG deselected**
+за 1394.28 s; отделен config gate 17 PASS; **97 PostgreSQL PASS** за 569.86 s;
+**618 Vitest PASS / 66 files** за 55.11 s; всички Docker/image/document/restore
+jobs PASS. Последващият окончателен HEAD променя QA/документация и се проверява
+отново изцяло; точните финални counts са в PR checks/предаването.
+
+Точните CI резултати са в [final CI](qa/catalog-builder-03d/final/ci.json), а
+проверките на окончателния HEAD са авторитетни в [PR #104 checks](https://github.com/djebedaq/AssetCore/pull/104/checks).
+Локално: typecheck/lint/build/Ruff/protected migrations/authorization PASS;
+29 targeted frontend PASS; 35 backend targets PASS/6 POSIX SKIP, след което
+final malformed suite 6 PASS/1 POSIX SKIP. Linux CI изпълнява POSIX случаите.
+
+Честно отчетени начални опити:
+
+- Новите worker-shape regressions първо FAIL, после поправени; assertions са запазени.
+- Локален unrestricted Vitest е INTERRUPTED; повторен bounded target 29/29 PASS.
+- Локален image rebuild е INTERRUPTED при бавни package installs/малък host RAM резерв.
+  Linux приемането използва проверения production-oriented image плюс текущ read-only
+  backend bind/hashes. Exact commit production image build и runtime/document smokes
+  се изпълняват отделно в GitHub Docker CI.
+- Първият combined CI `38244352117`: backend/frontend/PG PASS, Docker FAIL в isolated
+  Compose stage `post_deploy_smoke`, без достатъчно assertion detail. Няма доказана
+  възпроизводима продуктова причина. Добавена е sanitized exception type/function/line
+  QA диагностика; повторението `38245128678` премина Compose без промяна на assertions
+  или deployment логиката. Окончателният CI трябва също да е зелен.
+- Първият synthetic Edge опит FAIL при pan assertion. QA drag вече използва видимото
+  пресичане с viewport и изчаква zoom overflow; product pan/CSS не са променяни и
+  assertion-ът не е отслабен. Повторението премина 11/11.
+
+NOT RUN: Hammelmann без original/control; P200E/X25 без independent control;
+непознати OEM оформления; дълъг soak/certified cold-cache benchmark;
+external penetration/screen-reader certification и отделен OS-CVE scan.
+Parser quota е за един runtime/shared temp namespace, не cluster-wide quota.
+Official document generation от същия browser synthetic каталог не е изпълнено;
+нормалният document renderer/история са проверени отделно чрез Docker/PG.
+Тези непроверени възможности са извън препоръчания ограничен release scope.
+
+## Възпроизводимост и бъдещ rollout/rollback — НЕ Е ИЗПЪЛНЯВАН
+
+Командите са в [final QA README](qa/catalog-builder-03d/final/README.md) и съществуващия
+`.github/workflows/check.yml`. Originals/expected/raw OEM outputs остават локални.
+
+1. Независим review; explicit merge approval; фиксирани release SHA/image digest/SBOM,
+   всички exact-HEAD CI jobs успешни. Production compatibility се проверява в отделна
+   разрешена задача; настоящият етап не инспектира production.
+2. При бъдещо разрешение: проверен encrypted backup и QA restore; image/toolchain и
+   наличен migration head 0033; maintenance/abort план преди writes. Не се генерират
+   наново historical signed documents или snapshots.
+3. Контролиран image switch, readiness/liveness/login/roles; verified inventory,
+   shared refs/kits/PARTS-DOC/исторически документи; source review/native/OCR,
+   correction/resume, direct-publish refusal и bounded capacity smoke.
+4. Abort при integrity drift, authorization leak, lost human edit, orphan OCR,
+   unhealthy runtime или publication bypass. Не се увеличават limits за маскиране.
+5. Rollback image кандидат е merged 03E `0c6101d` със запазена 0033 база и ledger:
+   schema/extractor version са съвместими, OS leases вече са налични. Връщат се четирите
+   известни frontend/fault-handling ограничения; оценяват се преди fallback и при нужда
+   се спира новото authoring/OCR. Няма DB downgrade или изтриване на review/evidence.
+6. При data corruption: спиране на writes и отделен одобрен incident/restore план,
+   който съхранява всички по-нови human decisions/audit; не се заменя автоматично базата
+   със стар backup.
+
+Всички нови QA run контейнери са `--rm`; собствените loopback servers/browser contexts
+се затварят във finally. OEM/untracked/QA материали са запазени. **Production не е
+достъпвана; няма merge, deployment или премахване на Draft статуса.**
+
+---
+
+## Исторически 03D отчет — преди интеграцията на #105
+
+Следващият текст е запазен като историческо доказателство за първоначалната 03C
+база. Неговите NO-GO/FAIL/CI/performance стойности не описват настоящия combined build.
+
+
 # CATALOG BUILDER 03D — окончателно приемане и release readiness
 
 ## 1. Executive summary
