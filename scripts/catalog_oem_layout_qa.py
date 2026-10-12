@@ -48,13 +48,22 @@ def quantity(value):
 
 
 def compare(reports):
+    selected = {key: {int(page) for page in pages.split(",")} for key, _, pages in CASES}
+    keys = [item["case"] for item in reports]
+    if len(keys) != len(selected) or set(keys) != set(selected):
+        raise ValueError("QA_CORPUS_CASE_SELECTION_MISMATCH")
     cases = []
     for item in reports:
         key, report = item["case"], item["report"]
         # No expected data was read until all extraction reports were saved.
         control = ROOT / "backend/resources/catalog/v2" / (key + ".json")
         expected = json.loads(control.read_text(encoding="utf-8"))["records"]
-        assert all(row["source_document_sha256"] == report["source_sha256"] for row in expected)
+        if not expected or not all(row["source_document_sha256"] == report["source_sha256"] for row in expected):
+            raise ValueError("QA_SOURCE_SHA_MISMATCH")
+        numbers = [page["physical_page"] for page in report["runs"][0]["pages"]]
+        if (len(report["runs"]) != 1 or len(numbers) != len(selected[key]) or set(numbers) != selected[key]
+                or {row["source_page"] for row in expected} != selected[key]):
+            raise ValueError("QA_CORPUS_PAGE_SELECTION_MISMATCH")
         pages = []
         for page in report["runs"][0]["pages"]:
             wanted = [row for row in expected if row["source_page"] == page["physical_page"]]
@@ -108,7 +117,8 @@ def compare(reports):
                 "control_nonnumeric_quantities": sum(quantity(row["quantity"]) is None for row in wanted),
                 "missing_control_rows": len(wanted) - paired["position_number_pair"],
                 "additional_candidates": len(unused),
-                "automatic_exact_acceptance": "PASS" if exact_rows == len(wanted) == len(actual) and provenance else "FAIL",
+                "automatic_exact_acceptance": "PASS" if exact_rows == len(wanted) == len(actual)
+                    and provenance and not page["result"].get("error") else "FAIL",
                 "unmatched_candidates": len(unused), "provenance": provenance,
                 "quality": page["result"].get("quality"), "error": page["result"].get("error"),
                 "resources": page["resources"], "review_state": "NOT_REVIEWED"})
@@ -130,7 +140,7 @@ def main():
     result = extract() if args.mode == "extract" else compare(json.loads(args.report.read_text(encoding="utf-8")))
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"mode": args.mode, "cases": len(result if isinstance(result, list) else result["cases"])}))
-    return 0
+    return 0 if not isinstance(result, dict) or result.get("passed") else 1
 
 
 if __name__ == "__main__":

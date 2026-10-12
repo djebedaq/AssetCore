@@ -10,3 +10,5 @@ These files contain aggregate counts, fingerprints, geometry classifications and
 - `browser-d13.json`: real Edge/D13 scenario; original screenshots remain private.
 
 The final GitHub Actions run and exact full-suite counts are recorded on the PR for its final HEAD. Extraction PASS never sets VERIFIED or bypasses publication readiness. Original Fussen blank/nonnumeric fields remain review requirements.
+
+The comparator requires all eight selected cases and every configured physical page exactly once. A mismatch exits nonzero; partial reports, duplicate cases/pages and wrong source hashes are rejected. Seven synthetic comparator regressions cover these gates without importing OEM control values into extraction.

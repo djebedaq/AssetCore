@@ -56,6 +56,8 @@ Fussen контролите и оригиналът съдържат **три п
 
 Контролите се четат единствено от comparator **след** записване на извличането. При Linux извличането контролният directory в image е маскиран с празен read-only tmpfs. D13 expected JSON изобщо не се предоставя на контейнера. Comparator пази multiplicity: всеки контролен запис консумира само един извлечен occurrence. Проверява петте полета, source SHA/page, липсващи и допълнителни редове.
 
+Финалният QA audit поправи и наследен слаб gate в CLI: отрицателно сравнение вече връща exit code 1. Пропуснат/дублиран каталог или физическа страница, сменен SHA и частичен report не могат да се представят като успешен пълен корпус. Седем отрицателни/положителни synthetic comparator теста доказват това; контролите не се променят.
+
 Доказателства: [corpus-summary.json](qa/catalog-builder-03e/corpus-summary.json), [точно сравнение по всички страници](qa/catalog-builder-03e/corpus-linux-comparison.json).
 
 ## 03A/03B интеграция и ресурсна безопасност
@@ -86,6 +88,8 @@ Runtime: Python 3.12.15, PyMuPDF 1.26.7, Pillow 12.3.0, Tesseract 5.5.0. Ням�
 
 Локално изпълнени: Ruff за целия поддържан Python scope, protected migration-history validation, authorization inventory, frontend typecheck/ESLint/production build и extraction/ledger/capacity регресии. Windows-only skips са POSIX process-group, unsafe-storage и inherited-descriptor тестовете; те се изпълняват в Linux CI.
 
+Точни локални резултати: 58 PASS / 7 Windows POSIX skips за layout + adaptive + capacity върху implementation HEAD; допълнително 7/7 comparator теста след QA gate корекцията. Full Vitest: 66 файла, 614 PASS, 246,33 s при един worker. Продуктовият pipeline не е променян след финалните Linux fingerprint/exact измервания.
+
 Реален Edge/D13 browser: една операция извлича 30 кандидата в една таблица, exact values/source 20+10, 390/768/1440 px, keyboard focus, durable edit/refresh, повторно извличане без дубликати, source inspections/decisions и server publication blockers. OEM screenshots остават локални; публикува се само агрегатният [browser report](qa/catalog-builder-03e/browser-d13.json).
 
 Първият browser опит прекъсна при inspection image след source confirmation. Диагностичното повторение след приключване на background PDF заявките върна две HTTP 200 inspection responses и премина всичките седем сценария. Serial QA вече изчаква network idle преди inspection и затваряне на успешно потвърдената attestation форма преди следващия източник. Това не променя продукта и не заменя отделните saturation/concurrency проверки.
@@ -99,6 +103,7 @@ python -m ruff check backend/app backend/alembic backend/scripts scripts tests
 python backend/scripts/validate_migration_history.py --require-all-protected
 python backend/scripts/validate_authorization_inventory.py
 python -m pytest -q tests/test_catalog_oem_layout_extraction.py tests/test_catalog_adaptive_extraction.py tests/test_catalog_process_capacity.py
+python -m pytest -q tests/test_catalog_oem_layout_qa.py
 python -m pytest -q -m "not postgres"
 python -m pytest -q tests/postgres
 
