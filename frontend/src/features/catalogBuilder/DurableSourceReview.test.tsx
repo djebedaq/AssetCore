@@ -72,6 +72,18 @@ it('does not allow manual attestation to hide an unresolved candidate', async ()
   expect(screen.getByRole('button', { name: 'Потвърди проверения източник' })).toBeDisabled()
 })
 
+it('releases an original arriving after the review component was closed', async () => {
+  images()
+  let finish: (response: Response) => void = () => {}
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finish = resolve })))
+  const view = render(<I18nProvider><DurableSourceReview session={session} reload={vi.fn(async () => {})} parts={[]} busy={false} /></I18nProvider>)
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Покажи оригинала' }))
+  view.unmount()
+  finish(originalResponse())
+  await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledOnce())
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:qa-original')
+})
+
 it('shows a stale approval error and retains the source for a new inspection', async () => {
   images()
   const reload = vi.fn(async () => {})

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, createApiObjectUrl } from '../../api'
 import { useI18n } from '../../i18n'
 import { guidedError } from './guidedErrors'
@@ -11,6 +11,8 @@ export default function DurableSourceReview({ session, reload, parts, busy, targ
   session: ReviewSession | null; reload: () => Promise<void>; parts: Array<PartValues & { id: number }>; busy: boolean
 }) {
   const { t } = useI18n()
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const [selected, setSelected] = useState<number | null>(null)
   const [original, setOriginal] = useState<{ url: string; receipt: string | null; source: ReviewSource } | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -40,6 +42,7 @@ export default function DurableSourceReview({ session, reload, parts, busy, targ
     clearForm(); setWorking(true); setSelected(item.visual_page_id)
     try {
       const result = await createApiObjectUrl(`${builderBase}/visual-pages/${item.visual_page_id}/review-original`)
+      if (!mounted.current) { URL.revokeObjectURL(result.url); return }
       setOriginal({ url: result.url, receipt: result.reviewReceipt || null, source: item })
     } catch (caught) { setError(t(guidedError(caught))) } finally { setWorking(false) }
   }

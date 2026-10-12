@@ -11,6 +11,7 @@ from threading import BoundedSemaphore
 
 from ...settings import settings
 from ..service import fail
+from .capacity import slot
 
 SLOTS = BoundedSemaphore(settings.catalog_extraction_max_processes)
 
@@ -26,12 +27,13 @@ def extract(content: bytes, operation: str, number: int, config: dict) -> dict:
     if not SLOTS.acquire(blocking=False):
         raise fail("catalog_extraction_busy")
     try:
-        return _extract(content, operation, number, config)
+        with slot(settings.catalog_extraction_max_processes) as descriptor:
+            return _extract(content, operation, number, config, descriptor)
     finally:
         SLOTS.release()
 
 
-def _extract(content: bytes, operation: str, number: int, config: dict) -> dict:
+def _extract(content: bytes, operation: str, number: int, config: dict, descriptor=None) -> dict:
     with TemporaryDirectory(prefix="assetcore-extraction-") as folder:
         source = Path(folder) / "source.pdf"
         output = Path(folder) / "evidence.json"
@@ -50,6 +52,9 @@ def _extract(content: bytes, operation: str, number: int, config: dict) -> dict:
                 str(source), str(output), operation, str(number), json.dumps(config)],
                 env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                # On Unix the worker retains the lease even if its web parent
+                # dies. It closes on worker exit/timeout, never while parsing.
+                **({"pass_fds": (descriptor,)} if sys.platform != "win32" and descriptor is not None else {}),
                 start_new_session=sys.platform != "win32",
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
             lease = None
@@ -73,10 +78,13 @@ def _extract(content: bytes, operation: str, number: int, config: dict) -> dict:
                 kill_group(completed.pid)  # A crashed worker may leave OCR alive.
             if completed.returncode != 0 or not output.is_file() or output.stat().st_size > 16 * 1024 * 1024:
                 raise fail("catalog_extraction_resource_limit", 422)
-            return json.loads(output.read_text(encoding="utf-8"))
+            result = json.loads(output.read_text(encoding="utf-8"))
+            if not isinstance(result, dict):
+                raise ValueError("invalid worker evidence")
+            return result
         except subprocess.TimeoutExpired:
             raise fail("catalog_extraction_timeout", 422) from None
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError, ValueError, UnicodeError):
             raise fail("catalog_extraction_resource_limit", 422) from None
 
 
