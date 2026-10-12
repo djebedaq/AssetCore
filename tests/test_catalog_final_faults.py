@@ -8,7 +8,7 @@ from app.catalog_admin.parts_extraction import process
 from fastapi import HTTPException
 
 
-@pytest.mark.parametrize("output", [b"{", b"[]", b"\xff"])
+@pytest.mark.parametrize("output", [b"{", b"[]", b"\xff", b"{}", b'{"rows": {}}', b'{"error": []}'])
 def test_malformed_worker_evidence_is_a_controlled_failure(monkeypatch, output):
     launch = subprocess.Popen
 

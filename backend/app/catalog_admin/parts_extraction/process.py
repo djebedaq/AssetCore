@@ -23,6 +23,24 @@ def kill_group(pid):
         pass
 
 
+def valid_evidence(result, operation):
+    """Validate the worker envelope before any consumer indexes its fields."""
+    if not isinstance(result, dict):
+        return False
+    if "error" in result:
+        return len(result) == 1 and isinstance(result["error"], str) and result["error"] in {
+            "catalog_source_encrypted", "catalog_source_page_limit",
+            "catalog_source_invalid_pdf", "catalog_extraction_page_failed"}
+    if operation == "validate":
+        return type(result.get("page_count")) is int and result["page_count"] > 0
+    if operation in {"preview", "thumbnail"}:
+        return isinstance(result.get("image"), str) and bool(result["image"])
+    fields = {"rows": list, "tables": list, "words": list, "quality": dict,
+        "warnings": list, "raw_text": str, "method": str, "pipeline_version": str, "ocr_used": bool}
+    return operation == "page" and all(isinstance(result.get(key), kind) for key, kind in fields.items()) and all(
+        isinstance(item, dict) for key in ("rows", "tables", "words") for item in result[key])
+
+
 def extract(content: bytes, operation: str, number: int, config: dict) -> dict:
     if not SLOTS.acquire(blocking=False):
         raise fail("catalog_extraction_busy")
@@ -78,7 +96,7 @@ def _extract(content: bytes, operation: str, number: int, config: dict, descript
             if completed.returncode != 0 or not output.is_file() or output.stat().st_size > 16 * 1024 * 1024:
                 raise fail("catalog_extraction_resource_limit", 422)
             result = json.loads(output.read_text(encoding="utf-8"))
-            if not isinstance(result, dict):
+            if not valid_evidence(result, operation):
                 raise ValueError("invalid worker evidence")
             return result
         except subprocess.TimeoutExpired:
