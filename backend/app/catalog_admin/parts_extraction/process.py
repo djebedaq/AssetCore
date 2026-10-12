@@ -52,8 +52,7 @@ def _extract(content: bytes, operation: str, number: int, config: dict, descript
                 str(source), str(output), operation, str(number), json.dumps(config)],
                 env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                # On Unix the worker retains the lease even if its web parent
-                # dies. It closes on worker exit/timeout, never while parsing.
+                # The Unix worker retains capacity if its web parent dies.
                 **({"pass_fds": (descriptor,)} if sys.platform != "win32" and descriptor is not None else {}),
                 start_new_session=sys.platform != "win32",
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)

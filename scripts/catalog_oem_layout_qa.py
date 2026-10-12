@@ -1,0 +1,147 @@
+"""03E real library corpus: extraction and independent comparison are separate modes.
+
+Extract output contains OEM rows: keep it private/ignored. Compare emits aggregate
+counts only. The fixture selection contains physical pages, never expected values.
+Existing verified source controls are loaded only by the compare command.
+"""
+
+import argparse
+import hashlib
+import json
+import sys
+from collections import Counter
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from types import SimpleNamespace
+
+from catalog_adaptive_pdf_qa import extract_report
+
+ROOT = Path(__file__).resolve().parents[1]
+CASES = [
+    ("falch_1000/drive_pump", "FALCH_1000/PUMP_PARTLIST.pdf", "2,3"),
+    ("falch_1000/liquid_part", "FALCH_1000/LIQUID_PART_PARTLIST.pdf", "2,3"),
+    ("falch_1000/wheel_jet", "FALCH_1000/WHEEL_JET_PARTLIST.pdf", "4,5,6,7,8,9"),
+    ("falch_500/pump", "FALCH_500/PUMP_PARTLIST.pdf", "2,3,4"),
+    ("falch_500/unloader_valve", "FALCH_500/UNLOADER_VALVE_PARTLIST.pdf", "2,3,4"),
+    ("falch_500/valve_500bar", "FALCH_500/VALVE_500BAR_PARTLIST.pdf", "2,3"),
+    ("falch_500/wheel_jet", "FALCH_500/WHEEL_JET_PARTLIST.pdf", "4,5,6,7,8"),
+    ("hydwin_fussen_500/plunger_pump", "HYDWIN_FUSEEN_500/ONLY_PLUNGER_PUMP.pdf", "22"),
+]
+
+
+def extract():
+    reports = []
+    for key, document, pages in CASES:
+        report = extract_report(SimpleNamespace(pdf=ROOT / "backend/resources/technical_docs/PARTS_CATALOG" / document,
+            pages=pages, runs=1))
+        reports.append({"case": key, "report": report})
+        print(json.dumps({"case": key, "extracted_candidates": sum(len(page["result"].get("rows", []))
+            for page in report["runs"][0]["pages"])}), file=sys.stderr, flush=True)
+    return reports
+
+
+def quantity(value):
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def compare(reports):
+    selected = {key: {int(page) for page in pages.split(",")} for key, _, pages in CASES}
+    keys = [item["case"] for item in reports]
+    if len(keys) != len(selected) or set(keys) != set(selected):
+        raise ValueError("QA_CORPUS_CASE_SELECTION_MISMATCH")
+    cases = []
+    for item in reports:
+        key, report = item["case"], item["report"]
+        # No expected data was read until all extraction reports were saved.
+        control = ROOT / "backend/resources/catalog/v2" / (key + ".json")
+        expected = json.loads(control.read_text(encoding="utf-8"))["records"]
+        if not expected or not all(row["source_document_sha256"] == report["source_sha256"] for row in expected):
+            raise ValueError("QA_SOURCE_SHA_MISMATCH")
+        numbers = [page["physical_page"] for page in report["runs"][0]["pages"]]
+        if (len(report["runs"]) != 1 or len(numbers) != len(selected[key]) or set(numbers) != selected[key]
+                or {row["source_page"] for row in expected} != selected[key]):
+            raise ValueError("QA_CORPUS_PAGE_SELECTION_MISMATCH")
+        pages = []
+        for page in report["runs"][0]["pages"]:
+            wanted = [row for row in expected if row["source_page"] == page["physical_page"]]
+            actual = [row["payload"] for row in page["result"].get("rows", [])]
+            # Preserve duplicate source occurrences; consume each match once.
+            matched = Counter()
+            for row, value in zip(wanted, actual, strict=False):
+                matched["position"] += value.get("position") == row["position"]
+                matched["part_number"] += value.get("part_number") == row["part_number"]
+                matched["quantity_raw"] += value.get("quantity_raw") == row["quantity_raw"]
+                parsed = quantity(value.get("quantity"))
+                matched["numeric_quantity"] += parsed is not None and parsed == quantity(row["quantity"])
+                matched["quantity_value"] += parsed == quantity(row["quantity"]) and value.get("quantity_raw") == row["quantity_raw"]
+                matched["original_description"] += bool(value.get("description")) and value.get("description") in {
+                    row.get("description_de"), row.get("description_en"), row.get("description_fr"), row.get("original_name")}
+            unused = list(actual)
+            paired = Counter()
+            for row in wanted:
+                index = next((i for i, value in enumerate(unused) if value.get("position") == row["position"]
+                    and value.get("part_number") == row["part_number"]), None)
+                if index is None:
+                    continue
+                value = unused.pop(index)
+                paired["position_number_pair"] += 1
+                paired["numeric_quantity"] += quantity(value.get("quantity")) == quantity(row["quantity"])
+                paired["quantity_raw"] += value.get("quantity_raw") == row["quantity_raw"]
+                paired["original_description"] += bool(value.get("description")) and value.get("description") in {
+                    row.get("description_de"), row.get("description_en"), row.get("description_fr"), row.get("original_name")}
+            # The source controls can order horizontal panels differently from
+            # geometric traversal. Retain the strict ordered metric, and also
+            # report a duplicate-consuming complete-row multiset comparison.
+            remaining, exact_rows = list(actual), 0
+            for row in wanted:
+                index = next((i for i, value in enumerate(remaining) if value.get("position") == row["position"]
+                    and value.get("part_number") == row["part_number"]
+                    and quantity(value.get("quantity")) == quantity(row["quantity"])
+                    and value.get("quantity_raw") == row["quantity_raw"]
+                    and bool(value.get("description")) and value.get("description") in {
+                        row.get("description_de"), row.get("description_en"), row.get("description_fr"), row.get("original_name")}), None)
+                if index is not None:
+                    remaining.pop(index)
+                    exact_rows += 1
+            provenance = all(row.get("provenance", {}).get("sha256") == report["source_sha256"]
+                and row["provenance"].get("physical_page") == page["physical_page"] for row in page["result"].get("rows", []))
+            pages.append({"physical_page": page["physical_page"], "expected_rows": len(wanted),
+                "extracted_candidates": len(actual), "ordered_exact_fields": {field: matched[field] for field in
+                    ("position", "part_number", "quantity_raw", "quantity_value", "numeric_quantity", "original_description")},
+                "paired_fields": dict(paired), "exact_rows_unordered_all_five_fields": exact_rows,
+                "missing_quantity_candidates": sum(row.get("quantity") is None for row in actual),
+                "control_blank_part_numbers": sum(not row["part_number"] for row in wanted),
+                "control_nonnumeric_quantities": sum(quantity(row["quantity"]) is None for row in wanted),
+                "missing_control_rows": len(wanted) - paired["position_number_pair"],
+                "additional_candidates": len(unused),
+                "automatic_exact_acceptance": "PASS" if exact_rows == len(wanted) == len(actual)
+                    and provenance and not page["result"].get("error") else "FAIL",
+                "unmatched_candidates": len(unused), "provenance": provenance,
+                "quality": page["result"].get("quality"), "error": page["result"].get("error"),
+                "resources": page["resources"], "review_state": "NOT_REVIEWED"})
+        cases.append({"case": key, "source_sha256": report["source_sha256"],
+            "control_sha256": hashlib.sha256(control.read_bytes()).hexdigest(), "pages": pages})
+    return {"scope": "REAL_EXISTING_VERIFIED_LIBRARY_POST_EXTRACTION_COMPARISON", "cases": cases,
+        "passed": all(page["automatic_exact_acceptance"] == "PASS" for case in cases for page in case["pages"]),
+        "universal_manufacturer_accuracy_claim": False, "hammelmann": "NOT_AVAILABLE"}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", choices=("extract", "compare"))
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    if args.mode == "compare" and not args.report:
+        parser.error("compare requires the saved extraction --report")
+    result = extract() if args.mode == "extract" else compare(json.loads(args.report.read_text(encoding="utf-8")))
+    args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({"mode": args.mode, "cases": len(result if isinstance(result, list) else result["cases"])}))
+    return 0 if not isinstance(result, dict) or result.get("passed") else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

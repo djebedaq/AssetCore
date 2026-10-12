@@ -122,6 +122,18 @@ def ruled_rows(page, *, continuation: list[dict] | None = None) -> tuple[list[di
         boundaries = ([cell[0] for cell in column_cells] + [table.bbox[2]]
                       if all(column_cells) else [])
         normalized = [edge / page.cropbox.width for edge in boundaries]
+        from . import panels
+        panel_headers = [str(value or "") for value in headers]
+        if boundaries and (len(panels.regions(panel_headers)) > 1 or sum(
+                set(header_candidates(header)) == {"description"} for header in panel_headers) > 1):
+            parts, regions = panels.parse(panel_headers, extracted[offset:],
+                [list(row.bbox) for row in table.rows[offset:offset + len(extracted) - offset]], list(table.bbox), boundaries)
+            for region in regions:
+                region["page_width"] = page.cropbox.width
+                region["geometry"]["normalized_boundaries"] = [edge / page.cropbox.width for edge in region["geometry"]["boundaries"]]
+            rows.extend(parts)
+            tables.extend(regions)
+            continue
         mapping, inherited = None, None
         if headerless:
             offset = 0
@@ -205,7 +217,8 @@ def header_anchors(line: list[dict]) -> list[dict]:
     return sorted(anchors, key=lambda item: item["center"])
 
 
-def layout_rows(words: list[dict], width: float, *, continuation: list[dict] | None = None) -> tuple[list[dict], list[dict]]:
+def layout_rows(words: list[dict], width: float, *, continuation: list[dict] | None = None,
+                physical_regions: list[dict] | None = None) -> tuple[list[dict], list[dict]]:
     rows, tables, regions = [], [], []
     lines = word_lines(words)
     for index, line in enumerate(lines):
@@ -251,9 +264,18 @@ def layout_rows(words: list[dict], width: float, *, continuation: list[dict] | N
                             "human_mapping": old.get("human_mapping", False)})
     for region in regions[:80]:
         headers = region["headers"]
+        # Use only an enclosing, semantically recognized physical table. This
+        # supplies an extent, never values or a schema to the independent reader.
+        enclosing = [table["bbox"] for table in physical_regions or [] if table.get("bom_evidence")
+            and table.get("cells") and table.get("geometry", {}).get("state") == "RESOLVED"
+            and all(table["bbox"][0] - 1 <= h["center"] <= table["bbox"][2] + 1
+                and table["bbox"][1] - 1 <= (h["bbox"][1] + h["bbox"][3]) / 2 <= table["bbox"][3] for h in headers)]
+        physical_bottom = min((box[3] for box in enclosing), default=float("inf"))
         next_header = min((r["line"] for r in regions if r["line"] > region["line"]), default=len(lines))
         selected_lines = []
         for line in lines[region["line"] + 1:next_header]:
+            if min((w["bbox"][1] + w["bbox"][3]) / 2 for w in line) >= physical_bottom:
+                break
             selected = [w for w in line if region["left"] <= (w["bbox"][0] + w["bbox"][2]) / 2 <= region["right"]]
             if not selected:
                 continue

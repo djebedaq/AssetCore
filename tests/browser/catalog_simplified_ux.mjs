@@ -129,11 +129,15 @@ try {
   checks.push('Re-extraction keeps all candidate identities and creates no duplicate parts')
   phase='review-sources'; const panel = page.getByRole('region', { name: 'Проверка на всеки източник', exact: true })
   for (const index of [0, 1]) {
+    // Finish background PDF comparison before requesting another parser slot.
+    // Capacity saturation is tested separately; it is not this serial UI flow.
+    await page.waitForLoadState('networkidle')
     await panel.getByRole('button', { name: 'Покажи оригинала', exact: true }).nth(index).click()
     await panel.locator('img').evaluate(image => image.decode())
     await panel.getByRole('textbox').fill('QA: Сравнени всички позиции, оригинални номера, описания и количества с точния PDF.')
     await panel.getByRole('button', { name: 'Потвърди проверения източник', exact: true }).click()
     await expect(panel.getByText('Проверен за текущите данни', { exact: false })).toHaveCount(index + 1)
+    await expect(panel.locator('.source-attestation')).toHaveCount(0)
   }
   await page.reload(); await reopen()
   await expect(panel.getByText('Проверен за текущите данни', { exact: false })).toHaveCount(2)

@@ -37,7 +37,11 @@ def assessment(rows, table):
         "observed_rows": observed, "candidate_rows": len(rows), "covered_rows": len(covered), "missing_rows": missing,
         "partial_rows": len(invalid), "warnings": warnings,
         # Rank by semantic validity, field quality and coverage, not raw row count.
-        "rank": [int(semantic), (len(rows) - len(invalid)) / max(1, len(rows)),
+        # A local physical-cell schema preserves wrapped/empty cells. A word
+        # reader can look cleaner precisely because it omitted their second line.
+        "rank": [int(semantic), int(ruled and bool(table.get("panel"))
+                 and table.get("geometry", {}).get("state") == "RESOLVED"),
+                 (len(rows) - len(invalid)) / max(1, len(rows)),
                  len(covered) / max(1, observed), int(ruled), int(complete)]}
 
 
@@ -104,6 +108,9 @@ def choose(strategies):
     selected, summaries = [], []
     for name, rows, tables in strategies:
         for table in tables:
+            if not table.get("cells") and not table.get("bom_evidence") and not table.get("grid"):
+                summaries.append({"strategy": name, "bbox": table["bbox"], "rejected": "EMPTY_NON_BOM"})
+                continue
             if "excluded_rows" in table:
                 table["excluded_rows"] = [e for e in table["excluded_rows"] if e["reason"] != "DUPLICATE_REGION"]
             if table.get("cells") and all(document_metadata(cells) for cells in table["cells"]) and not table.get("bom_evidence"):
@@ -174,6 +181,8 @@ def choose(strategies):
             row["table_index"] = ordinal
             row["source_region"] = {"table": ordinal, "row": row.get("source_row_index"), "bbox": row["bbox"]}
             row["warnings"] = sorted(set(row["warnings"] + table.get("strategy_warnings", [])))
+            if table.get("strategy_warnings"):
+                row["confidence"] = min(row["confidence"], .7)
         table["quality"] = assessment(item["rows"], table)
         tables.append(table)
     # Equal visible values are distinct occurrences. Geometry is evidence, not
