@@ -222,3 +222,46 @@ def test_group_ocr_releases_transaction_and_rejects_concurrent_review(pg_factory
         assert len(future.result(timeout=45)["rows"]) > 0
     with pg_factory() as db:
         assert db.get(ledger.Source, state["id"]).review_state != "VERIFIED"
+
+
+def test_invalid_nested_worker_commits_failed_attempt_and_retry_preserves_correction(pg_factory, monkeypatch):
+    import copy
+
+    from app.catalog_admin.parts_extraction.schemas import CandidateEdit, ExtractSelection
+    from fastapi import HTTPException
+    from test_catalog_worker_evidence import inject
+
+    page, preview = selected_source(pg_factory)
+    candidate = preview["rows"][0]
+    values = {**candidate["payload"], "part_number": "QA-PG-HUMAN-PRESERVED"}
+    data = ExtractSelection(visual_page_id=preview["source"]["visual_page_id"])
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        review.edit_candidate(db, actor, candidate["candidate_id"],
+            CandidateEdit(expected_version=candidate["candidate_version"], values=values))
+        source, *_ = ledger.source_context(db, data.visual_page_id)
+        evidence = copy.deepcopy(db.get(ledger.Attempt, source.current_attempt_id).evidence)
+        source_id = source.id
+    evidence["rows"] = [{}]
+    with monkeypatch.context() as patch:
+        inject(patch, evidence)  # Real child process, not a process.extract stub.
+        with pg_factory() as db:
+            actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            with pytest.raises(HTTPException) as rejected:
+                service.preview(db, actor, page["id"], data)
+            assert rejected.value.status_code == 422
+            assert rejected.value.detail["code"] == "catalog_extraction_resource_limit"
+    with pg_factory() as db:
+        source = db.get(ledger.Source, source_id)
+        attempt = db.get(ledger.Attempt, source.current_attempt_id)
+        assert source.processing_state == attempt.state == "FAILED"
+        assert source.review_state != "VERIFIED" and attempt.finished_at is not None
+        assert attempt.error_code == "catalog_extraction_resource_limit"
+        assert db.get(ledger.Candidate, candidate["candidate_id"]).values == values
+        assert len(ledger.candidates(db, source)) == len(preview["rows"])
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        retry = service.preview(db, actor, page["id"], data)
+        assert retry["rows"][0]["payload"] == values
+        assert [r["candidate_id"] for r in retry["rows"]] == [r["candidate_id"] for r in preview["rows"]]
+        db.refresh(source)
+        assert source.processing_state == "SUCCEEDED" and source.review_state != "VERIFIED"

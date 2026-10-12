@@ -1,5 +1,50 @@
 # CATALOG BUILDER 03D FINAL — интеграция и окончателно приемане
 
+## Final worker evidence boundary fix — 12.10.2026
+
+Независимият review на `07b0360` откри структурен пропуск във вложените worker
+данни. Реалният subprocess regression възпроизведе приемане на `rows: [{}]`;
+HTTP тестовете доказаха 500 при невалиден row/payload и 200 при невалидна
+table/quality структура. Началният целеви набор даде **5 FAIL / 1 PASS**.
+
+`process.valid_evidence()` вече използва малък вътрешен structural contract в
+`evidence.py`, преди резултатът да стигне до ledger. Проверяват се payload,
+warnings, schema/mapping, raw cells, boxes, таблици/row bands, quality, words,
+provenance и употребяваните optional geometry полета. Нечислови/неограничени
+числа, bool вместо index и прекалено дълбок JSON се отказват контролирано.
+Няма нормализиране, изхвърляне на частични редове или извеждане на липсващи части.
+Празните идентификатори, nullable description/quantity и оригиналният quantity_raw
+остават допустими **непотвърдени** кандидати с непроменени raw доказателства.
+
+Невалидният worker output връща sanitized **422**, опитът и източникът стават
+**FAILED**, а не SUCCEEDED или stranded RUNNING. Предишният успешен evidence,
+човешката поправка и candidate IDs се запазват; незабавен retry работи. Добавен е
+отделен реален PostgreSQL regression за същата транзакционна последователност.
+Действащият deadline recovery механизъм при прекъсване остава непроменен.
+
+Локално: **83/83** нови contract/HTTP теста; по-широкият първи набор е
+**179 PASS / 8 Windows POSIX SKIP**, преди последното разширяване на новите тестове.
+Окончателният локален worker/fault набор е **96 PASS / 6 POSIX SKIP** за 48.22 s.
+Всички worker/fault проверки са повторени; окончателните пълни backend,
+frontend, PostgreSQL, Docker и security резултати са в
+[CI на окончателния PR HEAD](https://github.com/djebedaq/AssetCore/pull/104/checks).
+
+Повторното независимо Linux приемане върху текущите source hashes е
+**611/611 от 24 OEM страници** и **D13 3 × (20/20 + 10/10)**; два едновременни
+D13 OCR worker-а също дават 20/20 всеки. Контролите са недостъпни при extraction
+и се четат само от отделния comparator след записването на резултатите.
+[Нови агрегирани доказателства](qa/catalog-builder-03d/final/worker-boundary-fix/implementation.json),
+[OEM](qa/catalog-builder-03d/final/worker-boundary-fix/corpus.json),
+[D13](qa/catalog-builder-03d/final/worker-boundary-fix/d13-linux-exact.json),
+[regressions](qa/catalog-builder-03d/final/worker-boundary-fix/regressions.json).
+
+Оценката остава ограничен, контролиран GO след успешен финален CI и независим
+review. Матрицата вече има **22 PASS / 1 BLOCKED / 5 NOT RUN**. Старите измервания
+и NO-GO историята са запазени. Няма промяна на OCR алгоритъм, DB/миграции,
+resource limits, canonical capacity, fingerprints, versions, reconciliation,
+inspection receipts, audit, permissions или publication gate. D13 остава
+непубликуван и 48/38 не е разрешено. Production не е достъпвана.
+
 ## Текуща оценка и обхват
 
 **Препоръка: GO за ограничен, контролиран release scope след независим review,

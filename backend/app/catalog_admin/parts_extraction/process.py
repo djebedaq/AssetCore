@@ -11,6 +11,7 @@ from threading import BoundedSemaphore
 
 from ...settings import settings
 from ..service import fail
+from . import evidence
 from .capacity import slot
 
 SLOTS = BoundedSemaphore(settings.catalog_extraction_max_processes)
@@ -24,7 +25,7 @@ def kill_group(pid):
 
 
 def valid_evidence(result, operation):
-    """Validate the worker envelope before any consumer indexes its fields."""
+    """Validate worker evidence before any consumer indexes nested fields."""
     if not isinstance(result, dict):
         return False
     if "error" in result:
@@ -35,10 +36,7 @@ def valid_evidence(result, operation):
         return type(result.get("page_count")) is int and result["page_count"] > 0
     if operation in {"preview", "thumbnail"}:
         return isinstance(result.get("image"), str) and bool(result["image"])
-    fields = {"rows": list, "tables": list, "words": list, "quality": dict,
-        "warnings": list, "raw_text": str, "method": str, "pipeline_version": str, "ocr_used": bool}
-    return operation == "page" and all(isinstance(result.get(key), kind) for key, kind in fields.items()) and all(
-        isinstance(item, dict) for key in ("rows", "tables", "words") for item in result[key])
+    return operation == "page" and evidence.page(result)
 
 
 def extract(content: bytes, operation: str, number: int, config: dict) -> dict:
