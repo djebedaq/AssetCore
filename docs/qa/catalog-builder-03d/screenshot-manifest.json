@@ -1,0 +1,26 @@
+{
+  "synthetic_only": true,
+  "oem_pages_included": false,
+  "files": [
+    {
+      "path": "docs/qa/catalog-builder-03d/screenshots/parts-390.png",
+      "bytes": 101369,
+      "sha256": "c35cfbc2cacd0b856cb376bef409e6f912afa8c071e654eb0e2cd5c20caddd8d"
+    },
+    {
+      "path": "docs/qa/catalog-builder-03d/screenshots/published-reopened-1440.png",
+      "bytes": 175200,
+      "sha256": "1e658e81a3eadeaf29a5f06535992f598e722f74b5e5fd04903d7a1b491684b8"
+    },
+    {
+      "path": "docs/qa/catalog-builder-03d/screenshots/rectangle-second-scheme-1440.png",
+      "bytes": 160713,
+      "sha256": "8f77e75cdc1075b5d8d89327dc52ff60008c5b57e8ffdab7c583c3fd7e31c3ee"
+    },
+    {
+      "path": "docs/qa/catalog-builder-03d/screenshots/touch-hotspots-768.png",
+      "bytes": 127956,
+      "sha256": "a5798d83cdcae804d0cf83a2c423b56647d74bb3b8267ecdc485bd428c2ffc02"
+    }
+  ]
+}

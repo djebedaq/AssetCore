@@ -26,7 +26,12 @@ def test_upgrade_does_not_infer_any_human_approval_and_protects_history(tmp_path
         connection.execute(text("CREATE TABLE qa_history (id INTEGER PRIMARY KEY, evidence TEXT NOT NULL)"))
         connection.execute(text("INSERT INTO qa_history VALUES (1, 'Synthetic immutable document fingerprint')"))
     _run_sqlite_revision(path, command.upgrade, "head")
+    # Alembic used another engine for DROP/recreate. Inspect a fresh SQLite
+    # connection instead of the pool's cached pre-upgrade PRAGMA statements.
+    engine.dispose()
     with engine.connect() as connection:
+        from catalog_ledger_schema_helpers import assert_ledger_schema
+        assert_ledger_schema(connection)
         for table in TABLES:
             assert connection.scalar(text(f"SELECT count(*) FROM {table}")) == 0
             assert {c["name"] for c in inspect(connection).get_columns(table)} == set(Base.metadata.tables[table].columns.keys())

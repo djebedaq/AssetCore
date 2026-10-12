@@ -1,0 +1,65 @@
+{
+  "findings": [
+    {
+      "area": "process_capacity_per_web_worker",
+      "status": "FIXED",
+      "proof": "tests/test_catalog_process_capacity.py"
+    },
+    {
+      "area": "private_capacity_directory_files_symlinks",
+      "status": "PASS",
+      "proof": "tests/test_catalog_process_capacity.py"
+    },
+    {
+      "area": "fixed_arguments_no_shell_environment_allowlist",
+      "status": "PASS",
+      "proof": "backend/app/catalog_admin/parts_extraction/process.py"
+    },
+    {
+      "area": "timeout_child_cleanup_resource_limits",
+      "status": "PASS",
+      "proof": "tests/test_catalog_adaptive_extraction.py"
+    },
+    {
+      "area": "upload_and_invalid_pdf_bounds",
+      "status": "PASS",
+      "proof": "tests/test_catalog_selected_extraction.py"
+    },
+    {
+      "area": "evidence_original_receipt_actor_hmac_version_authorization",
+      "status": "PASS",
+      "proof": "tests/test_catalog_durable_review.py"
+    },
+    {
+      "area": "publication_api_stale_digest_current_catalog_lock",
+      "status": "PASS",
+      "proof": "tests/postgres/test_catalog_durable_review_postgres.py"
+    },
+    {
+      "area": "source_switch_link_existing_and_blob_cleanup",
+      "status": "PASS",
+      "proof": "browser-synthetic.json"
+    },
+    {
+      "area": "dependency_high_critical_unknown_gates_release_sbom",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "area": "nonroot_readonly_network_none_ocr",
+      "status": "PASS",
+      "proof": "d13-linux-exact.json"
+    },
+    {
+      "area": "external_penetration_test_container_os_cve_scan",
+      "status": "NOT RUN",
+      "proof": "No external certification claim"
+    }
+  ],
+  "no_new_dependencies": true,
+  "no_permissions_roles_changes": true,
+  "no_cloud_ocr": true,
+  "no_original_oem_upload_outside_qa_app": true,
+  "no_production_access": true,
+  "corpus_blocker": "FAIL_AUTOMATIC_ACCURACY_WITH_EXPLICIT_NEEDS_REVIEW_NOT_PUBLICATION_BYPASS"
+}

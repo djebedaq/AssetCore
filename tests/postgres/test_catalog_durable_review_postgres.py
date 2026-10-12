@@ -171,6 +171,8 @@ def test_existing_postgres_upgrade_creates_ledger_constraints_without_backfill(p
         command.downgrade(config, "20261009_0032")
         assert not set(tables) & set(inspect(connection).get_table_names())
         command.upgrade(config, "head")
+        from catalog_ledger_schema_helpers import assert_ledger_schema
+        assert_ledger_schema(connection)
         for table in tables:
             assert connection.scalar(text(f"SELECT count(*) FROM {table}")) == 0
             assert {c["name"] for c in inspect(connection).get_columns(table)} == set(Base.metadata.tables[table].columns.keys())

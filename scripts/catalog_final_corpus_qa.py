@@ -68,17 +68,39 @@ def compare(reports):
                 matched["original_description"] += bool(value.get("description")) and value.get("description") in {
                     row.get("description_de"), row.get("description_en"), row.get("description_fr"), row.get("original_name")}
             unused = list(actual)
+            paired = Counter()
             for row in wanted:
                 index = next((i for i, value in enumerate(unused) if value.get("position") == row["position"]
                     and value.get("part_number") == row["part_number"]), None)
                 if index is None:
                     continue
-                unused.pop(index)
+                value = unused.pop(index)
+                paired["position_number_pair"] += 1
+                paired["numeric_quantity"] += quantity(value.get("quantity")) == quantity(row["quantity"])
+                paired["quantity_raw"] += value.get("quantity_raw") == row["quantity_raw"]
+                paired["original_description"] += bool(value.get("description")) and value.get("description") in {
+                    row.get("description_de"), row.get("description_en"), row.get("description_fr"), row.get("original_name")}
+            # The source controls can order horizontal panels differently from
+            # geometric traversal. Retain the strict ordered metric, and also
+            # report a duplicate-consuming complete-row multiset comparison.
+            remaining, exact_rows = list(actual), 0
+            for row in wanted:
+                index = next((i for i, value in enumerate(remaining) if value.get("position") == row["position"]
+                    and value.get("part_number") == row["part_number"]
+                    and quantity(value.get("quantity")) == quantity(row["quantity"])
+                    and value.get("quantity_raw") == row["quantity_raw"]
+                    and bool(value.get("description")) and value.get("description") in {
+                        row.get("description_de"), row.get("description_en"), row.get("description_fr"), row.get("original_name")}), None)
+                if index is not None:
+                    remaining.pop(index)
+                    exact_rows += 1
             provenance = all(row.get("provenance", {}).get("sha256") == report["source_sha256"]
                 and row["provenance"].get("physical_page") == page["physical_page"] for row in page["result"].get("rows", []))
             pages.append({"physical_page": page["physical_page"], "expected_rows": len(wanted),
-                "extracted_candidates": len(actual), "exact_fields": {field: matched[field] for field in
+                "extracted_candidates": len(actual), "ordered_exact_fields": {field: matched[field] for field in
                     ("position", "part_number", "quantity_raw", "numeric_quantity", "original_description")},
+                "paired_fields": dict(paired), "exact_rows_unordered_all_five_fields": exact_rows,
+                "missing_quantity_candidates": sum(row.get("quantity") is None for row in actual),
                 "unmatched_candidates": len(unused), "provenance": provenance,
                 "quality": page["result"].get("quality"), "error": page["result"].get("error"),
                 "resources": page["resources"], "review_state": "NOT_REVIEWED"})
