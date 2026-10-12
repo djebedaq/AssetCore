@@ -17,6 +17,7 @@ Screenshots са от реалния Edge браузър и нормалните
 | Единна таблица и оригинално evidence | [1440 px](parts-1440.png), [768 px](parts-768.png), [390 px](parts-390.png) |
 | Десет действителни синтетични callouts | [Hotspots](hotspots-1440.png) |
 | Server readiness след source review и verified hotspots | [Final review](ready-1440.png) |
+| Непотвърдени source полета и отделни конфликтни цели: cancel/accept/reset | [Source switch](source-switch-reset.png), [8/8 browser checks](source-review-switch.json) |
 
 OEM PDF, expected JSON и OEM screenshots остават локални. Exact-field JSON съдържа само
 сравнения, fingerprints и измервания, без оригинални OEM редове/изображения.

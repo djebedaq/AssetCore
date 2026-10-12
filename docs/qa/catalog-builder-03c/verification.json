@@ -6,9 +6,9 @@
   "ocr_algorithm_changes": false,
   "local": {
     "frontend_vitest": {
-      "passed": 604,
+      "passed": 614,
       "files": 66,
-      "wall_seconds": 115.98,
+      "wall_seconds": 139.22,
       "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=2"
     },
     "backend_targeted": {
@@ -37,7 +37,14 @@
     "release_verification": "PASS",
     "docker_build": "PASS",
     "linux_runtime_smokes": "PASS",
-    "postgres_clients": "16.15"
+    "postgres_clients": "16.15",
+    "durable_source_switch": {
+      "passed": 13,
+      "included_in_full_vitest": true,
+      "browser_checks": 8,
+      "browser_page_errors": 0,
+      "browser_report": "source-review-switch.json"
+    }
   },
   "ci": "Authoritative full backend / PostgreSQL / security / exact image checks are the Build check jobs on the pull request HEAD; see PR checks.",
   "limitations": [

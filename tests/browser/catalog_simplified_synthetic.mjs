@@ -141,6 +141,63 @@ try {
   expect(bypass.status()).toBe(409)
   checks.push('Direct authenticated API publication remains blocked before source review and verified hotspots')
   const panel = page.getByRole('region', { name: 'Проверка на всеки източник', exact: true })
+  // QA fixture only: remove three confirmed synthetic parts, then use the real
+  // extractor/ledger to obtain ACCEPTED_PART_REMOVED conflicts (no mocked API).
+  await expect.poll(async () => (await api(`/reference-pages/${referenceId}/parts`)).length).toBe(10)
+  for (const part of (await api(`/reference-pages/${referenceId}/parts`)).filter(item => ['1', '2', '6'].includes(item.position))) {
+    const removed = await page.request.delete(base + `/api/admin/catalog-builder/parts/${part.id}`, { headers: { 'X-CSRF-Token': csrf.value } })
+    expect(removed.status()).toBe(204)
+  }
+  expect(await api(`/reference-pages/${referenceId}/parts`)).toHaveLength(7)
+  await task(/Разпознаване/); await button('Разпознай частите').click()
+  await expect.poll(() => extracted.length).toBe(4); await task(/Проверка на части/)
+  const showOriginal = index => panel.getByRole('button', { name: 'Покажи оригинала', exact: true }).nth(index).click()
+  await showOriginal(0); await panel.locator('img').evaluate(image => image.decode())
+  await expect(panel.getByRole('combobox')).toHaveCount(2)
+  const remaining = await api(`/reference-pages/${referenceId}/parts`)
+  const linkTarget = String(remaining.find(part => part.position === '3').id)
+  await panel.getByRole('combobox').nth(0).selectOption(linkTarget)
+  await expect(panel.getByRole('combobox').nth(1)).toHaveValue('')
+  await panel.getByRole('combobox').nth(1).selectOption(linkTarget)
+  await expect(panel.getByRole('combobox').nth(0)).toHaveValue('')
+  const pendingReason = 'QA: непотвърдено основание за конкретната оригинална страница.'
+  await panel.getByRole('textbox').fill(pendingReason); await panel.getByRole('checkbox').check()
+  const firstOriginal = await panel.locator('img').getAttribute('src')
+  const cancelled = page.waitForEvent('dialog')
+  acceptDialog = false; await showOriginal(1)
+  expect((await cancelled).message()).toContain('ще бъдат изчистени')
+  await expect(panel.getByRole('textbox')).toHaveValue(pendingReason)
+  await expect(panel.getByRole('checkbox')).toBeChecked()
+  await expect(panel.getByRole('combobox').nth(1)).toHaveValue(linkTarget)
+  await expect(panel.locator('img')).toHaveAttribute('src', firstOriginal)
+  acceptDialog = true; await showOriginal(1)
+  await panel.locator('img').evaluate(image => image.decode())
+  await expect(panel.locator('img')).toHaveAttribute('alt', 'PDF страница 3')
+  await expect(panel.getByRole('textbox')).toHaveValue('')
+  await expect(panel.getByRole('checkbox')).not.toBeChecked()
+  await expect(panel.getByRole('combobox')).toHaveValue('')
+  await expect(panel.getByRole('button', { name: 'Свържи с вече поправена част', exact: true })).toBeDisabled()
+  expect(await panel.locator('img').getAttribute('src')).not.toBe(firstOriginal)
+  await showOriginal(0); await panel.locator('img').evaluate(image => image.decode())
+  await expect(panel.getByRole('combobox').nth(0)).toHaveValue('')
+  await expect(panel.getByRole('combobox').nth(1)).toHaveValue('')
+  await page.screenshot({ path: out + '/source-switch-reset.png', fullPage: true })
+  checks.push('Real ledger conflicts: LINK_EXISTING is candidate-specific; cancelled source switch preserves reason/manual/link/original; accepted switch and return clear them and load the exact new physical original')
+  // Explicit UI recovery of the deliberately removed synthetic rows, keeping
+  // their original values and normal candidate versions/audit/publication gate.
+  for (const [index, count] of [[0, 2], [1, 1]]) {
+    await showOriginal(index)
+    await panel.getByRole('textbox').fill('QA: възстановяване на умишлено премахнати синтетични части по точния оригинал.')
+    for (let left = count; left > 0; left--) {
+      await panel.getByRole('button', { name: 'Потвърди като отделен вариант за преглед', exact: true }).first().click()
+      await expect(panel.getByRole('combobox')).toHaveCount(left - 1)
+    }
+  }
+  await button('Избери валидните видими редове').click(); await button('Потвърди избраните части').click()
+  await expect(button('Потвърди избраните части')).toBeDisabled()
+  await expect.poll(async () => (await api(`/reference-pages/${referenceId}/parts`)).length).toBe(10)
+  expect((await api(`/reference-pages/${referenceId}/parts`)).map(part => part.part_number).sort()).toEqual(
+    Array.from({ length: 10 }, (_, index) => `QA-${index + 1}`).sort())
   for (const index of [0, 1]) {
     await panel.getByRole('button', { name: 'Покажи оригинала', exact: true }).nth(index).click()
     await panel.locator('img').evaluate(image => image.decode())

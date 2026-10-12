@@ -199,7 +199,7 @@ Baseline изискваше 20 отделни OCR checkboxes; останалит
 |---|---|
 | Windows/Edge, реален D13 през нормалния UI | 20/20 + 10/10; една таблица; SHA/page; edit/refresh; re-extraction без дубликати; source review refresh; hotspot blockers |
 | Linux Docker D13, 3 повторения | 3 × (20/20 + 10/10), всички 4 полета + SHA/physical page; 0 останали subprocess-и |
-| Full Vitest | 604 PASS / 66 файла (`node node_modules/vitest/vitest.mjs run --maxWorkers=2`) |
+| Full Vitest | 614 PASS / 66 файла (`node node_modules/vitest/vitest.mjs run --maxWorkers=2`), 139.22 s |
 | Typecheck / ESLint / production Vite build | PASS; съществуващото предупреждение за големия общ app chunk остава |
 | Backend durable/adaptive/publication/wizard/evidence | 69 PASS, 2 platform SKIP на Windows; Unix process-group cases се изпълняват в Linux CI |
 | Evidence geometry и подмяна на HMAC claim | 2 PASS, включително legacy no-highlight и 422 tampering |
@@ -214,7 +214,7 @@ Full backend SQLite, PostgreSQL transactions/backup compatibility, dependency au
 checks се изпълняват от съществуващия **Build check** workflow върху PR HEAD. Финалният CI статус
 и точните резултати са в PR checks и машинночетимия QA отчет; не се заменят с frontend readiness.
 Локалният full frontend прогон с неограничени workers беше прекъснат при конкуриращ се QA load;
-повторният ограничен прогон завърши с 604 PASS. Прекъснатият опит не е отчетен като PASS.
+финалният ограничен прогон завърши с 614 PASS. Прекъснатият опит не е отчетен като PASS.
 
 Основни команди: `pytest -q tests/test_catalog_durable_review.py tests/test_catalog_adaptive_extraction.py
 tests/test_catalog_publication.py tests/test_catalog_wizard.py tests/test_catalog_evidence_preview.py`;
@@ -236,6 +236,46 @@ Worker limits остават 45 s / 1 GiB и съществуващият pixel/
 Машинночетимото exact-field доказателство е [d13-linux-exact.json](qa/catalog-builder-03c/d13-linux-exact.json).
 Screenshots в PR са от реално работещия браузър със **синтетичния** PDF, не декоративни mockups.
 OEM screenshots остават локални; не се публикуват и не са изпращани към външна OCR/AI услуга.
+
+## Целева корекция при финален review — смяна на източник
+
+`DurableSourceReview` изисква ясно потвърждение, преди повторното отваряне на оригинал или
+смяната на физическата страница да изчисти непотвърдено основание, manual transcription
+отметка или избрана цел за конфликт. Отказът запазва формата, оригинала и inspection receipt,
+без нова заявка. Потвърждението изчиства reason/manual/link/error, стария object URL/receipt и
+image-loaded състоянието, преди да поиска новия оригинал. Неуспешна нова инспекция оставя
+потвърждението блокирано. Същата защита важи при повторно отваряне на текущия оригинал.
+Предупреждението има пълни BG/EN/RU преводи.
+
+Изборът `LINK_EXISTING` е обвързан с visual page ID, source version/fingerprint и candidate
+ID/version. Друг кандидат не наследява избраната цел; смяна на версия или fingerprint я
+прави неприложима. Успешното разрешаване изчиства избора и inspection състоянието, като
+следващото човешко потвърждение продължава да изисква актуален оригинал. Payload-ите запазват
+точните expected versions, fingerprints и inspection token; няма промени на backend audit,
+receipt validation, publication gate, OCR, DB schema, миграции или останалия UX.
+
+`DurableSourceReview.test.tsx` съдържа 13 теста: отделни reason/manual/link и комбинирани
+непотвърдени полета; cancel/accept; освобождаване на стария оригинал; нов receipt и заредено
+изображение; неуспешна нова инспекция; отделни конфликтни кандидати/страници; source/candidate
+version и fingerprint смяна; точен LINK_EXISTING payload и изчистване след запис. Пълният
+frontend набор е 614 PASS / 66 файла; typecheck, ESLint и production build са PASS.
+
+Браузърният сценарий `catalog_simplified_synthetic.mjs` допълва реалния Edge/API прогон с
+контролирана временна QA подготовка: след завършено потвърждение премахва три **синтетични**
+части чрез авторизираните API и повторно разпознаване създава истински ledger конфликти.
+Проверява отделните LINK_EXISTING избори, cancel със запазени reason/manual/link/original,
+accept с празна форма и точната нова физическа страница, както и връщане без стара цел.
+След изрично UI разрешаване възстановява точните десет оригинални синтетични части и
+продължава съществуващите source-review/logout/hotspot/publication проверки. Няма mocked
+API, промяна на OEM документ или фиктивни записи в committed/production база.
+Първият разширен прогон спря заради QA синхронизация преди края на груповото потвърждение;
+добавени са изрично изчакване на десетте записани части и assertion за седемте останали
+преди re-extraction. Assertions за конфликти и сигурност не са отслабени.
+Финалният Edge прогон е **8/8 PASS, 0 page errors**, включително възстановяване на десетте
+точни синтетични части, source review и публикация след проверените hotspots.
+Резултатите са в [source-review-switch.json](qa/catalog-builder-03c/source-review-switch.json),
+а празната форма след потвърдена смяна и връщане — в
+[реалния screenshot](qa/catalog-builder-03c/source-switch-reset.png).
 
 ## Регресии, ограничения и 03D
 
