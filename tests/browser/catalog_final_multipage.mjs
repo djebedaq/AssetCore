@@ -71,6 +71,7 @@ try {
       await missing.getByRole('button', { name: 'Грешка — опитайте отново', exact: true }).click()
       await expect.poll(() => extracted.length).toBe(7)
       expect(extracted.map(item => item.source.page_number)).toEqual([2, 3, 4, 6, 7, 8, 5])
+      await expect(button('Разпознай частите')).toBeEnabled()
       await task(/Проверка на части/)
     }
     await expect(page.locator('.guided-parts tbody tr')).toHaveCount(count * 5)

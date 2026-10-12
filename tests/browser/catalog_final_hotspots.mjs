@@ -1,0 +1,78 @@
+// Real Chromium pointer input, real API persistence; synthetic source callouts only.
+export async function finalHotspotAcceptance({ page, expect, api, button, referenceId, revisionId, base, out }) {
+  const schemes = await api(`/reference-pages/${referenceId}/exploded-pages`)
+  expect(schemes.map(row => row.page_number)).toEqual([1, 4])
+  const detail = schemes[1], path = `/visual-pages/${detail.visual_page_id}/hotspots`
+  const rows = () => api(path)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const priorImage = await page.locator('.builder-scheme-canvas img').getAttribute('src')
+  await page.getByRole('combobox', { name: /^Страница на разглобената схема/ }).selectOption(String(detail.visual_page_id))
+  const canvas = page.locator('.builder-scheme-canvas')
+  await expect(canvas.locator('img')).not.toHaveAttribute('src', priorImage)
+  await canvas.locator('img').evaluate(image => image.decode())
+  await button('Цяла страница').click()
+  await page.locator('.wizard-position-list').getByRole('button', { name: /^Позиция 1\s/ }).click()
+  await button('Инструменти за маркера').click(); await button('Правоъгълник').click()
+  await canvas.scrollIntoViewIfNeeded()
+  const at = async (x, y) => {
+    const box = await canvas.boundingBox()
+    return { x: box.x + box.width * x / 850, y: box.y + box.height * y / 650 }
+  }
+  const cdp = await page.context().newCDPSession(page), start = await at(125, 125), end = await at(185, 165)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...start, id: 1 }] })
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...end, id: 1 }] })
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
+  await expect(canvas.locator('.builder-hotspot.draft')).toHaveCount(0)
+  expect(await rows()).toEqual([])
+  const draw = async () => {
+    const first = await at(125, 125), last = await at(185, 165)
+    await page.mouse.move(first.x, first.y); await page.mouse.down()
+    await page.mouse.move(last.x, last.y, { steps: 5 }); await page.mouse.up()
+    await expect.poll(async () => (await rows()).filter(row => row.is_verified).length).toBe(1)
+    await expect(button('Правоъгълник')).toBeEnabled()
+  }
+  await draw()
+  const created = (await rows())[0]
+  expect(created.position).toBe('1')
+  expect(created.x).toBeCloseTo(125 / 850, 2); expect(created.y).toBeCloseTo(125 / 650, 2)
+  expect(created.width).toBeCloseTo(60 / 850, 2); expect(created.height).toBeCloseTo(40 / 650, 2)
+  await button('Избор и преместване').click()
+  const marker = canvas.locator('.builder-hotspot').first(), box = await marker.boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 8, box.y + box.height / 2 + 6, { steps: 5 }); await page.mouse.up()
+  await expect.poll(async () => (await rows())[0].version).toBeGreaterThan(created.version)
+  await expect(button('Избор и преместване')).toBeEnabled()
+  const moved = (await rows())[0]
+  expect(moved.x).toBeGreaterThan(created.x); expect(moved.y).toBeGreaterThan(created.y)
+  const handle = canvas.locator('.builder-hotspot-handle').first(), corner = await handle.boundingBox()
+  await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2); await page.mouse.down()
+  await page.mouse.move(corner.x + corner.width / 2 + 10, corner.y + corner.height / 2 + 8, { steps: 5 }); await page.mouse.up()
+  await expect.poll(async () => (await rows())[0].width).toBeGreaterThan(moved.width)
+  await expect(button('Избор и преместване')).toBeEnabled()
+  await button('Отмени проверката').click()
+  await expect.poll(async () => (await rows())[0].is_verified).toBe(false)
+  const blocked = await api(`/revisions/${revisionId}/publication-readiness`)
+  expect(blocked.errors.some(issue => issue.code === 'catalog_publication_hotspot_unverified' && issue.hotspot_id === created.id)).toBe(true)
+  await button('Провери').click(); await expect.poll(async () => (await rows())[0].is_verified).toBe(true)
+  const current = (await rows())[0], csrf = (await page.context().cookies()).find(cookie => cookie.name === 'assetcore_csrf')
+  const stale = await page.request.patch(base + `/api/admin/catalog-builder/hotspots/${current.id}`, {
+    headers: { 'X-CSRF-Token': csrf.value }, data: { expected_version: created.version, x: created.x, y: created.y, width: created.width, height: created.height },
+  })
+  expect(stale.status()).toBe(409); expect((await rows())[0]).toEqual(current)
+  await button('Отмени последното поставяне').click(); await expect.poll(async () => (await rows()).length).toBe(0)
+  await page.locator('.wizard-position-list').getByRole('button', { name: /^Позиция 1\s/ }).click()
+  await button('Правоъгълник').click(); await draw()
+  const normalized = (await rows())[0]
+  expect((await api(`/reference-pages/${referenceId}/coverage`)).find(row => row.position === '1').hotspot_count).toBe(2)
+  await button('По ширина').click()
+  for (let count = 0; count < 3; count++) await button('Увеличи').click()
+  await button('Преместване на изгледа').click()
+  const view = page.locator('.builder-scheme-viewport'), viewport = await view.boundingBox()
+  await page.mouse.move(viewport.x + viewport.width * .6, viewport.y + viewport.height * .6); await page.mouse.down()
+  await page.mouse.move(viewport.x + viewport.width * .6 - 40, viewport.y + viewport.height * .6 - 30, { steps: 5 }); await page.mouse.up()
+  expect(await view.evaluate(node => node.scrollLeft > 0 || node.scrollTop > 0)).toBe(true)
+  expect((await rows())[0]).toEqual(normalized)
+  await button('Цяла страница').click()
+  await page.screenshot({ path: out + '/rectangle-second-scheme-1440.png', fullPage: true })
+  await cdp.detach()
+}

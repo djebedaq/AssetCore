@@ -1,6 +1,7 @@
 // Real browser / real APIs; only the runtime-generated synthetic PDF is used.
 import { createRequire } from 'node:module'
 import { writeFile } from 'node:fs/promises'
+import { finalHotspotAcceptance } from './catalog_final_hotspots.mjs'
 const require = createRequire(import.meta.url), modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
 const { chromium } = require(modulePath)
 const expect = require(modulePath + '/test').expect.configure({ timeout: 60000 })
@@ -63,6 +64,8 @@ try {
   await page.getByLabel('Качи PDF', { exact: true }).setInputFiles(out + '/synthetic.pdf')
   await jump(1); await button('Добави тази страница като схема').click()
   await expect(page.getByText('Страница 1 е добавена: Схема', { exact: true })).toBeVisible()
+  await jump(4); await button('Добави тази страница като схема').click()
+  await expect(page.getByText('Страница 4 е добавена: Схема', { exact: true })).toBeVisible()
   await page.locator('.source-selection').getByRole('button', { name: 'Затвори', exact: true }).click()
   await button('+ Добави списък с части').click()
   for (const number of [2, 3]) {
@@ -242,6 +245,8 @@ try {
   }
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: out + '/hotspots-1440.png', fullPage: true })
+  await finalHotspotAcceptance({ page, expect, api, button, referenceId, revisionId: revision.id, base, out })
+  checks.push('Second actual synthetic scheme: pointer cancellation, rectangle, mouse move/resize, verify/unverify blocker, stale version rejection, undo/delete, second occurrence, zoom/pan and refresh preserve normalized geometry')
   await task(/Публикуване/)
   await expect(button('Публикувай каталог')).toBeEnabled()
   for (const width of [390, 768, 1440]) {
@@ -250,9 +255,28 @@ try {
     await expect(button('Публикувай каталог')).toBeEnabled()
   }
   await page.screenshot({ path: out + '/ready-1440.png', fullPage: true })
+  const assemblies = await api(`/revisions/${revision.id}/assemblies`)
+  const originalGraph = {
+    parts: await api(`/reference-pages/${referenceId}/parts`),
+    coverage: await api(`/reference-pages/${referenceId}/coverage`),
+    pages: await api(`/assemblies/${assemblies[0].id}/reference-pages`),
+    hotspots: await Promise.all((await api(`/reference-pages/${referenceId}/exploded-pages`)).map(row => api(`/visual-pages/${row.visual_page_id}/hotspots`))),
+  }
   await button('Публикувай каталог').click()
   await expect(page.getByText('Каталогът е публикуван.', { exact: true })).toBeVisible()
   checks.push('Ten actual synthetic callouts placed, saved, verified and advanced with touch at 390/768/1440; overlay dimensions match normalized geometry; responsive reviewed synthetic catalog publishes through UI')
+  await page.reload()
+  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Каталожен конструктор', exact: true }).click()
+  await page.locator('.builder-list-item').filter({ hasText: 'Synthetic QA simplified UX' }).getByRole('button', { name: 'Отвори работното пространство', exact: true }).click()
+  await expect(page.getByText('Каталогът е публикуван.', { exact: true })).toBeVisible()
+  expect((await api(`/catalogs/${catalog.id}/revisions`)).find(row => row.id === revision.id).status).toBe('PUBLISHED')
+  expect(await api(`/reference-pages/${referenceId}/parts`)).toEqual(originalGraph.parts)
+  expect(await api(`/reference-pages/${referenceId}/coverage`)).toEqual(originalGraph.coverage)
+  expect(await api(`/assemblies/${assemblies[0].id}/reference-pages`)).toEqual(originalGraph.pages)
+  expect(await Promise.all((await api(`/reference-pages/${referenceId}/exploded-pages`)).map(row => api(`/visual-pages/${row.visual_page_id}/hotspots`)))).toEqual(originalGraph.hotspots)
+  await expect(button('Публикувай каталог')).toHaveCount(0)
+  await page.screenshot({ path: out + '/published-reopened-1440.png', fullPage: true })
+  checks.push('Published synthetic revision reopens read-only after refresh; exact source assignments, parts and verified hotspot coverage are unchanged')
   expect(errors).toEqual([])
   await writeFile(out + '/results.json', JSON.stringify({ passed: true, checks, pageErrors: errors, syntheticOnly: true, productionAccess: false }, null, 2))
   console.log(JSON.stringify({ checks, pageErrors: errors }))

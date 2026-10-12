@@ -36,6 +36,39 @@ def test_two_source_approvals_wait_for_catalog_lock_and_only_one_version_wins(pg
     assert sorted(outcome.status for outcome in outcomes) == [200, 409]
 
 
+def test_two_operators_need_own_receipts_and_one_current_review_wins(pg_factory):
+    from fastapi import HTTPException
+    _, state, first_receipt, catalog_id, _ = prepared(pg_factory)
+    with pg_factory() as db:
+        first = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        first_id = first.id
+        second = User(email="catalog-review-qa@assetcore.invalid", full_name="QA Second Operator",
+            first_name="QA", middle_name="Second", last_name="Operator", job_title="QA director",
+            profile_status="PROFILE_COMPLETE", role="director", password_hash="!disabled-qa-login", is_active=True)
+        db.add(second)
+        db.commit()
+        second_id = second.id
+        _, second_receipt = review.original(db, second, state["visual_page_id"])
+        data = SourceReview(expected_version=state["version"], fingerprint=state["fingerprint"],
+            inspection_token=first_receipt, reason="QA inspected the exact original physical source")
+        with pytest.raises(HTTPException) as rejected:
+            review.verify(db, second, state["visual_page_id"], data)
+        assert rejected.value.detail["code"] == "catalog_source_review_inspection_required"
+        assert first.id != second_id
+        db.rollback()
+    second_data = data.model_copy(update={"inspection_token": second_receipt})
+    outcomes = race(pg_factory, CatalogDefinition, catalog_id, [
+        lambda db, actor: review.verify(db, actor, state["visual_page_id"], data),
+        lambda db, actor: review.verify(db, db.get(User, second_id), state["visual_page_id"], second_data),
+    ], success_status=200)
+    assert sorted(outcome.status for outcome in outcomes) == [200, 409]
+    with pg_factory() as db:
+        latest = db.scalar(select(ledger.Decision).where(ledger.Decision.source_id == state["id"])
+            .order_by(ledger.Decision.id.desc()))
+        assert latest.source_version == state["version"] + 1
+        assert latest.actor_id in {first_id, second_id}
+
+
 def test_candidate_edits_share_catalog_lock_and_reject_stale_version(pg_factory):
     from app.catalog_admin.parts_extraction.schemas import CandidateEdit
     page, preview = selected_source(pg_factory)
