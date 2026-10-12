@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "checks": [
+    "No global Advanced mode; dialog keyboard focus trap, Escape cancellation and focus restoration; unsaved values are guarded",
+    "Explicit scheme and two list assignments; one recognition action; ten exact separate candidates in one table; 390/768/1440 no page overflow and keyboard editor access",
+    "English and Russian workflow/review controls render; switching back to Bulgarian keeps all ten candidates",
+    "Two actual browser tabs: stale autosave preserves unsaved human text; explicit reload sees the saved other-tab correction; stale confirmation creates zero parts; restored exact synthetic original before approval",
+    "Direct authenticated API publication remains blocked before source review and verified hotspots",
+    "Real ledger conflicts: LINK_EXISTING is candidate-specific; cancelled source switch preserves reason/manual/link/original; accepted switch and return clear them and load the exact new physical original",
+    "Confirmed parts and source decisions survive logout and a fresh login",
+    "Ten actual synthetic callouts placed, saved, verified and advanced with touch at 390/768/1440; overlay dimensions match normalized geometry; responsive reviewed synthetic catalog publishes through UI"
+  ],
+  "pageErrors": [],
+  "syntheticOnly": true,
+  "productionAccess": false,
+  "browser": "Microsoft Edge (Playwright, real API)",
+  "scenario": "Durable source switch and candidate-bound LINK_EXISTING",
+  "screenshots_sha256": {
+    "source-switch-reset.png": "18480f8e29a64bb41c0cbe25e7255290f53d95360304e59606f9b9a8a716cde7"
+  }
+}

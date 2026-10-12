@@ -238,6 +238,7 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         "part_count": len(content["parts"]), "mapped_part_count": sum(bool(values) for values in mapped.values()),
         "exploded_page_count": sum(x.role == "EXPLODED_SCHEME" for x in content["pages"]),
         "spare_list_page_count": sum(x.role == "SPARE_PARTS_LIST" for x in content["pages"]),
+        "reviewed_source_count": sum(item["valid"] for item in review_proof),
         "hotspot_count": len(content["hotspots"]),
         "verified_hotspot_count": sum(x.is_verified for x in content["hotspots"]),
         "repair_kit_count": len(content["kits"]),

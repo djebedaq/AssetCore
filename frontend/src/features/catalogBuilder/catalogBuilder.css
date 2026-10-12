@@ -1,0 +1,85 @@
+.catalog-workbench { font-size: 14px; }
+.catalog-workbench [hidden] { display: none !important; }
+.catalog-workbench button:not(.builder-hotspot), .catalog-workbench summary { min-height: 40px; }
+.catalog-workbench button:focus-visible, .catalog-workbench summary:focus-visible,
+.catalog-workbench input:focus-visible, .catalog-workbench select:focus-visible { outline: 3px solid #287cb8; outline-offset: 2px; }
+.catalog-context { color: #526576; margin: 0 0 10px; }
+.catalog-workbench .catalog-navigation { display: flex; gap: 5px; overflow-x: auto; padding: 4px 2px 10px; }
+.catalog-navigation button { white-space: nowrap; flex: 1; }
+.catalog-navigation button span { display: inline-grid; place-items: center; border: 1px solid currentColor; border-radius: 50%; width: 23px; height: 23px; margin-right: 3px; }
+.catalog-navigation [aria-current=step] { background: #e8f2fb; border-color: #397baa; color: #173c59; font-weight: 700; }
+.guided-single-workflow:has(.reference-sidebar[hidden]) { grid-template-columns: minmax(0, 1fr); }
+.guided-single-workflow .reference-content { min-width: 0; }
+.assembly-switcher { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+.assembly-switcher select { max-width: 600px; }
+.parts-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.parts-toolbar label { display: grid; gap: 4px; }
+.parts-toolbar label:nth-child(2) { flex: 1; min-width: 150px; }
+.catalog-workbench .unified-parts { max-height: 48vh; margin: 10px 0; }
+.catalog-workbench .unified-parts table { width: 100%; min-width: 0; table-layout: fixed; }
+.unified-parts th:first-child { width: 48px; }
+.unified-parts th:nth-child(2) { width: 135px; }
+.unified-parts th:nth-child(3) { width: 18%; }
+.unified-parts th:nth-child(5) { width: 80px; }
+.unified-parts th:nth-child(6) { width: 20%; }
+.catalog-workbench .unified-parts td:nth-child(4) { min-width: 0; }
+.unified-parts td { overflow-wrap: anywhere; vertical-align: middle; }
+.unified-parts td small, .part-open small { display: block; font-size: 11px; color: #526576; }
+.unified-parts [aria-selected=true] { outline: 2px solid #287cb8; outline-offset: -2px; }
+.unified-parts .part-open { white-space: normal; width: 100%; text-align: left; }
+.part-comparison { display: grid; grid-template-columns: minmax(0, 3fr) minmax(240px, 2fr); gap: 16px; padding-top: 12px; border-top: 1px solid #ccd8e2; }
+.part-edit > label, .part-edit details label { display: grid; gap: 4px; margin: 10px 0; }
+.part-edit h4 { margin: 0; }
+.part-original { min-width: 0; }
+.part-original .reader-viewport { height: 60vh; min-height: 300px; }
+.reader-image { position: relative; flex: none; margin: 0 auto; }
+.reader-image img { display: block; max-width: none; }
+.evidence-highlight { position: absolute; border: 2px solid #c34d00; background: #ffb62720; pointer-events: none; box-sizing: border-box; }
+.raw-evidence { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; font-size: 12px; }
+.durable-review { margin: 16px 0; }
+.durable-review .source-review-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid #dae2e8; }
+.source-review-row b { flex: 1; min-width: 180px; overflow-wrap: anywhere; }
+.source-review-row details { font-size: 12px; }
+.source-attestation > label { display: grid; gap: 6px; margin: 12px 0; }
+.source-attestation > label:has(input[type=checkbox]) { display: flex; align-items: center; }
+.source-attestation textarea { min-height: 80px; }
+.source-attestation .guided-original { max-height: 65vh; overflow: auto; }
+.catalog-maintenance details { padding: 12px 0; border-top: 1px solid #dae2e8; }
+.source-options { position: relative; }
+.source-options summary { padding: 5px 10px; cursor: pointer; }
+.source-options[open] button { position: absolute; z-index: 3; right: 0; background: white; }
+.hotspot-simple .builder-scheme-layout { grid-template-columns: minmax(0, 1fr) 230px; }
+.hotspot-simple .builder-scheme-details { min-width: 0; }
+.hotspot-simple .builder-scheme-details > input, .hotspot-simple .builder-scheme-details select { min-width: 0; max-width: 100%; }
+.hotspot-simple .builder-scheme-details .actions { flex-wrap: wrap; }
+.hotspot-simple .builder-scheme-viewport { height: 65vh; }
+.hotspot-simple .wizard-position-list { max-height: 36vh; }
+.catalog-maintenance > details > summary, .part-edit summary { cursor: pointer; font-weight: 600; }
+@media (max-width: 1000px) {
+  .catalog-navigation button { flex: none; }
+  .part-comparison { grid-template-columns: minmax(0, 1fr) 280px; }
+}
+@media (max-width: 700px) {
+  .catalog-workbench button:not(.builder-hotspot), .catalog-workbench summary { min-height: 44px; }
+  .catalog-workbench .panel { padding: 10px; }
+  .catalog-navigation button { font-size: 12px; }
+  .catalog-navigation button span { width: 20px; height: 20px; }
+  .assembly-switcher { display: grid; gap: 4px; }
+  .parts-toolbar { display: grid; grid-template-columns: 1fr 1fr; }
+  .parts-toolbar input, .parts-toolbar select { min-width: 0; width: 100%; }
+  .unified-parts table, .unified-parts tbody { display: block; }
+  .unified-parts thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .unified-parts tr { display: grid; grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1fr); border-bottom: 1px solid #ccd8e2; padding: 6px 0; }
+  .unified-parts td { display: block; border: 0; padding: 5px; }
+  .unified-parts td:first-child { grid-row: 1 / 4; }
+  .unified-parts td:nth-child(4) { grid-column: 2 / 4; }
+  .unified-parts td:nth-child(6) { grid-column: 2 / 4; }
+  .part-comparison { display: flex; flex-direction: column-reverse; }
+  .part-original .reader-viewport { min-height: 250px; height: 48vh; }
+  .hotspot-simple .builder-scheme-layout { display: flex; flex-direction: column-reverse; }
+  .hotspot-simple .wizard-position-list { display: flex; overflow: auto; max-height: 150px; }
+  .hotspot-simple .wizard-position-list button { min-width: 150px; max-width: 200px; }
+  .hotspot-simple .builder-scheme-viewport { height: 55vh; }
+  .source-review-row b { width: 100%; }
+  .catalog-workbench .source-summary { grid-template-columns: 1fr; }
+}

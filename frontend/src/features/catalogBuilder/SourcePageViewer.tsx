@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '../../i18n'
 import usePagePreview from './usePagePreview'
 
-export default function SourcePageViewer({ artifactId, pageCount, number, onPage }: {
-  artifactId: number; pageCount: number; number: number; onPage: (number: number) => void
+export default function SourcePageViewer({ artifactId, pageCount, number, onPage, fixed = false, region }: {
+  artifactId: number; pageCount: number; number: number; onPage: (number: number) => void; fixed?: boolean; region?: { left: string; top: string; width: string; height: string } | null
 }) {
   const { t } = useI18n()
   const preview = usePagePreview(artifactId, number)
@@ -24,6 +24,7 @@ export default function SourcePageViewer({ artifactId, pageCount, number, onPage
     setZoom(Math.max(1, width / Math.max(1, view.clientWidth - 24) * 100))
   }
   useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(resize)
     if (viewport.current) observer.observe(viewport.current)
     resize()
@@ -32,11 +33,11 @@ export default function SourcePageViewer({ artifactId, pageCount, number, onPage
   function changeZoom(delta: number) { setFit(null); setZoom(value => Math.max(10, Math.min(800, value + delta))) }
   return <div className="source-reader">
     <div className="reader-toolbar" role="toolbar" aria-label={t('workspace.pdfControls')}>
-      <button className="secondary" disabled={number <= 1} onClick={() => onPage(number - 1)} aria-label={t('workspace.previousPage')}>‹</button>
+      {!fixed && <><button className="secondary" disabled={number <= 1} onClick={() => onPage(number - 1)} aria-label={t('workspace.previousPage')}>‹</button>
       <label>{t('guided.jump')}<input type="number" min={1} max={pageCount} value={jump} onChange={event => setJump(event.target.value)}
         onBlur={jumpToPage} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); jumpToPage() } }} /></label>
       <span>/ {pageCount}</span>
-      <button className="secondary" disabled={number >= pageCount} onClick={() => onPage(number + 1)} aria-label={t('workspace.nextPage')}>›</button>
+      <button className="secondary" disabled={number >= pageCount} onClick={() => onPage(number + 1)} aria-label={t('workspace.nextPage')}>›</button></>}
       <button className="secondary" onClick={() => changeZoom(-25)} aria-label={t('builder.mapping.zoomOut')}>−</button>
       <span>{Math.round(zoom)}%</span>
       <button className="secondary" onClick={() => changeZoom(25)} aria-label={t('builder.mapping.zoomIn')}>+</button>
@@ -54,8 +55,8 @@ export default function SourcePageViewer({ artifactId, pageCount, number, onPage
         viewport.current.scrollTop = pan.current.top + pan.current.y - event.clientY
       }} onPointerUp={() => { pan.current = null }} onPointerCancel={() => { pan.current = null }}>
       {preview.error ? <div role="alert" className="reader-message"><p>{t('builder.previewError')}</p><button className="secondary" onClick={preview.retry}>{t('wizard.retry')}</button></div>
-        : preview.url ? <img ref={image} src={preview.url} draggable={false} onLoad={resize} onError={preview.failed}
-          style={{ width: `${zoom}%` }} alt={t('guided.physicalPage', { number })} />
+        : preview.url ? <div className="reader-image" style={{ width: `${zoom}%` }}><img ref={image} src={preview.url} draggable={false} onLoad={resize} onError={preview.failed}
+          style={{ width: '100%' }} alt={t('guided.physicalPage', { number })} />{region && <span className="evidence-highlight" style={region} aria-hidden="true" />}</div>
           : <p role="status" className="reader-message">{t('builder.previewPending')}</p>}
     </div>
   </div>

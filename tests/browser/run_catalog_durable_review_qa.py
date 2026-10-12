@@ -9,7 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 
-def main(*, scenario="durable", pdf_path=None, expected_path=None):
+def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_script=None):
     root = Path(__file__).resolve().parents[2]
     qa = root / ".tmp" / (f"catalog03-{scenario}-browser-" + uuid4().hex)
     qa.mkdir()
@@ -75,7 +75,7 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None):
                 # browser comparator, never the app server or parser worker.
                 browser_env.update(QA_PDF=str(pdf_path), QA_EXPECTED=str(expected_path))
             script_name = "catalog_adaptive_extraction.mjs" if scenario == "adaptive" else "catalog_durable_review.mjs"
-            result = subprocess.run(["node", str(root / "tests/browser" / script_name)], cwd=root, env=browser_env)
+            result = subprocess.run(["node", str(browser_script or root / "tests/browser" / script_name)], cwd=root, env=browser_env)
         print("Catalog browser QA exit code:", result.returncode)
         return result.returncode
     finally:

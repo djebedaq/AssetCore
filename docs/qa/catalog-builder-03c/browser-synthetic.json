@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "checks": [
+    "No global Advanced mode; dialog keyboard focus trap, Escape cancellation and focus restoration; unsaved values are guarded",
+    "Explicit scheme and two list assignments; one recognition action; ten exact separate candidates in one table; 390/768/1440 no page overflow and keyboard editor access",
+    "English and Russian workflow/review controls render; switching back to Bulgarian keeps all ten candidates",
+    "Two actual browser tabs: stale autosave preserves unsaved human text; explicit reload sees the saved other-tab correction; stale confirmation creates zero parts; restored exact synthetic original before approval",
+    "Direct authenticated API publication remains blocked before source review and verified hotspots",
+    "Confirmed parts and source decisions survive logout and a fresh login",
+    "Ten actual synthetic callouts placed, saved, verified and advanced with touch at 390/768/1440; overlay dimensions match normalized geometry; responsive reviewed synthetic catalog publishes through UI"
+  ],
+  "pageErrors": [],
+  "syntheticOnly": true,
+  "productionAccess": false,
+  "screenshots_sha256": {
+    "sources-1440.png": "e7ccf5464110b5f4694563db6e65b67e0e451dbdb505cbb8f8e88e24f8991bd9",
+    "parts-1440.png": "9c6449f688ea04957e022503dc19bffe3d0847fcf4b6bed2f2a0867f049acf61",
+    "parts-768.png": "83dde3bcd0af241019f11fee6c242bf290b99d227d6262125aac3b4270df8ae8",
+    "parts-390.png": "1700dd25be1c816ed0faf3c2a7e0999623cab661011fac6e4782f737bb0edf7d",
+    "hotspots-1440.png": "8618a447503f894b2c8b1128fe7a80fd31cf70c1c2e617ffb1b5ea4841dea8ed",
+    "ready-1440.png": "493db3b893551cce1b8410b723d74bedd0803758a51862f50981f51b5915ccd0"
+  }
+}

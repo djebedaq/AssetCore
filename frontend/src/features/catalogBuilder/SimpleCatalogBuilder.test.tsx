@@ -42,7 +42,7 @@ it('keeps complete BG/EN/RU wizard keys', () => {
   expect(Object.keys(wizardRu).sort()).toEqual(Object.keys(wizardBg).sort())
 })
 
-it('preserves an unsaved simple form when a mode switch is cancelled', async () => {
+it('preserves an unsaved catalog form when closing is cancelled and has no global mode switch', async () => {
   setSessionUser(actor)
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/categories') ? json([category]) : json([])))
@@ -50,7 +50,8 @@ it('preserves an unsaved simple form when a mode switch is cancelled', async () 
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: 'Нов каталог' }))
   await user.type(screen.getByLabelText('Име на каталога'), 'QA незапазен каталог')
-  await user.click(screen.getByRole('button', { name: 'Разширен режим' }))
+  expect(screen.queryByRole('button', { name: 'Разширен режим' })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Затвори' }))
   expect(confirm).toHaveBeenCalled()
   expect(screen.getByLabelText('Име на каталога')).toHaveValue('QA незапазен каталог')
   expect(screen.getByRole('dialog')).toBeVisible()
