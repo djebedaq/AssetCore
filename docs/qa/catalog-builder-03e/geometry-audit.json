@@ -1,0 +1,511 @@
+{
+  "scope": "AGGREGATE_GEOMETRY_ONLY_NO_OEM_TEXT_OR_IMAGES",
+  "pages": [
+    {
+      "case": "falch_1000/drive_pump",
+      "physical_page": 2,
+      "native_words": 350,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_1000/drive_pump",
+      "physical_page": 3,
+      "native_words": 149,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        4
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 4,
+      "source_occurrences": 4,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_1000/liquid_part",
+      "physical_page": 2,
+      "native_words": 402,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_1000/liquid_part",
+      "physical_page": 3,
+      "native_words": 410,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        16
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 16,
+      "source_occurrences": 16,
+      "duplicate_payload_occurrences": 2
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "physical_page": 4,
+      "native_words": 404,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "physical_page": 5,
+      "native_words": 423,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "physical_page": 6,
+      "native_words": 426,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        22
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 22,
+      "source_occurrences": 22,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "physical_page": 7,
+      "native_words": 458,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        25
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 25,
+      "source_occurrences": 25,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "physical_page": 8,
+      "native_words": 418,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        34
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 34,
+      "source_occurrences": 34,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "physical_page": 9,
+      "native_words": 429,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        23
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 23,
+      "source_occurrences": 23,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/pump",
+      "physical_page": 2,
+      "native_words": 356,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 2
+    },
+    {
+      "case": "falch_500/pump",
+      "physical_page": 3,
+      "native_words": 368,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        31
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 31,
+      "source_occurrences": 31,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/pump",
+      "physical_page": 4,
+      "native_words": 305,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        4
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 4,
+      "source_occurrences": 4,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/unloader_valve",
+      "physical_page": 2,
+      "native_words": 389,
+      "image_count": 2,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/unloader_valve",
+      "physical_page": 3,
+      "native_words": 405,
+      "image_count": 2,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        33
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 33,
+      "source_occurrences": 33,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/unloader_valve",
+      "physical_page": 4,
+      "native_words": 305,
+      "image_count": 2,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        2
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 2,
+      "source_occurrences": 2,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/valve_500bar",
+      "physical_page": 2,
+      "native_words": 428,
+      "image_count": 2,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        29
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 29,
+      "source_occurrences": 29,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/valve_500bar",
+      "physical_page": 3,
+      "native_words": 479,
+      "image_count": 2,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        3
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 3,
+      "source_occurrences": 3,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "physical_page": 4,
+      "native_words": 392,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "physical_page": 5,
+      "native_words": 424,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 1
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "physical_page": 6,
+      "native_words": 435,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 1
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "physical_page": 7,
+      "native_words": 408,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        30
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 30,
+      "source_occurrences": 30,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "physical_page": 8,
+      "native_words": 383,
+      "image_count": 1,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "OPEN_HORIZONTAL_CELL_EDGES",
+      "panels": 1,
+      "columns_per_panel": [
+        10
+      ],
+      "physical_bands_per_panel": [
+        27
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "TITLE_BLOCK_ONLY_FIND_TABLES_AND_MULTILINGUAL_HEADER_LINES",
+      "review_required_rows": 27,
+      "source_occurrences": 27,
+      "duplicate_payload_occurrences": 0
+    },
+    {
+      "case": "hydwin_fussen_500/plunger_pump",
+      "physical_page": 22,
+      "native_words": 455,
+      "image_count": 0,
+      "native_text_available": true,
+      "ocr_used": false,
+      "geometric_method": "CLOSED_RULED_PANELS",
+      "panels": 2,
+      "columns_per_panel": [
+        5,
+        5
+      ],
+      "physical_bands_per_panel": [
+        29,
+        29
+      ],
+      "quality_state": "NEEDS_REVIEW",
+      "reason": "REPEATED_ROLES_REQUIRE_TWO_LOCAL_SCHEMAS",
+      "review_required_rows": 4,
+      "source_occurrences": 58,
+      "duplicate_payload_occurrences": 0
+    }
+  ]
+}

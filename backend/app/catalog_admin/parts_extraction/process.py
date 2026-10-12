@@ -11,6 +11,7 @@ from threading import BoundedSemaphore
 
 from ...settings import settings
 from ..service import fail
+from .capacity import slot
 
 SLOTS = BoundedSemaphore(settings.catalog_extraction_max_processes)
 
@@ -26,12 +27,13 @@ def extract(content: bytes, operation: str, number: int, config: dict) -> dict:
     if not SLOTS.acquire(blocking=False):
         raise fail("catalog_extraction_busy")
     try:
-        return _extract(content, operation, number, config)
+        with slot(settings.catalog_extraction_max_processes) as descriptor:
+            return _extract(content, operation, number, config, descriptor)
     finally:
         SLOTS.release()
 
 
-def _extract(content: bytes, operation: str, number: int, config: dict) -> dict:
+def _extract(content: bytes, operation: str, number: int, config: dict, descriptor=None) -> dict:
     with TemporaryDirectory(prefix="assetcore-extraction-") as folder:
         source = Path(folder) / "source.pdf"
         output = Path(folder) / "evidence.json"
@@ -50,6 +52,8 @@ def _extract(content: bytes, operation: str, number: int, config: dict) -> dict:
                 str(source), str(output), operation, str(number), json.dumps(config)],
                 env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                # The Unix worker retains capacity if its web parent dies.
+                **({"pass_fds": (descriptor,)} if sys.platform != "win32" and descriptor is not None else {}),
                 start_new_session=sys.platform != "win32",
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
             lease = None

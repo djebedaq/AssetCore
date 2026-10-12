@@ -4,15 +4,15 @@ import re
 
 from .values import POSITION, quantity
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ROLES = ("position", "part_number", "description", "quantity", "technical_notes", "technical_specification")
 ALIASES = {
     "position": {"pos", "position", "index", "позиция", "поз", "позиц", "позномер"},
-    "part_number": {"part no", "part number", "spare part no", "article no", "art nr", "teile nr", "teil nr", "part nr", "stock code", "номер детали", "номер част", "кат номер", "артикул", "номенклатурен номер"},
-    "description": {"description", "designation", "part name", "benennung", "beschreibung", "bezeichnung", "описание", "наименование", "название", "обозначение"},
-    "quantity": {"qty", "quantity", "pieces", "pcs", "menge", "anzahl", "количество", "кол", "бр", "кол во"},
+    "part_number": {"part no", "part number", "spare part no", "article no", "art nr", "artikelnr", "artikel nr", "n° d'article", "teile nr", "teil nr", "part nr", "stock code", "номер детали", "номер част", "кат номер", "артикул", "номенклатурен номер"},
+    "description": {"description", "déscription", "designation", "désignation", "part name", "benennung", "beschreibung", "bezeichnung", "описание", "наименование", "название", "обозначение"},
+    "quantity": {"qty", "quantity", "quantité", "pieces", "pièces", "pcs", "menge", "anzahl", "количество", "кол", "бр", "кол во"},
     "technical_notes": {"remark", "remarks", "note", "notes", "comment", "comments", "bemerkung", "bemerkungen", "забележка", "забележки", "примечание", "примечания"},
-    "technical_specification": {"specification", "spec", "технически данни", "спецификация"},
+    "technical_specification": {"specification", "specifications", "spec", "технически данни", "спецификация"},
 }
 AMBIGUOUS = {
     "item": {"position": 1.3, "description": 1.3},
@@ -34,6 +34,16 @@ def normalize_header(text: str) -> str:
 
 
 def header_candidates(text: str) -> dict[str, float]:
+    if "\n" in text:
+        # A local multi-line cell can contain translations of one role. Strong
+        # conflicting labels remain ambiguous; Item/No never acquire a global
+        # single meaning from this aggregation.
+        choices = [header_candidates(line) for line in text.splitlines()[:12] if line.strip()]
+        strong = {role for choice in choices for role, score in choice.items() if score >= 2.5}
+        if len(strong) == 1:
+            return {next(iter(strong)): 2.5}
+        return {role: max(choice.get(role, 0) for choice in choices)
+            for role in {role for choice in choices for role in choice}}
     clean = normalize_header(text)
     explicit = {role: 2.5 for role, aliases in ALIASES.items() if clean in aliases}
     return explicit or AMBIGUOUS.get(clean, {})
