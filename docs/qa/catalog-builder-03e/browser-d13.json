@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "browser": "Edge Chromium",
+  "checks": [
+    "Single UI action: page 13 exact 20/20, page 15 exact 10/10; all four fields and SHA/page provenance",
+    "One table retains 20/10 original source occurrences; responsive 390/768/1440 without page overflow; keyboard field focus",
+    "Human draft correction survives refresh; restored to inspected original before confirmation",
+    "Thirty confirmed parts remain blocked until both original sources receive explicit human review",
+    "Re-extraction keeps all candidate identities and creates no duplicate parts",
+    "Source decisions survive refresh; publication still blocked by unverified hotspot work (48/38 untouched)",
+    "Simplified hotspot workspace opens original; unresolved positions stay blocked; final readiness remains server-authoritative"
+  ],
+  "pageErrors": [],
+  "productionAccess": false,
+  "screenshots": "PRIVATE_OEM_CONTENT_NOT_COMMITTED",
+  "initial_attempt": "FAIL_INSPECTION_IMAGE_TIMEOUT; SEE_REPORT",
+  "final_scenario": "tests/browser/catalog_simplified_ux.mjs; waits for serial inspection lifecycle"
+}

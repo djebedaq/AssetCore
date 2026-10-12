@@ -27,7 +27,7 @@ from . import context as group_context
 from . import ledger, process, quality
 from .tables import parse_region
 
-EXTRACTOR_VERSION = "SPARE_PARTS_2"
+EXTRACTOR_VERSION = "SPARE_PARTS_3"
 
 
 def resumable_attempt(db, source):

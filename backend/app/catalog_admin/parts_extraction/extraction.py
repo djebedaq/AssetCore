@@ -5,11 +5,11 @@ import time
 
 import fitz
 
-from . import context, ocr, quality, raster, region_ocr
+from . import context, native_grid, ocr, quality, raster, region_ocr
 from .schema import SCHEMA_VERSION
 from .tables import layout_rows, ruled_rows
 
-PIPELINE_VERSION = "ADAPTIVE_PDF_2"
+PIPELINE_VERSION = "ADAPTIVE_PDF_3"
 
 
 def words_for(page, textpage, maximum):
@@ -37,13 +37,21 @@ def extract_page(page, config: dict) -> dict:
         strategies.append(("NATIVE_TABLE", rows, tables))
     except Exception:
         warnings.append("TABLE_DETECTION_FAILED")
+    grid_rows, grid_tables, grid_warnings = native_grid.extract(page, words,
+        covered=[table["bbox"] for table in native_tables if table.get("bom_evidence") and table.get("cells")])
+    warnings.extend(grid_warnings)
     # Always run independent layout, even if find_tables found only metadata.
+    # Physical table edges bound a header's body; a footer is not another row.
     layout_continuation = continuation if not native_tables or any(t.get("continuation_inferred") for t in native_tables) else None
-    rows, tables = layout_rows(words, page.cropbox.width, continuation=layout_continuation)
+    rows, tables = layout_rows(words, page.cropbox.width, continuation=layout_continuation,
+        physical_regions=native_tables + grid_tables)
     rows, tables = context.resolve(rows, tables, config)
     if not tables and config.get("context_profiles"):
         rows, tables = context.borderless(words, page.cropbox.width, config)
     strategies.append(("NATIVE_LAYOUT", rows, tables))
+    if grid_tables:
+        grid_rows, grid_tables = context.resolve(grid_rows, grid_tables, config)
+        strategies.append(("NATIVE_VECTOR_GRID", grid_rows, grid_tables))
     rows, tables, coverage, summaries = quality.choose(strategies)
     images = page.get_image_info()
     uncovered_image = any(fitz.Rect(i["bbox"]).get_area() > page.rect.get_area() * .15
@@ -105,6 +113,8 @@ def extract_page(page, config: dict) -> dict:
         warnings.extend(table["schema"].get("warnings", []))
         warnings.extend(table["quality"]["warnings"])
     warnings.extend(coverage.get("warnings", []))
+    if grid_warnings:
+        coverage.update({"state": "NEEDS_REVIEW", "unresolved_vector_regions": True})
     if ocr_used:
         warnings.append("OCR_REQUIRES_REVIEW")
     if uncovered_image and not any(t["method"] == "IMAGE_CELL_OCR" or t.get("ocr_profile", {}).get("engine") == "TESSERACT_CLI" for t in tables):
