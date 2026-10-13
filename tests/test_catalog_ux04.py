@@ -6,7 +6,15 @@ from datetime import timedelta
 import fitz
 import pytest
 from app.catalog.runtime_context import published_bindings
-from app.catalog_admin import draft_deletion, hotspots, parts, reference_pages, service, visual_sources, wizard
+from app.catalog_admin import (
+    draft_deletion,
+    hotspots,
+    parts,
+    reference_pages,
+    service,
+    visual_sources,
+    wizard,
+)
 from app.catalog_admin.parts_extraction.schemas import PageCreate, SourceAssign
 from app.catalog_admin.schemas import ArtifactUpload, HotspotCreate, PartCreate, SimpleCatalogCreate
 from app.database import Base
