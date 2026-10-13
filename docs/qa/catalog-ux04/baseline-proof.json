@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "baseline_sha": "ad5063bfd67e9a47d8fda52418ad502910f2c247",
+  "physical_pages": 5,
+  "assignment_requests": 5,
+  "assignment_button_clicks": 5,
+  "primary_areas": 6,
+  "scope": "ACTUAL_BROWSER_ON_ARCHIVED_ORIGIN_MAIN_WITH_NEW_DISPOSABLE_QA_DATABASE"
+}

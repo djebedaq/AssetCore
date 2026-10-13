@@ -1,0 +1,32 @@
+{
+  "passed": true,
+  "checks": [
+    "Three explicitly named user assemblies; no inferred assemblies; three primary areas",
+    "Two physical scheme pages and three nonconsecutive lists assigned together to one logical group",
+    "Accepted rows edited directly, autosaved and resumed after reload; original source quantity restored before attestation",
+    "Actual PDF extraction of 19 rows; bulk acceptance; all three originals loaded and explicitly attested without written normal-review reasons",
+    "One dependency confirmation removed a processed physical list, its seven owned parts and temporary OCR data",
+    "All remaining group parts deleted together with one confirmation; the logical group, diagrams and selected PDF sources remain",
+    "Whole unpublished catalog with remaining OCR/review data deleted; machine inventory remains",
+    "Both machines link both complete catalogs; unpublished links are labeled prepared; unlink removes only the selected active relationship"
+  ],
+  "screenshots": [
+    "pdf-selection-1440.png",
+    "parts-reviewed-1440.png",
+    "parts-reviewed-768.png",
+    "parts-reviewed-390.png",
+    "source-dependency-preview-1440.png",
+    "machine-1-whole-catalog-links-1440.png",
+    "machine-2-whole-catalog-links-390.png"
+  ],
+  "actions": {
+    "physical_pages": 5,
+    "before_assignment_requests": 5,
+    "after_assignment_requests": 1,
+    "before_primary_areas": 6,
+    "after_primary_areas": 3,
+    "normal_review_written_reasons": 0,
+    "draft_source_delete_confirmations": 1,
+    "whole_catalog_link_selections": 1
+  }
+}

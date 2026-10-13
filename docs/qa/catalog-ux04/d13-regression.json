@@ -1,0 +1,26 @@
+{
+  "scope": "EXACT_FIELD_REGRESSION_AGAINST_RETAINED_PREVIOUSLY_INDEPENDENTLY_VALIDATED_EXTRACTION",
+  "source_sha256": "e9540c2af79802d000f186381c403dfbca6ae6b58ecb6cb13b9ecec862558e42",
+  "baseline_extraction_sha256": "95e52e744285cbeeaa44150f31ca76ad142504c32850481aa881e92e69252a3a",
+  "baseline_independent_validation_sha256": "1a0eaf4a941977756ff23eb7bdbbf5679e373129fd252feb9dd37f9fbf495a22",
+  "baseline_human_control_sha256": "8b9ee50398b45c65c927a53e18359c4f56ad1f446abb2142010d3d16e7c9ce60",
+  "current_extraction_sha256": "1e4990de5dbd659a40af29fbb65bcff6bd1970d78341b98dc45906395bfe75ed",
+  "new_human_approval": false,
+  "pages": [
+    {
+      "physical_page": 13,
+      "expected_previously_validated_rows": 20,
+      "current_rows": 20,
+      "exact_rows_all_five_fields": 20,
+      "passed": true
+    },
+    {
+      "physical_page": 15,
+      "expected_previously_validated_rows": 10,
+      "current_rows": 10,
+      "exact_rows_all_five_fields": 10,
+      "passed": true
+    }
+  ],
+  "passed": true
+}

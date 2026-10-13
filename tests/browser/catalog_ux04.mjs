@@ -18,6 +18,7 @@ const button = name => page.getByRole('button', { name, exact: true })
 const api = async path => { const response = await page.request.get(base + '/api/admin/catalog-builder' + path); expect(response.status()).toBe(200); return response.json() }
 async function shot(name, width) {
   await page.setViewportSize({ width, height: 1000 })
+  await page.evaluate(() => window.scrollTo(0, 0))
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
   await page.screenshot({ path: `${out}/${name}-${width}.png`, fullPage: true })
   screenshots.push(`${name}-${width}.png`)
