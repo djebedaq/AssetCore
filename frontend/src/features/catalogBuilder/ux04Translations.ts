@@ -6,6 +6,7 @@ export const ux04Bg = {
   'ux04.addSelected': 'Добави избраните страници ({{count}})',
   'ux04.selectionHelp': 'Маркирайте схемите и списъците за тази логическа група. За отделна схема със собствени списъци добавете друга група.',
   'ux04.group': 'Група схема и списъци',
+  'ux04.groupNumber': 'Схема и списъци {{number}}',
   'ux04.addGroup': 'Добави група схема и списъци',
   'ux04.delete': 'Изтрий черновата',
   'ux04.deleteCatalog': 'Изтрий каталога',
@@ -26,6 +27,7 @@ export const ux04Bg = {
   'ux04.confirmOriginal': 'Проверих спрямо оригинала',
   'ux04.catalogs': 'Каталози',
   'ux04.count.catalog_definitions': 'Каталози',
+  'ux04.count.catalog_source_blobs': 'Оригинални PDF файлове без други връзки',
   'ux04.count.catalog_revisions': 'Ревизии',
   'ux04.count.catalog_asset_bindings': 'Връзки с машини',
   'ux04.count.catalog_revision_assemblies': 'Възли',
@@ -45,6 +47,8 @@ export const ux04Bg = {
   'ux04.count.protected': 'Защитени свързани записи',
 }
 export const ux04En: Record<keyof typeof ux04Bg, string> = {
+  'ux04.count.catalog_source_blobs': 'Original PDF files without other links',
+  'ux04.groupNumber': 'Diagram and lists {{number}}',
   'ux04.deleteCatalog': 'Delete catalog', 'ux04.deleteRevision': 'Delete draft revision',
   'ux04.catalogPdf': 'Catalog and PDF', 'ux04.partsMarkers': 'Parts and markers', 'ux04.publish': 'Publish',
   'ux04.selectPages': 'Select PDF pages', 'ux04.addSelected': 'Add selected pages ({{count}})',
@@ -70,6 +74,8 @@ export const ux04En: Record<keyof typeof ux04Bg, string> = {
   'ux04.count.protected': 'Protected related records',
 }
 export const ux04Ru: Record<keyof typeof ux04Bg, string> = {
+  'ux04.count.catalog_source_blobs': 'Исходные PDF без других связей',
+  'ux04.groupNumber': 'Схема и списки {{number}}',
   'ux04.deleteCatalog': 'Удалить каталог', 'ux04.deleteRevision': 'Удалить черновую ревизию',
   'ux04.catalogPdf': 'Каталог и PDF', 'ux04.partsMarkers': 'Детали и маркеры', 'ux04.publish': 'Публикация',
   'ux04.selectPages': 'Выбор страниц PDF', 'ux04.addSelected': 'Добавить выбранные страницы ({{count}})',

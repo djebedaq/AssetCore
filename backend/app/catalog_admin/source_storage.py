@@ -60,7 +60,8 @@ def validate_pdf(content: bytes) -> int:
 
 def shared_blob(db: Session, content: bytes, digest: str | None = None) -> CatalogSourceBlob:
     digest = digest or hashlib.sha256(content).hexdigest()
-    existing = db.scalar(select(CatalogSourceBlob).where(CatalogSourceBlob.sha256 == digest))
+    query = select(CatalogSourceBlob).where(CatalogSourceBlob.sha256 == digest).with_for_update(read=True, key_share=True)
+    existing = db.scalar(query)
     if existing is not None:
         if existing.byte_length != len(content) or existing.content != content:
             raise fail("catalog_source_integrity", 422)
@@ -72,7 +73,7 @@ def shared_blob(db: Session, content: bytes, digest: str | None = None) -> Catal
             db.flush()
         return blob
     except IntegrityError:
-        blob = db.scalar(select(CatalogSourceBlob).where(CatalogSourceBlob.sha256 == digest))
+        blob = db.scalar(query)
         if blob is None or blob.content != content:
             raise fail("catalog_source_integrity", 422) from None
         return blob

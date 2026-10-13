@@ -116,7 +116,7 @@ export default function GuidedWorkspace({ revisionId, groups, task: initialTask,
       <nav className="page-tabs" aria-label={t('guided.pages')}>{pages.map((item, index) => <button key={item.id} disabled={busy}
         className="secondary" aria-current={pageId === item.id ? 'page' : undefined}
         onClick={() => { if (canNavigate()) { setPageId(item.id); if (!onNavigate) setTask('documents'); setDirty(false); setKitDirty(false) } }}>
-          {item.title || t('guided.page', { number: index + 1 })}<small>{t(`guided.${item.status}`)}</small></button>)}
+          {item.title || t('ux04.groupNumber', { number: index + 1 })}<small>{t(`guided.${item.status}`)}</small></button>)}
         {assemblyId && <button className="secondary" aria-label={t('guided.addPage')} disabled={busy || dirty || titleDirty || kitDirty} onClick={() => void action(async () => {
           const created = await api<ReferencePage>(`${builderBase}/assemblies/${assemblyId}/reference-pages`, { method: 'POST', body: '{}' }); setPageId(created.id); setTask('documents')
         })}>+ {t('ux04.addGroup')}</button>}
@@ -129,10 +129,10 @@ export default function GuidedWorkspace({ revisionId, groups, task: initialTask,
             {(onNavigate ? ['parts', 'hotspots'] as const : ['documents', 'parts', 'hotspots'] as const).map(value => <button key={value} className="secondary" aria-current={task === value ? 'page' : undefined}
               onClick={() => navigateTask(value)}>{t(value === 'documents' ? 'workspace.sources' : `wizard.${value}`)}</button>)}
           </nav>
-          {page.status === 'COMPLETE' ? <span role="status">✓ {t('workspace.pageComplete')}</span> : task !== nextTask && <button className="primary" onClick={() => navigateTask(nextTask)}>{t(nextTask === 'documents' ? 'workspace.sources' : nextTask === 'parts' ? 'guided.extract' : 'wizard.hotspots')}</button>}
+          {page.status === 'COMPLETE' ? <span role="status">✓ {t('workspace.pageComplete')}</span> : !onNavigate && task !== nextTask && <button className="primary" onClick={() => navigateTask(nextTask)}>{t(nextTask === 'documents' ? 'workspace.sources' : nextTask === 'parts' ? 'guided.extract' : 'wizard.hotspots')}</button>}
         </div>
         {task === 'documents' && <>
-          <GuidedSources key={page.id} revisionId={revisionId} page={page} contextLabel={`${label(assembly)} › ${t('guided.page', { number: pages.indexOf(page) + 1 })}`} changed={refresh} onDirtyChange={setDirty} />
+          <GuidedSources key={page.id} revisionId={revisionId} page={page} contextLabel={`${label(assembly)} › ${page.title || t('ux04.groupNumber', { number: pages.indexOf(page) + 1 })}`} changed={refresh} onDirtyChange={setDirty} />
           {onNavigate && <button className="primary" disabled={!page.scheme_count || !page.spare_list_count || dirty || busy} onClick={() => navigateTask('extract')}>{t('catalogUx.next')}</button>}
           <details><summary>{t('catalogUx.pageTools')}</summary><form className="form-grid" onSubmit={event => { event.preventDefault(); void action(() => api(`${builderBase}/reference-pages/${page.id}`, { method: 'PATCH', body: JSON.stringify({ expected_version: page.version, title: pageTitle.trim() || null }) })) }}>
             <label>{t('builder.title')}<input value={pageTitle} maxLength={255} disabled={busy} onChange={event => setPageTitle(event.target.value)} /></label>

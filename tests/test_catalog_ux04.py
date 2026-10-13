@@ -237,7 +237,7 @@ def test_delete_processed_draft_atomically_preserves_other_owners_and_source_blo
     assert db.scalar(select(func.count(CatalogRevisionPart.id))) == 0
     assert db.scalar(select(func.count(CatalogExtractionCandidate.id))) == 0
     assert db.scalar(select(func.count(CatalogExtractionAttempt.id))) == 0
-    assert db.scalar(select(func.count(CatalogSourceBlob.id))) == 1
+    assert db.scalar(select(func.count(CatalogSourceBlob.id))) == (0 if kind in {"catalog", "revision"} else 1)
     assert db.get(CatalogRevision, protected_revision.id).status == "PUBLISHED"
     assert db.scalar(select(AuditLog.id).where(AuditLog.action == "CATALOG_DRAFT_DELETED"))
     if kind not in {"catalog", "revision"}:

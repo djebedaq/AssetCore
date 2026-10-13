@@ -53,7 +53,7 @@ def main() -> None:
             db.add(category)
             db.flush()
             catalog = m.CatalogDefinition(code="QA_BUILDER_DOC", asset_category_id=category.id,
-                                           name_bg="QA", name_en="QA", name_ru="QA", created_by_id=actor.id)
+                                           name_bg="QA", name_en="QA", name_ru="QA", manufacturer="QA", model_reference="QA", created_by_id=actor.id)
             db.add(catalog)
             db.flush()
             revision = m.CatalogRevision(catalog_id=catalog.id, revision_code="A", status="DRAFT", created_by_id=actor.id)

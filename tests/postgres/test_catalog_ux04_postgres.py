@@ -9,8 +9,10 @@ from app.models import (
     CatalogExtractionAttempt,
     CatalogExtractionSource,
     CatalogRevision,
+    CatalogRevisionArtifact,
     CatalogRevisionAssembly,
     CatalogRevisionPart,
+    CatalogSourceBlob,
 )
 from sqlalchemy import func, select
 from test_catalog_guided_builder_postgres import selected_source
@@ -35,7 +37,7 @@ def test_two_draft_deletions_only_one_executes_and_neither_leaves_orphans(pg_fac
     outcomes = race(pg_factory, CatalogDefinition, catalog_id, [
         lambda db, actor: draft_deletion.remove(db, actor, "source", identity, plan["digest"])] * 2,
         success_status=204)
-    assert sorted(result.status for result in outcomes) == [204, 404]
+    assert sorted(result.status for result in outcomes) == [204, 409]
     with pg_factory() as db:
         assert db.scalar(select(func.count(CatalogExtractionSource.id))) == 0
         assert db.scalar(select(func.count(CatalogExtractionAttempt.id))) == 0
@@ -54,3 +56,35 @@ def test_confirmation_racing_deletion_is_atomic_and_preview_detects_new_parts(pg
         sources = db.scalar(select(func.count(CatalogExtractionSource.id)))
         parts = db.scalar(select(func.count(CatalogRevisionPart.id)))
         assert (sources, parts) in [(0, 0), (1, len(preview["rows"]))]
+
+
+def test_collecting_unused_pdf_races_safely_with_another_catalog_reusing_it(pg_factory):
+    from app.catalog_admin import source_storage
+    page, preview, catalog_id, _, _ = prepared(pg_factory)
+    with pg_factory() as db:
+        original = db.get(CatalogRevisionArtifact, preview["source"]["artifact_id"])
+        content, digest, blob_id = original.content, original.sha256, original.source_blob_id
+        owner_id = original.created_by_id
+        catalog = CatalogDefinition(code="QA_UX04_SHARED", asset_category_id=db.get(CatalogDefinition, catalog_id).asset_category_id,
+            name_bg="QA", name_en="QA", name_ru="QA", created_by_id=owner_id)
+        db.add(catalog)
+        db.flush()
+        revision = CatalogRevision(catalog_id=catalog.id, revision_code="QA", created_by_id=owner_id)
+        db.add(revision)
+        db.flush()
+        assembly = CatalogRevisionAssembly(revision_id=revision.id, code="QA", name_bg="QA", name_en="QA", name_ru="QA", created_by_id=owner_id)
+        db.add(assembly)
+        db.commit()
+        target_id = assembly.id
+    def reuse(db, actor):
+        blob = source_storage.shared_blob(db, content, digest)
+        db.add(CatalogRevisionArtifact(assembly_id=target_id, title="Synthetic QA reused original", filename="qa.pdf",
+            media_type="application/pdf", source_blob=blob, stored_content=b"", sha256=digest, page_count=2, created_by_id=actor.id))
+        db.commit()
+    outcomes = race(pg_factory, CatalogSourceBlob, blob_id, [
+        lambda db, actor: draft_deletion.remove(db, actor, "catalog", catalog_id), reuse], success_status=200, expected_statuses=[200, 200])
+    assert [result.status for result in outcomes] == [200, 200]
+    with pg_factory() as db:
+        retained = db.scalar(select(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == target_id))
+        assert retained.content == content and retained.sha256 == digest
+        assert db.scalar(select(func.count(CatalogSourceBlob.id)).where(CatalogSourceBlob.sha256 == digest)) == 1

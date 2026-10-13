@@ -5,7 +5,7 @@ import Modal from './CatalogDialog'
 import { builderBase } from './wizardTypes'
 import { ux04Bg } from './ux04Translations'
 
-type Preview = { digest: string; counts: Record<string, number>; blockers: Array<{ table: string; count: number }> }
+type Preview = { digest: string; counts: Record<string, number>; blockers: Array<{ table: string; count: number; record_ids?: number[] }> }
 export default function DraftDeleteButton({ kind, identity, onDeleted, label, disabled = false }: {
   kind: string; identity: number; onDeleted: () => Promise<void>; label?: string; disabled?: boolean
 }) {
@@ -41,7 +41,7 @@ export default function DraftDeleteButton({ kind, identity, onDeleted, label, di
       <p>{t('ux04.deleteHelp')}</p>
       {error && <p className="error" role="alert">{error}</p>}
       {preview && <><ul>{Object.entries(preview.counts).map(([table, count]) => <li key={table}>{countName(table)}: {count}</li>)}</ul>
-        {!!preview.blockers.length && <><h4>{t('ux04.dependencies')}</h4><ul>{preview.blockers.map((item, index) => <li key={index}>{countName(item.table)}: {item.count}</li>)}</ul></>}
+        {!!preview.blockers.length && <><h4>{t('ux04.dependencies')}</h4><ul>{preview.blockers.map((item, index) => <li key={index}>{countName(item.table)}: {item.count} {item.record_ids?.map(id => `№${id}`).join(', ')}</li>)}</ul></>}
         <button className="primary" disabled={busy || !!preview.blockers.length} onClick={() => void remove()}>{t('guided.delete')}</button></>}
       {error && <button className="secondary" disabled={busy} onClick={() => void load()}>{t('wizard.retry')}</button>}
     </Modal>}

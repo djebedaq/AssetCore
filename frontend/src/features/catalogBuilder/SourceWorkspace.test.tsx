@@ -95,12 +95,12 @@ it('keeps reference and page selected when switching the local sources/parts/map
     : String(input).endsWith('/reference-pages') ? json([empty, { ...empty, id: 8 }]) : json([])))
   render(<I18nProvider><GuidedWorkspace revisionId={2} groups={groups} task="references" changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
   const user = userEvent.setup()
-  await user.click(await screen.findByRole('button', { name: /Страница 2/ }))
+  await user.click(await screen.findByRole('button', { name: /Схема и списъци 2/ }))
   await user.click(screen.getByRole('button', { name: 'Части' }))
-  expect(screen.getByRole('button', { name: /Страница 2/ })).toHaveAttribute('aria-current', 'page')
+  expect(screen.getByRole('button', { name: /Схема и списъци 2/ })).toHaveAttribute('aria-current', 'page')
   expect(screen.getByRole('button', { name: /Reference 3/ })).toHaveAttribute('aria-current', 'page')
   await user.click(screen.getAllByRole('button', { name: 'Източници' })[0])
-  expect(screen.getByRole('button', { name: /Страница 2/ })).toHaveAttribute('aria-current', 'page')
+  expect(screen.getByRole('button', { name: /Схема и списъци 2/ })).toHaveAttribute('aria-current', 'page')
 })
 
 it('keeps complete workspace translation parity', () => {
@@ -131,7 +131,7 @@ it('prevents opening the previous page sources while a new logical page is still
   await user.click(screen.getByRole('button', { name: 'Добави страница' }))
   expect(screen.getByRole('button', { name: '+ Добави схема' })).toBeDisabled()
   complete()
-  await waitFor(() => expect(screen.getByRole('button', { name: /Страница 2/ })).toHaveAttribute('aria-current', 'page'))
+  await waitFor(() => expect(screen.getByRole('button', { name: /Схема и списъци 2/ })).toHaveAttribute('aria-current', 'page'))
   await waitFor(() => expect(screen.getByRole('button', { name: '+ Добави схема' })).toBeEnabled())
 })
 

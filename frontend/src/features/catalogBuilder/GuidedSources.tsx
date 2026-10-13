@@ -18,12 +18,16 @@ export default function GuidedSources({ revisionId, page, changed, onDirtyChange
   const [start, setStart] = useState(1)
   const [intent, setIntent] = useState<Source['role'] | null>(null)
   const selection = useRef<HTMLElement>(null)
-  useDialogFocus(selection, !!intent, () => { if (!busy) setIntent(null) })
+  useDialogFocus(selection, !!intent, closeSelection)
   const [selected, setSelected] = useState<Array<{ page_number: number; roles: Source['role'][] }>>([])
   const [percent, setPercent] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const document = documents.find(item => item.id === documentId)
+  function closeSelection() {
+    if (busy || selected.length > 0 && !window.confirm(t('wizard.unsaved'))) return
+    setSelected([]); setIntent(null)
+  }
   // The server creates per-reference aliases for a shared PDF. Match the
   // canonical document by its content identity, not its reference-local ID.
   const matchesDocument = (source: Source) => source.artifact_id === documentId ||
@@ -44,7 +48,7 @@ export default function GuidedSources({ revisionId, page, changed, onDirtyChange
     setBusy(true); setError(''); setPercent(0)
     try {
       const source = await uploadApiFile<Document>(`${builderBase}/revisions/${revisionId}/pdf`, file, setPercent)
-      await load(); setDocumentId(source.id); setStart(1)
+      await load(); setDocumentId(source.id); setStart(1); setSelected([])
     } catch (caught) { report(caught) } finally { setBusy(false); setPercent(null) }
   }
   async function assign() {
@@ -91,7 +95,7 @@ export default function GuidedSources({ revisionId, page, changed, onDirtyChange
     {error && <p role="alert" className="error">{error}</p>}
     {summary}
     {intent && <section ref={selection} role="dialog" aria-modal="true" tabIndex={-1} className="source-selection" aria-label={t('workspace.sourceSelection')}>
-      <div className="source-heading"><strong>{contextLabel} · {roleName(intent)}</strong><button className="secondary" disabled={busy} onClick={() => setIntent(null)}>{t('common.close')}</button></div>
+      <div className="source-heading"><strong>{contextLabel}</strong><button className="secondary" disabled={busy} onClick={closeSelection}>{t('common.close')}</button></div>
       <div className="reader-document-tools">
         <label>{t('guided.chooseSource')}<select disabled={busy} value={documentId} onChange={event => { setDocumentId(Number(event.target.value)); setStart(1); setSelected([]) }}>
           <option value="">{t('guided.select')}</option>{documents.map(item => <option key={item.id} value={item.id}>{item.filename}</option>)}

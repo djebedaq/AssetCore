@@ -1,6 +1,6 @@
 """Catalog-locked, previewable deletion of owned draft data only.
 
-Audit entries and immutable source blobs are independent and are never removed.
+Audit entries and referenced source blobs are independent and are never removed.
 Any FK outside this explicit ownership graph is a protected dependency.
 """
 
@@ -60,6 +60,7 @@ from ..models import (
 from ..models import (
     CatalogRevisionVisualPage as Page,
 )
+from ..models import CatalogSourceBlob as Blob
 from ..models import (
     CatalogSourceReviewDecision as Decision,
 )
@@ -241,6 +242,29 @@ def plan(db, kind, identity):
     put(Attempt, find(Attempt, Attempt.source_id.in_(ids(Source))))
     put(Candidate, find(Candidate, Candidate.source_id.in_(ids(Source))))
     put(Decision, find(Decision, Decision.source_id.in_(ids(Source))))
+    # Shared originals have independent ownership. Lock candidate blobs and
+    # collect only those with no surviving reference anywhere in the schema.
+    blob_ids = set(
+        db.scalars(select(Artifact.source_blob_id).where(Artifact.id.in_(ids(Artifact))))
+    )
+    blob_ids.update(db.scalars(select(Source.source_blob_id).where(Source.id.in_(ids(Source)))))
+    blob_ids.discard(None)
+    for blob in db.scalars(
+        select(Blob).where(Blob.id.in_(blob_ids)).order_by(Blob.id).with_for_update()
+    ):
+        shared = any(
+            db.scalar(
+                select(table.c.id)
+                .where(fk.parent == blob.id, ~table.c.id.in_(owned[table.name]))
+                .limit(1)
+            )
+            is not None
+            for table in Base.metadata.tables.values()
+            for fk in table.foreign_keys
+            if fk.column.table.name == Blob.__tablename__
+        )
+        if not shared:
+            put(Blob, [blob.id])
     # Scope records are temporary too when their final source is removed.
     put(
         Extraction,
@@ -261,7 +285,12 @@ def plan(db, kind, identity):
                 )
                 if found:
                     blockers.append(
-                        {"table": table.name, "field": fk.parent.name, "count": len(found)}
+                        {
+                            "table": table.name,
+                            "field": fk.parent.name,
+                            "count": len(found),
+                            "record_ids": sorted(found),
+                        }
                     )
     # Include row values, not only counts, in optimistic concurrency evidence.
     snapshot = {}
@@ -299,7 +328,12 @@ def preview(db, kind, identity):
 
 
 def remove(db, actor, kind, identity, expected_digest=None):
-    summary, owned, revision_ids = plan(db, kind, identity)
+    try:
+        summary, owned, revision_ids = plan(db, kind, identity)
+    except HTTPException as error:
+        if expected_digest is not None and error.status_code == 404:
+            raise fail("catalog_delete_stale") from None
+        raise
     if summary["blockers"]:
         raise HTTPException(
             409,
@@ -360,6 +394,16 @@ def remove(db, actor, kind, identity, expected_digest=None):
 
             touch(page)
     db.flush()
+    for kit in db.scalars(
+        select(Kit).where(
+            ~Kit.id.in_(owned[Kit.__tablename__]),
+            Kit.id.in_(
+                select(Component.kit_id).where(Component.id.in_(owned[Component.__tablename__]))
+            ),
+        )
+    ):
+        kit.version += 1
+    db.flush()
     # All children first; every deleted table is part of the explicit draft graph.
     for model in [
         Decision,
@@ -379,6 +423,7 @@ def remove(db, actor, kind, identity, expected_digest=None):
         Revision,
         Binding,
         Catalog,
+        Blob,
     ]:
         table = model.__table__
         if owned[table.name]:
