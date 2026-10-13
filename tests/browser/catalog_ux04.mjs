@@ -72,6 +72,18 @@ try {
   await button('Избери валидните видими редове').click()
   await button('Потвърди избраните части').click()
   await expect.poll(async () => (await api(`/reference-pages/${logical.id}/parts`)).length).toBe(19)
+  const quantity = page.locator('.part-comparison').getByLabel('Количество', { exact: true })
+  await quantity.fill('3'); await quantity.press('Tab')
+  await expect.poll(async () => Number((await api(`/reference-pages/${logical.id}/parts`))[0].quantity)).toBe(3)
+  // Restore the actual synthetic source quantity before any source attestation.
+  await quantity.fill('2'); await quantity.press('Tab')
+  await expect.poll(async () => Number((await api(`/reference-pages/${logical.id}/parts`))[0].quantity)).toBe(2)
+  await page.reload()
+  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Каталожен конструктор', exact: true }).click()
+  await page.locator('.builder-list-item').filter({ hasText: 'Synthetic QA UX04 draft' }).getByRole('button', { name: 'Продължи черновата', exact: true }).click()
+  await page.locator('.catalog-navigation').getByRole('button', { name: /Части и маркери/ }).click()
+  await expect.poll(async () => Number(await page.locator('.part-comparison').getByLabel('Количество', { exact: true }).inputValue())).toBe(2)
+  checks.push('Accepted rows edited directly, autosaved and resumed after reload; original source quantity restored before attestation')
   for (let index = 0; index < 3; index++) {
     await page.locator('.source-review-row').nth(index).getByRole('button', { name: 'Покажи оригинала', exact: true }).click()
     await page.locator('.source-attestation img').evaluate(image => image.decode())

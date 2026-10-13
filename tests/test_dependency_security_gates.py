@@ -131,7 +131,7 @@ def test_ci_actions_are_immutable_and_all_existing_security_gates_remain_explici
     root = Path(__file__).resolve().parents[1]
     workflow = yaml.safe_load((root / ".github/workflows/check.yml").read_text(encoding="utf-8"))
     assert workflow["permissions"] == {"contents": "read"}
-    assert set(workflow["jobs"]) == {"frontend", "backend", "postgres", "docker"}
+    assert set(workflow["jobs"]) == {"frontend", "backend", "postgres", "docker", "browser"}
     for job in workflow["jobs"].values():
         assert 0 < job["timeout-minutes"] <= 30
         for step in job["steps"]:
@@ -153,6 +153,10 @@ def test_ci_actions_are_immutable_and_all_existing_security_gates_remain_explici
     postgres = workflow["jobs"]["postgres"]
     assert postgres["env"]["ASSETCORE_REQUIRE_POSTGRES_TESTS"] == "true"
     assert any("pytest -q tests/postgres" in step.get("run", "") for step in postgres["steps"])
+    browser = "\n".join(step.get("run", "") for step in workflow["jobs"]["browser"]["steps"])
+    assert "playwright@1.62.1" in browser
+    assert "npm audit" in browser and "--audit-level=high" in browser
+    assert "run_catalog_ux04_qa.py" in browser
 
 
 def test_ci_translation_command_runs_without_an_inherited_pythonpath():

@@ -173,7 +173,7 @@ def create_part(db: Session, actor: User, assembly_id: int, data: PartCreate, *,
     return _dict(db, item)
 
 
-def update_part(db: Session, actor: User, part_id: int, data: PartUpdate) -> dict:
+def update_part(db: Session, actor: User, part_id: int, data: PartUpdate, *, commit: bool = True) -> dict:
     item, assembly, revision, catalog = _part(db, part_id, mutate=True)
     changes = data.model_dump(exclude_unset=True)
     values = _clean({**{key: getattr(item, key) for key in PartCreate.model_fields}, **changes})
@@ -186,6 +186,12 @@ def update_part(db: Session, actor: User, part_id: int, data: PartUpdate) -> dic
         item.updated_at = utcnow()
         from .parts_extraction.ledger import invalidate_scope
         invalidate_scope(db, actor, assembly.id, item.reference_page_id, "PART_UPDATED")
+        from ..models import CatalogExtractionCandidate
+        for candidate in db.scalars(select(CatalogExtractionCandidate).where(
+                CatalogExtractionCandidate.part_id == item.id,
+                CatalogExtractionCandidate.part_created_at == item.created_at,
+                CatalogExtractionCandidate.state == "ACCEPTED")):
+            candidate.version += 1
     try:
         db.flush()
     except IntegrityError as exc:
@@ -195,7 +201,8 @@ def update_part(db: Session, actor: User, part_id: int, data: PartUpdate) -> dic
         add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_UPDATED",
                       _meta(catalog, revision, assembly, before=before,
                             after={key: values[key] for key in changes}))
-    db.commit()
+    if commit:
+        db.commit()
     return _dict(db, item)
 
 

@@ -168,9 +168,33 @@ def edit_candidate(db, actor, candidate_id, data):
     db.refresh(candidate)
     if candidate.source_id != source.id or candidate.version != data.expected_version:
         raise fail("catalog_reference_page_stale")
-    if source.processing_state == "RUNNING" or candidate.state == "ACCEPTED":
+    if source.processing_state == "RUNNING":
         raise fail("catalog_extraction_candidate_unresolved")
     before = {"values": candidate.values, "state": candidate.state, "reason": candidate.reason}
+    if candidate.state == "ACCEPTED":
+        if data.action != "SAVE" or data.values is None:
+            raise fail("catalog_extraction_candidate_unresolved")
+        part = ledger.accepted_part(db, candidate)
+        if part is None:
+            raise fail("catalog_extraction_candidate_unresolved")
+        from pydantic import ValidationError
+
+        from .. import parts
+        from ..schemas import PartUpdate
+        try:
+            update = PartUpdate.model_validate(data.values)
+        except ValidationError:
+            raise fail("catalog_part_invalid", 422) from None
+        version = source.version
+        parts.update_part(db, actor, part.id, update, commit=False)
+        candidate.values = {**candidate.values, **data.values}
+        candidate.updated_by_id, candidate.updated_at = actor.id, ledger.utcnow()
+        if source.version == version:
+            ledger.invalidate(source)
+        add_audit_log(db, actor, "catalog_extraction_candidate", candidate.id, "EXTRACTION_CANDIDATE_REVIEWED",
+            {"action": "SAVE", "before": before, "after": {"values": candidate.values, "state": candidate.state}, "source_id": source.id})
+        db.commit()
+        return {"id": candidate.id, "version": candidate.version, "state": candidate.state}
     if data.action in {"REJECT", "LINK_EXISTING", "NEW_VARIANT"} and (not data.reason or len(data.reason.strip()) < 10):
         raise fail("catalog_source_review_reason_required", 422)
     if data.action == "SAVE":

@@ -1,6 +1,7 @@
 export const ux04Bg = {
   'ux04.catalogPdf': 'Каталог и PDF',
   'ux04.partsMarkers': 'Части и маркери',
+  'ux04.morePartDetails': 'Още данни за частта',
   'ux04.publish': 'Публикуване',
   'ux04.selectPages': 'Избор на PDF страници',
   'ux04.addSelected': 'Добави избраните страници ({{count}})',
@@ -47,6 +48,7 @@ export const ux04Bg = {
   'ux04.count.protected': 'Защитени свързани записи',
 }
 export const ux04En: Record<keyof typeof ux04Bg, string> = {
+  'ux04.morePartDetails': 'More part details',
   'ux04.count.catalog_source_blobs': 'Original PDF files without other links',
   'ux04.groupNumber': 'Diagram and lists {{number}}',
   'ux04.deleteCatalog': 'Delete catalog', 'ux04.deleteRevision': 'Delete draft revision',
@@ -74,6 +76,7 @@ export const ux04En: Record<keyof typeof ux04Bg, string> = {
   'ux04.count.protected': 'Protected related records',
 }
 export const ux04Ru: Record<keyof typeof ux04Bg, string> = {
+  'ux04.morePartDetails': 'Дополнительные данные детали',
   'ux04.count.catalog_source_blobs': 'Исходные PDF без других связей',
   'ux04.groupNumber': 'Схема и списки {{number}}',
   'ux04.deleteCatalog': 'Удалить каталог', 'ux04.deleteRevision': 'Удалить черновую ревизию',

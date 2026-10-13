@@ -179,7 +179,8 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
     const id = candidate.candidate_id
     if (action === 'SAVE' && !pending.current.has(id)) return
     clearTimeout(timers.current.get(id)); pending.current.delete(id)
-    const generation = generations.current.get(id) || 0, values = { ...row.part }, reason = row.reason
+    const generation = generations.current.get(id) || 0, values = row.confirmed
+      ? Object.fromEntries(fields.map(field => [field, row.part[field] ?? null])) : { ...row.part }, reason = row.reason
     const pageId = page.id
     dirtyIds.current.add(id); setUnsaved(true)
     setSaveStates(current => ({ ...current, [id]: 'saving' }))
@@ -201,6 +202,7 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
           setSaveStates(current => ({ ...current, [id]: 'saved' }))
         }
         setSession(await api<ReviewSession>(`${builderBase}/reference-pages/${pageId}/review-session`, { method: 'POST' }))
+        if (result.state === 'ACCEPTED' && scope.current === pageId) setAccepted(await api<Array<PartValues & { id: number }>>(`${builderBase}/reference-pages/${pageId}/parts`))
       } catch (caught) {
         if (scope.current === pageId) {
           setSaveStates(current => ({ ...current, [id]: caught instanceof ApiError && caught.status === 409 ? 'conflict' : 'saveError' }))
@@ -354,18 +356,18 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
         }}>{t('builder.downloadSource')}</button></div>
         <div className="part-edit"><div className="source-heading"><h4 ref={editorTitle} tabIndex={-1}>{t('catalogUx.editPart')} · {active.row.part.position}</h4><button className="secondary" onClick={() => { saveRow(active.source, active.index); setActiveRow(null) }}>{t('common.close')}</button></div>
           <p>{active.item.preview.source.filename} · {t('guided.physicalPage', { number: active.item.preview.source.page_number })}</p>
-          {fields.slice(0, 4).map(field => <label key={field}>{t(`guided.${field}`)}<input aria-label={t(`guided.${field}`)} disabled={busy || active.row.rejected || active.row.confirmed || active.candidate.candidate_state === 'CONFLICT'} value={active.row.part[field] ?? ''} onChange={event => edit(active.source, active.index, { part: { ...active.row.part, [field]: event.target.value || null } })} onBlur={() => saveRow(active.source, active.index)} /></label>)}
+          {fields.slice(0, 4).map(field => <label key={field}>{t(`guided.${field}`)}<input aria-label={t(`guided.${field}`)} disabled={busy || active.row.rejected || active.candidate.candidate_state === 'CONFLICT'} value={active.row.part[field] ?? ''} onChange={event => edit(active.source, active.index, { part: { ...active.row.part, [field]: event.target.value || null } })} onBlur={() => saveRow(active.source, active.index)} /></label>)}
           {active.candidate.candidate_id && saveStates[active.candidate.candidate_id] && <p role={['conflict', 'saveError'].includes(saveStates[active.candidate.candidate_id]) ? 'alert' : 'status'}>{t(`catalogUx.${saveStates[active.candidate.candidate_id]}`)}</p>}
           {active.candidate.candidate_id && saveStates[active.candidate.candidate_id] === 'saveError' && <button className="secondary" onClick={() => { pending.current.set(active.candidate.candidate_id!, active); saveRow(active.source, active.index) }}>{t('wizard.retry')}</button>}
           {active.candidate.candidate_id && saveStates[active.candidate.candidate_id] === 'conflict' && <button className="secondary" disabled={busy} onClick={() => void reloadRow(active.candidate.candidate_id!)}>{t('catalogUx.reloadRow')}</button>}
           {active.row.confirmed && <button className="secondary" disabled={busy || unsaved} onClick={() => {
             setEditPartId(session?.sources.flatMap(source => source.candidates).find(candidate => candidate.id === active.candidate.candidate_id)?.part_id || undefined); setTools(true)
-          }}>{t('common.edit')}</button>}
+          }}>{t('ux04.morePartDetails')}</button>}
           {!valid(active.row) && <p role="alert">{t('catalogUx.invalidRow')}</p>}
           {active.candidate.warnings.length > 0 && !active.row.confirmed && <p role="status">{t('guided.attention')}</p>}
           {active.candidate.candidate_state === 'CONFLICT' && <p role="alert">{t('guided.rowConflict')}</p>}
           <details><summary>{t('catalogUx.rowTools')}</summary>
-            {fields.slice(4).map(field => <label key={field}>{t(`guided.${field}`)}<input value={active.row.part[field] ?? ''} disabled={busy || active.row.confirmed || active.row.rejected || active.candidate.candidate_state === 'CONFLICT'} onChange={event => edit(active.source, active.index, { part: { ...active.row.part, [field]: event.target.value || null } })} onBlur={() => saveRow(active.source, active.index)} /></label>)}
+            {fields.slice(4).map(field => <label key={field}>{t(`guided.${field}`)}<input value={active.row.part[field] ?? ''} disabled={busy || active.row.rejected || active.candidate.candidate_state === 'CONFLICT'} onChange={event => edit(active.source, active.index, { part: { ...active.row.part, [field]: event.target.value || null } })} onBlur={() => saveRow(active.source, active.index)} /></label>)}
             <label>{t('guided.reviewReason')}<input value={active.row.reason} onChange={event => edit(active.source, active.index, { reason: event.target.value })} /></label>
             <button className="secondary" disabled={busy || unsaved || active.row.confirmed || active.candidate.candidate_state === 'CONFLICT' || !active.row.rejected && active.row.reason.trim().length < 10} onClick={() => saveRow(active.source, active.index, active.row.rejected ? 'RESTORE' : 'REJECT')}>{t(active.row.rejected ? 'guided.restore' : 'guided.reject')}</button>
             <pre className="raw-evidence">{active.candidate.raw_text}</pre><pre className="raw-evidence">{JSON.stringify({ source: active.item.preview.source, geometry: active.item.preview.page_geometry, row: active.candidate, method: active.item.preview.method, quality: active.item.preview.quality, warnings: active.item.preview.warnings, version: active.item.preview.pipeline_version }, null, 2)}</pre>

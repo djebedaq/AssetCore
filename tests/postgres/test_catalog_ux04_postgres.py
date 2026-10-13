@@ -88,3 +88,24 @@ def test_collecting_unused_pdf_races_safely_with_another_catalog_reusing_it(pg_f
         retained = db.scalar(select(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == target_id))
         assert retained.content == content and retained.sha256 == digest
         assert db.scalar(select(func.count(CatalogSourceBlob.id)).where(CatalogSourceBlob.sha256 == digest)) == 1
+
+
+def test_accepted_row_autosaves_share_the_catalog_lock_and_reject_stale_values(pg_factory):
+    from app.catalog_admin.parts_extraction import review
+    from app.catalog_admin.parts_extraction.schemas import CandidateEdit
+    from app.models import User
+    page, preview, catalog_id, _, _ = prepared(pg_factory)
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        service.confirm(db, actor, page["id"], ExtractConfirm(token=preview["token"],
+            rows=[{"index": index, "part": row["payload"]} for index, row in enumerate(preview["rows"])], confirm_warnings=True))
+        candidate = review.workspace(db, actor, page["assembly_id"], page["id"])["sources"][0]["candidates"][0]
+    outcomes = race(pg_factory, CatalogDefinition, catalog_id, [
+        lambda db, actor: review.edit_candidate(db, actor, candidate["id"], CandidateEdit(
+            expected_version=candidate["version"], values={"quantity": "3"})),
+        lambda db, actor: review.edit_candidate(db, actor, candidate["id"], CandidateEdit(
+            expected_version=candidate["version"], values={"quantity": "4"})),
+    ], success_status=200)
+    assert sorted(result.status for result in outcomes) == [200, 409]
+    with pg_factory() as db:
+        assert int(db.get(CatalogRevisionPart, candidate["part_id"]).quantity) in {3, 4}

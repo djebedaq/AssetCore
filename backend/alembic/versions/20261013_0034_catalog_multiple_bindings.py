@@ -40,6 +40,12 @@ def downgrade():
     # Never silently discard a second catalog or inactive historical binding.
     if (
         op.get_bind()
+        .execute(sa.text("SELECT id FROM catalog_asset_bindings WHERE is_active = false LIMIT 1"))
+        .first()
+    ):
+        raise RuntimeError("Inactive catalog bindings require explicit resolution before downgrade")
+    if (
+        op.get_bind()
         .execute(
             sa.text(
                 "SELECT machine_id FROM catalog_asset_bindings "

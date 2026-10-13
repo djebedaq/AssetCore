@@ -146,6 +146,27 @@ it('has complete Bulgarian, English and Russian UX keys', () => {
   expect(Object.keys(catalogUxRu).sort()).toEqual(Object.keys(catalogUxBg).sort())
 })
 
+it('autosaves accepted rows directly with their version and restores the correction after remount', async () => {
+  const durable = new ReviewTestTransport(), saved = durable.record(preview(11))
+  saved.rows[0].candidate_state = 'ACCEPTED'
+  const patch = vi.fn((init?: RequestInit) => {
+    const data = JSON.parse(String(init?.body))
+    saved.rows[0].payload = { ...saved.rows[0].payload, ...data.values }
+    saved.rows[0].candidate_version = data.expected_version + 1
+    return json({ version: saved.rows[0].candidate_version, state: 'ACCEPTED' })
+  })
+  const view = setup(durable, patch)
+  expect(await screen.findByLabelText('Количество')).toBeEnabled()
+  fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } })
+  fireEvent.blur(screen.getByLabelText('Количество'))
+  await waitFor(() => expect(patch).toHaveBeenCalledOnce())
+  expect(JSON.parse(String(patch.mock.calls[0][0]?.body))).toMatchObject({ expected_version: 1, values: { quantity: '3' } })
+  await screen.findByText('Запазено')
+  view.unmount(); setup(durable, patch)
+  expect(await screen.findByLabelText('Количество')).toHaveValue('3')
+  expect(screen.getAllByRole('row')[1]).toHaveTextContent('Потвърдени')
+})
+
 it('resumes retained partial candidates after a failed retry without a fabricated confirmation token', async () => {
   const durable = new ReviewTestTransport(), p = durable.record(preview(11))
   p.rows[0].payload.quantity = null

@@ -31,6 +31,11 @@ def test_two_catalogs_late_binding_unbind_and_delete_rev2_preserve_published_acc
         preview = checked(client.post(f"{BASE}/reference-pages/{page['id']}/extract", headers=auth_headers, json={"visual_page_id": source["id"]}))
         checked(client.post(f"{BASE}/reference-pages/{page['id']}/extraction/confirm", headers=auth_headers,
             json={"token": preview["token"], "rows": [{"index": index, "part": row["payload"]} for index, row in enumerate(preview["rows"])], "confirm_warnings": True}))
+        parts = checked(client.get(f"{BASE}/reference-pages/{page['id']}/parts", headers=auth_headers))
+        kit = checked(client.post(f"{BASE}/assemblies/{assembly['id']}/repair-kits", headers=auth_headers,
+            json={"code": f"QA_UX04_KIT_{number}", "name_bg": "QA ONLY", "source_visual_page_id": source["id"]}), 201)
+        checked(client.post(f"{BASE}/repair-kits/{kit['id']}/components", headers=auth_headers,
+            json={"part_id": parts[0]["id"], "quantity": 1}), 201)
         for position in ["1", "2"]:
             marker = checked(client.post(f"{BASE}/visual-pages/{scheme['id']}/hotspots", headers=auth_headers,
                 json={"position": position, "x": .1, "y": .1, "width": .03, "height": .03}), 201)
@@ -61,6 +66,11 @@ def test_two_catalogs_late_binding_unbind_and_delete_rev2_preserve_published_acc
                 "lines": [{"catalog_part_id": details["parts"][0]["id"], "description": "Synthetic QA request", "quantity": 1}]}), 201)
         assert parts_by_catalog[0].isdisjoint(parts_by_catalog[1])
         assert len(checked(client.get(f"/api/catalog/v2/search?machine_id={machine_id}", headers=auth_headers))) == 4
+        kits = checked(client.get(f"/api/catalog/v2/repair-kits?machine_id={machine_id}", headers=auth_headers))
+        assert len(kits) == 2
+        for kit in kits:
+            checked(client.post("/api/part-requests/multi", headers=auth_headers, json={"machine_id": machine_id,
+                "repair_kit_id": kit["id"], "repair_kit_mode": "KIT", "lines": [{"description": "Synthetic QA kit request", "quantity": 1}]}), 201)
     item, revision = published[0]
     draft = checked(client.post(f"{BASE}/catalogs/{item['id']}/edit", headers=auth_headers), 201)
     preview = checked(client.get(f"{BASE}/draft-deletion/revision/{draft['id']}", headers=auth_headers))
@@ -88,3 +98,18 @@ def test_source_review_normal_click_needs_receipt_but_no_written_reason(client, 
     payload["inspection_token"] = original.headers["X-Catalog-Review-Receipt"]
     checked(client.post(f"{BASE}/visual-pages/{visual['id']}/review", headers=auth_headers, json=payload))
     assert resume(client, auth_headers, page)["sources"][0]["review_state"] == "VERIFIED"
+    approved = resume(client, auth_headers, page)["sources"][0]
+    candidate = approved["candidates"][0]
+    changed = checked(client.patch(f"{BASE}/extraction-candidates/{candidate['id']}", headers=auth_headers,
+        json={"expected_version": candidate["version"], "values": {"quantity": "3"}}))
+    assert changed["state"] == "ACCEPTED" and changed["version"] > candidate["version"]
+    current = resume(client, auth_headers, page)["sources"][0]
+    assert current["review_state"] == "NEEDS_REVIEW"
+    assert current["candidates"][0]["original"] == candidate["original"]
+    parts = checked(client.get(f"{BASE}/reference-pages/{page['id']}/parts", headers=auth_headers))
+    assert float(next(part for part in parts if part["id"] == candidate["part_id"])["quantity"]) == 3
+    assert client.patch(f"{BASE}/extraction-candidates/{candidate['id']}", headers=auth_headers,
+        json={"expected_version": candidate["version"], "values": {"quantity": "9"}}).status_code == 409
+    checked(client.patch(f"{BASE}/parts/{candidate['part_id']}", headers=auth_headers, json={"quantity": "4"}))
+    assert client.patch(f"{BASE}/extraction-candidates/{candidate['id']}", headers=auth_headers,
+        json={"expected_version": changed["version"], "values": {"quantity": "9"}}).status_code == 409

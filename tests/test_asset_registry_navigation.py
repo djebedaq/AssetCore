@@ -58,7 +58,7 @@ def test_registry_navigation_counts_filtering_lifecycle_and_permissions(
     assert "QA_EMPTY_INACTIVE" not in by_code
     assert set(by_code["QA_PAINT"]) == {
         "id", "code", "name_bg", "name_en", "name_ru", "is_active",
-        "asset_count", "has_pressure",
+        "asset_count", "has_pressure", "capabilities",
     }
     assert client.get("/api/machines/category-navigation").status_code == 401
     assert client.get("/api/categories", headers=viewer_headers).status_code == 403

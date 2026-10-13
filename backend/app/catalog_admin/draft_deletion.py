@@ -314,6 +314,8 @@ def plan(db, kind, identity):
         {
             "kind": kind,
             "id": identity,
+            "catalog_id": catalog.id,
+            "catalog_code": catalog.code,
             "digest": digest,
             "counts": {name: len(values) for name, values in owned.items() if values},
             "blockers": blockers,
