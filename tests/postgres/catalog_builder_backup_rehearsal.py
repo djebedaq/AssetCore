@@ -106,6 +106,40 @@ def publish(factory, revision_id):
                             preview["current_published_revision_id"], True)
 
 
+def durable_work(factory):
+    """Use normal extraction/edit/confirm/inspection services before backup."""
+    from app.catalog_admin.parts_extraction import ledger, review, service
+    from app.catalog_admin.parts_extraction.schemas import (
+        CandidateEdit,
+        ExtractConfirm,
+        ExtractSelection,
+    )
+    from catalog_review_helpers import verify_service_sources
+    from test_catalog_guided_builder_postgres import selected_source
+
+    page, preview = selected_source(factory)
+    with factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        row = preview["rows"][0]
+        service_row = {**row["payload"], "part_number": "QA-RESTORED-HUMAN-CORRECTION"}
+        review.edit_candidate(db, actor, row["candidate_id"], CandidateEdit(
+            expected_version=row["candidate_version"], values=service_row))
+        repeated = service.preview(db, actor, page["id"], ExtractSelection(
+            visual_page_id=page["sources"][0]["id"]))
+        assert repeated["rows"][0]["payload"] == service_row
+        service.confirm(db, actor, page["id"], ExtractConfirm(token=repeated["token"], rows=[
+            {"index": i, "part": item["payload"], "expected_version": item["candidate_version"]}
+            for i, item in enumerate(repeated["rows"])], confirm_warnings=True))
+        verify_service_sources(db, actor, page["assembly_id"], page["id"])
+        source = review.workspace(db, actor, page["assembly_id"], page["id"])["sources"][0]
+        assert source["review_state"] == "VERIFIED"
+        tables = (ledger.ExtractionSession, ledger.Source, ledger.Attempt, ledger.Candidate, ledger.Decision)
+        counts = {table.__tablename__: db.query(table).count() for table in tables}
+        assert all(counts.values())
+        assert len(source["attempts"]) >= 2
+        return counts
+
+
 def main():
     engine = create_engine(SOURCE)
     assert not inspect(engine).get_table_names(), "Upgrade rehearsal requires an empty disposable source"
@@ -186,6 +220,7 @@ def main():
             db.commit()
             for machine_id in machine_ids:
                 assert runtime.machine_catalog(db, machine_id)["dataset_version"] == f"CATALOG_BUILDER_R{next_id}"
+        ledger_counts = durable_work(factory)
         all_columns, expected = capture(engine)
         with engine.connect() as connection:
             audit_limit = connection.scalar(text("SELECT coalesce(max(id), 0) FROM audit_logs"))
@@ -210,6 +245,7 @@ def main():
     engine.dispose()
     print(json.dumps({"pre_builder_upgrade": "passed", "encrypted_builder_restore": "passed",
                       "shared_binding_count": 2, "immutable_request_documents": "passed",
+                      "durable_human_work_restore": "passed", "ledger_counts": ledger_counts,
                       "head": "20261009_0033", "anchors": anchors}, sort_keys=True))
 
 

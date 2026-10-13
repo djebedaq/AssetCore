@@ -29,6 +29,7 @@ def main(*, output_name="registry02-postgres"):
     env["ASSETCORE_REQUIRE_POSTGRES_TESTS"] = "true"
     try:
         subprocess.run(["docker", "run", "--detach", "--name", name,
+            "--memory", "512m", "--cpus", "1", "--pids-limit", "64",
             "--publish", f"127.0.0.1:{port}:5432", "--env", "POSTGRES_PASSWORD", "--env", "POSTGRES_USER",
             "--env", "POSTGRES_DB", "postgres:16-alpine"], env=env, check=True, capture_output=True)
         for _ in range(60):

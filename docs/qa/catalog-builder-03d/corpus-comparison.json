@@ -1,0 +1,975 @@
+{
+  "scope": "REAL_EXISTING_VERIFIED_LIBRARY_POST_EXTRACTION_COMPARISON",
+  "cases": [
+    {
+      "case": "falch_1000/drive_pump",
+      "source_sha256": "81eb5c94e2c2c2a2b8e868acb3721dddfecd642c2744093046fe34fdf9213c82",
+      "control_sha256": "82520e11051e1cd8c02fb10836914831cc4b4343cbc762ba449883b863e3b830",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 37,
+            "candidate_rows": 0,
+            "missing_rows": 37,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.3298,
+            "sampled_cpu_seconds": 2.38,
+            "sampled_peak_tree_rss_mib": 147.77,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 4,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 10,
+            "candidate_rows": 0,
+            "missing_rows": 10,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 0.8703,
+            "sampled_cpu_seconds": 0.88,
+            "sampled_peak_tree_rss_mib": 145.72,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_1000/liquid_part",
+      "source_sha256": "a238920e0392b9c5be56452eef1da9187e530d8dea6925b721784b06418a5278",
+      "control_sha256": "6ca3f1caf2ba653d20079fb5b200e42c48f01961c23fd701a5ae27de945ee457",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 38,
+            "candidate_rows": 0,
+            "missing_rows": 38,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.6267,
+            "sampled_cpu_seconds": 2.66,
+            "sampled_peak_tree_rss_mib": 177.96,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 16,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 25,
+            "candidate_rows": 0,
+            "missing_rows": 25,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.4743,
+            "sampled_cpu_seconds": 2.5,
+            "sampled_peak_tree_rss_mib": 178.11,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "source_sha256": "acc612f796ec891cf8aeb0bc86b7150630f7b4874ea370d0c4f5503aff73675d",
+      "control_sha256": "cdc55cba5ec75b26bef19f22f8e6b1843ed58c848efbc162bfb690607e9c2c09",
+      "pages": [
+        {
+          "physical_page": 4,
+          "expected_rows": 30,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 37,
+            "candidate_rows": 0,
+            "missing_rows": 37,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.3759,
+            "sampled_cpu_seconds": 2.42,
+            "sampled_peak_tree_rss_mib": 187.11,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 5,
+          "expected_rows": 30,
+          "extracted_candidates": 33,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {
+            "position_number_pair": 16,
+            "numeric_quantity": 0,
+            "quantity_raw": 0,
+            "original_description": 0
+          },
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 33,
+          "unmatched_candidates": 17,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 38,
+            "candidate_rows": 33,
+            "missing_rows": 1,
+            "partial_rows": 33,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.4822,
+            "sampled_cpu_seconds": 2.54,
+            "sampled_peak_tree_rss_mib": 187.69,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 6,
+          "expected_rows": 22,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 34,
+            "candidate_rows": 0,
+            "missing_rows": 34,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.0243,
+            "sampled_cpu_seconds": 2.04,
+            "sampled_peak_tree_rss_mib": 188.15,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 7,
+          "expected_rows": 25,
+          "extracted_candidates": 28,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {
+            "position_number_pair": 14,
+            "numeric_quantity": 0,
+            "quantity_raw": 0,
+            "original_description": 0
+          },
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 28,
+          "unmatched_candidates": 14,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 40,
+            "candidate_rows": 28,
+            "missing_rows": 12,
+            "partial_rows": 28,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.1776,
+            "sampled_cpu_seconds": 2.2,
+            "sampled_peak_tree_rss_mib": 188.89,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 8,
+          "expected_rows": 34,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 37,
+            "candidate_rows": 0,
+            "missing_rows": 37,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.3739,
+            "sampled_cpu_seconds": 2.41,
+            "sampled_peak_tree_rss_mib": 188.97,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 9,
+          "expected_rows": 23,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 34,
+            "candidate_rows": 0,
+            "missing_rows": 34,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.6791,
+            "sampled_cpu_seconds": 2.77,
+            "sampled_peak_tree_rss_mib": 190.29,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/pump",
+      "source_sha256": "0f9d3e8d178272b7e65a57a37f495a448fc24c31730ac2c107e5d50f29a317c4",
+      "control_sha256": "9916db79efb81fb97b89ad82ee301e0f508bfe6bb44c08c3fdc236a89506d3cb",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 38,
+            "candidate_rows": 0,
+            "missing_rows": 38,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.2244,
+            "sampled_cpu_seconds": 2.29,
+            "sampled_peak_tree_rss_mib": 189.99,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 31,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 37,
+            "candidate_rows": 0,
+            "missing_rows": 37,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.4771,
+            "sampled_cpu_seconds": 2.53,
+            "sampled_peak_tree_rss_mib": 194.18,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 4,
+          "expected_rows": 4,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 15,
+            "candidate_rows": 0,
+            "missing_rows": 15,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 1.7237,
+            "sampled_cpu_seconds": 1.74,
+            "sampled_peak_tree_rss_mib": 193.37,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/unloader_valve",
+      "source_sha256": "5382954ff92c616622b0d4cfdc3a2a12581f442c209c6329d8d2e50cb40fc1d5",
+      "control_sha256": "534711b67a462e4a77842bd08b682943a60c73e87f5cf112147f9fdb481ec6c0",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 33,
+          "ordered_exact_fields": {
+            "position": 2,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 0,
+            "quantity_raw": 0,
+            "original_description": 0
+          },
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 33,
+          "unmatched_candidates": 3,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 38,
+            "candidate_rows": 33,
+            "missing_rows": 1,
+            "partial_rows": 33,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.3789,
+            "sampled_cpu_seconds": 2.43,
+            "sampled_peak_tree_rss_mib": 194.62,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 33,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 37,
+            "candidate_rows": 0,
+            "missing_rows": 37,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.5249,
+            "sampled_cpu_seconds": 2.6,
+            "sampled_peak_tree_rss_mib": 195.11,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 4,
+          "expected_rows": 2,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 13,
+            "candidate_rows": 0,
+            "missing_rows": 13,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 1.3713,
+            "sampled_cpu_seconds": 1.36,
+            "sampled_peak_tree_rss_mib": 194.84,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/valve_500bar",
+      "source_sha256": "ff4a643c60109636e6ebc619551d46ab57b05542fca32a46e3390dec130d14af",
+      "control_sha256": "f328b396c963e7bdbe4864f2177cfcc6e128998b5f3d51a9e8e871071fbebca8",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 29,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 38,
+            "candidate_rows": 0,
+            "missing_rows": 38,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.3236,
+            "sampled_cpu_seconds": 2.36,
+            "sampled_peak_tree_rss_mib": 196.15,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 3,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 19,
+            "candidate_rows": 0,
+            "missing_rows": 19,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.4752,
+            "sampled_cpu_seconds": 2.53,
+            "sampled_peak_tree_rss_mib": 196.56,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "source_sha256": "baab518592c770457ba493d056e7e7112ddfa15d45d8db93214fe339ec36af85",
+      "control_sha256": "ea019471999df2e4a175101e3857f4b232f261e486be91529ba9dffd08b5518b",
+      "pages": [
+        {
+          "physical_page": 4,
+          "expected_rows": 30,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 38,
+            "candidate_rows": 0,
+            "missing_rows": 38,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.2744,
+            "sampled_cpu_seconds": 2.3,
+            "sampled_peak_tree_rss_mib": 196.84,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 5,
+          "expected_rows": 30,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 38,
+            "candidate_rows": 0,
+            "missing_rows": 38,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.4734,
+            "sampled_cpu_seconds": 2.5,
+            "sampled_peak_tree_rss_mib": 197.04,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 6,
+          "expected_rows": 30,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 37,
+            "candidate_rows": 0,
+            "missing_rows": 37,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.4738,
+            "sampled_cpu_seconds": 2.51,
+            "sampled_peak_tree_rss_mib": 197.23,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 7,
+          "expected_rows": 30,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 37,
+            "candidate_rows": 0,
+            "missing_rows": 37,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.3231,
+            "sampled_cpu_seconds": 2.35,
+            "sampled_peak_tree_rss_mib": 197.48,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 8,
+          "expected_rows": 27,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "TEXT_LINE_REGIONS",
+            "observed_rows": 35,
+            "candidate_rows": 0,
+            "missing_rows": 35,
+            "partial_rows": 0,
+            "needs_context": true
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.3793,
+            "sampled_cpu_seconds": 2.45,
+            "sampled_peak_tree_rss_mib": 197.43,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "hydwin_fussen_500/plunger_pump",
+      "source_sha256": "5b5d89b5ebcd71dc8f203d7a6ef419e9f131eaf7f95a1cbe3221992d5c6b7056",
+      "control_sha256": "df3b508f3d5bde0f64f3e33af1744f989f7885eb788432e0a1ebeee0545da7e8",
+      "pages": [
+        {
+          "physical_page": 22,
+          "expected_rows": 58,
+          "extracted_candidates": 0,
+          "ordered_exact_fields": {
+            "position": 0,
+            "part_number": 0,
+            "quantity_raw": 0,
+            "numeric_quantity": 0,
+            "original_description": 0
+          },
+          "paired_fields": {},
+          "exact_rows_unordered_all_five_fields": 0,
+          "missing_quantity_candidates": 0,
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 29,
+            "candidate_rows": 0,
+            "missing_rows": 29,
+            "partial_rows": 0,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 29,
+              "covered_rows": 0,
+              "missing_rows": 29,
+              "truncated": false
+            },
+            "warnings": [
+              "ROW_COVERAGE_INCOMPLETE"
+            ]
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 0.9844,
+            "sampled_cpu_seconds": 0.97,
+            "sampled_peak_tree_rss_mib": 197.46,
+            "peak_process_count_including_controller": 2,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    }
+  ],
+  "universal_manufacturer_accuracy_claim": false,
+  "hammelmann": "NOT_AVAILABLE"
+}

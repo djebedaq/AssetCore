@@ -1,0 +1,25 @@
+{
+  "scope": "REAL_EDGE_SYNTHETIC_ONLY_NO_OEM_IMAGES",
+  "screenshots": [
+    {
+      "file": "screenshots/parts-390.png",
+      "sha256": "c35cfbc2cacd0b856cb376bef409e6f912afa8c071e654eb0e2cd5c20caddd8d",
+      "synthetic_only": true
+    },
+    {
+      "file": "screenshots/published-reopened-1440.png",
+      "sha256": "4b1abf2fe8997cd3911b55e67553696e3e7fa12f8a41d9d1b51bca982610ad8c",
+      "synthetic_only": true
+    },
+    {
+      "file": "screenshots/rectangle-second-scheme-1440.png",
+      "sha256": "fc14d928c1446071f1e7ae9d7f1d8e0d4622bf043692188c5e51a99e7b4d645f",
+      "synthetic_only": true
+    },
+    {
+      "file": "screenshots/touch-hotspots-768.png",
+      "sha256": "a5798d83cdcae804d0cf83a2c423b56647d74bb3b8267ecdc485bd428c2ffc02",
+      "synthetic_only": true
+    }
+  ]
+}

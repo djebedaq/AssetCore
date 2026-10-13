@@ -8,6 +8,63 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
   { status, headers: { 'Content-Type': 'application/json' } })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
+it.each([false, true])('undo uses our latest saved version and rejects a concurrent edit (foreign=%s)', async foreignEdit => {
+  const user = userEvent.setup(), NativeURL = URL
+  vi.stubGlobal('URL', class extends NativeURL { static createObjectURL = vi.fn(() => 'blob:qa'); static revokeObjectURL = vi.fn() })
+  vi.stubGlobal('PointerEvent', class extends MouseEvent {
+    pointerId = 1; pointerType = 'mouse'
+  })
+  HTMLElement.prototype.setPointerCapture = vi.fn()
+  HTMLElement.prototype.hasPointerCapture = vi.fn(() => false)
+  let rows: Array<Record<string, unknown>> = []
+  const deletes: string[] = []
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input), method = init?.method || 'GET', body = init?.body ? JSON.parse(String(init.body)) : {}
+    if (path.endsWith('/exploded-pages')) return json([{ visual_page_id: 5, artifact_id: 8, artifact_title: 'QA', page_number: 1 }])
+    if (path.endsWith('/coverage')) return json([{ position: '1', part_count: 1, part_numbers: ['QA-1'], hotspot_count: rows.length,
+      state: rows[0]?.is_verified ? 'VERIFIED' : rows.length ? 'UNVERIFIED' : 'NO_HOTSPOT' }])
+    if (path.endsWith('/preview')) return new Response(new Blob(['qa']), { headers: { 'Content-Type': 'image/png' } })
+    if (path.endsWith('/visual-pages/5/hotspots')) {
+      if (method === 'POST') rows = [{ ...body, id: 1, version: 1, is_verified: false }]
+      return json(method === 'POST' ? rows[0] : rows)
+    }
+    if (method === 'DELETE') {
+      deletes.push(path)
+      if (!path.endsWith(`expected_version=${rows[0].version}`)) return json({ detail: { code: 'catalog_hotspot_stale' } }, 409)
+      rows = []; return new Response(null, { status: 204 })
+    }
+    if (method === 'PATCH' || path.endsWith('/verify') || path.endsWith('/unverify')) {
+      if (body.expected_version !== rows[0].version) return json({ detail: { code: 'catalog_hotspot_stale' } }, 409)
+      rows = [{ ...rows[0], ...(method === 'PATCH' ? body : {}), version: Number(rows[0].version) + 1,
+        is_verified: method === 'POST' && path.endsWith('/verify') }]
+      return json(rows[0])
+    }
+    return json({}, 404)
+  }))
+  render(<I18nProvider><RevisionHotspotEditor assemblyId={7} referencePageId={9} editable simple /></I18nProvider>)
+  const image = await screen.findByRole('img'), canvas = image.parentElement as HTMLElement
+  vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 100, height: 100 } as DOMRect)
+  fireEvent.pointerDown(image, { clientX: 40, clientY: 30 }); fireEvent.pointerUp(image, { clientX: 40, clientY: 30 })
+  await waitFor(() => expect(rows[0]?.version).toBe(2))
+  await user.click(await screen.findByRole('button', { name: 'Отмени проверката' }))
+  await waitFor(() => expect(rows[0].version).toBe(3))
+  await user.click(await screen.findByRole('button', { name: /^Провери$/ }))
+  await waitFor(() => expect(rows[0].version).toBe(4))
+  await user.click(screen.getByRole('button', { name: 'Инструменти за маркера' }))
+  fireEvent.change(screen.getByLabelText('X'), { target: { value: '0.5' } })
+  await user.click(screen.getByRole('button', { name: 'Запази геометрията' }))
+  await waitFor(() => expect(rows[0].version).toBe(6))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Отмени последното поставяне' })).toBeEnabled())
+  if (foreignEdit) rows = [{ ...rows[0], version: 7, x: .6 }]
+  await user.click(screen.getByRole('button', { name: 'Отмени последното поставяне' }))
+  await waitFor(() => expect(deletes).toHaveLength(1))
+  expect(deletes[0]).toContain('expected_version=6')
+  if (foreignEdit) {
+    await screen.findByRole('alert')
+    expect(rows[0]).toMatchObject({ version: 7, x: .6 })
+  } else await waitFor(() => expect(rows).toEqual([]))
+})
+
 it('draws normalized draft geometry, verifies explicitly, invalidates on edit and separates pan gestures', async () => {
   const actor = userEvent.setup()
   const NativeURL = URL

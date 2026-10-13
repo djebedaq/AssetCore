@@ -43,12 +43,16 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
         owner.password_hash, owner.preferred_language = hash_password(password), "bg"
         owner.must_change_password, owner.profile_status = False, "PROFILE_COMPLETE"
         db.commit()
-    if scenario == "durable":
+    if scenario in {"durable", "final-multipage"}:
         import fitz
-        with fitz.open(stream=multipage_pdf(), filetype="pdf") as pdf:
+        with fitz.open(stream=multipage_pdf(count=7 if scenario == "final-multipage" else 2), filetype="pdf") as pdf:
             # Visible synthetic callouts make the browser hotspot exercise verifiable.
             for index in range(10):
                 pdf[0].insert_text((80 + index % 5 * 140, 150 + index // 5 * 140), str(index + 1), fontsize=18)
+            if scenario == "durable":
+                detail = pdf.new_page(width=850, height=650)
+                detail.insert_text((60, 70), "Synthetic QA detail scheme", fontsize=18)
+                detail.insert_text((150, 150), "1", fontsize=18)
             (qa / "synthetic.pdf").write_bytes(pdf.tobytes())
     env["QA_BROWSER_CHANNEL"] = "msedge" if os.name == "nt" else ""
     server = None

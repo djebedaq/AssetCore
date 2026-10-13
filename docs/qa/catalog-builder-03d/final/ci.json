@@ -1,0 +1,185 @@
+{
+  "scope": "COMBINED_PRODUCT_CODE_AND_AUTHORITATIVE_FINAL_PR_HEAD_CHECKS",
+  "completed_run": {
+    "commit": "1040a4158ce395e011d3c0d57e990bd0315cfff8",
+    "url": "https://github.com/djebedaq/AssetCore/actions/runs/38245128678",
+    "all_jobs": "SUCCESS",
+    "backend": {
+      "passed": 1247,
+      "skipped": 3,
+      "postgres_deselected": 97,
+      "seconds": 1394.28,
+      "production_config_gate_passed": 17
+    },
+    "frontend": {
+      "passed": 618,
+      "files": 66,
+      "seconds": 55.11
+    },
+    "postgres": {
+      "passed": 97,
+      "seconds": 569.86
+    },
+    "docker": {
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Initialize containers",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate Compose configuration",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate opt-in development database port override",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build production image",
+          "conclusion": "success"
+        },
+        {
+          "name": "Assert all PostgreSQL client majors in the exact production image",
+          "conclusion": "success"
+        },
+        {
+          "name": "Production image PostgreSQL 16 encrypted round trip and real PG17 rejection",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install existing cryptography dependency for isolated Compose QA",
+          "conclusion": "success"
+        },
+        {
+          "name": "Portable production Compose init, restart and verified-backup upgrade",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify fixed non-root runtime identity",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify production backup operations in the exact image",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify LibreOffice with read-only root filesystem",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify official visual appendix through LibreOffice",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify offline OCR of an explicitly selected synthetic parts list",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify adaptive cell OCR, masks, rotation, skew and partial rows",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify late-bound Builder official documents through LibreOffice",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run liveness and readiness smoke in the production image",
+          "conclusion": "success"
+        },
+        {
+          "name": "Stop containers",
+          "conclusion": "success"
+        }
+      ]
+    }
+  },
+  "final_head_checks": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+  "final_head_policy": "ALL_FINAL_HEAD_JOBS_MUST_BE_SUCCESS_BEFORE_HANDOFF; FINAL_COUNTS_REPORTED_IN_PR_BODY_AND_HANDOFF",
+  "skips": [
+    {
+      "count": 2,
+      "test": "tests/test_original_protocol_layout.py:133",
+      "reason": "LibreOffice absent on Python backend runner; actual LibreOffice checked separately in Docker"
+    },
+    {
+      "count": 1,
+      "test": "tests/test_production_manager.py:1023",
+      "reason": "Windows named mutex on Linux"
+    }
+  ],
+  "local": {
+    "typecheck": "PASS",
+    "eslint": "PASS",
+    "production_frontend_build": "PASS",
+    "ruff": "PASS",
+    "protected_migrations": 33,
+    "authorization_inventory": "PASS",
+    "frontend_targeted": {
+      "passed": 29,
+      "files": 3,
+      "seconds": 23.62
+    },
+    "backend_targets": {
+      "passed": 35,
+      "posix_skipped": 6,
+      "seconds": 14.86
+    },
+    "latest_worker_output_cases": {
+      "passed": 6,
+      "posix_skipped": 1,
+      "seconds": 0.73
+    },
+    "linux_oem_exact": 611,
+    "linux_d13_exact": "3x30",
+    "browser_synthetic_checks": 11,
+    "browser_d13_checks": 7,
+    "browser_lists": [
+      1,
+      4,
+      7
+    ],
+    "live_capacity": "TWO_ADMITTED_THIRD_BUSY_REAL_CRASH_NO_ORPHANS_SAME_SLOT_NATIVE_RETRY"
+  },
+  "attempt_history": [
+    {
+      "status": "FAIL",
+      "scope": "New worker-envelope tests before fix",
+      "result": "2 failed / 3 passed; fixed and negative cases retained"
+    },
+    {
+      "status": "INTERRUPTED",
+      "scope": "Local unrestricted Vitest invocation",
+      "result": "Own processes stopped; bounded target repeated 29/29 PASS"
+    },
+    {
+      "status": "INTERRUPTED",
+      "scope": "Local Docker image rebuild",
+      "result": "Slow package install/limited host RAM; current app mounted read-only over existing production-oriented image for Linux acceptance; exact commit image successfully built in CI"
+    },
+    {
+      "status": "FAIL",
+      "scope": "Initial combined CI Docker Compose smoke",
+      "run": "https://github.com/djebedaq/AssetCore/actions/runs/38244352117",
+      "result": "post_deploy_smoke stage, no precise assertion metadata; sanitized diagnostics added; next full CI passed without weakening assertions or changing deployment behavior"
+    },
+    {
+      "status": "FAIL",
+      "scope": "Initial synthetic Edge pan assertion",
+      "result": "QA now waits zoom overflow and drags within visible viewport; product pan unchanged; final 11 checks PASS"
+    }
+  ],
+  "production_access": false
+}

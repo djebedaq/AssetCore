@@ -1,0 +1,57 @@
+{
+  "cases": [
+    {
+      "case": "three_independent_web_controllers_two_slots",
+      "status": "PASS",
+      "proof": "tests/test_catalog_process_capacity.py",
+      "admitted": 2,
+      "busy": 1,
+      "before_fix": "FAIL_THIRD_CONTROLLER_ADMITTED"
+    },
+    {
+      "case": "dead_controller_worker_descriptor_lease_and_recovery",
+      "status": "PASS",
+      "proof": "tests/test_catalog_process_capacity.py"
+    },
+    {
+      "case": "two_real_concurrent_ocr_workers",
+      "status": "PASS",
+      "proof": "d13-concurrency-exact.json",
+      "exact": "20/20 EACH",
+      "orphans": 0
+    },
+    {
+      "case": "two_real_browser_tabs_saved_correction_and_stale_confirmation",
+      "status": "PASS",
+      "proof": "browser-synthetic.json"
+    },
+    {
+      "case": "two_distinct_operators_receipts_and_approval_race",
+      "status": "PASS",
+      "proof": "tests/postgres/test_catalog_durable_review_postgres.py",
+      "outcomes": [
+        200,
+        409
+      ]
+    },
+    {
+      "case": "pg_publish_edit_source_assignment_and_group_transaction_races",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/pull/104/checks"
+    },
+    {
+      "case": "long_duration_full_multiworker_http_soak",
+      "status": "NOT RUN",
+      "reason": "Bounded extractor, PG transactions and browser races only; constrained QA host, no production load claim"
+    },
+    {
+      "case": "two_real_ocr_controllers_third_busy_crash_with_tesseract_recovery",
+      "status": "PASS",
+      "proof": "live-capacity-exact.json"
+    }
+  ],
+  "queue_policy": "FAIL_FAST_BUSY",
+  "queue_wait_seconds": 0,
+  "scope": "ONE_RUNTIME_SHARED_TEMP_NAMESPACE",
+  "cluster_quota_claim": false
+}

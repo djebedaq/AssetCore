@@ -18,6 +18,27 @@ const preview = (item: Source, start: number): Preview => ({ token: `signed-${it
   })) })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
+it('resumes only an unstarted source after refresh while retaining saved candidates', async () => {
+  const sources = [source(10, 0), source(11, 1)], durable = new ReviewTestTransport()
+  durable.record(preview(sources[0], 1))
+  const requests: number[] = []
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const resumed = durable.handle(String(input), init); if (resumed) return resumed
+    if (String(input).endsWith('/extract')) {
+      const body = JSON.parse(String(init?.body)); requests.push(body.visual_page_id)
+      return json(durable.record(preview(sources[1], 6)))
+    }
+    return json([])
+  }))
+  render(<I18nProvider><GuidedParts stage="extract" page={makePage(sources)} changed={vi.fn(async () => {})} onDirtyChange={vi.fn()} /></I18nProvider>)
+  await screen.findByText('Общо части: 5 · Обработени източници: 0 / 2')
+  const lists = screen.getByLabelText('Списъци с резервни части')
+  await userEvent.setup().click(within(lists).getByRole('button', { name: 'Грешка — опитайте отново' }))
+  await screen.findByText('Общо части: 10 · Обработени източници: 0 / 2')
+  expect(requests).toEqual([11])
+  expect(durable.previews.get(10)?.rows).toHaveLength(5)
+})
+
 it('one action retries an earlier unresolved list after the later sources and preserves a failed source', async () => {
   const sources = [source(10, 0), source(11, 1), source(12, 2)]
   const requests: Record<string, unknown>[] = [], durable = new ReviewTestTransport()

@@ -1,0 +1,141 @@
+{
+  "recommendation": "NO-GO",
+  "pr_status": "DRAFT_NOT_READY",
+  "merge_deploy_authorized": false,
+  "production_access": false,
+  "requirements": [
+    {
+      "id": "d13_linux_3x_exact_fields_and_provenance",
+      "status": "PASS",
+      "proof": "d13-linux-exact.json"
+    },
+    {
+      "id": "d13_real_browser_correction_refresh_reextraction",
+      "status": "PASS",
+      "proof": "browser-d13.json"
+    },
+    {
+      "id": "synthetic_normal_workflow_publication_published_reopen",
+      "status": "PASS",
+      "proof": "browser-synthetic.json"
+    },
+    {
+      "id": "lists_1_4_7_disconnect_resume_single_retry",
+      "status": "PASS",
+      "proof": "browser-multipage.json"
+    },
+    {
+      "id": "lists_2_3_nonconsecutive_foreign_documents_group_context",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "id": "human_correction_bbox_drift_distinct_identical_occurrences",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "id": "five_zero_five_complete_readiness_direct_publish_rejected",
+      "status": "PASS",
+      "proof": "tests/test_catalog_durable_review.py"
+    },
+    {
+      "id": "stale_digest_parts_source_mapping_assignment_review",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "id": "hotspots_point_rectangle_move_resize_undo_multiple_schemes_geometry_touch",
+      "status": "PASS",
+      "proof": "browser-synthetic.json"
+    },
+    {
+      "id": "responsive_390_768_1440_keyboard_focus_bg_en_ru",
+      "status": "PASS",
+      "proof": "browser-synthetic.json"
+    },
+    {
+      "id": "source_switch_reason_manual_link_inspection_guard",
+      "status": "PASS",
+      "proof": "browser-synthetic.json"
+    },
+    {
+      "id": "two_tab_autosave_and_real_pg_operator_conflicts",
+      "status": "PASS",
+      "proof": "concurrency.json"
+    },
+    {
+      "id": "bounded_workers_no_orphans_timeout_memory_pressure",
+      "status": "PASS",
+      "proof": "fault-injection.json"
+    },
+    {
+      "id": "sqlite_pg_migrations_constraints_indexes_no_backfill",
+      "status": "PASS",
+      "proof": "postgres.json"
+    },
+    {
+      "id": "encrypted_restore_preserves_human_decisions_audit_source_bytes",
+      "status": "PASS",
+      "proof": "postgres.json"
+    },
+    {
+      "id": "verified_inventory_seed_falch_kits_shared_refs_immutable_history",
+      "status": "PASS",
+      "proof": "postgres.json"
+    },
+    {
+      "id": "parts_doc_official_docx_pdf_libreoffice_nonroot_readonly_health",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "id": "authorization_hmac_csrf_replay_evidence_and_dependency_release_gates",
+      "status": "PASS",
+      "proof": "security.json"
+    },
+    {
+      "id": "full_frontend_backend_pg_docker_ci_recorded_product_revision",
+      "status": "PASS",
+      "proof": "ci.json"
+    },
+    {
+      "id": "real_other_oem_exact_extraction_8_cases_611_controls",
+      "status": "FAIL",
+      "proof": "corpus-summary.json"
+    },
+    {
+      "id": "d13_publication_unresolved_original_48_vs_38_and_hotspots",
+      "status": "BLOCKED",
+      "proof": "browser-d13.json"
+    },
+    {
+      "id": "hammelmann_exact_acceptance",
+      "status": "NOT RUN",
+      "proof": "No authorized original available"
+    },
+    {
+      "id": "p200e_x25_exact_acceptance",
+      "status": "NOT RUN",
+      "proof": "No independent exact control available"
+    },
+    {
+      "id": "certified_cold_cache_long_multiworker_http_soak",
+      "status": "NOT RUN",
+      "proof": "performance.json"
+    },
+    {
+      "id": "formal_screen_reader_user_study_external_penetration_test",
+      "status": "NOT RUN",
+      "proof": "No certification claimed"
+    },
+    {
+      "id": "official_document_generation_in_same_browser_synthetic_catalog",
+      "status": "NOT RUN",
+      "proof": "Covered separately by Docker normal-service official document acceptance, not that browser scenario"
+    }
+  ],
+  "blocking_reason": "Real Falch/HYDWIN corpus automatic exact extraction fails on all 8 cases; reproduced on 03C baseline.",
+  "follow_up": "Bounded multilingual/multilevel and horizontal-panel native extraction hardening with independent 611-row controls; retain all review/publication/resource guards.",
+  "latest_ci_proof": "https://github.com/djebedaq/AssetCore/pull/104/checks"
+}

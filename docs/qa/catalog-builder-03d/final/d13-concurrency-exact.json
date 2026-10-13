@@ -1,0 +1,142 @@
+{
+  "passed": true,
+  "source_sha256": "e9540c2af79802d000f186381c403dfbca6ae6b58ecb6cb13b9ecec862558e42",
+  "control_sha256": "8b9ee50398b45c65c927a53e18359c4f56ad1f446abb2142010d3d16e7c9ce60",
+  "control_usage": "SEPARATE_POST_EXTRACTION_COMPARISON_ONLY",
+  "runtime": {
+    "os": "Linux",
+    "python": "3.12.15",
+    "pymupdf": "1.26.7",
+    "pillow": "12.3.0",
+    "tesseract": "tesseract 5.5.0",
+    "models": {
+      "bul": "aebc9b0fcc8cfaf8a9f38a02bb7b85052bd850744696a2c11cf0081820e5b21e",
+      "deu": "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
+      "eng": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "osd": "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff",
+      "rus": "e16e5e036cce1d9ec2b00063cf8b54472625b9e14d893a169e2b0dedeb4df225"
+    },
+    "cgroup_v2": {
+      "memory.peak": "551825408",
+      "memory.max": "1073741824",
+      "memory.events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0",
+      "cpu.stat": "usage_usec 12564947\nuser_usec 10568192\nsystem_usec 1996755\nnice_usec 0\nnr_periods 83\nnr_throttled 34\nthrottled_usec 903366\nnr_bursts 0\nburst_usec 0",
+      "cpu.max": "200000 100000",
+      "pids.peak": "13",
+      "pids.max": "64"
+    }
+  },
+  "implementation_sha256": {
+    "__init__.py": "9b7fd0bff1a6e76618d019d71264e7cfac2f6d4d45c64b8e6aa595ff2d21a5fa",
+    "capacity.py": "05d92a29371a3b256b08905df4cf9f2b6b5cf712263c47f7db5aca0c981b838b",
+    "cell_ocr.py": "6a30fd554daee6b50f411de57aa42a4692150fe69d602b45a9e26106290becb0",
+    "columns.py": "8820fc80da2401fe69ac056e8f81b0942967d961206d7ee2dc634b62cdf11590",
+    "context.py": "636684476c91b6504431975d506addd8e59e9efce5ecc3f1defff3d734913db5",
+    "extraction.py": "ee220b78949ae6afd2f7a8c5e08ef529140fb8de83cfb1bbbee4d78610ccbbc9",
+    "ledger.py": "7b428a1e279f2372cf6d40afe7834028136819cb87a0b5fe16d6f5cee1c1a29b",
+    "native_grid.py": "ccd1a3bdfea3c308810e1046c03b9af12cbe577ba429711c29a9950412da4031",
+    "ocr.py": "fc21b599361f580e808fecdb8cf589f2ac95ea6dc4992ba81753d5d933abeeb5",
+    "panels.py": "cc7a67cce300fc1dd06d652e3222577e3783e2de383ea98f477e62f5044a4a02",
+    "process.py": "b82ac0186b8e762d7608bd01b9e14b137fdd83ce8835862625b5d4dbb1595f52",
+    "quality.py": "e0110b6a90560dab073672bf97aee4d07f2b3276cf8565ff824a8d23976bd62b",
+    "raster.py": "f55539c00ae7e9bc1269be85266ebfff4f3c12faaa7b124c1eb5fd19e50f183d",
+    "raster_geometry.py": "964be9377027fbe7c993546863e37546663b9a5a795df19bd706a83904791adf",
+    "region_ocr.py": "138de06bf7305e7bb2d476ea8536105250821bf9df16179369e24ae465872382",
+    "review.py": "079733af7d006b78457a4daa15f30c9857469c2fc47b1d0c54c7ad6787f61c95",
+    "schema.py": "b93fcc62b9759e8651642b5130563bbc4689814b1520c9b138f7d002bba7dc2e",
+    "schemas.py": "6cac1c29294204902889fc4fc8b8542134d7fd1daa2a5979bf9206d5776ed49b",
+    "service.py": "186cab1bdb453ded4f96db7a1a894a7603c899dfb9479be1f23dcdc520916f17",
+    "tables.py": "e0ffe15ad855c6004fb9e210e682ea1ca3f6f108536b6e89dbedb317bb5df6a5",
+    "values.py": "c7095c107875c04e13f6d15fb60c6c6388bddd5af452435b3f0d82512fa339d0",
+    "windows_limits.py": "012e80583cf7eb13ece4a2b76bcadd5122e0b56d48be70a91d4c7eac001f3f69",
+    "worker.py": "1a7c1796c1a7757658e53420099d2bca8c4ea7fb778b3a58359b4bd5b32f22ad"
+  },
+  "implementation_algorithm": "sha256-normalized-lf",
+  "runs": [
+    {
+      "run": 1,
+      "pages": [
+        {
+          "physical_page": 13,
+          "expected": 20,
+          "extracted": 20,
+          "exact_rows": 20,
+          "exact_fields": {
+            "position": 20,
+            "part_number": 20,
+            "description": 20,
+            "quantity": 20
+          },
+          "provenance": true,
+          "passed": true,
+          "mismatches": [],
+          "resources": {
+            "wall_seconds": 4.9702,
+            "sampled_cpu_seconds": 8.74,
+            "sampled_peak_tree_rss_mib": 600.79,
+            "peak_process_count_including_controller": 5,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0,
+            "measurement_scope": "AGGREGATE_TWO_CONCURRENT_WORKERS"
+          },
+          "quality": {
+            "state": "COMPLETE_CANDIDATES",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 20,
+            "candidate_rows": 20,
+            "missing_rows": 0,
+            "partial_rows": 0,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 20,
+              "covered_rows": 20,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          }
+        },
+        {
+          "physical_page": 13,
+          "expected": 20,
+          "extracted": 20,
+          "exact_rows": 20,
+          "exact_fields": {
+            "position": 20,
+            "part_number": 20,
+            "description": 20,
+            "quantity": 20
+          },
+          "provenance": true,
+          "passed": true,
+          "mismatches": [],
+          "resources": {
+            "wall_seconds": 4.9702,
+            "sampled_cpu_seconds": 8.74,
+            "sampled_peak_tree_rss_mib": 600.79,
+            "peak_process_count_including_controller": 5,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": 0,
+            "queue_wait_seconds": 0,
+            "measurement_scope": "AGGREGATE_TWO_CONCURRENT_WORKERS"
+          },
+          "quality": {
+            "state": "COMPLETE_CANDIDATES",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 20,
+            "candidate_rows": 20,
+            "missing_rows": 0,
+            "partial_rows": 0,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 20,
+              "covered_rows": 20,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

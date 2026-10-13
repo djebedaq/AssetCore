@@ -36,6 +36,39 @@ def test_two_source_approvals_wait_for_catalog_lock_and_only_one_version_wins(pg
     assert sorted(outcome.status for outcome in outcomes) == [200, 409]
 
 
+def test_two_operators_need_own_receipts_and_one_current_review_wins(pg_factory):
+    from fastapi import HTTPException
+    _, state, first_receipt, catalog_id, _ = prepared(pg_factory)
+    with pg_factory() as db:
+        first = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        first_id = first.id
+        second = User(email="catalog-review-qa@assetcore.invalid", full_name="QA Second Operator",
+            first_name="QA", middle_name="Second", last_name="Operator", job_title="QA director",
+            profile_status="PROFILE_COMPLETE", role="director", password_hash="!disabled-qa-login", is_active=True)
+        db.add(second)
+        db.commit()
+        second_id = second.id
+        _, second_receipt = review.original(db, second, state["visual_page_id"])
+        data = SourceReview(expected_version=state["version"], fingerprint=state["fingerprint"],
+            inspection_token=first_receipt, reason="QA inspected the exact original physical source")
+        with pytest.raises(HTTPException) as rejected:
+            review.verify(db, second, state["visual_page_id"], data)
+        assert rejected.value.detail["code"] == "catalog_source_review_inspection_required"
+        assert first.id != second_id
+        db.rollback()
+    second_data = data.model_copy(update={"inspection_token": second_receipt})
+    outcomes = race(pg_factory, CatalogDefinition, catalog_id, [
+        lambda db, actor: review.verify(db, actor, state["visual_page_id"], data),
+        lambda db, actor: review.verify(db, db.get(User, second_id), state["visual_page_id"], second_data),
+    ], success_status=200)
+    assert sorted(outcome.status for outcome in outcomes) == [200, 409]
+    with pg_factory() as db:
+        latest = db.scalar(select(ledger.Decision).where(ledger.Decision.source_id == state["id"])
+            .order_by(ledger.Decision.id.desc()))
+        assert latest.source_version == state["version"] + 1
+        assert latest.actor_id in {first_id, second_id}
+
+
 def test_candidate_edits_share_catalog_lock_and_reject_stale_version(pg_factory):
     from app.catalog_admin.parts_extraction.schemas import CandidateEdit
     page, preview = selected_source(pg_factory)
@@ -138,6 +171,8 @@ def test_existing_postgres_upgrade_creates_ledger_constraints_without_backfill(p
         command.downgrade(config, "20261009_0032")
         assert not set(tables) & set(inspect(connection).get_table_names())
         command.upgrade(config, "head")
+        from catalog_ledger_schema_helpers import assert_ledger_schema
+        assert_ledger_schema(connection)
         for table in tables:
             assert connection.scalar(text(f"SELECT count(*) FROM {table}")) == 0
             assert {c["name"] for c in inspect(connection).get_columns(table)} == set(Base.metadata.tables[table].columns.keys())
@@ -187,3 +222,46 @@ def test_group_ocr_releases_transaction_and_rejects_concurrent_review(pg_factory
         assert len(future.result(timeout=45)["rows"]) > 0
     with pg_factory() as db:
         assert db.get(ledger.Source, state["id"]).review_state != "VERIFIED"
+
+
+def test_invalid_nested_worker_commits_failed_attempt_and_retry_preserves_correction(pg_factory, monkeypatch):
+    import copy
+
+    from app.catalog_admin.parts_extraction.schemas import CandidateEdit, ExtractSelection
+    from fastapi import HTTPException
+    from test_catalog_worker_evidence import inject
+
+    page, preview = selected_source(pg_factory)
+    candidate = preview["rows"][0]
+    values = {**candidate["payload"], "part_number": "QA-PG-HUMAN-PRESERVED"}
+    data = ExtractSelection(visual_page_id=preview["source"]["visual_page_id"])
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        review.edit_candidate(db, actor, candidate["candidate_id"],
+            CandidateEdit(expected_version=candidate["candidate_version"], values=values))
+        source, *_ = ledger.source_context(db, data.visual_page_id)
+        evidence = copy.deepcopy(db.get(ledger.Attempt, source.current_attempt_id).evidence)
+        source_id = source.id
+    evidence["rows"] = [{}]
+    with monkeypatch.context() as patch:
+        inject(patch, evidence)  # Real child process, not a process.extract stub.
+        with pg_factory() as db:
+            actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            with pytest.raises(HTTPException) as rejected:
+                service.preview(db, actor, page["id"], data)
+            assert rejected.value.status_code == 422
+            assert rejected.value.detail["code"] == "catalog_extraction_resource_limit"
+    with pg_factory() as db:
+        source = db.get(ledger.Source, source_id)
+        attempt = db.get(ledger.Attempt, source.current_attempt_id)
+        assert source.processing_state == attempt.state == "FAILED"
+        assert source.review_state != "VERIFIED" and attempt.finished_at is not None
+        assert attempt.error_code == "catalog_extraction_resource_limit"
+        assert db.get(ledger.Candidate, candidate["candidate_id"]).values == values
+        assert len(ledger.candidates(db, source)) == len(preview["rows"])
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        retry = service.preview(db, actor, page["id"], data)
+        assert retry["rows"][0]["payload"] == values
+        assert [r["candidate_id"] for r in retry["rows"]] == [r["candidate_id"] for r in preview["rows"]]
+        db.refresh(source)
+        assert source.processing_state == "SUCCEEDED" and source.review_state != "VERIFIED"

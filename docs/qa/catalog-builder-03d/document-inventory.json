@@ -1,0 +1,1955 @@
+{
+  "documents": [
+    {
+      "document": "LIQUID_PART_PARTLIST.pdf",
+      "source_sha256": "a238920e0392b9c5be56452eef1da9187e530d8dea6925b721784b06418a5278",
+      "pages": 4,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 54,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 402,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 410,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 4,
+          "words": 193,
+          "images": 1,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "PUMP_PARTLIST.pdf",
+      "source_sha256": "81eb5c94e2c2c2a2b8e868acb3721dddfecd642c2744093046fe34fdf9213c82",
+      "pages": 3,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 53,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 350,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 149,
+          "images": 1,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "WHEEL_JET_PARTLIST.pdf",
+      "source_sha256": "acc612f796ec891cf8aeb0bc86b7150630f7b4874ea370d0c4f5503aff73675d",
+      "pages": 11,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 59,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 59,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 59,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 4,
+          "words": 404,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 5,
+          "words": 423,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 6,
+          "words": 426,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 7,
+          "words": 458,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 8,
+          "words": 418,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 9,
+          "words": 429,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 10,
+          "words": 546,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 11,
+          "words": 138,
+          "images": 1,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "PUMP_PARTLIST.pdf",
+      "source_sha256": "0f9d3e8d178272b7e65a57a37f495a448fc24c31730ac2c107e5d50f29a317c4",
+      "pages": 4,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 50,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 356,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 368,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 4,
+          "words": 305,
+          "images": 1,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "UNLOADER_VALVE_PARTLIST.pdf",
+      "source_sha256": "5382954ff92c616622b0d4cfdc3a2a12581f442c209c6329d8d2e50cb40fc1d5",
+      "pages": 4,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 80,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 389,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 405,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 4,
+          "words": 305,
+          "images": 2,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "VALVE_500BAR_PARTLIST.pdf",
+      "source_sha256": "ff4a643c60109636e6ebc619551d46ab57b05542fca32a46e3390dec130d14af",
+      "pages": 3,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 71,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 428,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 479,
+          "images": 2,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "WHEEL_JET_PARTLIST.pdf",
+      "source_sha256": "baab518592c770457ba493d056e7e7112ddfa15d45d8db93214fe339ec36af85",
+      "pages": 10,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 59,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 59,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 59,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 4,
+          "words": 392,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 5,
+          "words": 424,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 6,
+          "words": 435,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 7,
+          "words": 408,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 8,
+          "words": 383,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 9,
+          "words": 522,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 10,
+          "words": 114,
+          "images": 1,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "ONLY_PLUNGER_PUMP.pdf",
+      "source_sha256": "5b5d89b5ebcd71dc8f203d7a6ef419e9f131eaf7f95a1cbe3221992d5c6b7056",
+      "pages": 23,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 6,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 113,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 312,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 4,
+          "words": 259,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 5,
+          "words": 257,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 6,
+          "words": 223,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 7,
+          "words": 348,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 8,
+          "words": 339,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 9,
+          "words": 364,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 10,
+          "words": 459,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 11,
+          "words": 362,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 12,
+          "words": 360,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 13,
+          "words": 277,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 14,
+          "words": 402,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 15,
+          "words": 190,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 16,
+          "words": 285,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 17,
+          "words": 140,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 18,
+          "words": 391,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 19,
+          "words": 13,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 20,
+          "words": 143,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 21,
+          "words": 12,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 22,
+          "words": 455,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 23,
+          "words": 12,
+          "images": 1,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "TreatmentCarrier D13 Parts Manual (Euro V)_v2.0_2026.05.pdf",
+      "source_sha256": "e9540c2af79802d000f186381c403dfbca6ae6b58ecb6cb13b9ecec862558e42",
+      "pages": 86,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 12,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 0,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 30,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 4,
+          "words": 199,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 5,
+          "words": 41,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 6,
+          "words": 4,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 7,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 8,
+          "words": 39,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 9,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 10,
+          "words": 25,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 11,
+          "words": 108,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 12,
+          "words": 4,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 13,
+          "words": 0,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 14,
+          "words": 4,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 15,
+          "words": 66,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 16,
+          "words": 4,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 17,
+          "words": 62,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 18,
+          "words": 18,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 19,
+          "words": 83,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 20,
+          "words": 20,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 21,
+          "words": 82,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 22,
+          "words": 7,
+          "images": 4,
+          "rotation": 0
+        },
+        {
+          "page": 23,
+          "words": 27,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 24,
+          "words": 7,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 25,
+          "words": 24,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 26,
+          "words": 18,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 27,
+          "words": 78,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 28,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 29,
+          "words": 29,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 30,
+          "words": 112,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 31,
+          "words": 4,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 32,
+          "words": 33,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 33,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 34,
+          "words": 113,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 35,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 36,
+          "words": 122,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 37,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 38,
+          "words": 67,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 39,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 40,
+          "words": 105,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 41,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 42,
+          "words": 80,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 43,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 44,
+          "words": 29,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 45,
+          "words": 112,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 46,
+          "words": 29,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 47,
+          "words": 20,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 48,
+          "words": 35,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 49,
+          "words": 114,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 50,
+          "words": 35,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 51,
+          "words": 60,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 52,
+          "words": 24,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 53,
+          "words": 118,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 54,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 55,
+          "words": 45,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 56,
+          "words": 120,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 57,
+          "words": 45,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 58,
+          "words": 113,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 59,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 60,
+          "words": 17,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 61,
+          "words": 97,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 62,
+          "words": 15,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 63,
+          "words": 59,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 64,
+          "words": 21,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 65,
+          "words": 22,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 66,
+          "words": 14,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 67,
+          "words": 28,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 68,
+          "words": 21,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 69,
+          "words": 17,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 70,
+          "words": 22,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 71,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 72,
+          "words": 10,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 73,
+          "words": 41,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 74,
+          "words": 6,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 75,
+          "words": 93,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 76,
+          "words": 4,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 77,
+          "words": 120,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 78,
+          "words": 4,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 79,
+          "words": 35,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 80,
+          "words": 4,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 81,
+          "words": 141,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 82,
+          "words": 7,
+          "images": 6,
+          "rotation": 0
+        },
+        {
+          "page": 83,
+          "words": 38,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 84,
+          "words": 47,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 85,
+          "words": 0,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 86,
+          "words": 26,
+          "images": 0,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "TreatmentCarrier P200E Parts Manual-_20260320142130.pdf",
+      "source_sha256": "2796643aa2a070960e5eed04693c02c17cd62dfd6cbf3cb50f43aa18fe4e145b",
+      "pages": 48,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 9,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 0,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 23,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 4,
+          "words": 227,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 5,
+          "words": 21,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 6,
+          "words": 5,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 7,
+          "words": 8,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 8,
+          "words": 16,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 9,
+          "words": 49,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 10,
+          "words": 8,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 11,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 12,
+          "words": 22,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 13,
+          "words": 90,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 14,
+          "words": 65,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 15,
+          "words": 172,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 16,
+          "words": 65,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 17,
+          "words": 195,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 18,
+          "words": 13,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 19,
+          "words": 38,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 20,
+          "words": 22,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 21,
+          "words": 113,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 22,
+          "words": 9,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 23,
+          "words": 91,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 24,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 25,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 26,
+          "words": 18,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 27,
+          "words": 70,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 28,
+          "words": 19,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 29,
+          "words": 75,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 30,
+          "words": 16,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 31,
+          "words": 57,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 32,
+          "words": 16,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 33,
+          "words": 55,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 34,
+          "words": 13,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 35,
+          "words": 33,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 36,
+          "words": 12,
+          "images": 4,
+          "rotation": 0
+        },
+        {
+          "page": 37,
+          "words": 28,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 38,
+          "words": 10,
+          "images": 4,
+          "rotation": 0
+        },
+        {
+          "page": 39,
+          "words": 29,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 40,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 41,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 42,
+          "words": 38,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 43,
+          "words": 118,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 44,
+          "words": 32,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 45,
+          "words": 115,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 46,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 47,
+          "words": 0,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 48,
+          "words": 21,
+          "images": 0,
+          "rotation": 0
+        }
+      ]
+    },
+    {
+      "document": "TreatmentCarrier X25 Parts Manual (Euro V)_2.0_2026.06.pdf",
+      "source_sha256": "a378ada9d3e0a514a6bdc67250ac18cae6720657cbceeef94c2ce5d66ad6c23e",
+      "pages": 116,
+      "page_characteristics": [
+        {
+          "page": 1,
+          "words": 16,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 2,
+          "words": 0,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 3,
+          "words": 23,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 4,
+          "words": 205,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 5,
+          "words": 50,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 6,
+          "words": 1,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 7,
+          "words": 8,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 8,
+          "words": 14,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 9,
+          "words": 47,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 10,
+          "words": 8,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 11,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 12,
+          "words": 40,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 13,
+          "words": 160,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 14,
+          "words": 28,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 15,
+          "words": 109,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 16,
+          "words": 34,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 17,
+          "words": 135,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 18,
+          "words": 23,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 19,
+          "words": 84,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 20,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 21,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 22,
+          "words": 43,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 23,
+          "words": 191,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 24,
+          "words": 29,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 25,
+          "words": 119,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 26,
+          "words": 26,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 27,
+          "words": 96,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 28,
+          "words": 19,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 29,
+          "words": 60,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 30,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 31,
+          "words": 55,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 32,
+          "words": 29,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 33,
+          "words": 125,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 34,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 35,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 36,
+          "words": 34,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 37,
+          "words": 136,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 38,
+          "words": 30,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 39,
+          "words": 118,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 40,
+          "words": 29,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 41,
+          "words": 114,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 42,
+          "words": 43,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 43,
+          "words": 175,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 44,
+          "words": 38,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 45,
+          "words": 159,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 46,
+          "words": 39,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 47,
+          "words": 163,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 48,
+          "words": 30,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 49,
+          "words": 109,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 50,
+          "words": 24,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 51,
+          "words": 85,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 52,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 53,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 54,
+          "words": 33,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 55,
+          "words": 142,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 56,
+          "words": 25,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 57,
+          "words": 89,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 58,
+          "words": 31,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 59,
+          "words": 124,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 60,
+          "words": 35,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 61,
+          "words": 130,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 62,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 63,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 64,
+          "words": 40,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 65,
+          "words": 161,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 66,
+          "words": 28,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 67,
+          "words": 97,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 68,
+          "words": 25,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 69,
+          "words": 91,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 70,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 71,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 72,
+          "words": 22,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 73,
+          "words": 93,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 74,
+          "words": 19,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 75,
+          "words": 64,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 76,
+          "words": 13,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 77,
+          "words": 26,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 78,
+          "words": 16,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 79,
+          "words": 31,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 80,
+          "words": 10,
+          "images": 5,
+          "rotation": 0
+        },
+        {
+          "page": 81,
+          "words": 28,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 82,
+          "words": 10,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 83,
+          "words": 20,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 84,
+          "words": 6,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 85,
+          "words": 20,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 86,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 87,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 88,
+          "words": 14,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 89,
+          "words": 43,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 90,
+          "words": 41,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 91,
+          "words": 94,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 92,
+          "words": 28,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 93,
+          "words": 93,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 94,
+          "words": 21,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 95,
+          "words": 73,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 96,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 97,
+          "words": 10,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 98,
+          "words": 15,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 99,
+          "words": 59,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 100,
+          "words": 11,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 101,
+          "words": 97,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 102,
+          "words": 6,
+          "images": 2,
+          "rotation": 0
+        },
+        {
+          "page": 103,
+          "words": 146,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 104,
+          "words": 9,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 105,
+          "words": 8,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 106,
+          "words": 83,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 107,
+          "words": 63,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 108,
+          "words": 183,
+          "images": 3,
+          "rotation": 0
+        },
+        {
+          "page": 109,
+          "words": 46,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 110,
+          "words": 157,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 111,
+          "words": 18,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 112,
+          "words": 16,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 113,
+          "words": 16,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 114,
+          "words": 8,
+          "images": 1,
+          "rotation": 0
+        },
+        {
+          "page": 115,
+          "words": 0,
+          "images": 0,
+          "rotation": 0
+        },
+        {
+          "page": 116,
+          "words": 25,
+          "images": 0,
+          "rotation": 0
+        }
+      ]
+    }
+  ],
+  "hammelmann": "NOT_AVAILABLE_IN_AUTHORIZED_WORKSPACE",
+  "scope": "METADATA_ONLY_NOT_ACCURACY"
+}

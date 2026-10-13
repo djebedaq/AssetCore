@@ -10,6 +10,7 @@ import secrets
 import stat
 import subprocess
 import tempfile
+import traceback
 import uuid
 from pathlib import Path
 
@@ -108,8 +109,12 @@ def main() -> None:
         except DeploymentError as error:
             # DeploymentError contains only a controlled code, never subprocess text.
             raise SystemExit(f"Compose production QA failed safely; stage={subject.stage}; code={error}") from None
-        except Exception:
-            raise SystemExit(f"Compose production QA failed safely; stage={subject.stage}") from None
+        except Exception as error:
+            # QA diagnostics identify the failed assertion without subprocess
+            # text, environment values, paths, or exception messages.
+            frame = traceback.extract_tb(error.__traceback__)[-1]
+            raise SystemExit(f"Compose production QA failed safely; stage={subject.stage}; "
+                f"type={type(error).__name__}; function={frame.name}; line={frame.lineno}") from None
         finally:
             # Exact random CI project, never an operator's volume or another stack.
             subject.dc("down", "--volumes", "--remove-orphans")

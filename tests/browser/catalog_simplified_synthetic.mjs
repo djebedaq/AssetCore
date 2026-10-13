@@ -1,6 +1,7 @@
 // Real browser / real APIs; only the runtime-generated synthetic PDF is used.
 import { createRequire } from 'node:module'
 import { writeFile } from 'node:fs/promises'
+import { finalHotspotAcceptance } from './catalog_final_hotspots.mjs'
 const require = createRequire(import.meta.url), modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
 const { chromium } = require(modulePath)
 const expect = require(modulePath + '/test').expect.configure({ timeout: 60000 })
@@ -63,6 +64,8 @@ try {
   await page.getByLabel('Качи PDF', { exact: true }).setInputFiles(out + '/synthetic.pdf')
   await jump(1); await button('Добави тази страница като схема').click()
   await expect(page.getByText('Страница 1 е добавена: Схема', { exact: true })).toBeVisible()
+  await jump(4); await button('Добави тази страница като схема').click()
+  await expect(page.getByText('Страница 4 е добавена: Схема', { exact: true })).toBeVisible()
   await page.locator('.source-selection').getByRole('button', { name: 'Затвори', exact: true }).click()
   await button('+ Добави списък с части').click()
   for (const number of [2, 3]) {
@@ -183,6 +186,43 @@ try {
   await expect(panel.getByRole('combobox').nth(1)).toHaveValue('')
   await page.screenshot({ path: out + '/source-switch-reset.png', fullPage: true })
   checks.push('Real ledger conflicts: LINK_EXISTING is candidate-specific; cancelled source switch preserves reason/manual/link/original; accepted switch and return clear them and load the exact new physical original')
+  // A failed new inspection cannot reuse the prior source's image or receipt.
+  await page.route('**/visual-pages/*/review-original', route => route.abort('connectionreset'), { times: 1 })
+  await showOriginal(1)
+  await expect(panel.locator('p.error[role="alert"]')).toHaveCount(1)
+  await expect(panel.locator('img')).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: 'Потвърди проверения източник', exact: true })).toBeDisabled()
+  await expect(panel.getByRole('textbox')).toHaveValue('')
+  await expect(panel.getByRole('checkbox')).not.toBeChecked()
+  await page.unroute('**/visual-pages/*/review-original')
+  // Delay an authorized real response until after navigation unmounts review.
+  await page.evaluate(() => {
+    const create = URL.createObjectURL.bind(URL), revoke = URL.revokeObjectURL.bind(URL)
+    window.qaReviewBlobs = { created: [], revoked: [] }
+    URL.createObjectURL = blob => { const url = create(blob); window.qaReviewBlobs.created.push(url); return url }
+    URL.revokeObjectURL = url => { window.qaReviewBlobs.revoked.push(url); return revoke(url) }
+  })
+  let pendingInspection
+  const intercepted = new Promise(resolve => { pendingInspection = resolve })
+  let finishInspection
+  const released = new Promise(resolve => { finishInspection = resolve })
+  await page.route('**/visual-pages/*/review-original', async route => {
+    const response = await route.fetch()
+    pendingInspection()
+    await released
+    await route.fulfill({ response })
+  }, { times: 1 })
+  await showOriginal(0); await intercepted
+  await task(/Разпознаване/)
+  await expect(panel).toHaveCount(0)
+  const createdBefore = await page.evaluate(() => window.qaReviewBlobs.created.length)
+  finishInspection()
+  await expect.poll(() => page.evaluate(before => window.qaReviewBlobs.created.slice(before).some(url => window.qaReviewBlobs.revoked.includes(url)), createdBefore)).toBe(true)
+  await page.unroute('**/visual-pages/*/review-original')
+  await task(/Проверка на части/)
+  await expect(panel.locator('img')).toHaveCount(0)
+  await showOriginal(0); await panel.locator('img').evaluate(image => image.decode())
+  checks.push('Failed inspection clears the old original and blocks approval; late authorized response after navigation unmount revokes its Blob URL; reopening requires a fresh inspection')
   // Explicit UI recovery of the deliberately removed synthetic rows, keeping
   // their original values and normal candidate versions/audit/publication gate.
   for (const [index, count] of [[0, 2], [1, 1]]) {
@@ -199,11 +239,13 @@ try {
   expect((await api(`/reference-pages/${referenceId}/parts`)).map(part => part.part_number).sort()).toEqual(
     Array.from({ length: 10 }, (_, index) => `QA-${index + 1}`).sort())
   for (const index of [0, 1]) {
+    await page.waitForLoadState('networkidle')
     await panel.getByRole('button', { name: 'Покажи оригинала', exact: true }).nth(index).click()
     await panel.locator('img').evaluate(image => image.decode())
     await panel.getByRole('textbox').fill('QA: Сравнени всички десет синтетични реда с точните оригинални страници.')
     await panel.getByRole('button', { name: 'Потвърди проверения източник', exact: true }).click()
     await expect(panel.getByText('Проверен за текущите данни', { exact: false })).toHaveCount(index + 1)
+    await expect(panel.locator('.source-attestation')).toHaveCount(0)
   }
   await button('Изход').click(); await login(); await reopen()
   await expect(panel.getByText('Проверен за текущите данни', { exact: false })).toHaveCount(2)
@@ -242,6 +284,8 @@ try {
   }
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: out + '/hotspots-1440.png', fullPage: true })
+  await finalHotspotAcceptance({ page, expect, api, button, referenceId, revisionId: revision.id, base, out })
+  checks.push('Second actual synthetic scheme: pointer cancellation, rectangle, mouse move/resize, verify/unverify blocker, stale version rejection, undo/delete, second occurrence, zoom/pan and refresh preserve normalized geometry')
   await task(/Публикуване/)
   await expect(button('Публикувай каталог')).toBeEnabled()
   for (const width of [390, 768, 1440]) {
@@ -250,9 +294,28 @@ try {
     await expect(button('Публикувай каталог')).toBeEnabled()
   }
   await page.screenshot({ path: out + '/ready-1440.png', fullPage: true })
+  const assemblies = await api(`/revisions/${revision.id}/assemblies`)
+  const originalGraph = {
+    parts: await api(`/reference-pages/${referenceId}/parts`),
+    coverage: await api(`/reference-pages/${referenceId}/coverage`),
+    pages: await api(`/assemblies/${assemblies[0].id}/reference-pages`),
+    hotspots: await Promise.all((await api(`/reference-pages/${referenceId}/exploded-pages`)).map(row => api(`/visual-pages/${row.visual_page_id}/hotspots`))),
+  }
   await button('Публикувай каталог').click()
   await expect(page.getByText('Каталогът е публикуван.', { exact: true })).toBeVisible()
   checks.push('Ten actual synthetic callouts placed, saved, verified and advanced with touch at 390/768/1440; overlay dimensions match normalized geometry; responsive reviewed synthetic catalog publishes through UI')
+  await page.reload()
+  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Каталожен конструктор', exact: true }).click()
+  await page.locator('.builder-list-item').filter({ hasText: 'Synthetic QA simplified UX' }).getByRole('button', { name: 'Отвори работното пространство', exact: true }).click()
+  await expect(page.getByText('Каталогът е публикуван.', { exact: true })).toBeVisible()
+  expect((await api(`/catalogs/${catalog.id}/revisions`)).find(row => row.id === revision.id).status).toBe('PUBLISHED')
+  expect(await api(`/reference-pages/${referenceId}/parts`)).toEqual(originalGraph.parts)
+  expect(await api(`/reference-pages/${referenceId}/coverage`)).toEqual(originalGraph.coverage)
+  expect(await api(`/assemblies/${assemblies[0].id}/reference-pages`)).toEqual(originalGraph.pages)
+  expect(await Promise.all((await api(`/reference-pages/${referenceId}/exploded-pages`)).map(row => api(`/visual-pages/${row.visual_page_id}/hotspots`)))).toEqual(originalGraph.hotspots)
+  await expect(button('Публикувай каталог')).toHaveCount(0)
+  await page.screenshot({ path: out + '/published-reopened-1440.png', fullPage: true })
+  checks.push('Published synthetic revision reopens read-only after refresh; exact source assignments, parts and verified hotspot coverage are unchanged')
   expect(errors).toEqual([])
   await writeFile(out + '/results.json', JSON.stringify({ passed: true, checks, pageErrors: errors, syntheticOnly: true, productionAccess: false }, null, 2))
   console.log(JSON.stringify({ checks, pageErrors: errors }))

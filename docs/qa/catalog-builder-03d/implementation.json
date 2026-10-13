@@ -1,0 +1,14 @@
+{
+  "base": "1bdb74b1c6d78d99ac4072690b66b5bf7b8d6be0",
+  "product_fix_commit": "4982f1994c6499300559558834799c21aca3a3c8",
+  "normalized_lf_sha256": {
+    "backend/app/catalog_admin/parts_extraction/capacity.py": "05d92a29371a3b256b08905df4cf9f2b6b5cf712263c47f7db5aca0c981b838b",
+    "backend/app/catalog_admin/parts_extraction/process.py": "6f12bf4f78d24d85795f2d73f5f6da93ef327ac8baa37bf036541d21fdfb3026",
+    "frontend/src/features/catalogBuilder/DurableSourceReview.tsx": "8a5722e2ddd7c565d537ee7f28e07a9c27b8c818f46757456ce4d1cc909234b2",
+    "frontend/src/features/catalogBuilder/GuidedParts.tsx": "c81f5b078aa79b27e1ee9586a1f20621d3e91cfc17385c431e40b44769f31f65",
+    "frontend/src/features/catalogBuilder/RevisionHotspotEditor.tsx": "75dbc7be3805b961d83984fd5a7d543953931687f47f62cae18f885a48999a0b"
+  },
+  "db_schema_changed": false,
+  "ocr_algorithm_changed": false,
+  "production_access": false
+}

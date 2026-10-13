@@ -1,0 +1,205 @@
+{
+  "status": "FAIL",
+  "scope": "AUTOMATIC_EXACT_EXTRACTION",
+  "cases": [
+    {
+      "case": "falch_1000/drive_pump",
+      "pages": 2,
+      "expected": 34,
+      "extracted_candidates": 0,
+      "ordered_exact_fields": {
+        "position": 0,
+        "part_number": 0,
+        "quantity_raw": 0,
+        "numeric_quantity": 0,
+        "original_description": 0
+      },
+      "paired_fields": {
+        "position_number_pair": 0,
+        "original_description": 0,
+        "numeric_quantity": 0,
+        "quantity_raw": 0
+      },
+      "exact_rows_unordered_all_five_fields": 0,
+      "missing_quantity_candidates": 0,
+      "all_pages_need_review": true,
+      "baseline_accuracy_and_quality_identical": true,
+      "automatic_exact_acceptance": "FAIL"
+    },
+    {
+      "case": "falch_1000/liquid_part",
+      "pages": 2,
+      "expected": 46,
+      "extracted_candidates": 0,
+      "ordered_exact_fields": {
+        "position": 0,
+        "part_number": 0,
+        "quantity_raw": 0,
+        "numeric_quantity": 0,
+        "original_description": 0
+      },
+      "paired_fields": {
+        "position_number_pair": 0,
+        "original_description": 0,
+        "numeric_quantity": 0,
+        "quantity_raw": 0
+      },
+      "exact_rows_unordered_all_five_fields": 0,
+      "missing_quantity_candidates": 0,
+      "all_pages_need_review": true,
+      "baseline_accuracy_and_quality_identical": true,
+      "automatic_exact_acceptance": "FAIL"
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "pages": 6,
+      "expected": 164,
+      "extracted_candidates": 61,
+      "ordered_exact_fields": {
+        "position": 0,
+        "part_number": 0,
+        "quantity_raw": 0,
+        "numeric_quantity": 0,
+        "original_description": 0
+      },
+      "paired_fields": {
+        "position_number_pair": 30,
+        "original_description": 0,
+        "numeric_quantity": 0,
+        "quantity_raw": 0
+      },
+      "exact_rows_unordered_all_five_fields": 0,
+      "missing_quantity_candidates": 61,
+      "all_pages_need_review": true,
+      "baseline_accuracy_and_quality_identical": true,
+      "automatic_exact_acceptance": "FAIL"
+    },
+    {
+      "case": "falch_500/pump",
+      "pages": 3,
+      "expected": 65,
+      "extracted_candidates": 0,
+      "ordered_exact_fields": {
+        "position": 0,
+        "part_number": 0,
+        "quantity_raw": 0,
+        "numeric_quantity": 0,
+        "original_description": 0
+      },
+      "paired_fields": {
+        "position_number_pair": 0,
+        "original_description": 0,
+        "numeric_quantity": 0,
+        "quantity_raw": 0
+      },
+      "exact_rows_unordered_all_five_fields": 0,
+      "missing_quantity_candidates": 0,
+      "all_pages_need_review": true,
+      "baseline_accuracy_and_quality_identical": true,
+      "automatic_exact_acceptance": "FAIL"
+    },
+    {
+      "case": "falch_500/unloader_valve",
+      "pages": 3,
+      "expected": 65,
+      "extracted_candidates": 33,
+      "ordered_exact_fields": {
+        "position": 2,
+        "part_number": 0,
+        "quantity_raw": 0,
+        "numeric_quantity": 0,
+        "original_description": 0
+      },
+      "paired_fields": {
+        "position_number_pair": 30,
+        "original_description": 0,
+        "numeric_quantity": 0,
+        "quantity_raw": 0
+      },
+      "exact_rows_unordered_all_five_fields": 0,
+      "missing_quantity_candidates": 33,
+      "all_pages_need_review": true,
+      "baseline_accuracy_and_quality_identical": true,
+      "automatic_exact_acceptance": "FAIL"
+    },
+    {
+      "case": "falch_500/valve_500bar",
+      "pages": 2,
+      "expected": 32,
+      "extracted_candidates": 0,
+      "ordered_exact_fields": {
+        "position": 0,
+        "part_number": 0,
+        "quantity_raw": 0,
+        "numeric_quantity": 0,
+        "original_description": 0
+      },
+      "paired_fields": {
+        "position_number_pair": 0,
+        "original_description": 0,
+        "numeric_quantity": 0,
+        "quantity_raw": 0
+      },
+      "exact_rows_unordered_all_five_fields": 0,
+      "missing_quantity_candidates": 0,
+      "all_pages_need_review": true,
+      "baseline_accuracy_and_quality_identical": true,
+      "automatic_exact_acceptance": "FAIL"
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "pages": 5,
+      "expected": 147,
+      "extracted_candidates": 0,
+      "ordered_exact_fields": {
+        "position": 0,
+        "part_number": 0,
+        "quantity_raw": 0,
+        "numeric_quantity": 0,
+        "original_description": 0
+      },
+      "paired_fields": {
+        "position_number_pair": 0,
+        "original_description": 0,
+        "numeric_quantity": 0,
+        "quantity_raw": 0
+      },
+      "exact_rows_unordered_all_five_fields": 0,
+      "missing_quantity_candidates": 0,
+      "all_pages_need_review": true,
+      "baseline_accuracy_and_quality_identical": true,
+      "automatic_exact_acceptance": "FAIL"
+    },
+    {
+      "case": "hydwin_fussen_500/plunger_pump",
+      "pages": 1,
+      "expected": 58,
+      "extracted_candidates": 0,
+      "ordered_exact_fields": {
+        "position": 0,
+        "part_number": 0,
+        "quantity_raw": 0,
+        "numeric_quantity": 0,
+        "original_description": 0
+      },
+      "paired_fields": {
+        "position_number_pair": 0,
+        "original_description": 0,
+        "numeric_quantity": 0,
+        "quantity_raw": 0
+      },
+      "exact_rows_unordered_all_five_fields": 0,
+      "missing_quantity_candidates": 0,
+      "all_pages_need_review": true,
+      "baseline_accuracy_and_quality_identical": true,
+      "automatic_exact_acceptance": "FAIL"
+    }
+  ],
+  "baseline": "03C QA image, same OCR/native module fingerprints; only process.py differs and capacity.py is new",
+  "regression_introduced_by_03d": false,
+  "confirmed_existing_catalog_integrity": "UNCHANGED",
+  "safe_behavior": "NEEDS_REVIEW / NOT_REVIEWED, no automatic VERIFIED",
+  "hammelmann_exact": "NOT_RUN_NO_AUTHORIZED_ORIGINAL",
+  "p200e_x25_exact": "NOT_RUN_NO_INDEPENDENT_CONTROL",
+  "recommendation": "NO-GO for general OEM release; separate bounded extraction follow-up is required"
+}

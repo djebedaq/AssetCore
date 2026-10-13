@@ -1,0 +1,48 @@
+{
+  "scope": "SYNTHETIC_REAL_SUBPROCESS_AND_HTTP_BOUNDARY",
+  "before": {
+    "failed": 5,
+    "passed": 1,
+    "deselected": 56,
+    "observed": [
+      "ROWS_OBJECT_ACCEPTED_AT_BOUNDARY",
+      "HTTP_500_ROWS_AND_PAYLOAD",
+      "HTTP_200_INVALID_TABLE_AND_QUALITY"
+    ]
+  },
+  "nested_final_local": {
+    "passed": 83,
+    "skipped": 0,
+    "seconds": 47.95
+  },
+  "earlier_extended_local_suite": {
+    "passed": 179,
+    "skipped": 8,
+    "seconds": 279.14,
+    "note": "Before final expansion of nested tests; final exact-HEAD full suite in CI"
+  },
+  "checks": [
+    "ROWS_PAYLOAD_WARNINGS_SCHEMA_GEOMETRY_TABLES_WORDS_QUALITY",
+    "MISSING_REQUIRED_NESTED_FIELDS",
+    "NONFINITE_NUMBERS_AND_EXCESSIVE_DEPTH",
+    "HTTP_422_AND_FAILED_ATTEMPT_NO_RUNNING_LEASE",
+    "IMMEDIATE_RETRY_PRESERVES_HUMAN_VALUES_AND_IDS",
+    "VALID_PARTIAL_ROWS_PERSIST_PENDING_WITH_RAW_EVIDENCE",
+    "CAPACITY_RELEASE_AFTER_BAD_OUTPUT"
+  ],
+  "postgres_new_regression": "EXACT_HEAD_CI_POSTGRES_JOB",
+  "commands": [
+    "python -m pytest tests/test_catalog_worker_evidence.py -q",
+    "python -m pytest tests/test_catalog_worker_evidence.py tests/test_catalog_final_faults.py tests/test_catalog_process_capacity.py tests/test_catalog_extraction_boundaries.py -q",
+    "python -m pytest -q -m \"not postgres\" --durations=10",
+    "python -m pytest -q tests/postgres",
+    "python -m ruff check backend/app backend/alembic backend/scripts scripts tests"
+  ],
+  "final_head_ci": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+  "final_worker_fault_suite_local": {
+    "passed": 96,
+    "skipped": 6,
+    "seconds": 48.22,
+    "skips": "POSIX-only memory/private-path/inherited-lease cases on Windows; Linux CI executes them"
+  }
+}

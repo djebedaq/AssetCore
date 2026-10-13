@@ -219,6 +219,11 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     await onChanged?.()
     return rows
   }
+  function rememberPlacement(saved: Hotspot, created = false) {
+    // Only our acknowledged writes advance Undo's version. A refresh after
+    // another operator's edit must retain the stale-version protection.
+    setLastPlaced(previous => created || previous?.id === saved.id ? saved : previous)
+  }
   async function save(candidate = draft) {
     if (!candidate || !pageId || saving.current || busy || !editable) return
     saving.current = true; setBusy(true); setSaveState('saving'); setError('')
@@ -230,10 +235,11 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
         : await api<Hotspot>(`/admin/catalog-builder/hotspots/${candidate.id}`, { method: 'PATCH', body: JSON.stringify({ ...payload, expected_version: candidate.version }) })
       // Keep the saved ID before verification so a retry cannot create a duplicate.
       setDraft({ ...saved, id: saved.id })
+      rememberPlacement(saved, candidate.id === null)
       if (simple && autoVerify) saved = await api<Hotspot>(`/admin/catalog-builder/hotspots/${saved.id}/verify`, {
         method: 'POST', body: JSON.stringify({ expected_version: saved.version }),
       })
-      if (candidate.id === null) setLastPlaced(saved)
+      rememberPlacement(saved)
       const rows = await refresh()
       setDraft({ ...saved, id: saved.id }); setSaveState('saved')
       if (simple) {
@@ -255,6 +261,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     try {
       const saved = await api<Hotspot>(`/admin/catalog-builder/hotspots/${current.id}/${verified ? 'verify' : 'unverify'}`,
         { method: 'POST', body: JSON.stringify({ expected_version: current.version }) })
+      rememberPlacement(saved)
       const rows = await refresh(); setDraft({ id: saved.id, position: saved.position, version: saved.version,
         x: saved.x, y: saved.y, width: saved.width, height: saved.height }); setError('')
       if (simple) {
@@ -270,6 +277,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
     setBusy(true)
     try {
       await api(`/admin/catalog-builder/hotspots/${current.id}?expected_version=${current.version}`, { method: 'DELETE' })
+      setLastPlaced(previous => previous?.id === current.id ? null : previous)
       setDraft(null); await refresh(); setError('')
     } catch (caught) { setError(message(caught)); setDraft(null); await refresh() } finally { setBusy(false) }
   }

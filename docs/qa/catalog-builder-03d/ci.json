@@ -1,0 +1,106 @@
+{
+  "scope": "RECORDED_COMPLETED_RUNS_PLUS_AUTHORITATIVE_FINAL_PR_HEAD_CHECKS",
+  "final_pr_head_checks": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+  "runs": [
+    {
+      "commit": "abbc6892e36b554cac5ee1e12a813c9072cbb341",
+      "url": "https://github.com/djebedaq/AssetCore/actions/runs/38210276450",
+      "all_jobs": "SUCCESS",
+      "backend": {
+        "passed": 1216,
+        "skipped": 3,
+        "pg_deselected": 96,
+        "seconds": 1429.95
+      },
+      "frontend": {
+        "passed": 616,
+        "files": 66
+      },
+      "postgres": {
+        "passed": 96
+      },
+      "docker": "SUCCESS"
+    },
+    {
+      "commit": "4982f1994c6499300559558834799c21aca3a3c8",
+      "url": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031",
+      "all_jobs": "SUCCESS",
+      "backend": {
+        "passed": 1217,
+        "skipped": 3,
+        "pg_deselected": 97,
+        "seconds": 1361.66
+      },
+      "frontend": {
+        "passed": 618,
+        "files": 66,
+        "seconds": 65.19
+      },
+      "postgres": {
+        "passed": 97,
+        "seconds": 616.14
+      },
+      "docker": "SUCCESS"
+    }
+  ],
+  "skips": [
+    {
+      "count": 2,
+      "test": "tests/test_original_protocol_layout.py:133",
+      "reason": "LibreOffice absent on backend runner"
+    },
+    {
+      "count": 1,
+      "test": "tests/test_production_manager.py:1023",
+      "reason": "Windows host named mutex on Linux"
+    }
+  ],
+  "local": {
+    "vitest": {
+      "passed": 618,
+      "files": 66,
+      "seconds": 216.09
+    },
+    "hotspot_target": {
+      "passed": 5,
+      "seconds": 3.6
+    },
+    "windows_boundaries": {
+      "passed": 7,
+      "platform_skipped": 6,
+      "seconds": 6.2
+    },
+    "comparator_final": {
+      "passed": 2,
+      "seconds": 0.09
+    },
+    "sqlite_ledger_schema": {
+      "passed": 1,
+      "seconds": 3.07
+    },
+    "postgres_second_operator": {
+      "passed": 1,
+      "seconds": 59.88
+    },
+    "postgres_ledger_schema": {
+      "passed": 1
+    },
+    "typecheck": "PASS",
+    "eslint": "PASS",
+    "build": {
+      "status": "PASS",
+      "seconds": 4.88,
+      "large_chunk_advisory": true
+    },
+    "ruff": "PASS",
+    "migration_history": {
+      "status": "PASS",
+      "protected": 33
+    },
+    "authorization_inventory": "PASS"
+  },
+  "interrupted_attempts": [
+    "Initial concurrent local build/browser/fault attempt: insufficient free host RAM; stopped own fault processes"
+  ],
+  "final_ci_note": "Final docs/QA commit adds two duplicate-consuming comparator tests and stronger schema assertions. Exact final-head results are authoritative at PR checks, not inferred from prior runs."
+}

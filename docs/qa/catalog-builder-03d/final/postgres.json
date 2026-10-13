@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "evidence": [
+    "https://github.com/djebedaq/AssetCore/actions/runs/38245128678",
+    "https://github.com/djebedaq/AssetCore/pull/104/checks",
+    "tests/postgres/catalog_builder_backup_rehearsal.py",
+    "tests/postgres/test_catalog_durable_review_postgres.py",
+    "tests/catalog_ledger_schema_helpers.py"
+  ],
+  "migration_head": "20261009_0033",
+  "protected_migrations": 33,
+  "full_concurrency_tests": 97,
+  "encrypted_restore": "EXACT_ALL_ROW_ALL_COLUMN_HISTORICAL_FINGERPRINT_MATCH",
+  "durable_human_work_restore": "PASS",
+  "human_correction_reextraction_before_backup": true,
+  "ledger_counts": {
+    "catalog_extraction_sessions": 3,
+    "catalog_extraction_sources": 3,
+    "catalog_extraction_attempts": 5,
+    "catalog_extraction_candidates": 4,
+    "catalog_source_review_decisions": 4
+  },
+  "anchors": {
+    "verified_inventory": 19,
+    "parts": 611,
+    "kits": 7,
+    "components": 84,
+    "diagrams": 12,
+    "verified_hotspots": 818,
+    "shared_binding_count": 2
+  },
+  "new_schema_comparison": "SQLite and PG migrated index names/columns/uniqueness, unique/check constraint names, FK columns/targets/ondelete match metadata",
+  "sqlite_fixture_note": "Fresh connection after external Alembic DROP/recreate removes stale cached PRAGMA reflection; indexes existed, no product migration defect.",
+  "historical_official_documents": "IMMUTABLE",
+  "production_database_access": false,
+  "historical_previous_evidence": "../postgres.json",
+  "scope": "CURRENT_COMBINED_PRODUCT_CODE; FINAL_HEAD_CI_AUTHORITATIVE_AT_PR_CHECKS",
+  "current_pg_runtime": "DISPOSABLE_GITHUB_ACTIONS_POSTGRESQL_16_SERVICE; LOCAL_512_MIB_REHEARSAL_IS_HISTORICAL"
+}

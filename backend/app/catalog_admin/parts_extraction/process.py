@@ -11,6 +11,7 @@ from threading import BoundedSemaphore
 
 from ...settings import settings
 from ..service import fail
+from . import evidence
 from .capacity import slot
 
 SLOTS = BoundedSemaphore(settings.catalog_extraction_max_processes)
@@ -21,6 +22,21 @@ def kill_group(pid):
         os.killpg(pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
+
+
+def valid_evidence(result, operation):
+    """Validate worker evidence before any consumer indexes nested fields."""
+    if not isinstance(result, dict):
+        return False
+    if "error" in result:
+        return len(result) == 1 and isinstance(result["error"], str) and result["error"] in {
+            "catalog_source_encrypted", "catalog_source_page_limit",
+            "catalog_source_invalid_pdf", "catalog_extraction_page_failed"}
+    if operation == "validate":
+        return type(result.get("page_count")) is int and result["page_count"] > 0
+    if operation in {"preview", "thumbnail"}:
+        return isinstance(result.get("image"), str) and bool(result["image"])
+    return operation == "page" and evidence.page(result)
 
 
 def extract(content: bytes, operation: str, number: int, config: dict) -> dict:
@@ -77,10 +93,13 @@ def _extract(content: bytes, operation: str, number: int, config: dict, descript
                 kill_group(completed.pid)  # A crashed worker may leave OCR alive.
             if completed.returncode != 0 or not output.is_file() or output.stat().st_size > 16 * 1024 * 1024:
                 raise fail("catalog_extraction_resource_limit", 422)
-            return json.loads(output.read_text(encoding="utf-8"))
+            result = json.loads(output.read_text(encoding="utf-8"))
+            if not valid_evidence(result, operation):
+                raise ValueError("invalid worker evidence")
+            return result
         except subprocess.TimeoutExpired:
             raise fail("catalog_extraction_timeout", 422) from None
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError, ValueError, UnicodeError):
             raise fail("catalog_extraction_resource_limit", 422) from None
 
 

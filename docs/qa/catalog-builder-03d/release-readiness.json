@@ -1,0 +1,188 @@
+{
+  "recommendation": "GO_LIMITED_CONTROLLED_SCOPE",
+  "pr_status": "DRAFT_PENDING_INDEPENDENT_REVIEW",
+  "merge_deploy_authorized": false,
+  "production_access": false,
+  "requirements": [
+    {
+      "id": "d13_linux_3x_exact_fields_and_provenance",
+      "status": "PASS",
+      "proof": "final/d13-linux-exact.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "d13_real_browser_correction_refresh_reextraction",
+      "status": "PASS",
+      "proof": "final/browser-d13.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "synthetic_normal_workflow_publication_published_reopen",
+      "status": "PASS",
+      "proof": "final/browser-synthetic.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "lists_1_4_7_disconnect_resume_single_retry",
+      "status": "PASS",
+      "proof": "final/browser-multipage.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "lists_2_3_nonconsecutive_foreign_documents_group_context",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "human_correction_bbox_drift_distinct_identical_occurrences",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "five_zero_five_complete_readiness_direct_publish_rejected",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "stale_digest_parts_source_mapping_assignment_review",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "hotspots_point_rectangle_move_resize_undo_multiple_schemes_geometry_touch",
+      "status": "PASS",
+      "proof": "final/browser-synthetic.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "responsive_390_768_1440_keyboard_focus_bg_en_ru",
+      "status": "PASS",
+      "proof": "final/browser-synthetic.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "source_switch_reason_manual_link_inspection_guard",
+      "status": "PASS",
+      "proof": "final/browser-synthetic.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "two_tab_autosave_and_real_pg_operator_conflicts",
+      "status": "PASS",
+      "proof": "final/concurrency.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "bounded_workers_no_orphans_timeout_memory_pressure",
+      "status": "PASS",
+      "proof": "final/fault-injection.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "sqlite_pg_migrations_constraints_indexes_no_backfill",
+      "status": "PASS",
+      "proof": "final/postgres.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "encrypted_restore_preserves_human_decisions_audit_source_bytes",
+      "status": "PASS",
+      "proof": "final/postgres.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "verified_inventory_seed_falch_kits_shared_refs_immutable_history",
+      "status": "PASS",
+      "proof": "final/postgres.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "parts_doc_official_docx_pdf_libreoffice_nonroot_readonly_health",
+      "status": "PASS",
+      "proof": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "authorization_hmac_csrf_replay_evidence_and_dependency_release_gates",
+      "status": "PASS",
+      "proof": "final/security.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "full_frontend_backend_pg_docker_ci_recorded_product_revision",
+      "status": "PASS",
+      "proof": "final/ci.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "real_other_oem_exact_extraction_8_cases_611_controls",
+      "status": "PASS",
+      "proof": "final/corpus-summary.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    },
+    {
+      "id": "d13_publication_unresolved_original_48_vs_38_and_hotspots",
+      "status": "BLOCKED",
+      "proof": "final/browser-d13.json"
+    },
+    {
+      "id": "hammelmann_exact_acceptance",
+      "status": "NOT RUN",
+      "proof": "No authorized original available"
+    },
+    {
+      "id": "p200e_x25_exact_acceptance",
+      "status": "NOT RUN",
+      "proof": "No independent exact control available"
+    },
+    {
+      "id": "certified_cold_cache_long_multiworker_http_soak",
+      "status": "NOT RUN",
+      "proof": "performance.json"
+    },
+    {
+      "id": "formal_screen_reader_user_study_external_penetration_test",
+      "status": "NOT RUN",
+      "proof": "No certification claimed"
+    },
+    {
+      "id": "official_document_generation_in_same_browser_synthetic_catalog",
+      "status": "NOT RUN",
+      "proof": "Covered separately by Docker normal-service official document acceptance, not that browser scenario"
+    },
+    {
+      "id": "live_independent_controllers_two_ocr_third_busy_active_tesseract_crash_same_slot_recovery",
+      "status": "PASS",
+      "proof": "final/live-capacity-exact.json"
+    },
+    {
+      "id": "nested_worker_evidence_rejected_before_durable_ledger_and_retry_preserves_work",
+      "status": "PASS",
+      "proof": "final/worker-boundary-fix/regressions.json",
+      "current_code_proof": "final/worker-boundary-fix/implementation.json"
+    }
+  ],
+  "blocking_reason": null,
+  "follow_up": "Independent review and separate authorized rollout; preserve unresolved D13/Fussen review and NOT RUN manufacturer/soak/certification scope.",
+  "latest_ci_proof": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+  "scope": {
+    "core": "DURABILITY_PUBLICATION_AUTHORIZATION_POSTGRES_RESTORE_BOUNDED_RUNTIME_GUIDED_UI",
+    "automatic_exact_extraction": "EIGHT_FALCH_HYDWIN_CASES_24_PAGES_611_SOURCE_RECORDS_AND_D13_30_PARTS",
+    "unverified": [
+      "HAMMELMANN",
+      "P200E_X25_EXACT",
+      "UNKNOWN_OEM_LAYOUTS",
+      "LONG_SOAK",
+      "EXTERNAL_CERTIFICATION"
+    ]
+  },
+  "implementation_fingerprints": "final/worker-boundary-fix/implementation.json",
+  "final_head_ci": "https://github.com/djebedaq/AssetCore/pull/104/checks",
+  "historical_assessment": "historical-release-readiness.json",
+  "previous_tested_product_commit": "cb4e4a32f450aff5ef7609b5562a430fc92b53b5",
+  "current_product_revision": "EXACT_FINAL_PR_HEAD_CI_AND_NORMALIZED_SOURCE_FINGERPRINTS"
+}

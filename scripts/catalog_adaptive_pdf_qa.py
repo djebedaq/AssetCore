@@ -98,6 +98,16 @@ def runtime():
             path.stem: hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(folder.glob("*.traineddata"))}})
     except (OSError, subprocess.SubprocessError, RuntimeError):
         result["tesseract"] = "UNAVAILABLE"
+    if sys.platform == "linux":
+        # Container-wide counters include short-lived processes missed by RSS
+        # sampling. They describe this QA cgroup, never the host or production.
+        metrics = {}
+        for name in ("memory.peak", "memory.max", "memory.events", "cpu.stat", "cpu.max", "pids.peak", "pids.max"):
+            try:
+                metrics[name] = (Path("/sys/fs/cgroup") / name).read_text().strip()
+            except OSError:
+                pass
+        result["cgroup_v2"] = metrics
     return result
 
 

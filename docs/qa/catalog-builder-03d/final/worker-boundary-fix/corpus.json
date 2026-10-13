@@ -1,0 +1,733 @@
+{
+  "status": "PASS",
+  "pages": 24,
+  "expected": 611,
+  "exact": 611,
+  "cases": [
+    {
+      "case": "falch_1000/drive_pump",
+      "source_sha256": "81eb5c94e2c2c2a2b8e868acb3721dddfecd642c2744093046fe34fdf9213c82",
+      "control_sha256": "82520e11051e1cd8c02fb10836914831cc4b4343cbc762ba449883b863e3b830",
+      "expected": 34,
+      "exact": 34,
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 4,
+          "extracted_candidates": 4,
+          "exact_rows_unordered_all_five_fields": 4,
+          "ordered_exact_fields": {
+            "position": 4,
+            "part_number": 4,
+            "quantity_raw": 4,
+            "quantity_value": 4,
+            "numeric_quantity": 4,
+            "original_description": 4
+          },
+          "paired_fields": {
+            "position_number_pair": 4,
+            "numeric_quantity": 4,
+            "quantity_raw": 4,
+            "original_description": 4
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_1000/liquid_part",
+      "source_sha256": "a238920e0392b9c5be56452eef1da9187e530d8dea6925b721784b06418a5278",
+      "control_sha256": "6ca3f1caf2ba653d20079fb5b200e42c48f01961c23fd701a5ae27de945ee457",
+      "expected": 46,
+      "exact": 46,
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 16,
+          "extracted_candidates": 16,
+          "exact_rows_unordered_all_five_fields": 16,
+          "ordered_exact_fields": {
+            "position": 16,
+            "part_number": 16,
+            "quantity_raw": 16,
+            "quantity_value": 16,
+            "numeric_quantity": 16,
+            "original_description": 16
+          },
+          "paired_fields": {
+            "position_number_pair": 16,
+            "numeric_quantity": 16,
+            "quantity_raw": 16,
+            "original_description": 16
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "source_sha256": "acc612f796ec891cf8aeb0bc86b7150630f7b4874ea370d0c4f5503aff73675d",
+      "control_sha256": "cdc55cba5ec75b26bef19f22f8e6b1843ed58c848efbc162bfb690607e9c2c09",
+      "expected": 164,
+      "exact": 164,
+      "pages": [
+        {
+          "physical_page": 4,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 5,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 6,
+          "expected_rows": 22,
+          "extracted_candidates": 22,
+          "exact_rows_unordered_all_five_fields": 22,
+          "ordered_exact_fields": {
+            "position": 22,
+            "part_number": 22,
+            "quantity_raw": 22,
+            "quantity_value": 22,
+            "numeric_quantity": 22,
+            "original_description": 22
+          },
+          "paired_fields": {
+            "position_number_pair": 22,
+            "numeric_quantity": 22,
+            "quantity_raw": 22,
+            "original_description": 22
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 7,
+          "expected_rows": 25,
+          "extracted_candidates": 25,
+          "exact_rows_unordered_all_five_fields": 25,
+          "ordered_exact_fields": {
+            "position": 25,
+            "part_number": 25,
+            "quantity_raw": 25,
+            "quantity_value": 25,
+            "numeric_quantity": 25,
+            "original_description": 25
+          },
+          "paired_fields": {
+            "position_number_pair": 25,
+            "numeric_quantity": 25,
+            "quantity_raw": 25,
+            "original_description": 25
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 8,
+          "expected_rows": 34,
+          "extracted_candidates": 34,
+          "exact_rows_unordered_all_five_fields": 34,
+          "ordered_exact_fields": {
+            "position": 34,
+            "part_number": 34,
+            "quantity_raw": 34,
+            "quantity_value": 34,
+            "numeric_quantity": 34,
+            "original_description": 34
+          },
+          "paired_fields": {
+            "position_number_pair": 34,
+            "numeric_quantity": 34,
+            "quantity_raw": 34,
+            "original_description": 34
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 9,
+          "expected_rows": 23,
+          "extracted_candidates": 23,
+          "exact_rows_unordered_all_five_fields": 23,
+          "ordered_exact_fields": {
+            "position": 23,
+            "part_number": 23,
+            "quantity_raw": 23,
+            "quantity_value": 23,
+            "numeric_quantity": 23,
+            "original_description": 23
+          },
+          "paired_fields": {
+            "position_number_pair": 23,
+            "numeric_quantity": 23,
+            "quantity_raw": 23,
+            "original_description": 23
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/pump",
+      "source_sha256": "0f9d3e8d178272b7e65a57a37f495a448fc24c31730ac2c107e5d50f29a317c4",
+      "control_sha256": "9916db79efb81fb97b89ad82ee301e0f508bfe6bb44c08c3fdc236a89506d3cb",
+      "expected": 65,
+      "exact": 65,
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 31,
+          "extracted_candidates": 31,
+          "exact_rows_unordered_all_five_fields": 31,
+          "ordered_exact_fields": {
+            "position": 31,
+            "part_number": 31,
+            "quantity_raw": 31,
+            "quantity_value": 31,
+            "numeric_quantity": 31,
+            "original_description": 31
+          },
+          "paired_fields": {
+            "position_number_pair": 31,
+            "numeric_quantity": 31,
+            "quantity_raw": 31,
+            "original_description": 31
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 4,
+          "expected_rows": 4,
+          "extracted_candidates": 4,
+          "exact_rows_unordered_all_five_fields": 4,
+          "ordered_exact_fields": {
+            "position": 4,
+            "part_number": 4,
+            "quantity_raw": 4,
+            "quantity_value": 4,
+            "numeric_quantity": 4,
+            "original_description": 4
+          },
+          "paired_fields": {
+            "position_number_pair": 4,
+            "numeric_quantity": 4,
+            "quantity_raw": 4,
+            "original_description": 4
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/unloader_valve",
+      "source_sha256": "5382954ff92c616622b0d4cfdc3a2a12581f442c209c6329d8d2e50cb40fc1d5",
+      "control_sha256": "534711b67a462e4a77842bd08b682943a60c73e87f5cf112147f9fdb481ec6c0",
+      "expected": 65,
+      "exact": 65,
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 33,
+          "extracted_candidates": 33,
+          "exact_rows_unordered_all_five_fields": 33,
+          "ordered_exact_fields": {
+            "position": 33,
+            "part_number": 33,
+            "quantity_raw": 33,
+            "quantity_value": 33,
+            "numeric_quantity": 33,
+            "original_description": 33
+          },
+          "paired_fields": {
+            "position_number_pair": 33,
+            "numeric_quantity": 33,
+            "quantity_raw": 33,
+            "original_description": 33
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 4,
+          "expected_rows": 2,
+          "extracted_candidates": 2,
+          "exact_rows_unordered_all_five_fields": 2,
+          "ordered_exact_fields": {
+            "position": 2,
+            "part_number": 2,
+            "quantity_raw": 2,
+            "quantity_value": 2,
+            "numeric_quantity": 2,
+            "original_description": 2
+          },
+          "paired_fields": {
+            "position_number_pair": 2,
+            "numeric_quantity": 2,
+            "quantity_raw": 2,
+            "original_description": 2
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/valve_500bar",
+      "source_sha256": "ff4a643c60109636e6ebc619551d46ab57b05542fca32a46e3390dec130d14af",
+      "control_sha256": "f328b396c963e7bdbe4864f2177cfcc6e128998b5f3d51a9e8e871071fbebca8",
+      "expected": 32,
+      "exact": 32,
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 29,
+          "extracted_candidates": 29,
+          "exact_rows_unordered_all_five_fields": 29,
+          "ordered_exact_fields": {
+            "position": 29,
+            "part_number": 29,
+            "quantity_raw": 29,
+            "quantity_value": 29,
+            "numeric_quantity": 29,
+            "original_description": 29
+          },
+          "paired_fields": {
+            "position_number_pair": 29,
+            "numeric_quantity": 29,
+            "quantity_raw": 29,
+            "original_description": 29
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 3,
+          "extracted_candidates": 3,
+          "exact_rows_unordered_all_five_fields": 3,
+          "ordered_exact_fields": {
+            "position": 3,
+            "part_number": 3,
+            "quantity_raw": 3,
+            "quantity_value": 3,
+            "numeric_quantity": 3,
+            "original_description": 3
+          },
+          "paired_fields": {
+            "position_number_pair": 3,
+            "numeric_quantity": 3,
+            "quantity_raw": 3,
+            "original_description": 3
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "source_sha256": "baab518592c770457ba493d056e7e7112ddfa15d45d8db93214fe339ec36af85",
+      "control_sha256": "ea019471999df2e4a175101e3857f4b232f261e486be91529ba9dffd08b5518b",
+      "expected": 147,
+      "exact": 147,
+      "pages": [
+        {
+          "physical_page": 4,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 5,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 6,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 7,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "exact_rows_unordered_all_five_fields": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 8,
+          "expected_rows": 27,
+          "extracted_candidates": 27,
+          "exact_rows_unordered_all_five_fields": 27,
+          "ordered_exact_fields": {
+            "position": 27,
+            "part_number": 27,
+            "quantity_raw": 27,
+            "quantity_value": 27,
+            "numeric_quantity": 27,
+            "original_description": 27
+          },
+          "paired_fields": {
+            "position_number_pair": 27,
+            "numeric_quantity": 27,
+            "quantity_raw": 27,
+            "original_description": 27
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "hydwin_fussen_500/plunger_pump",
+      "source_sha256": "5b5d89b5ebcd71dc8f203d7a6ef419e9f131eaf7f95a1cbe3221992d5c6b7056",
+      "control_sha256": "df3b508f3d5bde0f64f3e33af1744f989f7885eb788432e0a1ebeee0545da7e8",
+      "expected": 58,
+      "exact": 58,
+      "pages": [
+        {
+          "physical_page": 22,
+          "expected_rows": 58,
+          "extracted_candidates": 58,
+          "exact_rows_unordered_all_five_fields": 58,
+          "ordered_exact_fields": {
+            "position": 58,
+            "part_number": 58,
+            "quantity_raw": 58,
+            "quantity_value": 58,
+            "numeric_quantity": 57,
+            "original_description": 58
+          },
+          "paired_fields": {
+            "position_number_pair": 58,
+            "numeric_quantity": 58,
+            "quantity_raw": 58,
+            "original_description": 58
+          },
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "provenance": true,
+          "control_blank_part_numbers": 3,
+          "control_nonnumeric_quantities": 1,
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    }
+  ],
+  "controls_modified": false,
+  "oracle": "SEPARATE_POST_EXTRACTION_COMPARATOR_ONLY",
+  "automatically_verified": 0,
+  "implementation_sha256": {
+    "__init__.py": "9b7fd0bff1a6e76618d019d71264e7cfac2f6d4d45c64b8e6aa595ff2d21a5fa",
+    "capacity.py": "05d92a29371a3b256b08905df4cf9f2b6b5cf712263c47f7db5aca0c981b838b",
+    "cell_ocr.py": "6a30fd554daee6b50f411de57aa42a4692150fe69d602b45a9e26106290becb0",
+    "columns.py": "8820fc80da2401fe69ac056e8f81b0942967d961206d7ee2dc634b62cdf11590",
+    "context.py": "636684476c91b6504431975d506addd8e59e9efce5ecc3f1defff3d734913db5",
+    "evidence.py": "45adda90d91d2022c00cd0ad41375fd362c622e41cd4e34bbe647d92f313193f",
+    "extraction.py": "ee220b78949ae6afd2f7a8c5e08ef529140fb8de83cfb1bbbee4d78610ccbbc9",
+    "ledger.py": "7b428a1e279f2372cf6d40afe7834028136819cb87a0b5fe16d6f5cee1c1a29b",
+    "native_grid.py": "ccd1a3bdfea3c308810e1046c03b9af12cbe577ba429711c29a9950412da4031",
+    "ocr.py": "fc21b599361f580e808fecdb8cf589f2ac95ea6dc4992ba81753d5d933abeeb5",
+    "panels.py": "cc7a67cce300fc1dd06d652e3222577e3783e2de383ea98f477e62f5044a4a02",
+    "process.py": "7c15e4ccbb175f40733b50212a04ea834c01525d1199f5ebc7050edd5aed482d",
+    "quality.py": "e0110b6a90560dab073672bf97aee4d07f2b3276cf8565ff824a8d23976bd62b",
+    "raster.py": "f55539c00ae7e9bc1269be85266ebfff4f3c12faaa7b124c1eb5fd19e50f183d",
+    "raster_geometry.py": "964be9377027fbe7c993546863e37546663b9a5a795df19bd706a83904791adf",
+    "region_ocr.py": "138de06bf7305e7bb2d476ea8536105250821bf9df16179369e24ae465872382",
+    "review.py": "079733af7d006b78457a4daa15f30c9857469c2fc47b1d0c54c7ad6787f61c95",
+    "schema.py": "b93fcc62b9759e8651642b5130563bbc4689814b1520c9b138f7d002bba7dc2e",
+    "schemas.py": "6cac1c29294204902889fc4fc8b8542134d7fd1daa2a5979bf9206d5776ed49b",
+    "service.py": "186cab1bdb453ded4f96db7a1a894a7603c899dfb9479be1f23dcdc520916f17",
+    "tables.py": "e0ffe15ad855c6004fb9e210e682ea1ca3f6f108536b6e89dbedb317bb5df6a5",
+    "values.py": "c7095c107875c04e13f6d15fb60c6c6388bddd5af452435b3f0d82512fa339d0",
+    "windows_limits.py": "012e80583cf7eb13ece4a2b76bcadd5122e0b56d48be70a91d4c7eac001f3f69",
+    "worker.py": "1a7c1796c1a7757658e53420099d2bca8c4ea7fb778b3a58359b4bd5b32f22ad"
+  }
+}

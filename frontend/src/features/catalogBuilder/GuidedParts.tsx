@@ -306,11 +306,12 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
           const item = reviews.find(value => value.preview.source.visual_page_id === source.id)
           const durable = session?.sources.find(value => value.visual_page_id === source.id)
           const failed = result?.state === 'failed' || durable?.processing_state === 'FAILED' || durable?.processing_state === 'CANCELLED'
+          const unstarted = !item && durable?.processing_state !== 'RUNNING' && reviews.length > 0
           return <div key={source.id}><b>{source.filename} · {t('guided.physicalPage', { number: source.page_number })}</b>
             {' · '}{t(failed ? 'guided.processing.FAILED' : durable?.review_state === 'VERIFIED' ? 'guided.reviewState.VERIFIED' : item ? 'guided.attention' : 'guided.processing.QUEUED')}
             {item && <> · {t('guided.sourceRows', { count: item.rows.length })}</>}
             {result?.error && <p role="alert">{t(result.error)}</p>}
-            {(failed || item?.preview.quality?.state === 'NEEDS_REVIEW') && <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(source)}>{t('wizard.retry')}</button>}
+            {(failed || unstarted || item?.preview.quality?.state === 'NEEDS_REVIEW') && <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(source)}>{t('wizard.retry')}</button>}
           </div>
         })}
         <p role="status">{t('guided.sourceTotal', { count: allRows.length, processed: sourceResults.length ? sourceResults.filter(item => item.state !== 'pending').length : session?.sources.filter(item => item.attempts.length).length || 0, total: sources.length })}</p>

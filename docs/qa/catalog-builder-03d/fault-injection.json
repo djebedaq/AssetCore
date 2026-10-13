@@ -1,0 +1,62 @@
+{
+  "scope": "BOUNDED_SYNTHETIC_FAULTS_AND_REAL_D13_REGRESSION",
+  "cases": [
+    {
+      "case": "malformed_worker_json_list_utf8",
+      "status": "PASS",
+      "proof": "tests/test_catalog_final_faults.py",
+      "ci": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "case": "unix_memory_pressure_and_capacity_reuse",
+      "status": "PASS",
+      "proof": "tests/test_catalog_final_faults.py",
+      "ci": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "case": "worker_timeout_crash_child_termination_private_environment",
+      "status": "PASS",
+      "proof": "tests/test_catalog_adaptive_extraction.py",
+      "ci": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "case": "invalid_corrupt_encrypted_oversized_pdf_dependency_unavailable",
+      "status": "PASS",
+      "proof": "tests/test_catalog_selected_extraction.py",
+      "ci": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "case": "partial_empty_cells_missing_bands_competing_values",
+      "status": "PASS",
+      "proof": "tests/test_catalog_adaptive_extraction.py",
+      "ci": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "case": "expired_token_interrupted_attempt_failed_retry_double_confirm_stale_fingerprint",
+      "status": "PASS",
+      "proof": "tests/test_catalog_durable_review.py",
+      "ci": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "case": "client_disconnect_middle_source_refresh_single_retry",
+      "status": "PASS",
+      "proof": "browser-multipage.json",
+      "ci": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "case": "stale_autosave_source_switch_link_logout_login",
+      "status": "PASS",
+      "proof": "browser-synthetic.json",
+      "ci": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    },
+    {
+      "case": "pointer_cancel_stale_geometry_undo_after_own_or_foreign_edit",
+      "status": "PASS",
+      "proof": "browser-synthetic.json",
+      "ci": "https://github.com/djebedaq/AssetCore/actions/runs/38213529031"
+    }
+  ],
+  "unknown_results_automatically_verified": 0,
+  "physical_host_oom_stress": "NOT_RUN_INTENTIONALLY_UNSAFE",
+  "memory_test_scope": "RLIMIT_AS rejection before oversized allocation; cgroup pressure measured by bounded two-OCR run, not deliberate host OOM"
+}

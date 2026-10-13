@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "selectedLists": 1,
+      "candidates": 5,
+      "sources": 1,
+      "attemptsPerSource": 1,
+      "clientDisconnect": false,
+      "retriedOnlyMissingPage": false,
+      "automaticallyVerified": 0
+    },
+    {
+      "selectedLists": 4,
+      "candidates": 20,
+      "sources": 4,
+      "attemptsPerSource": 1,
+      "clientDisconnect": false,
+      "retriedOnlyMissingPage": false,
+      "automaticallyVerified": 0
+    },
+    {
+      "selectedLists": 7,
+      "candidates": 35,
+      "sources": 7,
+      "attemptsPerSource": 1,
+      "clientDisconnect": true,
+      "retriedOnlyMissingPage": true,
+      "automaticallyVerified": 0
+    }
+  ],
+  "pageErrors": [],
+  "syntheticOnly": true,
+  "productionAccess": false
+}
