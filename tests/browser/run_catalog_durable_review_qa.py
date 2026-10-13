@@ -12,7 +12,7 @@ from uuid import uuid4
 def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_script=None):
     root = Path(__file__).resolve().parents[2]
     qa = root / ".tmp" / (f"catalog03-{scenario}-browser-" + uuid4().hex)
-    qa.mkdir()
+    qa.mkdir(parents=True)
     runtime_temp = qa / "runtime-temp"
     runtime_temp.mkdir()
     with socket.socket() as listener:
