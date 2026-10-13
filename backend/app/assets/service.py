@@ -7,13 +7,14 @@ import io
 import qrcode
 from fastapi import HTTPException, Request, Response
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from ..audit import add_audit_log
 from ..models import (
     AssetCategory,
     CatalogAssetBinding,
+    CatalogDefinition,
     Machine,
     MachineStatus,
     Repair,
@@ -131,6 +132,10 @@ def create_machine(data: MachineCreate, user: User, db: Session) -> Machine:
 
 
 def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session) -> Machine:
+    if db.get_bind().dialect.name == "sqlite":
+        db.flush()
+        db.execute(update(Machine).where(Machine.id == machine_id)
+                   .values(updated_at=Machine.updated_at).execution_options(synchronize_session=False))
     item = db.scalar(select(Machine).where(Machine.id == machine_id)
                      .with_for_update().execution_options(populate_existing=True))
     if not item:
@@ -159,6 +164,17 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
             422, detail={"code": "category_required", "message": "Изберете съществуваща категория."},
         )
     category_changed = category is not None and category.id != item.category_id
+    if any(field in changes and changes[field] != getattr(item, field) for field in ("brand", "model")):
+        from types import SimpleNamespace
+
+        from ..catalog_admin.service import compatibility
+        proposed = SimpleNamespace(brand=changes.get("brand", item.brand), model=changes.get("model", item.model))
+        for catalog in db.scalars(select(CatalogDefinition).join(CatalogAssetBinding).where(
+                CatalogAssetBinding.machine_id == machine_id, CatalogAssetBinding.is_active.is_(True))
+                .order_by(CatalogDefinition.id).with_for_update(read=True, of=CatalogDefinition)
+                .execution_options(populate_existing=True)):
+            if compatibility(catalog, proposed) == "INCOMPATIBLE":
+                raise HTTPException(409, detail={"code": "catalog_asset_model_mismatch", "catalog_id": catalog.id})
     if category_changed and db.scalar(select(CatalogAssetBinding.id).where(
         CatalogAssetBinding.machine_id == machine_id, CatalogAssetBinding.is_active.is_(True)
     )) is not None:

@@ -6,9 +6,9 @@ from datetime import timedelta
 import fitz
 import pytest
 from app.catalog.runtime_context import published_bindings
-from app.catalog_admin import draft_deletion, reference_pages, service, visual_sources, wizard
+from app.catalog_admin import draft_deletion, hotspots, parts, reference_pages, service, visual_sources, wizard
 from app.catalog_admin.parts_extraction.schemas import PageCreate, SourceAssign
-from app.catalog_admin.schemas import ArtifactUpload, SimpleCatalogCreate
+from app.catalog_admin.schemas import ArtifactUpload, HotspotCreate, PartCreate, SimpleCatalogCreate
 from app.database import Base
 from app.models import (
     AssetCategory,
@@ -116,7 +116,7 @@ def assign(qa, page, artifact, selections):
 
 
 def test_user_assemblies_many_schemes_lists_order_and_shared_pdf(qa):
-    db, _, _ = qa
+    db, actor, _ = qa
     _, revision = catalog(qa)
     assert not list(db.scalars(select(CatalogRevisionAssembly)))
     assemblies = [group(qa, revision, name) for name in ["QA Chassis", "QA Boom", "QA Blasting"]]
@@ -142,6 +142,24 @@ def test_user_assemblies_many_schemes_lists_order_and_shared_pdf(qa):
     assert [row["page_number"] for row in first["sources"]] == [2, 1, 5, 3, 6]
     assert first["scheme_count"] == 2 and first["spare_list_count"] == 3
     assert second["scheme_count"] == second["spare_list_count"] == 1
+    # A second independent diagram/list group in the SAME assembly must keep
+    # identical position labels separate, including their marker coverage.
+    additional = reference_pages.create(db, actor, assemblies[0][0]["id"], PageCreate())
+    additional = assign(qa, additional, source, [
+        {"page_number": 4, "roles": ["EXPLODED_SCHEME"]},
+        {"page_number": 6, "roles": ["SPARE_PARTS_LIST"]},
+    ])
+    created = []
+    for page, number in [(first, "QA-GROUP-A"), (additional, "QA-GROUP-B")]:
+        part = parts.create_part(db, actor, assemblies[0][0]["id"],
+            PartCreate(position="1", part_number=number, description="Synthetic QA group isolation"), reference_page_id=page["id"])
+        created.append(part["id"])
+        hotspots.create_hotspot(db, actor, page["sources"][0]["id"],
+            HotspotCreate(position="1", x=.1, y=.1, width=.05, height=.05))
+        assert [row["part_number"] for row in parts.list_parts(db, assemblies[0][0]["id"], reference_page_id=page["id"])] == [number]
+        coverage = hotspots.coverage(db, assemblies[0][0]["id"], reference_page_id=page["id"])
+        assert coverage[0]["part_numbers"] == [number] and coverage[0]["hotspot_count"] == 1
+    assert created[0] != created[1]
     assert db.scalar(select(func.count(CatalogRevisionAssembly.id))) == 3
     assert db.scalar(select(func.count(CatalogSourceBlob.id))) == 1
 

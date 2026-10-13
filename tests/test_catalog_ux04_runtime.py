@@ -72,6 +72,9 @@ def test_two_catalogs_late_binding_unbind_and_delete_rev2_preserve_published_acc
             checked(client.post("/api/part-requests/multi", headers=auth_headers, json={"machine_id": machine_id,
                 "repair_kit_id": kit["id"], "repair_kit_mode": "KIT", "lines": [{"description": "Synthetic QA kit request", "quantity": 1}]}), 201)
     item, revision = published[0]
+    catalog_status = client.patch(f"{BASE}/catalogs/{item['id']}", headers=auth_headers, json={"model_reference": "MISMATCH_Z9"}).status_code
+    machine_status = client.patch(f"/api/machines/{machine_ids[0]}", headers=auth_headers, json={"model": "MISMATCH_Z9"}).status_code
+    assert catalog_status == machine_status == 409
     draft = checked(client.post(f"{BASE}/catalogs/{item['id']}/edit", headers=auth_headers), 201)
     preview = checked(client.get(f"{BASE}/draft-deletion/revision/{draft['id']}", headers=auth_headers))
     assert not preview["blockers"]

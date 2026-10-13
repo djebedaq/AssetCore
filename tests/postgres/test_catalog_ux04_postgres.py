@@ -109,3 +109,30 @@ def test_accepted_row_autosaves_share_the_catalog_lock_and_reject_stale_values(p
     assert sorted(result.status for result in outcomes) == [200, 409]
     with pg_factory() as db:
         assert int(db.get(CatalogRevisionPart, candidate["part_id"]).quantity) in {3, 4}
+
+
+def test_catalog_and_machine_model_edits_cannot_race_to_an_incompatible_binding(pg_factory):
+    from app.assets.service import update_machine
+    from app.catalog_admin import service as catalogs
+    from app.catalog_admin.schemas import CatalogUpdate
+    from app.models import AssetCategory, Machine, User
+    from app.schemas import MachineUpdate
+    _, _, catalog_id, _, _ = prepared(pg_factory)
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        catalog = db.get(CatalogDefinition, catalog_id)
+        catalog.manufacturer = "QA"
+        machine = Machine(inventory_number="QA_UX04_MODEL_RACE", name="QA ONLY", category_id=catalog.asset_category_id,
+            category=db.get(AssetCategory, catalog.asset_category_id).code,
+            brand="QA", model="QA_MODEL_A")
+        db.add(machine)
+        db.commit()
+        machine_id = machine.id
+        catalogs.bind_asset(db, actor, catalog_id, machine_id, compatibility_confirmed=True)
+    outcomes = race(pg_factory, CatalogDefinition, catalog_id, [
+        lambda db, actor: catalogs.update_catalog(db, actor, catalog_id, CatalogUpdate(model_reference="QA_MODEL_A")),
+        lambda db, actor: update_machine(machine_id, MachineUpdate(model="QA_MODEL_B"), actor, db),
+    ], success_status=200)
+    assert sorted(result.status for result in outcomes) == [200, 409]
+    with pg_factory() as db:
+        assert catalogs.compatibility(db.get(CatalogDefinition, catalog_id), db.get(Machine, machine_id)) != "INCOMPATIBLE"

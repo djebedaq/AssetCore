@@ -137,6 +137,8 @@ export default function MachineModal({ machine, initialCategoryId, locations, de
         const label = affected?.[`label_${locale}` as 'label_bg'] || affected?.label_bg
         const reason = caught.code === 'required_custom_field' ? t('machines.requiredField') : t('machines.invalidField')
         setError(label ? `${label}: ${reason}` : reason)
+      } else if (caught instanceof ApiError && caught.code === 'catalog_asset_model_mismatch') {
+        setError(t('ux04.incompatible'))
       } else if (caught instanceof ApiError && caught.code === 'field_category_mismatch') {
         setError(t('machines.categoryFieldMismatch'))
       } else if (caught instanceof ApiError && caught.code === 'inactive_custom_field') {

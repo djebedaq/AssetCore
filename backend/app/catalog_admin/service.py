@@ -80,6 +80,16 @@ def update_catalog(db: Session, actor: User, catalog_id: int, data: CatalogUpdat
     changes = data.model_dump(exclude_unset=True)
     if "code" in changes:
         raise fail("catalog_code_immutable")
+    if any(field in changes and changes[field] != getattr(item, field) for field in ("manufacturer", "model_reference")):
+        from types import SimpleNamespace
+        proposed = SimpleNamespace(manufacturer=changes.get("manufacturer", item.manufacturer),
+            model_reference=changes.get("model_reference", item.model_reference))
+        # Machine identity changes hold a shared catalog lock before applying
+        # values, so these reads remain authoritative without reversing locks.
+        for machine in db.scalars(select(Machine).join(CatalogAssetBinding).where(
+                CatalogAssetBinding.catalog_id == item.id, CatalogAssetBinding.is_active.is_(True))):
+            if compatibility(proposed, machine) == "INCOMPATIBLE":
+                raise HTTPException(409, detail={"code": "catalog_asset_model_mismatch", "machine_id": machine.id, "catalog_id": item.id})
     if any(changes.get(key) is None for key in ("name_bg", "name_en", "name_ru", "is_active", "asset_category_id") if key in changes):
         raise fail("catalog_invalid_update", 422)
     if changes.get("is_active") is False and db.scalar(select(CatalogRevision.id).where(

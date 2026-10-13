@@ -46,4 +46,3 @@ def test_downgrade_cannot_silently_reactivate_a_removed_link(tmp_path):
     engine.dispose()
     with pytest.raises(RuntimeError, match="Inactive catalog bindings"):
         _run_sqlite_revision(path, command.downgrade, "20261009_0033")
-

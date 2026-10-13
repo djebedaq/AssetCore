@@ -110,6 +110,7 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
       id: category.id, code: category.code, name_bg: category.name_bg,
       name_en: category.name_en, name_ru: category.name_ru, is_active: true,
       asset_count: 0, has_pressure: category.capabilities?.includes('HAS_PRESSURE') || false,
+      capabilities: category.capabilities || [],
     }])
     chooseCategory(category.code)
     setRefresh(value => value + 1)
