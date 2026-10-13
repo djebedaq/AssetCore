@@ -135,6 +135,8 @@ python tests/browser/run_catalog_ux04_qa.py
 
 Последващите промени добавят проверка на конкурентна редакция на модела, реалната PostgreSQL 0033→0034 миграция и груповото изтриване на части. Техните локални резултати са описани по-горе. Разширеният реален browser сценарий минава **8 проверки / 7 screenshots**, включително групово изтриване със запазени PDF страници. Окончателният CI за текущия HEAD е проследим през [checks на PR #106](https://github.com/djebedaq/AssetCore/pull/106/checks); статичният отчет различава проверения commit от следващия commit с доказателствата.
 
+За HEAD `82aa856f01e3bfae758e5dd09c892fb21d96d5c8` PostgreSQL CI завърши с **105 passed**, frontend с **619 passed**, browser с **8 проверки / 7 screenshots**, Docker също успешно. Backend изпълни 1343 успешни теста и откри единствено нарушеното изискване timeout ≤30; лимитът е върнат на 30, без промяна на самата security проверка. Окончателният повторен пълен run е в checks на PR.
+
 Пълните CI команди са:
 
 ```text
@@ -145,7 +147,7 @@ python scripts/audit_dependencies.py python --output security-reports/python-aud
 python3 scripts/audit_dependencies.py frontend --output security-reports/frontend-audit.json
 ```
 
-Workflow `Build check` изпълнява всички пет jobs и dependency security gates за всеки PR HEAD. PostgreSQL job включва реални припокриващи се транзакции, encrypted backup/restore и upgrade от pre-Builder схема. Docker job използва изолирани тестови контейнери. Backend timeout е 45 минути за пълния suite; проверки не са пропускани или смекчавани.
+Workflow `Build check` изпълнява всички пет jobs и dependency security gates за всеки PR HEAD. PostgreSQL job включва реални припокриващи се транзакции, encrypted backup/restore и upgrade от pre-Builder схема. Docker job използва изолирани тестови контейнери. Backend timeout запазва проверявания лимит от 30 минути; проверки не са пропускани или смекчавани.
 
 OEM проверката е изпълнена с отделни extraction и comparison процеси:
 
