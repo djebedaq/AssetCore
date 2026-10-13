@@ -7,6 +7,7 @@ import { evidenceRegion } from './evidenceGeometry'
 import Modal from './CatalogDialog'
 import RevisionParts from './RevisionParts'
 import DurableSourceReview from './DurableSourceReview'
+import DraftDeleteButton from './DraftDeleteButton'
 import { builderBase } from './wizardTypes'
 import type { PartValues, Preview, ReferencePage, ReviewSession, ReviewSource, Source } from './guidedTypes'
 
@@ -327,6 +328,7 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
         <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(source)}>{t('wizard.retry')}</button>
       </div>)}</div>
       <button className={allRows.length ? 'secondary' : 'primary'} disabled={busy || unsaved || !sources.length} onClick={() => void extract()}>{t('guided.extract')}</button>
+      {!!accepted.length && <DraftDeleteButton kind="parts" identity={page.id} label={t('ux04.deleteGroupParts')} disabled={busy || unsaved || advancedDirty || sourceReviewDirty} onDeleted={async () => { await load(); await changed() }} />}
       {progress && <p role="status">{t('guided.extracting', progress)}</p>}
       <div className="parts-toolbar"><label>{t('guided.filter')}<select value={filter} onChange={event => setFilter(event.target.value as typeof filter)}>
         {(['all', 'attention', 'accepted'] as const).map(value => <option value={value} key={value}>{t(`guided.${value}`)}</option>)}

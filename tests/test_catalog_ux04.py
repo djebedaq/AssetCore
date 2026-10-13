@@ -168,6 +168,13 @@ def test_user_assemblies_many_schemes_lists_order_and_shared_pdf(qa):
         coverage = hotspots.coverage(db, assemblies[0][0]["id"], reference_page_id=page["id"])
         assert coverage[0]["part_numbers"] == [number] and coverage[0]["hotspot_count"] == 1
     assert created[0] != created[1]
+    deletion = draft_deletion.preview(db, "parts", first["id"])
+    assert deletion["counts"]["catalog_revision_parts"] == 1
+    assert "catalog_revision_reference_pages" not in deletion["counts"]
+    draft_deletion.remove(db, actor, "parts", first["id"], deletion["digest"])
+    assert not parts.list_parts(db, assemblies[0][0]["id"], reference_page_id=first["id"])
+    assert len(reference_pages.list_pages(db, assemblies[0][0]["id"])) == 2
+    assert len(parts.list_parts(db, assemblies[0][0]["id"], reference_page_id=additional["id"])) == 1
     assert db.scalar(select(func.count(CatalogRevisionAssembly.id))) == 3
     assert db.scalar(select(func.count(CatalogSourceBlob.id))) == 1
 

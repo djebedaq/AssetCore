@@ -16,7 +16,7 @@ export default function DraftDeleteButton({ kind, identity, onDeleted, label, di
   const [error, setError] = useState('')
   const path = `${builderBase}/draft-deletion/${kind}/${identity}`
   function report(caught: unknown) {
-    setError(t(caught instanceof ApiError && caught.code === 'catalog_delete_stale' ? 'ux04.deleteStale'
+    setError(t(caught instanceof ApiError && ['catalog_delete_stale', 'catalog_delete_protected_dependency'].includes(caught.code || '') ? 'ux04.deleteStale'
       : caught instanceof ApiError && caught.code === 'catalog_delete_published_protected' ? 'ux04.deleteProtected' : 'guided.error'))
   }
   async function load() {

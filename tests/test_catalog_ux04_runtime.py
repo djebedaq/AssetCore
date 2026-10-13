@@ -116,3 +116,11 @@ def test_source_review_normal_click_needs_receipt_but_no_written_reason(client, 
     checked(client.patch(f"{BASE}/parts/{candidate['part_id']}", headers=auth_headers, json={"quantity": "4"}))
     assert client.patch(f"{BASE}/extraction-candidates/{candidate['id']}", headers=auth_headers,
         json={"expected_version": changed["version"], "values": {"quantity": "9"}}).status_code == 409
+    deletion = checked(client.get(f"{BASE}/draft-deletion/parts/{page['id']}", headers=auth_headers))
+    assert deletion["counts"]["catalog_revision_parts"] == len(parts)
+    response = client.post(f"{BASE}/draft-deletion/parts/{page['id']}", headers=auth_headers, json={"expected_digest": deletion["digest"]})
+    assert response.status_code == 204
+    assert checked(client.get(f"{BASE}/reference-pages/{page['id']}/parts", headers=auth_headers)) == []
+    after = resume(client, auth_headers, page)["sources"][0]
+    assert len(after["candidates"]) == len(current["candidates"])
+    assert all(row["state"] == "CONFLICT" and row["part_id"] is None for row in after["candidates"])

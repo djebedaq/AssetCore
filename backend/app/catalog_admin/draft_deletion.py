@@ -75,6 +75,7 @@ KINDS = {
     "document": Artifact,
     "source": Page,
     "part": Part,
+    "parts": Group,
     "hotspot": Hotspot,
     "kit": Kit,
 }
@@ -84,25 +85,27 @@ def plan(db, kind, identity):
     model = KINDS.get(kind)
     if model is None:
         raise fail("catalog_delete_kind_invalid", 422)
-    root = db.get(model, identity)
-    if root is None:
-        raise fail("catalog_delete_not_found", 404)
     if kind == "catalog":
-        catalog_id = root.id
+        catalog_id, assembly_id = identity, None
     elif kind == "revision":
-        catalog_id = root.catalog_id
+        catalog_id, assembly_id = db.scalar(select(Revision.catalog_id).where(Revision.id == identity)), None
     else:
-        if kind == "source":
-            assembly_id = db.get(Artifact, root.artifact_id).assembly_id
-        elif kind == "hotspot":
-            assembly_id = db.get(
-                Artifact, db.get(Page, root.visual_page_id).artifact_id
-            ).assembly_id
-        elif kind == "assembly":
-            assembly_id = root.id
+        # Resolve the ownership chain in one snapshot. A concurrent deletion
+        # can remove every parent before we acquire its catalog lock.
+        location = select(Revision.catalog_id, Assembly.id).join(Assembly, Assembly.revision_id == Revision.id)
+        if kind in {"source", "hotspot"}:
+            location = location.join(Artifact, Artifact.assembly_id == Assembly.id).join(Page, Page.artifact_id == Artifact.id)
+            if kind == "hotspot":
+                location = location.join(Hotspot, Hotspot.visual_page_id == Page.id)
+        elif kind != "assembly":
+            location = location.join(model, model.assembly_id == Assembly.id)
+        owner = db.execute(location.where(model.id == identity)).first()
+        if owner is None:
+            raise fail("catalog_delete_not_found", 404)
         else:
-            assembly_id = root.assembly_id
-        catalog_id = db.get(Revision, db.get(Assembly, assembly_id).revision_id).catalog_id
+            catalog_id, assembly_id = owner
+    if catalog_id is None:
+        raise fail("catalog_delete_not_found", 404)
     catalog = visual_sources.lock_catalog(db, catalog_id)
     # Re-read after waiting on the authoritative catalog lock.
     root = db.get(model, identity)
@@ -129,7 +132,10 @@ def plan(db, kind, identity):
     def find(cls, condition):
         return set(db.scalars(select(cls.id).where(condition)))
 
-    put(model, [identity])
+    if kind == "parts":
+        put(Part, find(Part, Part.reference_page_id == identity))
+    else:
+        put(model, [identity])
     if kind == "catalog":
         put(Revision, revision_ids)
         put(Binding, find(Binding, Binding.catalog_id == catalog_id))
