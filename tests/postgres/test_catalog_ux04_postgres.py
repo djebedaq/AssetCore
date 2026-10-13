@@ -136,3 +136,41 @@ def test_catalog_and_machine_model_edits_cannot_race_to_an_incompatible_binding(
     assert sorted(result.status for result in outcomes) == [200, 409]
     with pg_factory() as db:
         assert catalogs.compatibility(db.get(CatalogDefinition, catalog_id), db.get(Machine, machine_id)) != "INCOMPATIBLE"
+
+
+def test_postgres_upgrade_preserves_an_existing_single_binding_and_allows_a_second(pg_factory):
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+    from app.catalog_admin import service as catalogs
+    from app.models import AssetCategory, CatalogAssetBinding, Machine, User
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        category = AssetCategory(code="QA_UX04_MIGRATION", name_bg="QA", name_en="QA", name_ru="QA", capabilities=["HAS_PARTS_CATALOG"])
+        db.add(category)
+        db.flush()
+        machine = Machine(inventory_number="QA_UX04_MIGRATION", name="QA ONLY", category_id=category.id, category=category.code, brand="QA", model="QA")
+        items = [CatalogDefinition(code=f"QA_UX04_MIGRATION_{index}", asset_category_id=category.id,
+            name_bg="QA", name_en="QA", name_ru="QA", manufacturer="QA", model_reference="QA", created_by_id=actor.id) for index in range(2)]
+        db.add_all([machine, *items])
+        db.commit()
+        machine_id, catalog_ids = machine.id, [item.id for item in items]
+        catalogs.bind_asset(db, actor, catalog_ids[0], machine_id)
+        original = db.scalar(select(CatalogAssetBinding))
+        before = (original.id, original.catalog_id, original.machine_id, original.created_by_id, original.created_at)
+    root = Path(__file__).resolve().parents[2]
+    config = Config(str(root / "backend/alembic.ini"))
+    config.set_main_option("script_location", str(root / "backend/alembic"))
+    engine = pg_factory.kw["bind"]
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.downgrade(config, "20261009_0033")
+        command.upgrade(config, "head")
+    with pg_factory() as db:
+        original = db.scalar(select(CatalogAssetBinding))
+        assert (original.id, original.catalog_id, original.machine_id, original.created_by_id, original.created_at) == before
+        assert original.is_active and original.deactivated_at is None
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        catalogs.bind_asset(db, actor, catalog_ids[1], machine_id)
+        assert db.scalar(select(func.count(CatalogAssetBinding.id)).where(CatalogAssetBinding.machine_id == machine_id)) == 2

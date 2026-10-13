@@ -242,11 +242,13 @@ def main():
                 GeneratedDocument.part_request_id == request["id"]))} == doc_hashes
             assert snapshot_sha in set(db.scalars(select(PartVisualSnapshot.sha256)))
         restored.dispose()
+    with engine.connect() as connection:
+        actual_head = connection.scalar(text("SELECT version_num FROM alembic_version"))
     engine.dispose()
     print(json.dumps({"pre_builder_upgrade": "passed", "encrypted_builder_restore": "passed",
                       "shared_binding_count": 2, "immutable_request_documents": "passed",
                       "durable_human_work_restore": "passed", "ledger_counts": ledger_counts,
-                      "head": "20261009_0033", "anchors": anchors}, sort_keys=True))
+                      "head": actual_head, "anchors": anchors}, sort_keys=True))
 
 
 if __name__ == "__main__":
