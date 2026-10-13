@@ -73,6 +73,7 @@ def category_navigation(user: User, db: Session) -> list[dict]:
             "is_active": category.is_active,
             "asset_count": count,
             "has_pressure": "HAS_PRESSURE" in (category.capabilities or []),
+            "capabilities": category.capabilities or [],
         }
         for category, count in sorted(
             rows, key=lambda row: (row[0].name_bg.casefold(), row[0].code, row[0].id)
@@ -159,7 +160,7 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
         )
     category_changed = category is not None and category.id != item.category_id
     if category_changed and db.scalar(select(CatalogAssetBinding.id).where(
-        CatalogAssetBinding.machine_id == machine_id
+        CatalogAssetBinding.machine_id == machine_id, CatalogAssetBinding.is_active.is_(True)
     )) is not None:
         raise HTTPException(409, detail={"code": "catalog_asset_category_in_use"})
     active = _active_transfer(db, machine_id)

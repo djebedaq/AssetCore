@@ -91,13 +91,15 @@ def inspected(db, actor, source, active, data):
             raise ValueError("binding")
     except (ValueError, TypeError, KeyError, UnicodeError):
         raise fail("catalog_source_review_inspection_required", 422) from None
-    if len(data.reason.strip()) < 10:
+    if data.reason is not None and len(data.reason.strip()) < 10:
         raise fail("catalog_source_review_reason_required", 422)
 
 
 def correct_selection(db, actor, visual_page_id, data):
     source, active, page, *_ = ledger.source_context(db, visual_page_id, actor, create=True, mutate=True)
     inspected(db, actor, source, active, data)
+    if not data.reason or len(data.reason.strip()) < 10:
+        raise fail("catalog_source_review_reason_required", 422)
     if source.processing_state == "RUNNING" or any(c.state != "REJECTED" for c in ledger.candidates(db, source)):
         raise fail("catalog_source_review_incomplete", 422)
     if db.scalar(select(CatalogRevisionPartPageMap.id).where(CatalogRevisionPartPageMap.visual_page_id == page.id).limit(1)):
@@ -130,7 +132,8 @@ def verify(db, actor, visual_page_id, data):
         raise fail("catalog_source_review_incomplete", 422)
     if (zero or incomplete or source.processing_state != "SUCCEEDED") and not data.manual_transcription:
         raise fail("catalog_source_review_manual_required", 422)
-    if not data.reason.strip() or len(data.reason.strip()) < 10:
+    detailed = data.manual_transcription or any(candidate.state == "REJECTED" or candidate.reason for candidate in ledger.candidates(db, source))
+    if detailed and (not data.reason or len(data.reason.strip()) < 10):
         raise fail("catalog_source_review_reason_required", 422)
     # A failed/zero OCR page can only be completed by explicit transcription with
     # mapped parts and an inspected original, never by excluding it from the gate.
@@ -144,7 +147,7 @@ def verify(db, actor, visual_page_id, data):
     source.reviewed_by_id, source.reviewed_at = actor.id, ledger.utcnow()
     source.version += 1
     decision = ledger.Decision(source_id=source.id, source_version=source.version, fingerprint=final,
-        decision="VERIFIED", reason=data.reason.strip(), inspection_digest=ledger.hashed(data.inspection_token),
+        decision="VERIFIED", reason=data.reason.strip() if data.reason else "CHECKED_AGAINST_ORIGINAL", inspection_digest=ledger.hashed(data.inspection_token),
         actor_id=actor.id, created_at=source.reviewed_at)
     db.add(decision)
     db.flush()

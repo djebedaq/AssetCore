@@ -52,7 +52,7 @@ export default function DurableSourceReview({ session, reload, parts, busy, targ
     try {
       await api(`${builderBase}/visual-pages/${original.source.visual_page_id}/${correction ? 'selection-correction' : 'review'}`, { method: 'POST', body: JSON.stringify({
         expected_version: original.source.version, fingerprint: original.source.fingerprint,
-        inspection_token: original.receipt, reason, manual_transcription: manual,
+        inspection_token: original.receipt, ...(reason.trim() ? { reason } : {}), manual_transcription: manual,
       }) })
       await reload(); clearForm(); setSelected(null)
     } catch (caught) { setError(t(guidedError(caught))) } finally { setWorking(false) }
@@ -84,7 +84,8 @@ export default function DurableSourceReview({ session, reload, parts, busy, targ
         <img key={original.url} src={original.url} alt={t('guided.physicalPage', { number: source.source.page_number })}
           onLoad={() => setLoaded(true)} onError={() => { setLoaded(false); setError(t('builder.previewError')) }} /></a></div>
         <p className="muted">{t('guided.zoomOriginal')}</p></>}
-      <label>{t('guided.reviewReason')}<textarea value={reason} maxLength={2000} onChange={event => setReason(event.target.value)} /></label>
+      <details open={manual || source.candidates.some(candidate => ['CONFLICT', 'REJECTED'].includes(candidate.state) || !!candidate.reason)}><summary>{t('guided.reviewReason')}</summary>
+        <label>{t('guided.reviewReason')}<textarea value={reason} maxLength={2000} onChange={event => setReason(event.target.value)} /></label></details>
       {source.candidates.filter(candidate => candidate.state === 'CONFLICT').map(candidate => <div key={candidate.id} role="alert">
         <p>{t('guided.rowConflict')} · {candidate.original.payload.position} · {candidate.original.payload.part_number}</p>
         <label>{t('guided.linkExisting')}<select value={candidateLink(candidate)} onChange={event => setLink(event.target.value ? {
@@ -98,9 +99,9 @@ export default function DurableSourceReview({ session, reload, parts, busy, targ
         <button className="secondary" disabled={working || reason.trim().length < 10} onClick={() => void resolve(candidate, 'REJECT')}>{t('guided.reject')}</button>
       </div>)}
       <label><input type="checkbox" checked={manual} onChange={event => setManual(event.target.checked)} />{t('guided.manualTranscription')}</label>
-      <button className="primary" disabled={busy || working || !loaded || !original?.receipt || reason.trim().length < 10
+      <button className="primary" disabled={busy || working || !loaded || !original?.receipt || ((manual || source.candidates.some(candidate => candidate.state === 'REJECTED' || !!candidate.reason)) && reason.trim().length < 10)
         || source.candidates.some(candidate => ['PENDING', 'CONFLICT'].includes(candidate.state))}
-        onClick={() => void verify()}>{t('guided.verifySource')}</button>
+        onClick={() => void verify()}>{t('ux04.confirmOriginal')}</button>
       {source.candidates.every(candidate => candidate.state === 'REJECTED') && <button className="secondary"
         disabled={busy || working || !loaded || !original?.receipt || reason.trim().length < 10}
         onClick={() => void verify(true)}>{t('guided.correctSelection')}</button>}

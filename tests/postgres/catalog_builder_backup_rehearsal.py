@@ -195,7 +195,7 @@ def main():
                 db.add(machine)
                 db.commit()
                 machine_ids.append(machine.id)
-                bind_asset(db, actor, catalog_id, machine.id)
+                bind_asset(db, actor, catalog_id, machine.id, compatibility_confirmed=True)
                 assert runtime.machine_catalog(db, machine.id)["supported"]
             live = db.scalar(select(PartCatalog).where(PartCatalog.builder_revision_id == revision_id))
             request = create_multi_part_request(MultiPartRequestCreate(machine_id=machine_ids[0],

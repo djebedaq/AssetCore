@@ -166,6 +166,14 @@ class ClassifyDocumentPages(Payload):
     roles: list[str] = Field(max_length=2)
 
 
+class BindingCreate(Payload):
+    compatibility_confirmed: bool = False
+
+
+class DraftDelete(Payload):
+    expected_digest: str = Field(min_length=64, max_length=64)
+
+
 class RepairKitCreate(Payload):
     code: str = Field(min_length=1, max_length=120, pattern=r"^[A-Z][A-Z0-9_]*$")
     name_bg: str | None = Field(default=None, max_length=255)

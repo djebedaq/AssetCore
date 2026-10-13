@@ -126,22 +126,10 @@ def update(db: Session, actor: User, page_id: int, data) -> dict:
 
 
 def delete_page(db: Session, actor: User, page_id: int, expected_version: int) -> None:
-    page, assembly, revision, catalog = load(db, page_id, mutate=True)
+    page, *_ = load(db, page_id, mutate=True)
     check_version(page, expected_version)
-    sources = assignments(db, page.id)
-    if page_has_dependents(db, page.id):
-        raise fail("catalog_reference_page_in_use")
-    from .parts_extraction import ledger
-    if db.scalar(select(ledger.Attempt.id).join(ledger.Source, ledger.Attempt.source_id == ledger.Source.id)
-            .where(ledger.Source.visual_page_id.in_([source["id"] for source in sources])).limit(1)):
-        raise fail("catalog_source_correction_review_required")
-    ledger.invalidate_scope(db, actor, assembly.id, page.id, "REFERENCE_PAGE_REMOVED")
-    for source in sources:
-        db.delete(db.get(CatalogRevisionVisualPage, source["id"]))
-    add_audit_log(db, actor, "catalog_reference_page", page.id, "REFERENCE_PAGE_DELETED",
-        visual_sources._meta(catalog, revision, assembly, stable_key=page.stable_key))
-    db.delete(page)
-    db.commit()
+    from .draft_deletion import remove
+    remove(db, actor, "group", page_id)
 
 
 def page_has_dependents(db: Session, page_id: int) -> bool:
@@ -164,9 +152,13 @@ def assign(db: Session, actor: User, page_id: int, data) -> dict:
     page, assembly, revision, catalog = load(db, page_id, mutate=True)
     check_version(page, data.expected_version)
     source, _, source_revision, _ = visual_sources._artifact(db, data.artifact_id)
-    if source_revision.id != revision.id or any(not 1 <= number <= source.page_count for number in data.page_numbers):
+    if data.selections and (data.page_numbers or data.roles):
         raise fail("catalog_visual_page_invalid", 422)
-    if len(data.page_numbers) != len(set(data.page_numbers)) or len(data.roles) != len(set(data.roles)):
+    selections = [(item.page_number, role) for item in data.selections for role in item.roles] if data.selections else [
+        (number, role) for number in data.page_numbers for role in data.roles]
+    if source_revision.id != revision.id or not selections or any(not 1 <= number <= source.page_count for number, _ in selections):
+        raise fail("catalog_visual_page_invalid", 422)
+    if len(selections) != len(set(selections)):
         raise fail("catalog_visual_page_invalid", 422)
     from .parts_extraction.ledger import invalidate_scope
     invalidate_scope(db, actor, assembly.id, page.id, "SOURCE_ASSIGNMENT_ADDED")
@@ -185,17 +177,16 @@ def assign(db: Session, actor: User, page_id: int, data) -> dict:
     existing = {(item.page_number, item.role) for item in db.scalars(select(CatalogRevisionVisualPage).where(
         CatalogRevisionVisualPage.reference_page_id == page.id, CatalogRevisionVisualPage.artifact_id == alias.id))}
     try:
-        for number in data.page_numbers:
-            for role in data.roles:
-                if (number, role) in existing:
-                    continue
-                order = (order if order is not None else -1) + 1
-                db.add(CatalogRevisionVisualPage(reference_page_id=page.id, artifact_id=alias.id,
-                    page_number=number, role=role, sort_order=order, created_by_id=actor.id))
+        for number, role in selections:
+            if (number, role) in existing:
+                continue
+            order = (order if order is not None else -1) + 1
+            db.add(CatalogRevisionVisualPage(reference_page_id=page.id, artifact_id=alias.id,
+                page_number=number, role=role, sort_order=order, created_by_id=actor.id))
         touch(page)
         db.flush()
         add_audit_log(db, actor, "catalog_reference_page", page.id, "REFERENCE_SOURCES_ASSIGNED",
-            visual_sources._meta(catalog, revision, assembly, alias, page_numbers=data.page_numbers, roles=data.roles))
+            visual_sources._meta(catalog, revision, assembly, alias, selections=selections))
         db.commit()
     except IntegrityError as exc:
         db.rollback()

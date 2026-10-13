@@ -324,7 +324,8 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
         <b>{source.filename} · {t('guided.physicalPage', { number: source.page_number })}</b><p>{t(sourceResults.find(result => result.source.id === source.id)?.error || 'guided.processing.FAILED')}</p>
         <button className="secondary" disabled={busy || unsaved} onClick={() => void retrySource(source)}>{t('wizard.retry')}</button>
       </div>)}</div>
-      {!allRows.length && <button className="primary" disabled={busy || unsaved || !sources.length} onClick={() => void extract()}>{t('guided.extract')}</button>}
+      <button className={allRows.length ? 'secondary' : 'primary'} disabled={busy || unsaved || !sources.length} onClick={() => void extract()}>{t('guided.extract')}</button>
+      {progress && <p role="status">{t('guided.extracting', progress)}</p>}
       <div className="parts-toolbar"><label>{t('guided.filter')}<select value={filter} onChange={event => setFilter(event.target.value as typeof filter)}>
         {(['all', 'attention', 'accepted'] as const).map(value => <option value={value} key={value}>{t(`guided.${value}`)}</option>)}
       </select></label><label>{t('common.search')}<input value={search} onChange={event => setSearch(event.target.value)} /></label>

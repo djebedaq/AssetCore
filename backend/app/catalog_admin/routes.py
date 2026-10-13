@@ -24,10 +24,12 @@ from .schemas import (
     ArtifactUpload,
     AssemblyCreate,
     AssemblyUpdate,
+    BindingCreate,
     CatalogCreate,
     CatalogUpdate,
     ClassifyDocumentPages,
     CloneRevision,
+    DraftDelete,
     HotspotCreate,
     HotspotUpdate,
     PartCreate,
@@ -50,6 +52,34 @@ from .schemas import (
 
 router = APIRouter(prefix="/api/admin/catalog-builder", tags=["catalog-builder"])
 manager = require_permission(Permission.PARTS_MANAGE)
+
+
+@router.get("/draft-deletion/{kind}/{identity}")
+def draft_deletion_preview(kind: str, identity: int, _: User = Depends(manager), db: Session = Depends(get_db)):
+    from .draft_deletion import preview
+    return preview(db, kind, identity)
+
+
+@router.post("/draft-deletion/{kind}/{identity}", status_code=204)
+def delete_draft(kind: str, identity: int, data: DraftDelete, actor: User = Depends(manager), db: Session = Depends(get_db)):
+    from .draft_deletion import remove
+    remove(db, actor, kind, identity, data.expected_digest)
+
+
+@router.get("/machines/{machine_id}/catalogs")
+def machine_catalog_options(machine_id: int, _: User = Depends(manager), db: Session = Depends(get_db)):
+    from sqlalchemy import select
+
+    from ..models import CatalogAssetBinding, Machine
+    machine = db.get(Machine, machine_id)
+    if machine is None:
+        raise service.fail("catalog_asset_not_found", 404)
+    bound = set(db.scalars(select(CatalogAssetBinding.catalog_id).where(
+        CatalogAssetBinding.machine_id == machine_id, CatalogAssetBinding.is_active.is_(True))))
+    return [{**row, "bound": row["id"] in bound,
+             "compatibility": service.compatibility(service.catalog(db, row["id"]), machine),
+             "assets": repository.assets(db, row["id"])}
+            for row in repository.catalogs(db) if row["is_active"] and row["asset_category_id"] == machine.category_id]
 
 
 @router.get("/reference-sources")
@@ -239,9 +269,9 @@ def eligible_assets(catalog_id: int, search: str | None = Query(default=None, ma
 
 
 @router.post("/catalogs/{catalog_id}/assets/{machine_id}", status_code=201)
-def bind_asset(catalog_id: int, machine_id: int, actor: User = Depends(manager),
+def bind_asset(catalog_id: int, machine_id: int, data: BindingCreate = BindingCreate(), actor: User = Depends(manager),
                db: Session = Depends(get_db)) -> dict:
-    return service.bind_asset(db, actor, catalog_id, machine_id)
+    return service.bind_asset(db, actor, catalog_id, machine_id, data.compatibility_confirmed)
 
 
 @router.delete("/catalogs/{catalog_id}/assets/{machine_id}", status_code=204)

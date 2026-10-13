@@ -14,7 +14,9 @@ from ...audit import add_audit_log
 from ...models import (
     CatalogExtractionAttempt,
     CatalogExtractionCandidate,
+    CatalogRevision,
     CatalogRevisionArtifact,
+    CatalogRevisionAssembly,
     CatalogRevisionPart,
     CatalogRevisionPartPageMap,
     CatalogRevisionVisualPage,
@@ -165,6 +167,7 @@ def preview(db: Session, actor, page_id: int, data) -> dict:
     attempt = ledger.start(db, actor, state, EXTRACTOR_VERSION)
     attempt_id, session_id = attempt.id, active.id
     raw = artifact.content
+    catalog_identity, revision_identity, assembly_identity = catalog.id, revision.id, assembly.id
     db.commit()  # The RUNNING lease survives a request/worker interruption.
     try:
         evidence = process.extract(raw, "page", source["page_number"], config)
@@ -173,9 +176,19 @@ def preview(db: Session, actor, page_id: int, data) -> dict:
         code = exc.detail.get("code") if isinstance(exc, HTTPException) and isinstance(exc.detail, dict) else "catalog_extraction_page_failed"
         evidence = {"error": code}
     from ..visual_sources import lock_catalog
-    lock_catalog(db, catalog.id)
+    if lock_catalog(db, catalog_identity) is None:
+        db.rollback()
+        raise fail("catalog_reference_page_stale")
     attempt = db.get(CatalogExtractionAttempt, attempt_id)
+    revision = db.get(CatalogRevision, revision_identity)
+    assembly = db.get(CatalogRevisionAssembly, assembly_identity)
+    if attempt is None or revision is None or assembly is None:
+        db.rollback()
+        raise fail("catalog_reference_page_stale")
     historical = db.get(ledger.Source, attempt.source_id)
+    if historical is None:
+        db.rollback()
+        raise fail("catalog_reference_page_stale")
     active = ledger.session(db, None, assembly, revision, page_id)
     if (revision.status != "DRAFT" or active is None or active.id != session_id
             or historical.current_attempt_id != attempt_id or attempt.state != "RUNNING"):

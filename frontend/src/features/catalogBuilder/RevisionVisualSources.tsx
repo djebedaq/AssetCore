@@ -1,3 +1,4 @@
+import DraftDeleteButton from './DraftDeleteButton'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError, createApiObjectUrl, downloadApiFile } from '../../api'
 import { filePayload, Modal } from '../../industrialUi'
@@ -119,16 +120,6 @@ export default function RevisionVisualSources({ revisionId, editable, onDirtyCha
       setEdit(null); setError(''); await loadAssemblies()
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
   }
-  async function removeAssembly(item: Assembly) {
-    if (!window.confirm(t('builder.deleteAssembly01DConfirm', {
-      parts: item.part_count, hotspots: item.hotspot_count, kits: item.repair_kit_count,
-      components: item.repair_kit_component_count }))) return
-    try {
-      await api(`/admin/catalog-builder/assemblies/${item.id}`, { method: 'DELETE' })
-      if (assemblyId === item.id) setAssemblyId(null)
-      await loadAssemblies()
-    } catch (caught) { setError(message(caught)) }
-  }
   async function sendUpload(event: FormEvent) {
     event.preventDefault()
     if (!assemblyId || !uploadFile || busy) return
@@ -146,14 +137,6 @@ export default function RevisionVisualSources({ revisionId, editable, onDirtyCha
       } else setError(message(caught))
     } finally { setBusy(false) }
   }
-  async function removeArtifact(item: Artifact) {
-    if (!window.confirm(t('builder.deleteSourceConfirm'))) return
-    try {
-      await api(`/admin/catalog-builder/artifacts/${item.id}`, { method: 'DELETE' })
-      if (artifactId === item.id) setArtifactId(null)
-      if (assemblyId) await Promise.all([loadArtifacts(assemblyId), loadAssemblies()])
-    } catch (caught) { setError(message(caught)) }
-  }
   async function assign(role: Role) {
     if (!artifactId || !selectedPages.length || busy) return
     setBusy(true)
@@ -166,13 +149,6 @@ export default function RevisionVisualSources({ revisionId, editable, onDirtyCha
       setError('')
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
   }
-  async function removeAssignment(item: Assignment) {
-    if (!artifactId) return
-    try {
-      await api(`/admin/catalog-builder/visual-pages/${item.id}`, { method: 'DELETE' })
-      await Promise.all([loadAssignments(artifactId), loadAssemblies()])
-    } catch (caught) { setError(message(caught)) }
-  }
   const roleLabel = (role: Role) => t(role === 'EXPLODED_SCHEME' ? 'builder.role.exploded' : 'builder.role.spare')
   return <div className="builder-workspace">
     {error && <p className="error" role="alert">{error}</p>}
@@ -182,7 +158,7 @@ export default function RevisionVisualSources({ revisionId, editable, onDirtyCha
       <span><b>{item.code}</b> · {label(item)}<small>{t('builder.sourceCount', { count: item.artifact_count })} · {t('builder.explodedCount', { count: item.exploded_page_count })} · {t('builder.spareCount', { count: item.spare_list_page_count })} · {t('builder.part.count', { count: item.part_count })}</small></span>
       <div className="actions"><button className="secondary compact" onClick={() => { setAssemblyId(item.id); setAssemblyTab('sources') }}>{t('builder.open')}</button>
         {editable && <><button className="secondary compact" onClick={() => openAssembly(item)}>{t('common.edit')}</button>
-          <button className="secondary compact" onClick={() => void removeAssembly(item)}>{t('common.remove')}</button></>}</div>
+          <DraftDeleteButton kind="assembly" identity={item.id} label={t('common.remove')} onDeleted={async () => { if (assemblyId === item.id) setAssemblyId(null); await loadAssemblies() }} /></>}</div>
     </div>)}
     {assembly && <section className="panel"><div className="panel-title"><h4>{assembly.code} · {label(assembly)}</h4>
       <button className="secondary compact" onClick={() => setAssemblyId(null)}>{t('common.close')}</button></div>
@@ -201,7 +177,7 @@ export default function RevisionVisualSources({ revisionId, editable, onDirtyCha
       {artifacts.map(item => <div className="builder-row" key={item.id}><span><b>{item.title}</b> · {item.filename}<small>SHA-256: {item.sha256} · {t('builder.pageCount', { count: item.page_count })}</small></span>
         <div className="actions"><button className="secondary compact" onClick={() => setArtifactId(item.id)}>{t('builder.open')}</button>
           <button className="secondary compact" onClick={() => void downloadApiFile(`/admin/catalog-builder/artifacts/${item.id}/download`, item.filename)}>{t('builder.downloadSource')}</button>
-          {editable && <button className="secondary compact" onClick={() => void removeArtifact(item)}>{t('common.remove')}</button>}</div></div>)}
+          {editable && <DraftDeleteButton kind="document" identity={item.id} label={t('common.remove')} onDeleted={async () => { if (artifactId === item.id) setArtifactId(null); if (assemblyId) await Promise.all([loadArtifacts(assemblyId), loadAssemblies()]) }} />}</div></div>)}
       {artifact && <section className="builder-pages"><h4>{artifact.title} · {t('builder.pageCount', { count: artifact.page_count })}</h4>
         <p>SHA-256: {artifact.sha256}</p>
         {editable && <div className="actions">{intent ?
@@ -215,7 +191,7 @@ export default function RevisionVisualSources({ revisionId, editable, onDirtyCha
             <b>{t('builder.pageNumber', { count: number })}</b>
             {editable && <label><input type="checkbox" checked={selectedPages.includes(number)} onChange={() => setSelectedPages(pages => pages.includes(number) ? pages.filter(page => page !== number) : [...pages, number])} />{t('builder.selectPage')}</label>}
             {!pageRoles.length && <span className="muted">{t('builder.noRole')}</span>}
-            {pageRoles.map(page => <div key={page.id} className="actions"><span className="badge">{roleLabel(page.role)}</span>{editable && <button className="secondary compact" onClick={() => void removeAssignment(page)}>{t('builder.removeRole')}</button>}</div>)}
+            {pageRoles.map(page => <div key={page.id} className="actions"><span className="badge">{roleLabel(page.role)}</span>{editable && <DraftDeleteButton kind="source" identity={page.id} label={t('builder.removeRole')} onDeleted={async () => { await Promise.all([loadAssignments(artifactId!), loadAssemblies()]) }} />}</div>)}
           </article>
         })}</div>
       </section>}</>}

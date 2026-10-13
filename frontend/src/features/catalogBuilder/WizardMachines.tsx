@@ -3,7 +3,7 @@ import { api, ApiError } from '../../api'
 import { useI18n } from '../../i18n'
 import { builderBase, problemKeys } from './wizardTypes'
 
-type Machine = { id: number; inventory_number: string; name: string; brand: string; model: string | null }
+type Machine = { id: number; inventory_number: string; name: string; brand: string; model: string | null; compatibility?: string }
 export default function WizardMachines({ catalogId, onChanged }: { catalogId: number; onChanged: () => Promise<void> }) {
   const { t } = useI18n()
   const [bound, setBound] = useState<Machine[]>([])
@@ -11,6 +11,7 @@ export default function WizardMachines({ catalogId, onChanged }: { catalogId: nu
   const [search, setSearch] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [confirmed, setConfirmed] = useState<number[]>([])
   const report = (caught: unknown) => setError(t(caught instanceof ApiError && caught.code ? problemKeys[caught.code] || 'builder.error.generic' : 'builder.error.generic'))
   useEffect(() => {
     let active = true
@@ -27,18 +28,28 @@ export default function WizardMachines({ catalogId, onChanged }: { catalogId: nu
     if (busy) return
     setBusy(true); setError('')
     try {
-      await api(`${builderBase}/catalogs/${catalogId}/assets/${machine.id}`, { method: 'POST' })
+      await api(`${builderBase}/catalogs/${catalogId}/assets/${machine.id}`, { method: 'POST', body: JSON.stringify({ compatibility_confirmed: confirmed.includes(machine.id) }) })
       setBound(rows => [...rows, machine]); setEligible(rows => rows.filter(row => row.id !== machine.id))
       await onChanged()
     } catch (caught) { report(caught) } finally { setBusy(false) }
   }
-  return <section className="panel"><h4>{t('wizard.machines')}</h4><p>{t('wizard.machineHelp')}</p>
+  async function unbind(machine: Machine) {
+    setBusy(true); setError('')
+    try {
+      await api(`${builderBase}/catalogs/${catalogId}/assets/${machine.id}`, { method: 'DELETE' })
+      setBound(rows => rows.filter(row => row.id !== machine.id))
+      setEligible(await api<Machine[]>(`${builderBase}/catalogs/${catalogId}/eligible-assets`)); await onChanged()
+    } catch (caught) { report(caught) } finally { setBusy(false) }
+  }
+  return <section className="panel"><h4>{t('wizard.machines')}</h4><p>{t('ux04.bindingHelp')}</p>
     {error && <p className="error" role="alert">{error}</p>}
     {!bound.length && <p>{t('builder.noAssets')}</p>}
-    {bound.map(machine => <p key={machine.id}><b>{machine.inventory_number}</b> · {machine.name} · {machine.brand} {machine.model}</p>)}
+    {bound.map(machine => <p key={machine.id}><b>{machine.inventory_number}</b> · {machine.name} · {machine.brand} {machine.model}
+      <button className="secondary" disabled={busy} onClick={() => void unbind(machine)}>{t('ux04.unlink')}</button></p>)}
     <label>{t('wizard.machineSearch')}<input value={search} onChange={event => setSearch(event.target.value)} /></label>
     {!eligible.length && <p>{t('builder.noEligible')}</p>}
     {eligible.map(machine => <div className="builder-row" key={machine.id}><span><b>{machine.inventory_number}</b> · {machine.name} · {machine.brand} {machine.model}</span>
-      <button className="secondary" disabled={busy} onClick={() => void bind(machine)}>{t('builder.addAsset')}</button></div>)}
+      {machine.compatibility === 'AMBIGUOUS' && <label><input type="checkbox" checked={confirmed.includes(machine.id)} onChange={event => setConfirmed(current => event.target.checked ? [...current, machine.id] : current.filter(id => id !== machine.id))} />{t('ux04.compatibility')}</label>}
+      <button className="secondary" disabled={busy || machine.compatibility === 'INCOMPATIBLE' || machine.compatibility === 'AMBIGUOUS' && !confirmed.includes(machine.id)} onClick={() => void bind(machine)}>{t('builder.addAsset')}</button></div>)}
   </section>
 }

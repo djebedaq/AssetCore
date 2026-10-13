@@ -186,7 +186,7 @@ export type AssetCategory = {
 
 export type RegistryCategory = {
   id: number; code: string; name_bg: string; name_en?: string | null; name_ru?: string | null;
-  is_active: boolean; asset_count: number; has_pressure: boolean
+  is_active: boolean; asset_count: number; has_pressure: boolean; capabilities?: string[]
 }
 
 export type StoredAttachment = {

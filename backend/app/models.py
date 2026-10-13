@@ -951,10 +951,13 @@ class CatalogRevision(Base):
 
 class CatalogAssetBinding(Base):
     __tablename__ = "catalog_asset_bindings"
+    __table_args__ = (UniqueConstraint("catalog_id", "machine_id", name="uq_catalog_machine_binding"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     catalog_id: Mapped[int] = mapped_column(ForeignKey("catalog_definitions.id"), nullable=False, index=True)
-    machine_id: Mapped[int] = mapped_column(ForeignKey("machines.id"), unique=True, nullable=False)
+    machine_id: Mapped[int] = mapped_column(ForeignKey("machines.id"), nullable=False, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 

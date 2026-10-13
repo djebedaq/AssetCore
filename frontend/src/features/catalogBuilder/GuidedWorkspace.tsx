@@ -7,10 +7,11 @@ import GuidedSources from './GuidedSources'
 import RevisionHotspotEditor from './RevisionHotspotEditor'
 import RevisionRepairKits from './RevisionRepairKits'
 import RevisionParts from './RevisionParts'
+import DraftDeleteButton from './DraftDeleteButton'
 import type { ReferencePage } from './guidedTypes'
 import { builderBase, type Group, type Step } from './wizardTypes'
 
-const localTask = (step: Step): Step => ['references', 'extract', 'parts', 'hotspots'].includes(step) ? step : 'documents'
+const localTask = (step: Step): Step => step === 'extract' ? 'parts' : ['parts', 'hotspots'].includes(step) ? step : 'documents'
 
 export default function GuidedWorkspace({ revisionId, groups, task: initialTask, changed, onDirtyChange, target, onNavigate }: {
   revisionId: number; groups: Group[]; task: Step; changed: () => Promise<void>; onDirtyChange: (dirty: boolean) => void; target?: { assembly_id?: number; reference_page_id?: number; visual_page_id?: number; position?: string; part_id?: number }; onNavigate?: (step: Step) => void
@@ -86,7 +87,7 @@ export default function GuidedWorkspace({ revisionId, groups, task: initialTask,
   const nextTask: Step = !page?.scheme_count || !page?.spare_list_count ? 'documents' : !page.part_count ? 'parts' : 'hotspots'
   return <section className={`guided-workspace ${onNavigate ? 'guided-single-workflow' : ''}`}>
     {error && <p className="error" role="alert">{error}</p>}
-    <aside className="reference-sidebar" hidden={!!onNavigate && task !== 'references'}>
+    <aside className="reference-sidebar">
       <h4>{t('guided.references')}</h4>
       <nav aria-label={t('guided.references')}>{groups.map((group, index) => <div key={group.id} className="reference-row">
         <button className="secondary reference-link" disabled={busy} aria-current={assemblyId === group.id ? 'page' : undefined}
@@ -95,7 +96,7 @@ export default function GuidedWorkspace({ revisionId, groups, task: initialTask,
         </button>
         <details className="reference-menu"><summary aria-label={t('workspace.referenceOptions', { name: label(group) })}>⋯</summary><div>
           <button className="secondary" disabled={busy} onClick={() => { if (canNavigate()) { setRenaming(group.id); setName(label(group)) } }}>{t('common.edit')}</button>
-          <button className="secondary" disabled={busy} onClick={() => { if (canNavigate() && window.confirm(t('workspace.deleteReferenceConfirm'))) void action(() => api(`${builderBase}/assemblies/${group.id}`, { method: 'DELETE' })) }}>{t('guided.delete')}</button>
+          <DraftDeleteButton kind="assembly" identity={group.id} disabled={busy || dirty} label={t('guided.delete')} onDeleted={refresh} />
           <button className="secondary" disabled={busy || !index} onClick={() => void action(async () => {
             const ordered = groups.map(row => row.id)
             ;[ordered[index - 1], ordered[index]] = [ordered[index], ordered[index - 1]]
@@ -110,24 +111,22 @@ export default function GuidedWorkspace({ revisionId, groups, task: initialTask,
       </form>
     </aside>
     <fieldset className="reference-content" disabled={busy} aria-busy={busy}>
-      {onNavigate && task !== 'references' ? <label className="assembly-switcher">{t('guided.reference')}<select value={assemblyId ?? ''} disabled={busy || dirty || titleDirty || kitDirty} onChange={event => { setAssemblyId(Number(event.target.value)); setPageId(null) }}>
-        {groups.map(group => <option value={group.id} key={group.id}>{label(group)}</option>)}
-      </select></label> : <h4 className="guided-breadcrumb">{assembly ? label(assembly) : t('guided.addReference')}</h4>}
+      <h4 className="guided-breadcrumb">{assembly ? label(assembly) : t('guided.addReference')}</h4>
       {task === 'references' && onNavigate && <><p>{t('catalogUx.nodeHelp')}</p><button className="primary" disabled={!assemblyId || busy} onClick={() => navigateTask('documents')}>{t('catalogUx.step.documents')}</button></>}
-      <nav hidden={!!onNavigate && (task === 'references' || pages.length < 2 && task !== 'documents')} className="page-tabs" aria-label={t('guided.pages')}>{pages.map((item, index) => <button key={item.id} disabled={busy}
+      <nav className="page-tabs" aria-label={t('guided.pages')}>{pages.map((item, index) => <button key={item.id} disabled={busy}
         className="secondary" aria-current={pageId === item.id ? 'page' : undefined}
         onClick={() => { if (canNavigate()) { setPageId(item.id); if (!onNavigate) setTask('documents'); setDirty(false); setKitDirty(false) } }}>
-          {t('guided.page', { number: index + 1 })}<small>{t(`guided.${item.status}`)}</small></button>)}
+          {item.title || t('guided.page', { number: index + 1 })}<small>{t(`guided.${item.status}`)}</small></button>)}
         {assemblyId && <button className="secondary" aria-label={t('guided.addPage')} disabled={busy || dirty || titleDirty || kitDirty} onClick={() => void action(async () => {
           const created = await api<ReferencePage>(`${builderBase}/assemblies/${assemblyId}/reference-pages`, { method: 'POST', body: '{}' }); setPageId(created.id); setTask('documents')
-        })}>+ {t('guided.addPage')}</button>}
+        })}>+ {t('ux04.addGroup')}</button>}
       </nav>
       {page && assembly ? <>
         <p role="status">{t('guided.dashboard', { schemes: page.scheme_count, lists: page.spare_list_count, parts: page.part_count,
           mapped: page.mapped_position_count, positions: page.position_count })}</p>
-        <div className="page-workflow" hidden={!!onNavigate}>
+        <div className="page-workflow" hidden={!!onNavigate && task === 'documents'}>
           <nav aria-label={t('workspace.pageWork')}>
-            {(['documents', 'parts', 'hotspots'] as const).map(value => <button key={value} className="secondary" aria-current={task === value ? 'page' : undefined}
+            {(onNavigate ? ['parts', 'hotspots'] as const : ['documents', 'parts', 'hotspots'] as const).map(value => <button key={value} className="secondary" aria-current={task === value ? 'page' : undefined}
               onClick={() => navigateTask(value)}>{t(value === 'documents' ? 'workspace.sources' : `wizard.${value}`)}</button>)}
           </nav>
           {page.status === 'COMPLETE' ? <span role="status">✓ {t('workspace.pageComplete')}</span> : task !== nextTask && <button className="primary" onClick={() => navigateTask(nextTask)}>{t(nextTask === 'documents' ? 'workspace.sources' : nextTask === 'parts' ? 'guided.extract' : 'wizard.hotspots')}</button>}
@@ -144,7 +143,7 @@ export default function GuidedWorkspace({ revisionId, groups, task: initialTask,
               ;[ordered[index - 1], ordered[index]] = [ordered[index], ordered[index - 1]]
               await api(`${builderBase}/assemblies/${assemblyId}/reference-pages/reorder`, { method: 'POST', body: JSON.stringify({ pages: ordered.map(row => ({ id: row.id, expected_version: row.version })) }) })
             })}>{t('guided.moveUp')}</button>
-            <button className="secondary" disabled={busy || dirty} onClick={() => { if (window.confirm(t('workspace.deletePageConfirm'))) void action(() => api(`${builderBase}/reference-pages/${page.id}?expected_version=${page.version}`, { method: 'DELETE' })) }}>{t('guided.delete')}</button>
+            <DraftDeleteButton kind="group" identity={page.id} disabled={busy || dirty} label={t('guided.delete')} onDeleted={refresh} />
           </div></details>
         </>}
         {(task === 'parts' || task === 'extract') && <GuidedParts stage={task === 'extract' ? 'extract' : 'parts'} onContinue={onNavigate ? () => navigateTask(task === 'extract' ? 'parts' : 'hotspots') : undefined} key={page.id} page={page} targetSourceId={target?.visual_page_id} targetPartId={target?.part_id} changed={refresh} onDirtyChange={setDirty} />}

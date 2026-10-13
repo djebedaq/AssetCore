@@ -66,7 +66,7 @@ it('preserves explicit catalog codes and all language names inside contextual cr
     asset_category_id: 1, manufacturer: null, model_reference: null,
   } })
   expect(writes[1].path).toBe('/api/admin/catalog-builder/catalogs/10/edit')
-  expect(await screen.findByLabelText('Референция')).toBeVisible()
+  await waitFor(() => expect(screen.getByLabelText('Възел')).toBeVisible())
   expect(screen.queryByRole('button', { name: 'Разширен режим' })).not.toBeInTheDocument()
 })
 
@@ -83,7 +83,7 @@ it('waits for the server workflow before enabling navigation on resume', async (
   }))
   render(<I18nProvider><CatalogBuilder /></I18nProvider>)
   await userEvent.click(await screen.findByRole('button', { name: 'Продължи черновата' }))
-  const next = await screen.findByRole('button', { name: /4 Проверка на части/ })
+  const next = await screen.findByRole('button', { name: /2 Части и маркери/ })
   expect(next).toBeDisabled()
   await waitFor(() => expect(resolve).toBeTypeOf('function'))
   resolve(json(workflow(false)))
@@ -113,11 +113,11 @@ it('publishes only the server-reviewed digest and refreshes a stale publication 
   render(<I18nProvider><CatalogBuilder /></I18nProvider>)
   const actor = userEvent.setup()
   await actor.click(await screen.findByRole('button', { name: 'Продължи черновата' }))
-  const review = screen.getByRole('button', { name: /6 Публикуване/ })
+  const review = screen.getByRole('button', { name: /3 Публикуване/ })
   await waitFor(() => expect(review).toBeEnabled()); await actor.click(review)
   expect(await screen.findByRole('button', { name: 'Публикувай каталог' })).toBeDisabled()
   ready = true
-  await actor.click(screen.getByRole('button', { name: /1 Каталог и възел/ })); await actor.click(review)
+  await actor.click(screen.getByRole('button', { name: /1 Каталог и PDF/ })); await actor.click(review)
   await waitFor(() => expect(screen.getByRole('button', { name: 'Публикувай каталог' })).toBeEnabled())
   await actor.click(screen.getByRole('button', { name: 'Публикувай каталог' }))
   await screen.findByRole('alert')

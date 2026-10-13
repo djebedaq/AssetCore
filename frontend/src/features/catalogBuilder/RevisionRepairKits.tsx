@@ -1,3 +1,4 @@
+import DraftDeleteButton from './DraftDeleteButton'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api'
 import { Modal } from '../../industrialUi'
@@ -80,14 +81,6 @@ export default function RevisionRepairKits({ assemblyId, editable, onDirtyChange
       setEditing(null); setSelectedId(created.id); setError(''); await load()
     } catch (caught) { setError(message(caught)); setEditing(null); await load() } finally { setBusy(false) }
   }
-  async function remove(kit: Kit) {
-    if (!window.confirm(t('builder.kit.deleteConfirm', { code: kit.code }))) return
-    try {
-      await api(`/admin/catalog-builder/repair-kits/${kit.id}?expected_version=${kit.version}`, { method: 'DELETE' })
-      if (selectedId === kit.id) setSelectedId(null)
-      setError(''); await load()
-    } catch (caught) { setError(message(caught)); await load() }
-  }
   async function addComponent(event: FormEvent) {
     event.preventDefault()
     if (!selected || !addPartId || busy) return
@@ -124,7 +117,7 @@ export default function RevisionRepairKits({ assemblyId, editable, onDirtyChange
       <small>{t('builder.kit.componentCount', { count: kit.component_count })} · {t(kit.validation_status === 'READY' ? 'builder.kit.ready' : 'builder.kit.incomplete')}</small></span>
       <div className="actions"><button className="secondary compact" onClick={() => setSelectedId(kit.id)}>{t('builder.open')}</button>
         {editable && <><button className="secondary compact" onClick={() => openForm(kit)}>{t('common.edit')}</button>
-          <button className="secondary compact" onClick={() => void remove(kit)}>{t('common.remove')}</button></>}</div></div>)}
+          <DraftDeleteButton kind="kit" identity={kit.id} label={t('common.remove')} onDeleted={async () => { if (selectedId === kit.id) setSelectedId(null); await load() }} /></>}</div></div>)}
     {selected && <section className="panel"><div className="panel-title"><h4>{selected.code} · {name(selected)}</h4>
       <button className="secondary compact" onClick={() => setSelectedId(null)}>{t('common.close')}</button></div>
       <p>{t(selected.validation_status === 'READY' ? 'builder.kit.ready' : 'builder.kit.incomplete')}</p>

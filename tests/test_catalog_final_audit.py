@@ -108,7 +108,7 @@ def test_builder_search_includes_alternative_number(client, auth_headers, sessio
     _publish(client, auth_headers, revision_id)
     machine_id = _machine(session_factory, catalog_id, "QA_SEARCH")
     assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}",
-                       headers=auth_headers).status_code == 201
+                       headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     def unavailable_legacy_manifest():
         raise AssertionError("Published Builder runtime entered the legacy manifest")
 
@@ -190,7 +190,7 @@ def test_late_binding_shared_revision_documents_and_repeated_seed(
         assert live.compatible_machine_numbers in (None, [])
     machine_a = _machine(session_factory, catalog_id, "QA_LATE_A")
     assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_a}",
-                       headers=auth_headers).status_code == 201
+                       headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     # B is created after publication and matches A's model without being bound.
     machine_b = _machine(session_factory, catalog_id, "QA_LATE_B")
     assert not client.get(f"/api/catalog/v2/machines/{machine_b}", headers=auth_headers).json()["supported"]
@@ -198,7 +198,7 @@ def test_late_binding_shared_revision_documents_and_repeated_seed(
                     "description": "QA shared part"}], "submit_for_approval": True}
     assert client.post("/api/part-requests/multi", headers=auth_headers, json=request_body).status_code == 409
     assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_b}",
-                       headers=auth_headers).status_code == 201
+                       headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     request_ids = []
     for machine_id in (machine_a, machine_b):
         runtime = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers)
@@ -290,7 +290,7 @@ def test_multiple_exact_pages_variants_and_foreign_machine_ids(client, auth_head
     machine_id = _machine(session_factory, catalog_id, "QA_MULTIPAGE")
     foreign_machine = _machine(session_factory, catalog_id, "QA_FOREIGN")
     assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}",
-                       headers=auth_headers).status_code == 201
+                       headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     runtime = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers).json()
     source_id = runtime["assemblies"][0]["source_id"]
     detail = client.get(f"/api/catalog/v2/assemblies/{source_id}?machine_id={machine_id}",
@@ -310,7 +310,7 @@ def test_multiple_exact_pages_variants_and_foreign_machine_ids(client, auth_head
         "name_bg": "QA", "name_en": "QA", "name_ru": "QA",
     }).json()["id"]
     assert client.post(f"{BASE}/catalogs/{foreign_catalog}/assets/{foreign_machine}",
-                       headers=auth_headers).status_code == 201
+                       headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     foreign_revision = client.post(f"{BASE}/catalogs/{foreign_catalog}/revisions", headers=auth_headers,
                                    json={"revision_code": "A"}).json()["id"]
     foreign_assembly = client.post(f"{BASE}/revisions/{foreign_revision}/assemblies", headers=auth_headers,

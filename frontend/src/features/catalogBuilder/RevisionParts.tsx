@@ -1,3 +1,4 @@
+import DraftDeleteButton from './DraftDeleteButton'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError, createApiObjectUrl } from '../../api'
 import { filePayload, Modal } from '../../industrialUi'
@@ -114,11 +115,6 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
       setEditing(null); setError(''); await load(); await onChanged?.()
     } catch (caught) { setError(message(caught)) } finally { setBusy(false) }
   }
-  async function remove(part: Part) {
-    if (!window.confirm(t('builder.part.deleteConfirm'))) return
-    try { await api(`/admin/catalog-builder/parts/${part.id}`, { method: 'DELETE' }); await load(); await onChanged?.() }
-    catch (caught) { setError(message(caught)) }
-  }
   async function saveMapping() {
     if (!mapping || !selected.length || busy) return
     setBusy(true)
@@ -170,7 +166,7 @@ export default function RevisionParts({ assemblyId, editable, simple = false, in
         <td>{t(part.validation_status === 'READY' ? 'builder.part.ready' : 'builder.part.incomplete')}</td>
         <td><div className="actions">{editable && <><button className="secondary compact" onClick={() => openForm(part)}>{t('common.edit')}</button>
           <button className="secondary compact" onClick={() => { setMapping(part); setSelected([]) }}>{t('builder.part.map')}</button>
-          <button className="secondary compact" onClick={() => void remove(part)}>{t('common.remove')}</button></>}</div></td>
+          <DraftDeleteButton kind="part" identity={part.id} label={t('common.remove')} onDeleted={async () => { await load(); await onChanged?.() }} /></>}</div></td>
       </tr>)}</tbody></table></div>
     {editing && <Modal title={t(editing === 'new' ? 'builder.part.add' : 'common.edit')} onClose={() => setEditing(null)} wide>
       <form className="form-grid" onSubmit={event => void save(event)}>{visibleFields.map(key => <label key={key} className={['description', 'description_2', 'technical_specification', 'technical_notes'].includes(key) ? 'wide' : ''}>

@@ -7,7 +7,7 @@ import binascii
 import hashlib
 
 from fastapi import HTTPException
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -18,9 +18,7 @@ from ..models import (
     CatalogRevisionArtifact,
     CatalogRevisionAssembly,
     CatalogRevisionPart,
-    CatalogRevisionPartPageMap,
     CatalogRevisionPositionHotspot,
-    CatalogRevisionReferencePage,
     CatalogRevisionRepairKit,
     CatalogRevisionRepairKitComponent,
     CatalogRevisionVisualPage,
@@ -189,45 +187,8 @@ def update_assembly(db: Session, actor: User, assembly_id: int, data: AssemblyUp
 
 
 def delete_assembly(db: Session, actor: User, assembly_id: int) -> None:
-    from .hotspots import remove_page_hotspots
-    from .repair_kits import remove_assembly_kits
-
-    item, revision, catalog = _assembly(db, assembly_id, mutate=True)
-    if db.scalar(select(CatalogRevisionReferencePage.id).where(
-            CatalogRevisionReferencePage.assembly_id == item.id).limit(1)):
-        raise fail("catalog_reference_page_in_use")
-    from .parts_extraction import ledger
-    if db.scalar(select(ledger.Attempt.id).join(ledger.Source, ledger.Attempt.source_id == ledger.Source.id)
-            .join(ledger.ExtractionSession, ledger.Source.session_id == ledger.ExtractionSession.id)
-            .join(CatalogRevisionVisualPage, ledger.Source.visual_page_id == CatalogRevisionVisualPage.id)
-            .join(CatalogRevisionArtifact, CatalogRevisionVisualPage.artifact_id == CatalogRevisionArtifact.id)
-            .where(ledger.ExtractionSession.revision_id == revision.id,
-                CatalogRevisionArtifact.assembly_id == item.id).limit(1)):
-        raise fail("catalog_source_correction_review_required")
-    ledger.invalidate_scope(db, actor, assembly_id, None, "ASSEMBLY_REMOVED")
-    artifacts = db.scalars(select(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == item.id)).all()
-    artifact_audit = [{"artifact_id": artifact.id, "filename": artifact.filename,
-                       "sha256": artifact.sha256, "visual_pages": _role_pages(db, artifact.id)}
-                      for artifact in artifacts]
-    artifact_ids = select(CatalogRevisionArtifact.id).where(CatalogRevisionArtifact.assembly_id == item.id)
-    part_ids = select(CatalogRevisionPart.id).where(CatalogRevisionPart.assembly_id == item.id)
-    page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id.in_(artifact_ids))
-    part_count = db.scalar(select(func.count(CatalogRevisionPart.id)).where(CatalogRevisionPart.assembly_id == item.id))
-    mapping_count = db.scalar(select(func.count(CatalogRevisionPartPageMap.id)).where(
-        CatalogRevisionPartPageMap.part_id.in_(part_ids)))
-    kit_counts = remove_assembly_kits(db, item.id)
-    hotspot_counts = remove_page_hotspots(db, actor, page_ids, catalog, revision, item)
-    add_audit_log(db, actor, "catalog_revision_assembly", item.id, "ASSEMBLY_DELETED",
-                  _meta(catalog, revision, item, artifacts=artifact_audit,
-                        part_count=part_count, removed_part_page_maps=mapping_count,
-                        **kit_counts, **hotspot_counts))
-    db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.part_id.in_(part_ids)))
-    db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids)))
-    db.execute(delete(CatalogRevisionPart).where(CatalogRevisionPart.assembly_id == item.id))
-    db.execute(delete(CatalogRevisionVisualPage).where(CatalogRevisionVisualPage.artifact_id.in_(artifact_ids)))
-    db.execute(delete(CatalogRevisionArtifact).where(CatalogRevisionArtifact.assembly_id == item.id))
-    db.delete(item)
-    db.commit()
+    from .draft_deletion import remove
+    remove(db, actor, "assembly", assembly_id)
 
 
 def _artifact_dict(item: CatalogRevisionArtifact) -> dict:
@@ -299,35 +260,8 @@ def store_artifact(db: Session, actor: User, assembly_id: int, content: bytes,
 
 
 def delete_artifact(db: Session, actor: User, artifact_id: int) -> None:
-    from .hotspots import remove_page_hotspots
-    from .repair_kits import source_page_reference_count
-
-    item, assembly, revision, catalog = _artifact(db, artifact_id, mutate=True)
-    page_ids = select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id == item.id)
-    # Explicit logical-page assignments cannot be silently erased via the legacy
-    # artifact endpoint. Remove them through their versioned page workflow first.
-    if db.scalar(select(CatalogRevisionVisualPage.id).where(
-            CatalogRevisionVisualPage.artifact_id == item.id,
-            CatalogRevisionVisualPage.reference_page_id.is_not(None)).limit(1)):
-        raise fail("catalog_reference_page_in_use")
-    if source_page_reference_count(db, page_ids):
-        raise fail("catalog_repair_kit_source_page_in_use")
-    from .parts_extraction import ledger
-    if db.scalar(select(ledger.Attempt.id).join(ledger.Source, ledger.Attempt.source_id == ledger.Source.id)
-            .where(ledger.Source.visual_page_id.in_(page_ids)).limit(1)):
-        raise fail("catalog_source_correction_review_required")
-    ledger.invalidate_scope(db, actor, assembly.id, None, "SOURCE_DOCUMENT_REMOVED")
-    mapped = db.execute(select(CatalogRevisionPartPageMap.part_id, CatalogRevisionPartPageMap.visual_page_id)
-                        .where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids))).all()
-    hotspot_counts = remove_page_hotspots(db, actor, page_ids, catalog, revision, assembly)
-    add_audit_log(db, actor, "catalog_revision_artifact", item.id, "CATALOG_SOURCE_DELETED",
-                  _meta(catalog, revision, assembly, item, visual_pages=_role_pages(db, item.id),
-                        removed_part_page_maps=[{"part_id": part_id, "visual_page_id": page_id}
-                                                for part_id, page_id in mapped], **hotspot_counts))
-    db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.visual_page_id.in_(page_ids)))
-    db.execute(delete(CatalogRevisionVisualPage).where(CatalogRevisionVisualPage.artifact_id == item.id))
-    db.delete(item)
-    db.commit()
+    from .draft_deletion import remove
+    remove(db, actor, "document", artifact_id)
 
 
 def _page_dict(item: CatalogRevisionVisualPage) -> dict:
@@ -372,38 +306,26 @@ def assign_visual_pages(db: Session, actor: User, artifact_id: int, data: Visual
 
 
 def remove_visual_page(db: Session, actor: User, assignment_id: int, *, reviewed_correction: bool = False) -> None:
-    from .hotspots import remove_page_hotspots
-    from .repair_kits import source_page_reference_count
-
-    page = db.get(CatalogRevisionVisualPage, assignment_id)
-    if page is None:
-        raise fail("catalog_visual_page_invalid", 404)
-    item, assembly, revision, catalog = _artifact(db, page.artifact_id, mutate=True)
-    from .parts_extraction.ledger import invalidate_scope
-    invalidate_scope(db, actor, assembly.id, page.reference_page_id, "SOURCE_ASSIGNMENT_REMOVED")
-    if page.role == "SPARE_PARTS_LIST" and not reviewed_correction:
-        from .parts_extraction import ledger
-        attempted = db.scalar(select(ledger.Attempt.id).join(ledger.Source,
-            ledger.Attempt.source_id == ledger.Source.id).where(ledger.Source.visual_page_id == page.id).limit(1))
-        if attempted:
-            raise fail("catalog_source_correction_review_required")
-    if page.reference_page_id is not None:
+    if reviewed_correction:
+        # This legacy, explicitly attested correction keeps its historical
+        # evidence. Ordinary draft deletion never requires this workflow.
+        page = db.get(CatalogRevisionVisualPage, assignment_id)
+        if page is None:
+            raise fail("catalog_visual_page_invalid", 404)
+        _, assembly, _, _ = _artifact(db, page.artifact_id, mutate=True)
         from .reference_pages import load, sources_in_use, touch
-        reference, _, _, _ = load(db, page.reference_page_id, mutate=True)
         if sources_in_use(db, [page.id]):
             raise fail("catalog_reference_source_in_use")
-        touch(reference)
-    if source_page_reference_count(db, [page.id]):
-        raise fail("catalog_repair_kit_source_page_in_use")
-    mapped_parts = db.scalars(select(CatalogRevisionPartPageMap.part_id).where(
-        CatalogRevisionPartPageMap.visual_page_id == page.id)).all()
-    hotspot_counts = remove_page_hotspots(db, actor, [page.id], catalog, revision, assembly)
-    add_audit_log(db, actor, "catalog_revision_artifact", item.id, "VISUAL_PAGE_ROLE_REMOVED",
-                  _meta(catalog, revision, assembly, item, page_numbers=[page.page_number],
-                        role=page.role, unmapped_part_ids=mapped_parts, **hotspot_counts))
-    db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.visual_page_id == page.id))
-    db.delete(page)
-    db.commit()
+        if page.reference_page_id:
+            reference, *_ = load(db, page.reference_page_id, mutate=True)
+            touch(reference)
+        from .parts_extraction.ledger import invalidate_scope
+        invalidate_scope(db, actor, assembly.id, page.reference_page_id, "SOURCE_SELECTION_CORRECTED")
+        db.delete(page)
+        db.commit()
+        return
+    from .draft_deletion import remove
+    remove(db, actor, "source", assignment_id)
 
 
 def preview_page(db: Session, artifact_id: int, page_number: int, *, thumbnail: bool = False) -> bytes:

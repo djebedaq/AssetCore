@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n'
@@ -49,46 +49,44 @@ it('browses first, middle, last, previous/next and zoom without loading an entir
   expect(URL.revokeObjectURL).toHaveBeenCalledTimes(4)
 })
 
-it('retains multiple schemes/lists, offers dual roles and removes with the latest version', async () => {
+it('assigns multiple schemes and lists in one request and confirms a real dependency preview', async () => {
   images()
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
   let page = { ...empty }
-  const writes: Array<{ method: string; body: Record<string, unknown>; path: string }> = []
+  const writes: Array<{ path: string; body: Record<string, unknown> }> = []
   vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
     if (path.includes('/preview')) return new Response(new Uint8Array([137]), { headers: { 'Content-Type': 'image/png' } })
-    if (init?.method) {
-      const body = init.body ? JSON.parse(String(init.body)) : {}
-      writes.push({ method: init.method, body, path })
-      if (init.method === 'POST') {
-        const role = body.roles[0] as Source['role']
-        page = { ...page, version: page.version + 1, sources: [...page.sources, { id: page.sources.length + 1, artifact_id: 20, page_number: body.page_numbers[0], role, title: '', filename: 'manual.pdf' }] }
-      } else page = { ...page, version: page.version + 1, sources: page.sources.filter(source => source.id !== 1) }
-      return json(page)
+    if (path.includes('/draft-deletion/') && !init?.method) return json({ digest: 'a'.repeat(64), counts: { catalog_revision_visual_pages: 1 }, blockers: [] })
+    if (init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)); writes.push({ path, body })
+      if (path.endsWith('/sources')) {
+        const sources: Source[] = body.selections.flatMap((item: { page_number: number; roles: Source['role'][] }) => item.roles.map(role => ({
+          id: page.sources.length + item.page_number * 2 + (role === 'SPARE_PARTS_LIST' ? 1 : 0), artifact_id: 20, page_number: item.page_number, role, title: '', filename: 'manual.pdf',
+        })))
+        page = { ...page, version: page.version + 1, sources }
+      } else page = { ...page, version: page.version + 1, sources: page.sources.slice(1) }
+      return path.includes('/draft-deletion/') ? new Response(null, { status: 204 }) : json(page)
     }
-    return json([{ id: 20, filename: 'manual.pdf', page_count: 120 }])
+    return json([{ id: 20, filename: 'manual.pdf', page_count: 4 }])
   }))
-  const props = { revisionId: 2, onDirtyChange: vi.fn() }
-  const view = render(<I18nProvider><GuidedSources {...props} page={page} changed={refresh} /></I18nProvider>)
-  async function refresh() { view.rerender(<I18nProvider><GuidedSources {...props} page={page} changed={refresh} /></I18nProvider>) }
+  const view = render(<I18nProvider><GuidedSources revisionId={2} page={page} changed={refresh} onDirtyChange={vi.fn()} /></I18nProvider>)
+  async function refresh() { view.rerender(<I18nProvider><GuidedSources revisionId={2} page={page} changed={refresh} onDirtyChange={vi.fn()} /></I18nProvider>) }
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: '+ Добави схема' }))
   await screen.findByRole('img')
-  await user.click(screen.getByRole('button', { name: 'Добави тази страница като схема' }))
-  await user.click(await screen.findByRole('button', { name: 'Добави и като списък с части' }))
-  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2' } })
-  fireEvent.keyDown(screen.getByRole('spinbutton'), { key: 'Enter' })
-  await user.click(screen.getByRole('button', { name: 'Добави тази страница като схема' }))
-  await waitFor(() => expect(page.sources).toHaveLength(3))
-  await user.click(screen.getByRole('button', { name: '+ Добави списък с части' }))
-  await user.click(screen.getByRole('button', { name: 'Добави тази страница като списък с части' }))
+  for (const index of [0, 1]) {
+    const boxes = within(document.querySelectorAll('.pdf-page-picker article')[index] as HTMLElement).getAllByRole('checkbox')
+    await user.click(boxes[0]); await user.click(boxes[1])
+  }
+  await user.click(screen.getByRole('button', { name: 'Добави избраните страници (2)' }))
   await waitFor(() => expect(page.sources).toHaveLength(4))
-  expect(page.sources.map(source => [source.page_number, source.role])).toEqual([[1, 'EXPLODED_SCHEME'], [1, 'SPARE_PARTS_LIST'], [2, 'EXPLODED_SCHEME'], [2, 'SPARE_PARTS_LIST']])
-  expect(writes.map(row => row.body.expected_version)).toEqual([1, 2, 3, 4])
+  expect(writes).toHaveLength(1)
+  expect(writes[0].body).toEqual({ expected_version: 1, artifact_id: 20, selections: [1, 2].map(page_number => ({ page_number, roles: ['EXPLODED_SCHEME', 'SPARE_PARTS_LIST'] })) })
   await user.click(screen.getByRole('button', { name: 'Премахни страница 1: Схема' }))
+  await screen.findByText('Избрани PDF страници: 1')
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Изтрий' }))
   await waitFor(() => expect(page.sources).toHaveLength(3))
-  expect(writes.at(-1)?.path).toContain('sources/1?expected_version=5')
-  expect(screen.getByLabelText('Избор на PDF страници')).toBeVisible()
+  expect(writes.at(-1)?.body.expected_digest).toBe('a'.repeat(64))
 })
 
 it('keeps reference and page selected when switching the local sources/parts/mapping work', async () => {
@@ -148,9 +146,8 @@ it('recognizes a shared PDF assigned through another reference-local artifact al
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: 'PDF страница 22' }))
   await screen.findByRole('img', { name: 'PDF страница 22' })
-  expect(screen.getByRole('button', { name: 'Добави тази страница като схема' })).toBeDisabled()
-  expect(screen.getByText('Страница 22 е добавена: Схема')).toBeVisible()
-  expect(screen.getByRole('button', { name: 'Добави и като списък с части' })).toBeEnabled()
+  const boxes = within(document.querySelectorAll('.pdf-page-picker article')[21] as HTMLElement).getAllByRole('checkbox')
+  expect(boxes[0]).toBeChecked(); expect(boxes[0]).toBeDisabled(); expect(boxes[1]).toBeEnabled()
 })
 
 it('offers retry after a failed real-page request without retaining the failed object URL', async () => {

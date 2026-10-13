@@ -16,7 +16,7 @@ from ..models import (
     User,
 )
 from . import service, visual_sources
-from .schemas import ArtifactUpload, AssemblyCreate, ClassifyDocumentPages
+from .schemas import ArtifactUpload, ClassifyDocumentPages
 from .source_storage import shared_blob
 
 
@@ -28,12 +28,7 @@ def upload(db: Session, actor: User, revision_id: int, data: ArtifactUpload) -> 
             CatalogRevisionAssembly.sort_order, CatalogRevisionAssembly.id).limit(1))
     try:
         if group is None:
-            from .wizard import group_code
-            created = visual_sources.create_assembly(db, actor, revision.id, AssemblyCreate(
-                code=group_code(db, revision.id, "INITIAL_GROUP"),
-                name_bg="Първоначална група", name_en="Initial group", name_ru="Начальная группа",
-                sort_order=1), commit=False)
-            group = db.get(CatalogRevisionAssembly, created["id"])
+            raise service.fail("catalog_reference_required", 422)
         return visual_sources.upload_artifact(db, actor, group.id, data)
     except Exception:
         db.rollback()

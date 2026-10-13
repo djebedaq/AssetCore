@@ -220,7 +220,7 @@ def test_builder_drafts_excluded_published_revision_pinned(client, auth_headers,
     published = client.post(f"{BASE}/revisions/{revision_id}/publish", headers=auth_headers, json={
         "expected_publication_digest": readiness["publication_digest"], "expected_current_published_revision_id": None, "confirmed": True})
     assert published.status_code == 200, published.text
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers).status_code == 201
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     selected = next(item for item in client.get(f"{BASE}/reference-sources", headers=auth_headers).json()
                     if item["revision"] == f"CATALOG_BUILDER_R{revision_id}")
     with session_factory() as db:

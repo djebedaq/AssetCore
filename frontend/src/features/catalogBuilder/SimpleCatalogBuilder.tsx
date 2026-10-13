@@ -9,6 +9,7 @@ import GuidedWorkspace from './GuidedWorkspace'
 import WizardReview from './WizardReview'
 import WizardMachines from './WizardMachines'
 import useDraftGuard from './useDraftGuard'
+import DraftDeleteButton from './DraftDeleteButton'
 import { builderBase, problemKeys, type Catalog, type Category, type Group, type Issue, type Revision, type Step, type Workflow } from './wizardTypes'
 
 const newCatalog = { name: '', asset_category_id: '', manufacturer: '', model_reference: '', code: '', name_en: '', name_ru: '', description: '' }
@@ -64,7 +65,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirt
       api<Workflow>(`${builderBase}/revisions/${revisionId}/workflow`)]).then(([rows, summary]) => {
       if (!active) return
       setGroups(rows); setWorkflow(summary)
-      const next = revision?.status === 'DRAFT' ? 'references' : 'review'
+      const next = revision?.status === 'DRAFT' ? 'documents' : 'review'
       setStep(next);
     }).catch(report)
     return () => { active = false }
@@ -149,7 +150,8 @@ export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirt
   return <div className="builder-page catalog-workbench">
     {error && <p className="error" role="alert">{error}</p>}
     <section hidden={!!selected} className={`panel catalog-picker ${selected ? 'catalog-picker-open' : ''}`}><div className="panel-title"><h3>{t('builder.catalogs')}</h3>
-      {!selected && onLink && <button className="secondary" onClick={onLink}>{t('ref.link')}</button>}<button className="primary" disabled={!!selected} onClick={() => { setCreating(true); setForm(newCatalog) }}>{t('builder.create')}</button></div>
+      <button className="primary" disabled={!!selected} onClick={() => { setCreating(true); setForm(newCatalog) }}>{t('builder.create')}</button></div>
+      {!selected && onLink && <details><summary>{t('ref.additional')}</summary><button className="secondary" onClick={onLink}>{t('ref.link')}</button></details>}
       {!catalogs.length && <p>{t('builder.empty')}</p>}
       <div className="builder-list">{catalogs.map(catalog => <article className="builder-list-item" key={catalog.id}>
         <div><strong>{label(catalog)}</strong><small>{label(catalog.asset_category)} · {catalog.manufacturer} {catalog.model_reference}</small></div>
@@ -164,14 +166,17 @@ export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirt
       <button className="secondary" disabled={busy || dirty} onClick={() => setMaintenance(true)}>{t('catalogUx.manage')}</button>
       <button className="secondary" disabled={busy} onClick={close}>{t('common.close')}</button></div>
       <p className="catalog-context">{label(selected.asset_category)} · {selected.manufacturer} {selected.model_reference} · {t('catalogUx.revision')} {revision?.revision_code} · {revision && t(`builder.status.${revision.status}`)}</p>
-      <nav aria-label={t('wizard.title')} className="catalog-navigation">{(['references', 'documents', 'extract', 'parts', 'hotspots', 'review'] as const).map((value, index) => <button key={value}
-        className="secondary" aria-current={step === value ? 'step' : undefined}
+      <nav aria-label={t('wizard.title')} className="catalog-navigation">{(['documents', 'parts', 'review'] as const).map((value, index) => <button key={value}
+        className="secondary" aria-current={(value === 'documents' ? ['references', 'documents', 'catalog'].includes(step) : value === 'parts' ? ['extract', 'parts', 'hotspots'].includes(step) : step === 'review') ? 'step' : undefined}
         disabled={!revision || !workflow || busy || !editable && value !== 'review'} onClick={() => navigate(value)}>
-        <span>{index + 1}</span> {t(`catalogUx.step.${value}`)}
+        <span>{index + 1}</span> {t(value === 'documents' ? 'ux04.catalogPdf' : value === 'parts' ? 'ux04.partsMarkers' : 'ux04.publish')}
       </button>)}</nav>
       {dirty && <p className="muted" role="status">{t('wizard.unsavedNotice')}</p>}
       {!revision && <button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>}
       {!workflow && <p>{t('wizard.loading')}</p>}
+      {editable && step === 'documents' && <button className="secondary" disabled={busy} onClick={() => {
+        setMetadata({ name: label(selected), manufacturer: selected.manufacturer || '', model_reference: selected.model_reference || '' }); setEditingMetadata(true); navigate('catalog')
+      }}>{t('wizard.editMetadata')}</button>}
       <div hidden={step !== 'catalog'}><p><b>{t('builder.category')}:</b> {label(selected.asset_category)}</p>
         <p className="muted">{t('wizard.categoryLocked')}</p>
         <p><b>{t('builder.manufacturer')}:</b> {selected.manufacturer || t('common.noValue')}</p>
@@ -191,8 +196,13 @@ export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirt
       {editable && revision && <div hidden={['catalog', 'review'].includes(step)}><GuidedWorkspace
         onNavigate={navigate} target={target} revisionId={revision.id} groups={groups} task={step} changed={refresh} onDirtyChange={documentsDirty} /></div>}
       <div hidden={step !== 'review'}><WizardReview groups={groups} catalogName={label(selected)} revisionCode={revision?.revision_code} workflow={workflow} editable={!!editable} busy={busy || editingMetadata || Object.values(dirtyChildren).some(Boolean)} onFix={fixIssue} onPublish={() => void publish()} /></div>
-      {revision?.status === 'PUBLISHED' && <><p role="status">{t('wizard.published')}</p><button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button>
-        <WizardMachines catalogId={selected.id} onChanged={load} /></>}
+      {revision?.status === 'PUBLISHED' && <><p role="status">{t('wizard.published')}</p><button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button></>}
+      <details><summary>{t('wizard.machines')}</summary><WizardMachines catalogId={selected.id} onChanged={load} /></details>
+      {editable && revision && <DraftDeleteButton kind="revision" identity={revision.id} label={t('ux04.deleteRevision')} disabled={busy || dirty} onDeleted={async () => {
+        const rows = await api<Revision[]>(`${builderBase}/catalogs/${selected.id}/revisions`)
+        setRevisions(rows); setRevisionId(rows[0]?.id || null); setGroups([]); setWorkflow(null); await load()
+      }} />}
+      {!selected.published_revision && !revisions.some(row => row.status === 'RETIRED') && <DraftDeleteButton kind="catalog" identity={selected.id} label={t('ux04.deleteCatalog')} disabled={busy || dirty} onDeleted={async () => { close(); await load() }} />}
       <details><summary>{t('wizard.history')}</summary>{revisions.map((row, index) => <p key={row.id}>
         <button className="secondary" disabled={busy || row.id === revisionId} onClick={() => {
           if (dirty && !window.confirm(t('wizard.unsaved'))) return

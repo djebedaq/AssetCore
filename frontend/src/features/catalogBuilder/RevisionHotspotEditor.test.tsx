@@ -111,7 +111,8 @@ it('draws normalized draft geometry, verifies explicitly, invalidates on edit an
       rows = rows.map(row => row.id === 1 ? { ...row, ...body, is_verified: false, version: Number(row.version) + 1 } : row)
       return json(rows[0])
     }
-    if (path.includes('/hotspots/1?expected_version=') && method === 'DELETE') {
+    if (path.endsWith('/draft-deletion/hotspot/1') && method === 'GET') return json({ digest: 'a'.repeat(64), counts: { catalog_revision_position_hotspots: 1 }, blockers: [] })
+    if (path.endsWith('/draft-deletion/hotspot/1') && method === 'POST') {
       rows = rows.filter(row => row.id !== 1)
       return new Response(null, { status: 204 })
     }
@@ -189,6 +190,7 @@ it('draws normalized draft geometry, verifies explicitly, invalidates on edit an
   expect(writes.every(item => !item.path.includes('/catalog/diagrams'))).toBe(true)
   vi.stubGlobal('confirm', vi.fn(() => true))
   await actor.click(screen.getByRole('button', { name: 'Премахни' }))
+  await actor.click(await screen.findByRole('button', { name: 'Изтрий' }))
   await waitFor(() => expect(rows).toHaveLength(0))
 })
 

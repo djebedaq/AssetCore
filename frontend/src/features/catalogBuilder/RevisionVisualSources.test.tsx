@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n'
@@ -38,7 +38,8 @@ it('creates an assembly, reuses one PDF for both explicit roles, and previews la
     if (path.endsWith('/revisions/1/assemblies') && method === 'POST') { assemblies = [assembly]; return json(assembly, 201) }
     if (path.endsWith('/assemblies/10/artifacts') && method === 'GET') return json(artifacts)
     if (path.endsWith('/assemblies/10/artifacts') && method === 'POST') { artifacts = [artifact]; return json(artifact, 201) }
-    if (path.endsWith('/artifacts/20') && method === 'DELETE') { artifacts = []; return new Response(null, { status: 204 }) }
+    if (path.endsWith('/draft-deletion/document/20') && method === 'GET') return json({ digest: 'a'.repeat(64), counts: { catalog_revision_artifacts: 1 }, blockers: [] })
+    if (path.endsWith('/draft-deletion/document/20') && method === 'POST') { artifacts = []; return new Response(null, { status: 204 }) }
     if (path.endsWith('/artifacts/20/visual-pages') && method === 'GET') return json(assignments)
     if (path.endsWith('/artifacts/20/visual-pages') && method === 'POST') {
       if (((body?.page_numbers || []) as number[]).some(number => assignments.some(item => item.page_number === number && item.role === body?.role))) {
@@ -89,11 +90,11 @@ it('creates an assembly, reuses one PDF for both explicit roles, and previews la
   await actor.click(screen.getAllByLabelText('Избери страница')[0])
   await actor.click(screen.getByRole('button', { name: 'Отбележи като разглобена схема' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Тази роля вече е зададена за избрана страница.')
-  const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
-  vi.stubGlobal('confirm', confirm)
   await actor.click(screen.getAllByRole('button', { name: 'Премахни' })[1])
-  expect(calls.filter(call => call.method === 'DELETE')).toHaveLength(0)
+  await screen.findByText('PDF документи: 1')
+  await actor.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Затвори' }))
+  expect(calls.filter(call => call.path.includes('/draft-deletion/') && call.method === 'POST')).toHaveLength(0)
   await actor.click(screen.getAllByRole('button', { name: 'Премахни' })[1])
-  await waitFor(() => expect(calls.filter(call => call.method === 'DELETE' && call.path.endsWith('/artifacts/20'))).toHaveLength(1))
-  expect(confirm).toHaveBeenCalledTimes(2)
+  await actor.click(await screen.findByRole('button', { name: 'Изтрий' }))
+  await waitFor(() => expect(calls.filter(call => call.method === 'POST' && call.path.endsWith('/draft-deletion/document/20'))).toHaveLength(1))
 })
