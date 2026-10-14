@@ -72,12 +72,13 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
                     brand="QA_OTHER" if scenario == "ux06" and number == 5 else "QA",
                     model=None if scenario == "ux06" and number == 4 else "QA"))
             db.commit()
+            qa_category_id = category.id
         if scenario == "ux06":
             from app.models import CatalogDefinition, CatalogRevision
             from catalog_binding_fixtures import legacy_binding
             with SessionLocal() as db:
                 owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
-                pending = CatalogDefinition(code="QA_UX06_PENDING", asset_category_id=category.id,
+                pending = CatalogDefinition(code="QA_UX06_PENDING", asset_category_id=qa_category_id,
                     name_bg="Synthetic QA pending", name_en="Synthetic QA pending", name_ru="Synthetic QA pending",
                     manufacturer="QA", model_reference="QA", created_by_id=owner.id)
                 db.add(pending)

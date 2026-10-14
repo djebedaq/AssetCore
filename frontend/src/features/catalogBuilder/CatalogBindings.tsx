@@ -92,6 +92,13 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
   function toggleBinding(row: Binding, checked: boolean) {
     setRemoving(current => { const next = { ...current }; if (checked && Object.keys(next).length < 500) next[row.id] = row; else if (!checked) delete next[row.id]; return next })
   }
+  async function reload() {
+    if (busyRef.current) return
+    busyRef.current = true; setBusy(true); setError('')
+    try { await onChanged(); setRefresh(value => value + 1) }
+    catch { setError(t('builder.error.generic')) }
+    finally { busyRef.current = false; setBusy(false) }
+  }
   async function save() {
     if (busyRef.current || stage === 'review' && (!plan?.ready || previewLoading)) return
     busyRef.current = true; setBusy(true); setError(''); setIssues([]); setSuccess('')
@@ -140,9 +147,10 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
         <div className="actions"><button className="secondary" disabled={busy} onClick={() => setStage('select')}>{t('common.cancel')}</button>
           <button className={stage === 'remove' ? 'danger' : 'primary'} disabled={busy || stage === 'review' && (!plan?.ready || previewLoading || !rows.length) || stage === 'remove' && !removals.length} onClick={() => void save()}>{t(stage === 'remove' ? 'ux06.confirmRemove' : 'ux06.confirmBind')}</button></div>
       </section> : <>
-        <nav className="actions" aria-label={t('ux06.title')}>{(['connect', 'active'] as const).map(value => <button className="secondary" aria-pressed={mode === value} key={value} onClick={() => { setMode(value); setOffset(0); setSearch(''); setMachineFilter(0); setStage('select') }}>{t(`ux06.${value}`)}</button>)}</nav>
+        <nav className="actions" aria-label={t('ux06.title')}>{(['connect', 'active'] as const).map(value => <button className="secondary" disabled={busy} aria-pressed={mode === value} key={value} onClick={() => { setMode(value); setOffset(0); setSearch(''); setMachineFilter(0); setStage('select') }}>{t(`ux06.${value}`)}</button>)}
+          <button className="secondary" disabled={busy} onClick={() => void reload()}>{t('ux06.refresh')}</button></nav>
         <div className="binding-filters">
-          <label>{t('builder.category')}<select value={category} onChange={event => { setCategory(Number(event.target.value)); setCatalog(0); setMachineFilter(0); setOffset(0) }}><option value="">{t(mode === 'active' ? 'ux06.allCategories' : 'guided.select')}</option>{categories.filter(row => row.capabilities.includes('HAS_PARTS_CATALOG') && (mode === 'active' || row.is_active)).map(row => <option key={row.id} value={row.id}>{name(row)}</option>)}</select></label>
+          <label>{t('builder.category')}<select aria-label={t('builder.category')} value={category} onChange={event => { setCategory(Number(event.target.value)); setCatalog(0); setMachineFilter(0); setOffset(0) }}><option value="">{t(mode === 'active' ? 'ux06.allCategories' : 'guided.select')}</option>{categories.filter(row => row.capabilities.includes('HAS_PARTS_CATALOG') && (mode === 'active' || row.is_active)).map(row => <option key={row.id} value={row.id}>{name(row)}</option>)}</select></label>
           <label>{t('ux06.search')}<input type="search" maxLength={120} value={search} onChange={event => { setSearch(event.target.value); setOffset(0) }} /></label>
         </div>
         {mode === 'connect' ? <>
@@ -151,12 +159,12 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
           {!!machines.items.length && <label><input type="checkbox" checked={eligiblePage.length > 0 && eligiblePage.every(row => !!selected[row.id])} disabled={!eligiblePage.length || rows.length + eligiblePage.filter(row => !selected[row.id]).length > 500} onChange={event => { const checked = event.target.checked; setSelected(current => { const next = { ...current }; eligiblePage.forEach(row => { if (checked) next[row.id] = row; else delete next[row.id] }); return next }); if (!checked) setConfirmed(current => current.filter(id => !eligiblePage.some(row => row.id === id))) }} />{t('ux06.selectPage', { count: eligiblePage.length })}</label>}
           {machines.items.map(row => <article className="binding-card" key={row.id}><label><input type="checkbox" disabled={!row.is_active || row.bound || rows.length >= 500 && !selected[row.id]} checked={!!selected[row.id]} onChange={event => toggleMachine(row, event.target.checked)} /><span><b>{row.inventory_number}</b> · {row.name}<small>{row.brand} · {row.model} · {row.serial_number || t('common.noValue')}</small></span></label>
             <span>{row.bound ? t('ux06.already') : !row.is_active ? t('ux06.inactiveMachine') : row.compatibility ? t(`ux06.${row.compatibility}`) : t('ux06.chooseCatalog')}</span></article>)}
-          <label>{t('ux06.catalog')}<select value={catalog} disabled={!category} onChange={event => { setCatalog(Number(event.target.value)); setConfirmed([]); setOffset(0) }}><option value="">{t('guided.select')}</option>{catalogs.filter(row => row.asset_category_id === category).map(row => <option key={row.id} value={row.id} disabled={!row.is_active || !row.published_revision}>{name(row)} · {name(row.asset_category)} · {row.manufacturer} · {row.model_reference} · {row.code} · {row.published_revision?.revision_code || t('ux06.publishFirst')} · {t('ux06.boundCount', { count: row.active_asset_count || 0 })}{!row.is_active ? ` · ${t('builder.inactive')}` : ''}</option>)}</select></label>
+          <label>{t('ux06.catalog')}<select aria-label={t('ux06.catalog')} value={catalog} disabled={!category} onChange={event => { setCatalog(Number(event.target.value)); setConfirmed([]); setOffset(0) }}><option value="">{t('guided.select')}</option>{catalogs.filter(row => row.asset_category_id === category).map(row => <option key={row.id} value={row.id} disabled={!row.is_active || !row.published_revision}>{name(row)} · {name(row.asset_category)} · {row.manufacturer} · {row.model_reference} · {row.code} · {row.published_revision?.revision_code || t('ux06.publishFirst')} · {t('ux06.boundCount', { count: row.active_asset_count || 0 })}{!row.is_active ? ` · ${t('builder.inactive')}` : ''}</option>)}</select></label>
           <p className="muted">{t('ux06.publishFirst')}</p>
           {chosen && <p>{name(chosen)} · {chosen.published_revision?.revision_code || t('ux06.pending')} · {chosen.manufacturer} · {chosen.model_reference}</p>}
           <button className="primary" disabled={!rows.length || !chosen?.is_active || !chosen.published_revision || previewLoading || !plan} onClick={() => setStage('review')}>{t('ux06.preview')}</button>
         </> : <>
-          <div className="binding-filters"><label>{t('ux06.catalog')}<select value={catalog} onChange={event => { setCatalog(Number(event.target.value)); setOffset(0) }}><option value="">{t('ux06.allCatalogs')}</option>{catalogs.filter(row => !category || row.asset_category_id === category).map(row => <option key={row.id} value={row.id}>{name(row)} · {row.code}</option>)}</select></label>
+          <div className="binding-filters"><label>{t('ux06.catalog')}<select aria-label={t('ux06.catalog')} value={catalog} onChange={event => { setCatalog(Number(event.target.value)); setOffset(0) }}><option value="">{t('ux06.allCatalogs')}</option>{catalogs.filter(row => !category || row.asset_category_id === category).map(row => <option key={row.id} value={row.id}>{name(row)} · {row.code}</option>)}</select></label>
             <MachineSelect module="catalog" category={String(category || '')} label={t('ux06.machineFilter')} value={String(machineFilter || '')} onChange={value => { setMachineFilter(Number(value)); setOffset(0) }} /></div>
           <p>{t('ux06.selectedLinks', { count: removals.length })} · {t('ux06.pageHelp')} · {t('ux06.limit')}</p>
           {!!links.items.length && <label><input type="checkbox" checked={links.items.every(row => !!removing[row.id])} disabled={removals.length + links.items.filter(row => !removing[row.id]).length > 500} onChange={event => { const checked = event.target.checked; setRemoving(current => { const next = { ...current }; links.items.forEach(row => { if (checked) next[row.id] = row; else delete next[row.id] }); return next }) }} />{t('ux06.selectPage', { count: links.items.length })}</label>}

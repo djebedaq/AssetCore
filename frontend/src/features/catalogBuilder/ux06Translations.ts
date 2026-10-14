@@ -1,4 +1,5 @@
 export const ux06Bg = {
+  'ux06.refresh': 'Обнови данните',
   'ux06.limit': 'До 500 връзки в една операция.',
   'ux06.title': 'Управление на връзките', 'ux06.link': 'Свържи каталог', 'ux06.connect': 'Свързване', 'ux06.active': 'Активни връзки',
   'ux06.search': 'Търсене по номер, име, производител, модел или сериен номер', 'ux06.catalog': 'Каталог',
@@ -24,6 +25,7 @@ export const ux06Bg = {
   'ux06.missing': 'Машината или връзката вече не съществува.',
 } as const
 export const ux06En: Record<keyof typeof ux06Bg, string> = {
+  'ux06.refresh': 'Refresh data',
   'ux06.limit': 'Up to 500 bindings per operation.',
   'ux06.title': 'Binding management', 'ux06.link': 'Link catalog', 'ux06.connect': 'Connect', 'ux06.active': 'Active bindings',
   'ux06.search': 'Search by inventory, name, manufacturer, model or serial number', 'ux06.catalog': 'Catalog',
@@ -49,6 +51,7 @@ export const ux06En: Record<keyof typeof ux06Bg, string> = {
   'ux06.missing': 'The machine or binding no longer exists.',
 }
 export const ux06Ru: Record<keyof typeof ux06Bg, string> = {
+  'ux06.refresh': 'Обновить данные',
   'ux06.limit': 'До 500 связей за одну операцию.',
   'ux06.title': 'Управление связями', 'ux06.link': 'Связать каталог', 'ux06.connect': 'Связывание', 'ux06.active': 'Активные связи',
   'ux06.search': 'Поиск по номеру, имени, производителю, модели или серийному номеру', 'ux06.catalog': 'Каталог',

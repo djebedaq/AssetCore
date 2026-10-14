@@ -2,7 +2,7 @@
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Path, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from ..catalog.references import ReferenceCreate, ReferenceRevoke
@@ -303,13 +303,13 @@ def eligible_assets(catalog_id: int, search: str | None = Query(default=None, ma
 
 
 @router.post("/catalogs/{catalog_id}/assets/{machine_id}", status_code=201)
-def bind_asset(catalog_id: int, machine_id: int, data: BindingCreate = BindingCreate(), actor: User = Depends(manager),
+def bind_asset(catalog_id: int = Path(gt=0), machine_id: int = Path(gt=0), data: BindingCreate = BindingCreate(), actor: User = Depends(manager),
                db: Session = Depends(get_db)) -> dict:
     return service.bind_asset(db, actor, catalog_id, machine_id, data.compatibility_confirmed)
 
 
 @router.delete("/catalogs/{catalog_id}/assets/{machine_id}", status_code=204)
-def unbind_asset(catalog_id: int, machine_id: int, actor: User = Depends(manager),
+def unbind_asset(catalog_id: int = Path(gt=0), machine_id: int = Path(gt=0), actor: User = Depends(manager),
                  db: Session = Depends(get_db)) -> Response:
     service.unbind_asset(db, actor, catalog_id, machine_id)
     return Response(status_code=204)

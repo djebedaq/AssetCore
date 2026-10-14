@@ -45,6 +45,8 @@ it('keeps BG/EN/RU keys and disables unpublished catalogs even beside a publishe
   expect(Object.keys(ux06En).sort()).toEqual(Object.keys(ux06Bg).sort())
   expect(Object.keys(ux06Ru).sort()).toEqual(Object.keys(ux06Bg).sort())
   setup()
+  expect(screen.getByRole('combobox', { name: 'Категория активи' })).toHaveValue('1')
+  expect(screen.getByRole('combobox', { name: 'Каталог' })).toHaveValue('10')
   expect(await screen.findByRole('option', { name: /QA draft/ })).toBeDisabled()
   expect(screen.getByRole('option', { name: /QA published/ })).toBeEnabled()
   const existing = await screen.findByText('Вече свързан')
