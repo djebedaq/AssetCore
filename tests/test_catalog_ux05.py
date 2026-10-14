@@ -86,8 +86,6 @@ def test_confirmed_parts_publish_with_optional_review_and_coverage(client, auth_
         machine_id = machine.id
         history = {model: snapshot(db, model) for model in [ledger.Candidate, ledger.Source, ledger.Attempt,
                    CatalogSourceReviewDecision, CatalogRevisionPart, AuditLog]}
-    checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{machine_id}", headers=auth_headers,
-                        json={"compatibility_confirmed": True}), 201)
     result = ready(client, auth_headers, revision)
     assert result["ready"] and not result["errors"]
     assert result["summary"]["reviewed_source_count"] == 1
@@ -112,6 +110,8 @@ def test_confirmed_parts_publish_with_optional_review_and_coverage(client, auth_
         event = db.scalar(select(AuditLog).where(AuditLog.action == "CATALOG_REVISION_PUBLISHED",
                                                 AuditLog.entity_id == revision["id"]))
         assert json.loads(event.details)["reviewed_source_count"] == 1
+    checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{machine_id}", headers=auth_headers,
+                        json={"compatibility_confirmed": True}), 201)
     runtime = checked(client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers))
     source_id = runtime["assemblies"][0]["pages"][0]["source_id"]
     detail = checked(client.get(f"/api/catalog/v2/assemblies/{source_id}?machine_id={machine_id}", headers=auth_headers))

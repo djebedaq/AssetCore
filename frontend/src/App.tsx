@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, BookOpen, Boxes, ClipboardSignature, FileText, FileCheck2, Gauge, History, LogOut, Menu, PackageSearch, QrCode, Settings, ShieldCheck, UserRoundCog, Wrench, X } from 'lucide-react'
+import { BarChart3, BookOpen, LibraryBig, Boxes, ClipboardSignature, FileText, FileCheck2, Gauge, History, LogOut, Menu, PackageSearch, QrCode, Settings, ShieldCheck, UserRoundCog, Wrench, X } from 'lucide-react'
 import { api, clearLegacyAuthStorage, logout } from './api'
 import ChangePassword from './ChangePassword'
 import { useI18n, type TranslationKey } from './i18n'
@@ -178,7 +178,7 @@ function App() {
     ['transfers', 'nav.transfers', ClipboardSignature, 'transfers.view'],
     ['repairs', 'nav.repairs', Wrench, 'repairs.view'],
     ['catalog', 'nav.catalog', BookOpen, 'parts.view'],
-    ['catalogBuilder', 'builder.title', BookOpen, 'parts.manage'],
+    ['catalogBuilder', 'builder.title', LibraryBig, 'parts.manage'],
     ['parts', 'nav.parts', PackageSearch, 'requests.view'],
     ['documents', 'nav.documents', FileText, 'documents.view'],
     ['official', 'nav.officialDocuments', FileCheck2, 'documents.view'],

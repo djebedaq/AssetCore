@@ -1,3 +1,4 @@
+import { ux06Bg, ux06En, ux06Ru } from './features/catalogBuilder/ux06Translations'
 import { catalogUxBg, catalogUxEn, catalogUxRu } from './features/catalogBuilder/catalogUxTranslations'
 import { ux04Bg, ux04En, ux04Ru } from './features/catalogBuilder/ux04Translations'
 import { ux05Bg, ux05En, ux05Ru } from './features/catalogBuilder/ux05Translations'
@@ -21,6 +22,7 @@ import {
 export const bg = {
   ...ux04Bg,
   ...ux05Bg,
+  ...ux06Bg,
   ...uxBg,
   ...referenceBg,
   ...workspaceBg,
@@ -1144,7 +1146,7 @@ export const bg = {
   'catalog.verifiedClickablePositionsOnly': 'Кликаеми са само визуално проверените позиции. Всички останали части са достъпни от списъка под схемата.',
   'unknownPart.notFound': 'Не намирам частта',
   'official.slotRequester': 'Заявил', 'official.slotApprover': 'Одобрил',
-  'builder.title': 'Каталожен конструктор',
+  'builder.title': 'Управление на каталози',
   'builder.catalogs': 'Каталози', 'builder.create': 'Нов каталог', 'builder.edit': 'Редакция на каталог',
   'builder.runtimeNotice': 'Черновите не се показват на машините. Публикуваната ревизия се използва за изрично свързаните активи.',
   'builder.empty': 'Все още няма каталози в конструктора.', 'builder.active': 'Активен', 'builder.inactive': 'Неактивен',
@@ -1318,6 +1320,7 @@ export const en: Catalog = Object.fromEntries(
 Object.assign(en, {
   ...ux04En,
   ...ux05En,
+  ...ux06En,
   ...uxEn,
   ...referenceEn,
   ...wizardEn,
@@ -1815,7 +1818,7 @@ Object.assign(en, {
   'admin.minimum': 'Minimum', 'admin.maximum': 'Maximum',
   'admin.minimumLength': 'Minimum length', 'admin.maximumLength': 'Maximum length',
   'admin.pattern': 'Validation pattern',
-  'builder.title': 'Catalog Builder',
+  'builder.title': 'Catalog Management',
   'builder.catalogs': 'Catalogs', 'builder.create': 'New catalog', 'builder.edit': 'Edit catalog',
   'builder.runtimeNotice': 'Drafts are hidden from machines. The published revision serves explicitly bound assets.',
   'builder.empty': 'No Builder catalogs yet.', 'builder.active': 'Active', 'builder.inactive': 'Inactive',
@@ -1986,6 +1989,7 @@ export const ru: Catalog = Object.fromEntries(
 Object.assign(ru, {
   ...ux04Ru,
   ...ux05Ru,
+  ...ux06Ru,
   ...uxRu,
   ...referenceRu,
   ...wizardRu,
@@ -2486,7 +2490,7 @@ Object.assign(ru, {
   'admin.minimum': 'Минимум', 'admin.maximum': 'Максимум',
   'admin.minimumLength': 'Минимальная длина', 'admin.maximumLength': 'Максимальная длина',
   'admin.pattern': 'Шаблон проверки',
-  'builder.title': 'Конструктор каталога',
+  'builder.title': 'Управление каталогами',
   'builder.catalogs': 'Каталоги', 'builder.create': 'Новый каталог', 'builder.edit': 'Редактировать каталог',
   'builder.runtimeNotice': 'Черновики не показываются машинам. Опубликованная редакция используется явно привязанными активами.',
   'builder.empty': 'В конструкторе пока нет каталогов.', 'builder.active': 'Активен', 'builder.inactive': 'Неактивен',

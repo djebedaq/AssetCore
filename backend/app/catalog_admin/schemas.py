@@ -1,11 +1,47 @@
 from datetime import date
 from decimal import Decimal
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Payload(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+BindingID = Annotated[int, Field(strict=True, gt=0)]
+
+
+class BatchBind(Payload):
+    catalog_id: BindingID
+    machine_ids: list[BindingID] = Field(min_length=1, max_length=500)
+    confirmed_machine_ids: list[BindingID] = Field(default_factory=list, max_length=500)
+    expected_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def unique_ids(self):
+        if len(set(self.machine_ids)) != len(self.machine_ids) or len(set(self.confirmed_machine_ids)) != len(self.confirmed_machine_ids):
+            raise ValueError("catalog_binding_duplicate_ids")
+        if not set(self.confirmed_machine_ids).issubset(self.machine_ids):
+            raise ValueError("catalog_binding_confirmation_outside_selection")
+        return self
+
+
+class BindingRemoval(Payload):
+    binding_id: BindingID
+    catalog_id: BindingID
+    machine_id: BindingID
+    expected_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class BatchUnbind(Payload):
+    bindings: list[BindingRemoval] = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def unique_bindings(self):
+        if len({row.binding_id for row in self.bindings}) != len(self.bindings):
+            raise ValueError("catalog_binding_duplicate_ids")
+        return self
 
 
 class CatalogCreate(Payload):

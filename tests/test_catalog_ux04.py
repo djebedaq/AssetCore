@@ -37,6 +37,7 @@ from app.models import (
     User,
     utcnow,
 )
+from catalog_binding_fixtures import legacy_binding
 from fastapi import HTTPException
 from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import Session
@@ -292,8 +293,8 @@ def test_stale_preview_published_guard_and_multiple_active_bindings(qa):
     )
     db.add(machine)
     db.commit()
-    service.bind_asset(db, actor, item["id"], machine.id)
-    service.bind_asset(db, actor, second["id"], machine.id)
+    legacy_binding(db, actor, item["id"], machine.id)
+    legacy_binding(db, actor, second["id"], machine.id)
     assert not published_bindings(db, machine)
     before = draft_deletion.preview(db, "revision", revision.id)
     group(qa, revision)
@@ -314,7 +315,9 @@ def test_stale_preview_published_guard_and_multiple_active_bindings(qa):
 
 def test_model_compatibility_requires_explicit_ambiguous_confirmation(qa):
     db, actor, category = qa
-    item, _ = catalog(qa)
+    item, revision = catalog(qa)
+    revision.status = "PUBLISHED"
+    db.commit()
     machine = Machine(
         inventory_number="QA_UX04_MODEL",
         name="QA",

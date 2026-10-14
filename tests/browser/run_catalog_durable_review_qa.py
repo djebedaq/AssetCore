@@ -57,19 +57,34 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
                 detail.insert_text((60, 70), "Synthetic QA detail scheme", fontsize=18)
                 detail.insert_text((150, 150), "1", fontsize=18)
             (qa / "synthetic.pdf").write_bytes(pdf.tobytes())
-    elif scenario in {"ux04", "ux05"}:
+    elif scenario in {"ux04", "ux05", "ux06"}:
         from catalog_ux04_fixtures import workflow_pdf
         from catalog_ux05_fixtures import publication_pdf
-        (qa / "synthetic.pdf").write_bytes(publication_pdf() if scenario == "ux05" else workflow_pdf())
+        (qa / "synthetic.pdf").write_bytes(publication_pdf() if scenario in {"ux05", "ux06"} else workflow_pdf())
         from app.models import AssetCategory, Machine
         with SessionLocal() as db:
             category = AssetCategory(code="QA_UX04_ONLY", name_bg="QA UX04", name_en="QA UX04", name_ru="QA UX04", capabilities=["HAS_PARTS_CATALOG"])
             db.add(category)
             db.flush()
-            for number in range(1, 3):
+            for number in range(1, 7 if scenario == "ux06" else 3):
                 db.add(Machine(inventory_number=f"QA_UX04_{number}", name=f"Synthetic QA machine {number}",
-                    category=category.code, category_id=category.id, brand="QA", model="QA"))
+                    category=category.code, category_id=category.id,
+                    brand="QA_OTHER" if scenario == "ux06" and number == 5 else "QA",
+                    model=None if scenario == "ux06" and number == 4 else "QA"))
             db.commit()
+        if scenario == "ux06":
+            from app.models import CatalogDefinition, CatalogRevision
+            from catalog_binding_fixtures import legacy_binding
+            with SessionLocal() as db:
+                owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+                pending = CatalogDefinition(code="QA_UX06_PENDING", asset_category_id=category.id,
+                    name_bg="Synthetic QA pending", name_en="Synthetic QA pending", name_ru="Synthetic QA pending",
+                    manufacturer="QA", model_reference="QA", created_by_id=owner.id)
+                db.add(pending)
+                db.flush()
+                db.add(CatalogRevision(catalog_id=pending.id, revision_code="QA-DRAFT", created_by_id=owner.id))
+                target = db.scalar(select(Machine).where(Machine.inventory_number == "QA_UX04_6"))
+                legacy_binding(db, owner, pending.id, target.id)
     env["QA_BROWSER_CHANNEL"] = "msedge" if os.name == "nt" else ""
     server = None
     try:

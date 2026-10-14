@@ -14,6 +14,7 @@ from app.models import (
     CatalogRevisionPart,
     CatalogSourceBlob,
 )
+from catalog_binding_fixtures import legacy_binding
 from sqlalchemy import func, select
 from test_catalog_guided_builder_postgres import selected_source
 from test_concurrency import pg_factory as pg_factory  # noqa: F811
@@ -128,6 +129,8 @@ def test_catalog_and_machine_model_edits_cannot_race_to_an_incompatible_binding(
         db.add(machine)
         db.commit()
         machine_id = machine.id
+        db.add(CatalogRevision(catalog_id=catalog_id, revision_code="QA-PUBLISHED", status="PUBLISHED", created_by_id=actor.id))
+        db.commit()
         catalogs.bind_asset(db, actor, catalog_id, machine_id, compatibility_confirmed=True)
     outcomes = race(pg_factory, CatalogDefinition, catalog_id, [
         lambda db, actor: catalogs.update_catalog(db, actor, catalog_id, CatalogUpdate(model_reference="QA_MODEL_A")),
@@ -156,7 +159,7 @@ def test_postgres_upgrade_preserves_an_existing_single_binding_and_allows_a_seco
         db.add_all([machine, *items])
         db.commit()
         machine_id, catalog_ids = machine.id, [item.id for item in items]
-        catalogs.bind_asset(db, actor, catalog_ids[0], machine_id)
+        legacy_binding(db, actor, catalog_ids[0], machine_id)
         original = db.scalar(select(CatalogAssetBinding))
         before = (original.id, original.catalog_id, original.machine_id, original.created_by_id, original.created_at)
     root = Path(__file__).resolve().parents[2]
@@ -172,5 +175,7 @@ def test_postgres_upgrade_preserves_an_existing_single_binding_and_allows_a_seco
         assert (original.id, original.catalog_id, original.machine_id, original.created_by_id, original.created_at) == before
         assert original.is_active and original.deactivated_at is None
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        db.add(CatalogRevision(catalog_id=catalog_ids[1], revision_code="QA-PUBLISHED", status="PUBLISHED", created_by_id=actor.id))
+        db.commit()
         catalogs.bind_asset(db, actor, catalog_ids[1], machine_id)
         assert db.scalar(select(func.count(CatalogAssetBinding.id)).where(CatalogAssetBinding.machine_id == machine_id)) == 2

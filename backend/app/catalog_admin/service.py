@@ -214,54 +214,20 @@ def compatibility(item, machine) -> str:
 
 def bind_asset(db: Session, actor: User, catalog_id: int, machine_id: int,
                compatibility_confirmed: bool = False) -> dict:
-    # PostgreSQL row lock serializes attempts to bind the same machine. The
-    # unique catalog/machine pair is the final guard on both engines.
-    machine = db.scalar(select(Machine).where(Machine.id == machine_id)
-                        .with_for_update().execution_options(populate_existing=True))
-    if machine is None:
-        raise fail("catalog_asset_not_found", 404)
-    item = catalog(db, catalog_id, lock=True)
-    if not item.is_active:
-        raise fail("catalog_inactive")
-    category_for_builder(db, item.asset_category_id)
-    if not machine.is_active:
-        raise fail("catalog_asset_inactive")
-    if machine.category_id != item.asset_category_id:
-        raise fail("catalog_asset_category_mismatch")
-    match = compatibility(item, machine)
-    if match == "INCOMPATIBLE":
-        raise fail("catalog_asset_model_mismatch")
-    if match == "AMBIGUOUS" and not compatibility_confirmed:
-        raise fail("catalog_asset_compatibility_confirmation_required")
-    existing = db.scalar(select(CatalogAssetBinding).where(CatalogAssetBinding.machine_id == machine_id,
-        CatalogAssetBinding.catalog_id == catalog_id))
-    if existing and existing.is_active:
-        raise fail("catalog_asset_already_bound")
-    binding = existing or CatalogAssetBinding(catalog_id=item.id, machine_id=machine_id, created_by_id=actor.id)
-    binding.is_active, binding.deactivated_at = True, None
-    db.add(binding)
-    try:
-        db.flush()
-    except IntegrityError as exc:
-        db.rollback()
-        raise fail("catalog_asset_already_bound") from exc
-    add_audit_log(db, actor, "catalog_asset_binding", binding.id, "CATALOG_ASSET_BOUND",
-                  {"catalog_code": item.code, "machine_id": machine_id,
-                   "compatibility": match, "compatibility_confirmed": compatibility_confirmed})
-    db.commit()
-    return repository.asset_dict(machine)
+    from .bindings import bind
+    from .schemas import BatchBind
+    result = bind(db, actor, BatchBind(catalog_id=catalog_id, machine_ids=[machine_id],
+                  confirmed_machine_ids=[machine_id] if compatibility_confirmed else []), require_preview=False)
+    return {key: value for key, value in result["machines"][0].items() if key != "binding_id"}
 
 
 def unbind_asset(db: Session, actor: User, catalog_id: int, machine_id: int) -> None:
-    db.scalar(select(Machine).where(Machine.id == machine_id).with_for_update())
-    item = catalog(db, catalog_id, lock=True)
+    from .bindings import unbind
+    from .schemas import BatchUnbind
     binding = db.scalar(select(CatalogAssetBinding).where(
         CatalogAssetBinding.catalog_id == catalog_id, CatalogAssetBinding.machine_id == machine_id,
-        CatalogAssetBinding.is_active.is_(True))
-        .with_for_update())
+        CatalogAssetBinding.is_active.is_(True)))
     if binding is None:
         raise fail("catalog_asset_binding_not_found", 404)
-    add_audit_log(db, actor, "catalog_asset_binding", binding.id, "CATALOG_ASSET_UNBOUND",
-                  {"catalog_code": item.code, "machine_id": machine_id})
-    binding.is_active, binding.deactivated_at = False, utcnow()
-    db.commit()
+    unbind(db, actor, BatchUnbind(bindings=[{"binding_id": binding.id, "catalog_id": catalog_id,
+           "machine_id": machine_id, "expected_digest": "0" * 64}]), require_preview=False)

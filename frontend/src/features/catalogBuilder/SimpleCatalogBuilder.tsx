@@ -7,7 +7,7 @@ import './catalogBuilder.css'
 import CatalogMaintenance from './CatalogMaintenance'
 import GuidedWorkspace from './GuidedWorkspace'
 import WizardReview from './WizardReview'
-import WizardMachines from './WizardMachines'
+import CatalogBindings from './CatalogBindings'
 import useDraftGuard from './useDraftGuard'
 import DraftDeleteButton from './DraftDeleteButton'
 import { builderBase, problemKeys, type Catalog, type Category, type Group, type Issue, type Revision, type Step, type Workflow } from './wizardTypes'
@@ -26,6 +26,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirt
   const [target, setTarget] = useState<Issue | undefined>()
   const [step, setStep] = useState<Step>('catalog')
   const [maintenance, setMaintenance] = useState(false)
+  const [bindingCatalog, setBindingCatalog] = useState<number | null | undefined>(undefined)
   const [creating, setCreating] = useState(false)
   const [editingMetadata, setEditingMetadata] = useState(false)
   const [metadata, setMetadata] = useState({ name: '', manufacturer: '', model_reference: '' })
@@ -43,7 +44,7 @@ export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirt
   const report = (caught: unknown) => setError(t(caught instanceof ApiError && caught.code ? problemKeys[caught.code] || 'builder.error.generic' : 'builder.error.generic'))
   async function load() {
     const [rows, options] = await Promise.all([api<Catalog[]>(`${builderBase}/catalogs`), api<Category[]>('/categories')])
-    setCatalogs(rows); setCategories(options.filter(category => category.is_active && category.capabilities.includes('HAS_PARTS_CATALOG')))
+    setCatalogs(rows); setCategories(options.filter(category => category.capabilities.includes('HAS_PARTS_CATALOG')))
   }
   useEffect(() => { if (hasPermission('parts.manage')) void load().catch(report) }, [])
   useEffect(() => {
@@ -150,12 +151,15 @@ export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirt
   return <div className="builder-page catalog-workbench">
     {error && <p className="error" role="alert">{error}</p>}
     <section hidden={!!selected} className={`panel catalog-picker ${selected ? 'catalog-picker-open' : ''}`}><div className="panel-title"><h3>{t('builder.catalogs')}</h3>
-      <button className="primary" disabled={!!selected} onClick={() => { setCreating(true); setForm(newCatalog) }}>{t('builder.create')}</button></div>
+      <div className="actions"><button className="secondary" onClick={() => setBindingCatalog(null)}>{t('ux06.link')}</button>
+      <button className="primary" disabled={!!selected} onClick={() => { setCreating(true); setForm(newCatalog) }}>{t('builder.create')}</button></div></div>
       {!selected && onLink && <details><summary>{t('ref.additional')}</summary><button className="secondary" onClick={onLink}>{t('ref.link')}</button></details>}
       {!catalogs.length && <p>{t('builder.empty')}</p>}
       <div className="builder-list">{catalogs.map(catalog => <article className="builder-list-item" key={catalog.id}>
         <div><strong>{label(catalog)}</strong><small>{label(catalog.asset_category)} · {catalog.manufacturer} {catalog.model_reference}</small></div>
-        <span className="badge">{t(catalog.published_revision ? 'wizard.current' : 'builder.status.DRAFT')}</span>
+        <div className="catalog-binding-counts"><span className="badge">{t(!catalog.is_active ? 'builder.inactive' : catalog.published_revision ? 'wizard.current' : 'builder.status.DRAFT')} {catalog.published_revision?.revision_code}</span>
+          <small>{t('ux06.boundCount', { count: catalog.active_asset_count || 0 })}</small>
+          {!!catalog.pending_asset_count && <small>{t('ux06.pendingCount', { count: catalog.pending_asset_count })}</small>}</div>
         <button className="secondary" disabled={!catalog.is_active || busy || catalog.id === selectedId} onClick={() => {
           if (dirty && !window.confirm(t('wizard.unsaved'))) return
           setSelectedId(catalog.id); setDirtyChildren({}); setError('')
@@ -197,7 +201,9 @@ export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirt
         onNavigate={navigate} target={target} revisionId={revision.id} groups={groups} task={step} changed={refresh} onDirtyChange={documentsDirty} /></div>}
       <div hidden={step !== 'review'}><WizardReview groups={groups} catalogName={label(selected)} revisionCode={revision?.revision_code} workflow={workflow} editable={!!editable} busy={busy || editingMetadata || Object.values(dirtyChildren).some(Boolean)} onFix={fixIssue} onPublish={() => void publish()} /></div>
       {revision?.status === 'PUBLISHED' && <><p role="status">{t('wizard.published')}</p><button className="primary" disabled={busy} onClick={() => void edit()}>{t('wizard.edit')}</button></>}
-      <details><summary>{t('wizard.machines')}</summary><WizardMachines catalogId={selected.id} onChanged={load} /></details>
+      <section className="catalog-binding-summary"><p>{t('ux06.boundCount', { count: selected.active_asset_count || 0 })}</p>
+        {!!selected.pending_asset_count && <p>{t('ux06.pendingCount', { count: selected.pending_asset_count })}</p>}
+        <button className="secondary" disabled={busy || dirty} onClick={() => setBindingCatalog(selected.id)}>{t('ux06.title')}</button></section>
       {editable && revision && <DraftDeleteButton kind="revision" identity={revision.id} label={t('ux04.deleteRevision')} disabled={busy || dirty} onDeleted={async () => {
         const rows = await api<Revision[]>(`${builderBase}/catalogs/${selected.id}/revisions`)
         setRevisions(rows); setRevisionId(rows[0]?.id || null); setGroups([]); setWorkflow(null); await load()
@@ -210,14 +216,15 @@ export default function SimpleCatalogBuilder({ onDirtyChange, onLink }: { onDirt
         }}>{t('wizard.version', { number: revisions.length - index })}</button> · {t(`builder.status.${row.status}`)} · {date(row.created_at)}
       </p>)}</details>
     </section>}
+    {bindingCatalog !== undefined && <CatalogBindings catalogs={catalogs} categories={categories} catalogId={bindingCatalog || undefined} onClose={() => setBindingCatalog(undefined)} onChanged={load} />}
     {maintenance && selected && <Modal wide title={t('catalogUx.manage')} onClose={() => { if (!dirty || window.confirm(t('wizard.unsaved'))) setMaintenance(false) }}>
-      <CatalogMaintenance catalogId={selected.id} onDirtyChange={documentsDirty} onChanged={async () => { await load(); if (revisionId) await refresh(); setRevisions(await api<Revision[]>(`${builderBase}/catalogs/${selected.id}/revisions`)) }} />
+      <CatalogMaintenance catalogId={selected.id} onManageBindings={() => { setMaintenance(false); setBindingCatalog(selected.id) }} onDirtyChange={documentsDirty} onChanged={async () => { await load(); if (revisionId) await refresh(); setRevisions(await api<Revision[]>(`${builderBase}/catalogs/${selected.id}/revisions`)) }} />
     </Modal>}
     {creating && <Modal title={t('builder.create')} onClose={() => { if (!dirty || window.confirm(t('wizard.unsaved'))) setCreating(false) }}>
       <form className="form-grid" onSubmit={event => void create(event)}>
         <label>{t('wizard.name')}<input required maxLength={255} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
         <label>{t('builder.category')}<select required value={form.asset_category_id} onChange={event => setForm({ ...form, asset_category_id: event.target.value })}>
-          <option value="">{t('builder.category')}</option>{categories.map(category => <option key={category.id} value={category.id}>{label(category)}</option>)}</select></label>
+          <option value="">{t('builder.category')}</option>{categories.filter(category => category.is_active).map(category => <option key={category.id} value={category.id}>{label(category)}</option>)}</select></label>
         <label>{t('builder.manufacturer')}<input maxLength={255} value={form.manufacturer} onChange={event => setForm({ ...form, manufacturer: event.target.value })} /></label>
         <label>{t('builder.modelReference')}<input maxLength={255} value={form.model_reference} onChange={event => setForm({ ...form, model_reference: event.target.value })} /></label>
         <details className="wide"><summary>{t('catalogUx.catalogFields')}</summary>

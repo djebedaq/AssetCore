@@ -38,7 +38,7 @@ try {
   await page.locator('input[type=email]').fill(process.env.QA_EMAIL)
   await page.locator('input[type=password]').fill(process.env.QA_PASSWORD)
   await button('Вход').click()
-  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Каталожен конструктор', exact: true }).click()
+  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Управление на каталози', exact: true }).click()
   await createCatalog('Synthetic QA UX04 draft')
   for (const name of ['QA Chassis', 'QA Boom', 'QA Blasting']) {
     await page.locator('.reference-sidebar').getByLabel('Възел', { exact: true }).fill(name)
@@ -80,7 +80,7 @@ try {
   await quantity.fill('2'); await quantity.press('Tab')
   await expect.poll(async () => Number((await api(`/reference-pages/${logical.id}/parts`))[0].quantity)).toBe(2)
   await page.reload()
-  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Каталожен конструктор', exact: true }).click()
+  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Управление на каталози', exact: true }).click()
   await page.locator('.builder-list-item').filter({ hasText: 'Synthetic QA UX04 draft' }).getByRole('button', { name: 'Продължи черновата', exact: true }).click()
   await page.locator('.catalog-navigation').getByRole('button', { name: /Части и маркери/ }).click()
   await expect.poll(async () => Number(await page.locator('.part-comparison').getByLabel('Количество', { exact: true }).inputValue())).toBe(2)
@@ -123,30 +123,33 @@ try {
   await createCatalog('Synthetic QA shared catalog A')
   await button('Затвори').click()
   await createCatalog('Synthetic QA shared catalog B')
+  await button('Затвори').click()
   await page.goto(base + '/machines?category=QA_UX04_ONLY')
   await expect(page.locator('.machine-registry-table tbody tr')).toHaveCount(2)
-  for (let index = 0; index < 2; index++) {
-    await page.locator('.machine-registry-table tbody tr').nth(index).getByRole('button', { name: 'Свържи каталог', exact: true }).click()
-    const dialog = page.getByRole('dialog')
-    for (const name of ['Synthetic QA shared catalog A', 'Synthetic QA shared catalog B']) {
-      await dialog.locator('article').filter({ hasText: name }).getByRole('button', { name: 'Свържи каталог', exact: true }).click()
-    }
-    await expect(dialog.getByRole('button', { name: 'Премахни връзката с каталога', exact: true })).toHaveCount(2)
-    await shot(`machine-${index + 1}-whole-catalog-links`, index ? 390 : 1440)
-    await dialog.getByRole('button', { name: 'Затвори', exact: true }).click()
-    await page.setViewportSize({ width: 1440, height: 1000 })
+  await expect(page.getByRole('button', { name: 'Свържи каталог', exact: true })).toHaveCount(0)
+  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Управление на каталози', exact: true }).click()
+  await button('Свържи каталог').click()
+  const bindingDialog = page.getByRole('dialog')
+  await bindingDialog.getByLabel('Категория активи', { exact: true }).selectOption({ label: 'QA UX04' })
+  await expect(bindingDialog.locator('article')).toHaveCount(2)
+  await expect(bindingDialog.getByRole('option', { name: /Synthetic QA shared catalog A/ })).toBeDisabled()
+  await expect(bindingDialog.getByRole('option', { name: /Synthetic QA shared catalog B/ })).toBeDisabled()
+  const catalogs = await api('/catalogs'), machines = (await (await page.request.get(base + '/api/machines')).json()).filter(row => row.inventory_number.startsWith('QA_UX04_'))
+  const csrf = (await context.cookies()).find(cookie => cookie.name === 'assetcore_csrf').value
+  for (const item of catalogs) {
+    const result = await page.request.post(base + `/api/admin/catalog-builder/catalogs/${item.id}/assets/${machines[0].id}`, {
+      data: { compatibility_confirmed: true }, headers: { 'X-CSRF-Token': csrf } })
+    expect(result.status()).toBe(409)
+    expect((await result.json()).detail.code).toBe('catalog_not_published')
   }
-  const catalogs = await api('/catalogs')
-  expect(catalogs.map(row => row.bound_asset_count)).toEqual([2, 2])
-  await page.locator('.machine-registry-table tbody tr').first().getByRole('button', { name: 'Свържи каталог', exact: true }).click()
-  await page.getByRole('dialog').locator('article').filter({ hasText: 'Synthetic QA shared catalog A' }).getByRole('button', { name: 'Премахни връзката с каталога', exact: true }).click()
-  await expect(page.getByRole('dialog').getByRole('button', { name: 'Премахни връзката с каталога', exact: true })).toHaveCount(1)
-  checks.push('Both machines link both complete catalogs; unpublished links are labeled prepared; unlink removes only the selected active relationship')
+  expect(catalogs.map(row => row.bound_asset_count)).toEqual([0, 0])
+  await shot('draft-binding-prohibited', 1440)
+  checks.push('Superseding UX06 contract: no machine-registry binding action; draft options disabled and legacy API rejects new pending bindings')
   expect(errors).toEqual([])
   await writeFile(`${out}/browser-proof.json`, JSON.stringify({ passed: true, checks, screenshots, actions: {
     physical_pages: 5, before_assignment_requests: 5, after_assignment_requests: assignments,
     before_primary_areas: 6, after_primary_areas: 3, normal_review_written_reasons: 0,
-    draft_source_delete_confirmations: 1, whole_catalog_link_selections: 1,
+    draft_source_delete_confirmations: 1, whole_catalog_link_selections: 0,
   } }, null, 2))
   console.log(`UX04 browser: ${checks.length} acceptance checks passed; ${screenshots.length} screenshots`)
 } catch (error) {

@@ -143,6 +143,17 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
     changes = data.model_dump(exclude_unset=True, mode="json")
     custom_inputs = data.custom_fields if "custom_fields" in changes else None
     changes.pop("custom_fields", None)
+    if any(field in changes and changes[field] != getattr(item, field) for field in ("brand", "model")):
+        from types import SimpleNamespace
+
+        from ..catalog_admin.service import compatibility
+        proposed = SimpleNamespace(brand=changes.get("brand", item.brand), model=changes.get("model", item.model))
+        for catalog in db.scalars(select(CatalogDefinition).join(CatalogAssetBinding).where(
+                CatalogAssetBinding.machine_id == machine_id, CatalogAssetBinding.is_active.is_(True))
+                .order_by(CatalogDefinition.id).with_for_update(read=True, of=CatalogDefinition)
+                .execution_options(populate_existing=True)):
+            if compatibility(catalog, proposed) == "INCOMPATIBLE":
+                raise HTTPException(409, detail={"code": "catalog_asset_model_mismatch", "catalog_id": catalog.id})
     category = None
     if "category_id" in changes or "category" in changes:
         category = _resolve_category(
@@ -164,17 +175,6 @@ def update_machine(machine_id: int, data: MachineUpdate, user: User, db: Session
             422, detail={"code": "category_required", "message": "Изберете съществуваща категория."},
         )
     category_changed = category is not None and category.id != item.category_id
-    if any(field in changes and changes[field] != getattr(item, field) for field in ("brand", "model")):
-        from types import SimpleNamespace
-
-        from ..catalog_admin.service import compatibility
-        proposed = SimpleNamespace(brand=changes.get("brand", item.brand), model=changes.get("model", item.model))
-        for catalog in db.scalars(select(CatalogDefinition).join(CatalogAssetBinding).where(
-                CatalogAssetBinding.machine_id == machine_id, CatalogAssetBinding.is_active.is_(True))
-                .order_by(CatalogDefinition.id).with_for_update(read=True, of=CatalogDefinition)
-                .execution_options(populate_existing=True)):
-            if compatibility(catalog, proposed) == "INCOMPATIBLE":
-                raise HTTPException(409, detail={"code": "catalog_asset_model_mismatch", "catalog_id": catalog.id})
     if category_changed and db.scalar(select(CatalogAssetBinding.id).where(
         CatalogAssetBinding.machine_id == machine_id, CatalogAssetBinding.is_active.is_(True)
     )) is not None:

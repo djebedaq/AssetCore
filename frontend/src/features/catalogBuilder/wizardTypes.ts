@@ -6,7 +6,7 @@ export type Names = { name_bg: string; name_en: string; name_ru: string }
 export type Category = Names & { id: number; code: string; is_active: boolean; capabilities: string[] }
 export type Catalog = Names & { id: number; code: string; asset_category_id: number; asset_category: Category;
   manufacturer: string | null; model_reference: string | null; is_active: boolean;
-  published_revision: { id: number; revision_code: string } | null; draft_revision_count: number }
+  published_revision: { id: number; revision_code: string } | null; draft_revision_count: number; active_asset_count?: number; pending_asset_count?: number }
 export type Revision = { id: number; revision_code: string; status: 'DRAFT' | 'PUBLISHED' | 'RETIRED'; created_at: string }
 export type Group = Names & { id: number; code: string; part_count: number; exploded_page_count: number; spare_list_page_count: number;
   artifact_count?: number; hotspot_count?: number; repair_kit_count?: number; repair_kit_component_count?: number }
@@ -21,6 +21,11 @@ export type Workflow = { ready: boolean; publication_digest: string; current_pub
   progress: { position_count: number; completed_positions: number }; resume_step: Step }
 
 export const problemKeys: Record<string, TranslationKey> = {
+  catalog_not_published: 'ux06.publishFirst', catalog_bindings_stale: 'ux06.stale',
+  catalog_asset_already_bound: 'ux06.already', catalog_asset_inactive: 'ux06.inactiveMachine',
+  catalog_asset_not_found: 'ux06.missing', catalog_asset_binding_not_found: 'ux06.missing',
+  catalog_asset_category_mismatch: 'ux06.categoryMismatch',
+
   catalog_asset_model_mismatch: 'ux04.incompatible', catalog_asset_compatibility_confirmation_required: 'ux04.ambiguous',
   catalog_publication_source_review_required: 'guided.sourceReviewBlocked',
   catalog_publication_source_parts_unconfirmed: 'ux05.sourceParts',
@@ -57,6 +62,5 @@ export const problemKeys: Record<string, TranslationKey> = {
   catalog_publication_hotspot_unverified: 'builder.publication.hotspotUnverified',
   catalog_publication_hotspot_coverage: 'builder.publication.hotspotCoverage',
   catalog_publication_kit_incomplete: 'builder.publication.kitIncomplete',
-  catalog_asset_category_mismatch: 'builder.error.assetCategory', catalog_asset_already_bound: 'builder.error.assetBound',
   catalog_asset_binding_protected: 'builder.error.assetProtected',
 }

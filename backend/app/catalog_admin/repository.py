@@ -40,7 +40,10 @@ def catalogs(db: Session) -> list[dict]:
             "id": category.id, "code": category.code, "name_bg": category.name_bg,
             "name_en": category.name_en, "name_ru": category.name_ru,
         },
-        "bound_asset_count": bound_count, "draft_revision_count": draft_count,
+        "bound_asset_count": bound_count,
+        "active_asset_count": bound_count if item.id in published else 0,
+        "pending_asset_count": 0 if item.id in published else bound_count,
+        "draft_revision_count": draft_count,
         "latest_revision": latest.get(item.id), "published_revision": published.get(item.id),
         "created_at": item.created_at, "updated_at": item.updated_at,
     } for item, category, bound_count, draft_count in rows]
@@ -57,4 +60,5 @@ def assets(db: Session, catalog_id: int) -> list[dict]:
 def asset_dict(item: Machine) -> dict:
     return {"id": item.id, "inventory_number": item.inventory_number,
             "name": item.name, "brand": item.brand, "model": item.model,
+            "serial_number": item.serial_number,
             "category_id": item.category_id, "is_active": item.is_active}
