@@ -418,7 +418,8 @@ def publish(db: Session, actor: User, revision_id: int, expected_digest: str,
                        "previous_revision_id": old.id if old else None,
                        "digest": result["publication_digest"], **result["summary"],
                        "bound_asset_count": len(db.scalars(select(CatalogAssetBinding.id).where(
-                           CatalogAssetBinding.catalog_id == catalog.id)).all()), "publisher_id": actor.id})
+                           CatalogAssetBinding.catalog_id == catalog.id,
+                           CatalogAssetBinding.is_active.is_(True))).all()), "publisher_id": actor.id})
         db.commit()
         return revision_dict(revision)
     except IntegrityError as exc:

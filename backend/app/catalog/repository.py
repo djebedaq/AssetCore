@@ -45,6 +45,7 @@ def search_parts(
     translated_source_record_keys: set[str] | None = None,
     limit: int = 100,
     builder_revision_id: int | None = None,
+    stable_order: bool = False,
 ) -> list[PartCatalog]:
     statement = active_parts_statement(builder_revision_id).where(PartCatalog.family == family)
     if source_id:
@@ -77,15 +78,10 @@ def search_parts(
         statement = statement.where(
             or_(*conditions)
         )
-    return list(
-        db.scalars(
-            statement.order_by(
-                PartCatalog.assembly,
-                PartCatalog.position,
-                PartCatalog.source_row_index,
-            ).limit(limit)
-        )
-    )
+    statement = statement.order_by(PartCatalog.assembly, PartCatalog.position, PartCatalog.source_row_index)
+    if stable_order:
+        statement = statement.order_by(PartCatalog.id)
+    return list(db.scalars(statement.limit(limit)))
 
 
 def diagrams_for_source(db: Session, source_id: str) -> list[CatalogDiagram]:

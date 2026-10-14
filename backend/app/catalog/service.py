@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from itertools import islice, zip_longest
 from typing import Any
 
 from sqlalchemy import select
@@ -451,13 +452,17 @@ def search(
             return []
         if source_id:
             require_compatible_source(db, machine_id=machine_id, source_id=source_id)
-        result = []
+        matches = []
         for binding in bindings:
             _builder_integrity(db, binding.revision_id)
-            result.extend(serialize_part(part) for part in repository.search_parts(
+            matches.append(repository.search_parts(
                 db, query=query, family=db.get(CatalogDefinition, binding.catalog_id).code,
-                source_id=source_id, limit=limit, builder_revision_id=binding.revision_id))
-        return result[:limit]
+                source_id=source_id, limit=limit, builder_revision_id=binding.revision_id,
+                stable_order=len(bindings) > 1))
+        # Round-robin the already scoped, ordered catalogs before applying the
+        # global limit; exhausted catalogs leave their slots to the others.
+        fair_matches = (part for batch in zip_longest(*matches) for part in batch if part is not None)
+        return [serialize_part(part) for part in islice(fair_matches, limit)]
     family = machine_family(machine)
     if family is None or not asset_supports(machine, "HAS_PARTS_CATALOG"):
         return []
