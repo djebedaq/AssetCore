@@ -44,14 +44,14 @@
   },
   "ci_checks_url": "https://github.com/djebedaq/AssetCore/pull/108/checks",
   "screenshots_sha256": {
-    "central-connect-1440.png": "c310ef32cb3709cc738f28980acc79dc714e06a7e8848fc6b89680112908ceee",
-    "central-connect-768.png": "7629713d300b180d168c133599c6d90da00e7011c264f55ae269948c5cf6be28",
-    "central-connect-390.png": "8f70eb65ac054348918ab8ab14411e3aaddd61e8cd410510a62404c249be5619",
-    "incompatible-preview-1440.png": "8e42cdd78e5237acdf95a353cc0eefdc2d135a4bdf29b6f394fd4492a23c1247",
-    "batch-removal-preview-768.png": "f18389dc3c40ea9088c851c15226bb1dd0478711c2037ed76451eb3c9d35f3a2",
-    "central-active-1440.png": "735c13e7305b7a9ef510f3c9649f55b7fd9a129a43c7afebe8bd679598f036d2",
-    "central-active-768.png": "9770bddbc749c68c2eb083a001577c39a5804ee35b1552c054988a011cff0b18",
-    "central-active-390.png": "645e1f515666058947dde6fdf7f1590f9acbbd94657e26ef849a4d38fc6140a4"
+    "central-connect-1440.png": "f36511915af9d3efe55fe8166f55524526b26211ca4de8071b6ac8ac04cf0371",
+    "central-connect-768.png": "9cf69ed57bb28944a06de456d98eac703bc3473cb23911a2d15d4ca400313c68",
+    "central-connect-390.png": "5a3e870bd80ea52e356979830c25c7518b938ef7cc3bbe94ba257bd2baecdabf",
+    "incompatible-preview-1440.png": "a50620d87a6dbf016f62a31b6a3ea875091d43f03caa1c837e3cda60ec3ce0a2",
+    "batch-removal-preview-768.png": "d1e4e94ab9bdc5266291f83bd5ac5e5082ad672f7e783c37cf1d862fdf4b7dee",
+    "central-active-1440.png": "3b8bc582958a999ba60282531587f52287974556fc21a7dff603da65b6f28df1",
+    "central-active-768.png": "32953b25b216da639a55b146b6af1685d67bbec0b2b558e1234f6493e475062c",
+    "central-active-390.png": "e4d08e04599b5cdab4e0fe822737deb53ff6c10db7b5026bb2ee9b5067a7b447"
   },
   "local_pg_full_observation": {
     "case": "tests/postgres/test_concurrency.py::test_two_issue_transactions_create_one_active_transfer",
@@ -66,5 +66,11 @@
     "isolated_repeat": "passed without test/timeout changes",
     "cause": "not established",
     "transfer_source_changed": false
+  },
+  "frontend": {
+    "command": "pnpm test",
+    "passed": 629,
+    "files": 68,
+    "binding_component_tests": 6
   }
 }

@@ -32,6 +32,7 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
   const [links, setLinks] = useState<Page<Binding>>(empty)
   const [selected, setSelected] = useState<Record<number, Machine>>({})
   const [removing, setRemoving] = useState<Record<number, Binding>>({})
+  const [removalPreview, setRemovalPreview] = useState<Binding[] | null>(null)
   const [confirmed, setConfirmed] = useState<number[]>([])
   const [plan, setPlan] = useState<Plan | null>(null)
   const [stage, setStage] = useState<'select' | 'review' | 'remove'>('select')
@@ -50,7 +51,8 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
   const reason = (code?: string | null) => code ? t(problemKeys[code] || 'builder.error.generic') : ''
   const rows = Object.values(selected)
   const removals = Object.values(removing)
-  const dirty = rows.length > 0 || removals.length > 0
+  const removalTargets = removalPreview || removals
+  const dirty = rows.length > 0 || removals.length > 0 || !!removalPreview?.length
   useEffect(() => { heading.current?.focus() }, [stage, closeWarning])
   useEffect(() => {
     const before = (event: BeforeUnloadEvent) => { if (dirty || busy) event.preventDefault() }
@@ -84,7 +86,11 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
     return () => { active = false }
   }, [catalog, selected, confirmed, mode, refresh, t])
   function close() { if (busyRef.current) return; if (dirty) setCloseWarning(true); else onClose() }
-  function resetSelection() { setSelected({}); setRemoving({}); setConfirmed([]); setPlan(null); setStage('select') }
+  function resetSelection() {
+    if (mode === 'connect') { setSelected({}); setConfirmed([]); setPlan(null) }
+    else setRemoving({})
+    setRemovalPreview(null); setStage('select')
+  }
   function toggleMachine(row: Machine, checked: boolean) {
     setSelected(current => { const next = { ...current }; if (checked && Object.keys(next).length < 500) next[row.id] = row; else if (!checked) delete next[row.id]; return next })
     setConfirmed(current => current.filter(id => id !== row.id))
@@ -109,12 +115,17 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
         }))
         setSuccess(`${t('ux06.connected', { count: result.count })} · ${chosen ? name(chosen) : ''} · ${result.machines.map(row => row.inventory_number).join(', ')}`)
       } else {
-        const result = await api<{ count: number }>(`${builderBase}/bindings/batch-deactivate`, post({ bindings: removals.map(row => ({
+        const result = await api<{ count: number }>(`${builderBase}/bindings/batch-deactivate`, post({ bindings: removalTargets.map(row => ({
           binding_id: row.id, catalog_id: row.catalog_id, machine_id: row.machine_id, expected_digest: row.expected_digest,
         })) }))
-        setSuccess(`${t('ux06.removed', { count: result.count })} · ${removals.map(row => `${row.machine.inventory_number} / ${name(row.catalog)}`).join(', ')}`)
+        setSuccess(`${t('ux06.removed', { count: result.count })} · ${removalTargets.map(row => `${row.machine.inventory_number} / ${name(row.catalog)}`).join(', ')}`)
       }
-      resetSelection(); setRefresh(value => value + 1)
+      if (stage === 'review') resetSelection()
+      else {
+        setRemoving(current => Object.fromEntries(Object.entries(current).filter(([, row]) => !removalTargets.some(target => target.id === row.id))))
+        setRemovalPreview(null); setStage('select')
+      }
+      setRefresh(value => value + 1)
       await onChanged()
     } catch (caught) {
       setError(caught instanceof ApiError ? reason(caught.code) : t('builder.error.generic'))
@@ -142,10 +153,10 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
           {plan?.machines.map(row => <article className="binding-card" key={row.id}><div><b>{row.inventory_number || row.id}</b> · {row.name}<p>{t(`ux06.${row.compatibility || 'INCOMPATIBLE'}`)} · {reason(row.code)}</p>
             {row.compatibility === 'AMBIGUOUS' && <label><input type="checkbox" disabled={busy} checked={confirmed.includes(row.id)} onChange={event => setConfirmed(current => event.target.checked ? [...current, row.id] : current.filter(id => id !== row.id))} />{t('ux06.confirmMachine', { machine: row.inventory_number })}</label>}</div>
             <button className="secondary" disabled={busy} onClick={() => toggleMachine(row, false)}>{t('ux06.deselect')}</button></article>)}
-        </> : <><p>{t('ux06.removeWarning')}</p><p>{t('ux06.selectedLinks', { count: removals.length })}</p>
-          {removals.map(row => <article className="binding-card" key={row.id}><b>{row.machine.inventory_number} · {row.machine.name}</b><span>{name(row.catalog)} · {row.catalog.code} · {row.published_revision?.revision_code || t('ux06.pending')}</span></article>)}</>}
-        <div className="actions"><button className="secondary" disabled={busy} onClick={() => setStage('select')}>{t('common.cancel')}</button>
-          <button className={stage === 'remove' ? 'danger' : 'primary'} disabled={busy || stage === 'review' && (!plan?.ready || previewLoading || !rows.length) || stage === 'remove' && !removals.length} onClick={() => void save()}>{t(stage === 'remove' ? 'ux06.confirmRemove' : 'ux06.confirmBind')}</button></div>
+        </> : <><p>{t('ux06.removeWarning')}</p><p>{t('ux06.selectedLinks', { count: removalTargets.length })}</p>
+          {removalTargets.map(row => <article className="binding-card" key={row.id}><b>{row.machine.inventory_number} · {row.machine.name}</b><span>{name(row.catalog)} · {row.catalog.code} · {row.published_revision?.revision_code || t('ux06.pending')}</span></article>)}</>}
+        <div className="actions"><button className="secondary" disabled={busy} onClick={() => { setRemovalPreview(null); setStage('select') }}>{t('common.cancel')}</button>
+          <button className={stage === 'remove' ? 'danger' : 'primary'} disabled={busy || stage === 'review' && (!plan?.ready || previewLoading || !rows.length) || stage === 'remove' && !removalTargets.length} onClick={() => void save()}>{t(stage === 'remove' ? 'ux06.confirmRemove' : 'ux06.confirmBind')}</button></div>
       </section> : <>
         <nav className="actions" aria-label={t('ux06.title')}>{(['connect', 'active'] as const).map(value => <button className="secondary" disabled={busy} aria-pressed={mode === value} key={value} onClick={() => { setMode(value); setOffset(0); setSearch(''); setMachineFilter(0); setStage('select') }}>{t(`ux06.${value}`)}</button>)}
           <button className="secondary" disabled={busy} onClick={() => void reload()}>{t('ux06.refresh')}</button></nav>
@@ -169,9 +180,9 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
           <p>{t('ux06.selectedLinks', { count: removals.length })} · {t('ux06.pageHelp')} · {t('ux06.limit')}</p>
           {!!links.items.length && <label className="binding-select-page"><input type="checkbox" checked={links.items.every(row => !!removing[row.id])} disabled={removals.length + links.items.filter(row => !removing[row.id]).length > 500} onChange={event => { const checked = event.target.checked; setRemoving(current => { const next = { ...current }; links.items.forEach(row => { if (checked) next[row.id] = row; else delete next[row.id] }); return next }) }} />{t('ux06.selectPage', { count: links.items.length })}</label>}
           {links.items.map(row => <article className="binding-card" key={row.id}><label><input type="checkbox" disabled={removals.length >= 500 && !removing[row.id]} checked={!!removing[row.id]} onChange={event => toggleBinding(row, event.target.checked)} /><span><b>{row.machine.inventory_number}</b> · {row.machine.name}<small>{name(row.catalog)} · {row.catalog.code} · {row.published_revision?.revision_code || t('ux06.pending')}</small><small>{t(row.status === 'ACTIVE' ? 'ux06.activeBinding' : 'ux06.pending')}</small></span></label>
-            <button className="danger" onClick={() => { setRemoving({ [row.id]: row }); setStage('remove') }}>{t('ux06.remove')}</button></article>)}
+            <button className="danger" onClick={() => { setRemovalPreview([row]); setStage('remove') }}>{t('ux06.remove')}</button></article>)}
           {!!removals.length && <div className="binding-selection">{removals.map(row => <button className="secondary" key={row.id} onClick={() => toggleBinding(row, false)}>{row.machine.inventory_number} / {row.catalog.code} ×</button>)}</div>}
-          <button className="danger" disabled={!removals.length} onClick={() => setStage('remove')}>{t('ux06.removeSelected')}</button>
+          <button className="danger" disabled={!removals.length} onClick={() => { setRemovalPreview(removals); setStage('remove') }}>{t('ux06.removeSelected')}</button>
         </>}
         {loading ? <p role="status">{t('wizard.loading')}</p> : !page.items.length && <p>{t('builder.empty')}</p>}
         <div className="binding-pagination"><button className="secondary" disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - 50))}>{t('ux06.previous')}</button>

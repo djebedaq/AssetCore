@@ -132,7 +132,8 @@ try {
     checks.push('Individual removal and atomic batch removal use concrete pairs and immediately revoke runtime availability')
     // There are unfinished incompatible selections; the in-dialog close guard preserves them until explicitly discarded.
     await dialog.getByRole('button', { name: 'Затвори', exact: true }).click()
-    if (await dialog.getByText(/Незавършеният избор/).count()) await dialog.getByRole('button', { name: 'Затвори', exact: true }).last().click()
+    await expect(dialog.getByText(/Незавършеният избор/)).toBeVisible()
+    await dialog.getByRole('button', { name: 'Затвори', exact: true }).last().click()
     await button('Управление на връзките').click()
     await connect([1])
     expect((await api(`/bindings?catalog_id=${catalog.id}`)).items.find(link => link.machine_id === machine(1).id).id).toBe(first.id)

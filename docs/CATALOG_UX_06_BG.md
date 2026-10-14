@@ -43,7 +43,7 @@ Read endpoints приемат `offset` (>= 0), `limit` (1–100, default 50), `s
 120 знака), `category_id`, `catalog_id`; списъкът с връзки приема и `machine_id`.
 Отговорът е `{items, total, offset, limit}`. Търсенето на машини включва inventory,
 име, brand, model и serial; `%`/`_` се търсят буквално. Няма скрито отсичане на
-резултатите. Селекцията се пази между страниците/филтрите. „Избери всички“ обхваща
+резултатите. Селекцията се пази между страниците/филтрите и двата изгледа. Индивидуалният preview не заменя груповия избор; след успех се премахват само засегнатите IDs. „Избери всички“ обхваща
 само показаната страница, с изрично описание. Максимумът от 500 връзки на операция
 е показан в UI и се валидира от backend.
 
@@ -169,8 +169,8 @@ runtime договор. Нови pending връзки са забранени п
 | PostgreSQL full локално | `python -m pytest -q tests/postgres --tb=short` | 137 passed, 1 failed; виж ограничението по-долу |
 | Самостоятелен повторен transfer concurrency тест | `python -m pytest -q tests/postgres/test_concurrency.py::test_two_issue_transactions_create_one_active_transfer --tb=short` | 1 passed, 8.75 s; без промяна на теста/timeouts |
 | Финална foreign-catalog / authorization регресия | `python -m pytest -q tests/test_catalog_final_audit.py tests/test_catalog_bindings.py tests/test_authorization_web_security.py --tb=short` | 46 passed; 0 failed; 0 skipped |
-| Frontend suite | `pnpm test` | 628 passed, 68 файла |
-| Достъпни имена на selectors | `pnpm exec vitest run src/features/catalogBuilder/CatalogBindings.test.tsx --pool=threads --maxWorkers=1` | 5 passed; default timeout не е променян |
+| Frontend suite | `pnpm test` | 629 passed, 68 файла |
+| Достъпни имена на selectors | `pnpm exec vitest run src/features/catalogBuilder/CatalogBindings.test.tsx --pool=threads --maxWorkers=1` | 6 passed; default timeout не е променян |
 | TypeScript / ESLint | `pnpm typecheck`; `pnpm lint` | PASS |
 | Frontend build | `pnpm build` | PASS; запазено Vite предупреждение за bundle над 500 kB |
 | Python syntax | `python -m compileall -q backend/app backend/alembic backend/scripts scripts tests` | PASS |
