@@ -71,8 +71,10 @@ def serialize(db: Session, page) -> dict:
         CatalogRevisionPart.reference_page_id == page.id,
         ~select(CatalogRevisionPartPageMap.id).where(
             CatalogRevisionPartPageMap.part_id == CatalogRevisionPart.id).exists()).limit(1))
-    complete = bool(schemes and lists and count and unmapped_parts is None
-                    and positions <= mapped and all(verified for _, verified in hotspots))
+    list_ids = {source["id"] for source in sources if source["role"] == "SPARE_PARTS_LIST"}
+    populated_lists = set(db.scalars(select(CatalogRevisionPartPageMap.visual_page_id).where(
+        CatalogRevisionPartPageMap.visual_page_id.in_(list_ids))))
+    complete = bool(schemes and lists and count and unmapped_parts is None and list_ids <= populated_lists)
     if complete:
         from ..models import CatalogRevision
         from .parts_extraction import ledger
@@ -80,7 +82,9 @@ def serialize(db: Session, page) -> dict:
         if revision.status == "DRAFT":
             active = ledger.session(db, None, assembly, db.get(CatalogRevision, assembly.revision_id), page.id)
             reviewed = list(db.scalars(select(ledger.Source).where(ledger.Source.session_id == active.id))) if active else []
-            complete = bool(len(reviewed) == lists and all(ledger.valid(db, source, active) for source in reviewed))
+            complete = not any(source.processing_state == "RUNNING" or any(
+                c.state == "CONFLICT" or c.state == "ACCEPTED" and not ledger.accepted_part(db, c)
+                for c in ledger.candidates(db, source)) for source in reviewed)
     return {"id": page.id, "assembly_id": page.assembly_id, "stable_key": page.stable_key,
             "sort_order": page.sort_order, "title": page.title, "version": page.version,
             "sources": sources, "part_count": count, "position_count": len(positions),

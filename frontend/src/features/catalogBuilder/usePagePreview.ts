@@ -21,26 +21,29 @@ export function requestPdfPreview(path: string, active: () => boolean) {
   return request
 }
 
-export default function usePagePreview(artifactId?: number, pageNumber?: number) {
+export default function usePagePreview(artifactId?: number, pageNumber?: number, visualPageId?: number) {
   const [url, setUrl] = useState('')
   const [error, setError] = useState(false)
+  const [receipt, setReceipt] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let active = true
     let objectUrl = ''
-    setUrl(''); setError(false)
+    setUrl(''); setError(false); setReceipt(null)
     if (artifactId && pageNumber) {
-      void requestPdfPreview(`${builderBase}/artifacts/${artifactId}/pages/${pageNumber}/preview`, () => active).then(result => {
+      const path = visualPageId ? `${builderBase}/visual-pages/${visualPageId}/review-original`
+        : `${builderBase}/artifacts/${artifactId}/pages/${pageNumber}/preview`
+      void requestPdfPreview(path, () => active).then(result => {
         if (!result) return
         if (!active || !result.mediaType.startsWith('image/')) {
           URL.revokeObjectURL(result.url)
           if (active) setError(true)
           return
         }
-        objectUrl = result.url; setUrl(result.url)
+        objectUrl = result.url; setUrl(result.url); setReceipt(result.reviewReceipt || null)
       }).catch(() => { if (active) setError(true) })
     }
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [artifactId, pageNumber, attempt])
-  return { url, error, failed: () => setError(true), retry: () => setAttempt(value => value + 1) }
+  }, [artifactId, pageNumber, visualPageId, attempt])
+  return { url, error, receipt, failed: () => setError(true), retry: () => setAttempt(value => value + 1) }
 }

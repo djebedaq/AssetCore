@@ -159,14 +159,14 @@ def test_repeated_position_multi_scheme_extraction_publication_two_machines_and_
     assert len(cloned) == 2 and {page["stable_key"] for page in cloned} == {page["stable_key"] for page in pages}
     assert {page["id"] for page in cloned}.isdisjoint({page["id"] for page in pages})
     clone_ready = checked(client.get(f"{BASE}/revisions/{clone['id']}/publication-readiness", headers=auth_headers))
-    assert not clone_ready["ready"]
-    assert {issue["code"] for issue in clone_ready["errors"]} == {"catalog_publication_source_review_required"}
+    assert clone_ready["ready"] and not clone_ready["errors"]
+    assert {issue["code"] for issue in clone_ready["warnings"]} == {"catalog_publication_source_review_required"}
     verify_http_revision(client, auth_headers, clone['id'])
     assert checked(client.get(f"{BASE}/revisions/{clone['id']}/publication-readiness", headers=auth_headers))["ready"]
     clone_parts = checked(client.get(f"{BASE}/reference-pages/{cloned[0]['id']}/parts", headers=auth_headers))
     checked(client.patch(f"{BASE}/parts/{clone_parts[0]['id']}", headers=auth_headers,
         json={"description": "Synthetic next revision human edit"}))
-    assert not checked(client.get(f"{BASE}/revisions/{clone['id']}/publication-readiness", headers=auth_headers))["ready"]
+    assert checked(client.get(f"{BASE}/revisions/{clone['id']}/publication-readiness", headers=auth_headers))["ready"]
     verify_http_revision(client, auth_headers, clone['id'])
     clone_ready = checked(client.get(f"{BASE}/revisions/{clone['id']}/publication-readiness", headers=auth_headers))
     checked(client.post(f"{BASE}/revisions/{clone['id']}/publish", headers=auth_headers,

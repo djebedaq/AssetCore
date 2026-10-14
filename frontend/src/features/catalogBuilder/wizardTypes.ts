@@ -23,6 +23,11 @@ export type Workflow = { ready: boolean; publication_digest: string; current_pub
 export const problemKeys: Record<string, TranslationKey> = {
   catalog_asset_model_mismatch: 'ux04.incompatible', catalog_asset_compatibility_confirmation_required: 'ux04.ambiguous',
   catalog_publication_source_review_required: 'guided.sourceReviewBlocked',
+  catalog_publication_source_parts_unconfirmed: 'ux05.sourceParts',
+  catalog_publication_candidate_conflict: 'ux05.conflict',
+  catalog_publication_candidate_mapping_invalid: 'ux05.mapping',
+  catalog_publication_extraction_running: 'ux05.running',
+  catalog_publication_extraction_integrity: 'ux05.integrity',
   catalog_publication_reference_page_incomplete: 'guided.incomplete',
   catalog_reference_page_stale: 'guided.stale', catalog_reference_page_in_use: 'guided.inUse',
   catalog_invalid_update: 'builder.error.invalid', catalog_category_not_supported: 'builder.error.capability',

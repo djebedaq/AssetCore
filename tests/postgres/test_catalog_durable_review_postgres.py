@@ -119,7 +119,7 @@ def test_unprocessed_selected_source_remains_blocker_in_migrated_postgres(pg_fac
         revision_id = db.get(CatalogRevisionAssembly, page["assembly_id"]).revision_id
         result = publication.readiness(db, revision_id, locked=True)
         assert not result["ready"]
-        assert any(issue["code"] == "catalog_publication_source_review_required" for issue in result["errors"])
+        assert any(issue["code"] == "catalog_publication_source_parts_unconfirmed" for issue in result["errors"])
         source = db.scalar(select(ledger.Source))
         source.processing_state = "FAILED"
         db.commit()

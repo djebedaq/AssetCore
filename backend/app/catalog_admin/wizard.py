@@ -136,7 +136,9 @@ def workflow(db: Session, revision_id: int) -> dict:
             issue.update(page_number=page.page_number)
         if artifact:
             issue.update(filename=artifact.filename)
-        if issue["code"] == "catalog_publication_source_review_required":
+        if issue["code"] in {"catalog_publication_source_review_required", "catalog_publication_source_parts_unconfirmed",
+                             "catalog_publication_candidate_conflict", "catalog_publication_candidate_mapping_invalid",
+                             "catalog_publication_extraction_running", "catalog_publication_extraction_integrity"}:
             issue["step"] = "parts"
         elif part:
             issue.update(assembly_id=part.assembly_id, part_id=part.id, position=part.position, step="parts")
@@ -159,7 +161,7 @@ def workflow(db: Session, revision_id: int) -> dict:
         artifact = artifacts.get(page.artifact_id) if page else None
         if artifact:
             identity = (artifact.assembly_id, page.reference_page_id, hotspot.position)
-            if hotspot.is_verified:
+            if publication.hotspot_verified(hotspot):
                 marked.add(identity)
             else:
                 unconfirmed.add(identity)

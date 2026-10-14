@@ -65,6 +65,7 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
   const [unsaved, setUnsaved] = useState(false)
   const saveQueue = useRef<Promise<void>>(Promise.resolve())
   const candidateVersions = useRef(new Map<number, number>())
+  const inspections = useRef(new Map<number, { expected_version: number; fingerprint: string; inspection_token: string }>())
   const currentReviews = useRef<Review[]>([])
   const generations = useRef(new Map<number, number>())
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
@@ -254,12 +255,16 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
     setBusy(true); setError('')
     try {
       await saveQueue.current
-      const fresh = await api<ReviewSession>(`${builderBase}/reference-pages/${page.id}/review-session`, { method: 'POST' })
       for (const [source, item] of reviews.entries()) {
         const rows = item.rows.flatMap((row, index) => !!item.preview.token && row.selected && !row.rejected && !row.confirmed && valid(row) && item.preview.rows[index].candidate_state !== 'CONFLICT' ? [{ index, part: row.part,
           expected_version: candidateVersions.current.get(item.preview.rows[index].candidate_id!) ?? item.preview.rows[index].candidate_version }] : [])
         if (!rows.length) continue
-        const current = fresh.sources.find(value => value.visual_page_id === item.preview.source.visual_page_id)?.preview
+        const fresh = await api<ReviewSession>(`${builderBase}/reference-pages/${page.id}/review-session`, { method: 'POST' })
+        const latestSource = fresh.sources.find(value => value.visual_page_id === item.preview.source.visual_page_id)
+        const current = latestSource?.preview
+        const inspected = inspections.current.get(item.preview.source.visual_page_id)
+        const inspection = inspected && inspected.fingerprint === latestSource?.fingerprint && inspected.expected_version === latestSource?.version
+          && Date.now() / 1000 - JSON.parse(atob(inspected.inspection_token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'))).created <= 900 ? inspected : undefined
         const conflicting = rows.filter(row => {
           const candidate = item.preview.rows[row.index], latest = current?.rows[row.index]
           return !current || latest?.candidate_id !== candidate.candidate_id || latest?.candidate_version !== row.expected_version
@@ -272,7 +277,7 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
           setUnsaved(true); setError(t('guided.stale')); return
         }
         await api(`${builderBase}/reference-pages/${page.id}/extraction/confirm`, { method: 'POST', body: JSON.stringify({
-          token: current.token, rows, confirm_warnings: true,
+          token: current.token, rows, confirm_warnings: true, inspection,
         }) })
         setReviews(current => current.map((value, index) => index !== source ? value : {
           ...value, rows: value.rows.map((row, index) => rows.some(submitted => submitted.index === index) ? { ...row, selected: false, confirmed: true } : row),
@@ -353,7 +358,15 @@ export default function GuidedParts({ page, changed, onDirtyChange, targetSource
         </tr>
       })}</tbody></table></div>
       {active ? <section className="part-comparison" aria-label={t('catalogUx.editPart')}>
-        <div className="part-original"><SourcePageViewer artifactId={active.item.preview.source.artifact_id} number={active.item.preview.source.page_number} pageCount={active.item.preview.source.page_number} fixed onPage={() => {}} region={evidenceRegion(active.item.preview, active.candidate.bbox)} /><p className="muted">{t('catalogUx.originalHint')}</p><button className="secondary" disabled={busy} onClick={() => {
+        <div className="part-original"><SourcePageViewer artifactId={active.item.preview.source.artifact_id} number={active.item.preview.source.page_number} pageCount={active.item.preview.source.page_number} fixed onPage={() => {}} region={evidenceRegion(active.item.preview, active.candidate.bbox)}
+          visualPageId={active.item.preview.source.visual_page_id} onInspected={receipt => {
+            try {
+              const claim = JSON.parse(atob(receipt.split('.')[0].replace(/-/g, '+').replace(/_/g, '/')))
+              if (Date.now() / 1000 - claim.created <= 900) inspections.current.set(active.item.preview.source.visual_page_id, {
+                expected_version: claim.version, fingerprint: claim.fingerprint, inspection_token: receipt,
+              })
+            } catch { /* Only the server can validate inspection evidence. */ }
+          }} /><p className="muted">{t('catalogUx.originalHint')}</p><button className="secondary" disabled={busy} onClick={() => {
           setBusy(true); void downloadApiFile(`${builderBase}/artifacts/${active.item.preview.source.artifact_id}/download`, active.item.preview.source.filename).catch(caught => setError(t(guidedError(caught)))).finally(() => setBusy(false))
         }}>{t('builder.downloadSource')}</button></div>
         <div className="part-edit"><div className="source-heading"><h4 ref={editorTitle} tabIndex={-1}>{t('catalogUx.editPart')} · {active.row.part.position}</h4><button className="secondary" onClick={() => { saveRow(active.source, active.index); setActiveRow(null) }}>{t('common.close')}</button></div>

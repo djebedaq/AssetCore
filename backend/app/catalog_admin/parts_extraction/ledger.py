@@ -190,14 +190,29 @@ def valid(db, source, active, *, scope_digest=None):
 
 def publication_state(db, content):
     """Called after the catalog lock by publish; also supplies the digest proof."""
-    errors, proof, scopes = [], [], {}
+    errors, warnings, proof, scopes = [], [], [], {}
     assemblies = {a.id: a for a in content["assemblies"]}
     artifacts = {a.id: a for a in content["artifacts"]}
+    pages = {p.id: p for p in content["pages"]}
+    for part in content["parts"]:
+        if not part.extraction_evidence:
+            continue
+        original = part.extraction_evidence.get("source", {})
+        page = pages.get(original.get("visual_page_id"))
+        artifact = artifacts.get(page.artifact_id) if page else None
+        if (artifact is None or page.role != "SPARE_PARTS_LIST"
+                or original.get("artifact_id") != artifact.id or original.get("sha256") != artifact.sha256
+                or original.get("page_number") != page.page_number
+                or not any(m.part_id == part.id and m.visual_page_id == page.id for m in content["maps"])):
+            errors.append({"code": "catalog_publication_candidate_mapping_invalid", "part_id": part.id})
     from ...models import CatalogRevision
     for page in content["pages"]:
         if page.role != "SPARE_PARTS_LIST":
             continue
-        assembly = assemblies[artifacts[page.artifact_id].assembly_id]
+        artifact = artifacts.get(page.artifact_id)
+        assembly = assemblies.get(artifact.assembly_id) if artifact else None
+        if assembly is None:
+            continue  # The publication graph validator reports the broken link.
         revision = db.get(CatalogRevision, assembly.revision_id)
         scope = (assembly.id, page.reference_page_id)
         if scope not in scopes:
@@ -206,15 +221,45 @@ def publication_state(db, content):
         active, scope_digest = scopes[scope]
         source = db.scalar(select(Source).where(Source.session_id == active.id,
             Source.visual_page_id == page.id)) if active else None
+        if source is None:
+            # A selection change need not have been reopened in the editor.
+            # Inspect the retained candidates without creating a new session.
+            source = db.scalar(select(Source).join(ExtractionSession, Source.session_id == ExtractionSession.id).where(
+                ExtractionSession.revision_id == revision.id, ExtractionSession.assembly_id == assembly.id,
+                ExtractionSession.reference_page_id == page.reference_page_id,
+                Source.visual_page_id == page.id).order_by(Source.id.desc()).limit(1))
+            if source:
+                active = db.get(ExtractionSession, source.session_id)
+                scope_digest = scope_fingerprint(db, active)
         approved = valid(db, source, active, scope_digest=scope_digest) if source else False
         if not approved:
-            errors.append({"code": "catalog_publication_source_review_required", "visual_page_id": page.id,
+            warnings.append({"code": "catalog_publication_source_review_required", "visual_page_id": page.id,
                 "assembly_id": assembly.id, "reference_page_id": page.reference_page_id})
+        mapped_ids = {m.part_id for m in content["maps"] if m.visual_page_id == page.id}
+        if not mapped_ids:
+            errors.append({"code": "catalog_publication_source_parts_unconfirmed", "visual_page_id": page.id})
+        if source:
+            attempt = db.get(Attempt, source.current_attempt_id) if source.current_attempt_id else None
+            if attempt and (attempt.source_id != source.id or attempt.state == "SUCCEEDED" and (
+                    attempt.finished_at is None or not attempt.evidence or hashed(attempt.evidence) != attempt.evidence_digest)):
+                errors.append({"code": "catalog_publication_extraction_integrity", "visual_page_id": page.id})
+            if source.processing_state == "RUNNING":
+                errors.append({"code": "catalog_publication_extraction_running", "visual_page_id": page.id})
+            for candidate in candidates(db, source):
+                if candidate.state == "CONFLICT":
+                    errors.append({"code": "catalog_publication_candidate_conflict", "visual_page_id": page.id,
+                                   "candidate_id": candidate.id})
+                elif candidate.state == "ACCEPTED":
+                    part = accepted_part(db, candidate)
+                    if (part is None or part.id not in mapped_ids or part.assembly_id != assembly.id
+                            or part.reference_page_id != page.reference_page_id):
+                        errors.append({"code": "catalog_publication_candidate_mapping_invalid", "visual_page_id": page.id,
+                                       "candidate_id": candidate.id})
         proof.append({"visual_page_id": page.id, "session_id": active.id if active else None,
             "source_id": source.id if source else None, "version": source.version if source else None,
             "fingerprint": fingerprint(db, source, active, scope_digest=scope_digest) if source else None,
             "approved_fingerprint": source.approved_fingerprint if source else None, "valid": approved})
-    return errors, proof
+    return errors, warnings, proof
 
 
 def invalidate(source):

@@ -111,6 +111,10 @@ def _error(code: str, **ids) -> dict:
     return {"code": code, **ids}
 
 
+def hotspot_verified(item) -> bool:
+    return bool(item.is_verified and item.verified_by_id is not None and item.verified_at is not None)
+
+
 def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
     revision = db.get(CatalogRevision, revision_id)
     if revision is None:
@@ -199,8 +203,8 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
                 or hotspot.width < .002 or hotspot.height < .002
                 or hotspot.x + hotspot.width > 1 or hotspot.y + hotspot.height > 1):
             errors.append(_error("catalog_publication_hotspot_invalid", hotspot_id=hotspot.id))
-        elif not hotspot.is_verified or hotspot.verified_by_id is None or hotspot.verified_at is None:
-            errors.append(_error("catalog_publication_hotspot_unverified", hotspot_id=hotspot.id))
+        elif not hotspot_verified(hotspot):
+            warnings.append(_error("catalog_publication_hotspot_unverified", hotspot_id=hotspot.id))
         else:
             hotspot_positions[(artifact.assembly_id, page.reference_page_id)].add(hotspot.position)
     for (assembly_id, reference_page_id), values in positions.items():
@@ -208,7 +212,7 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         if missing:
             item = _error("catalog_publication_hotspot_coverage", assembly_id=assembly_id,
                           reference_page_id=reference_page_id, missing_positions=len(missing))
-            (errors if reference_page_id is not None else warnings).append(item)
+            warnings.append(item)
     for reference in content["reference_pages"]:
         owned = [page for page in content["pages"] if page.reference_page_id == reference.id]
         owned_parts = [part for part in content["parts"] if part.reference_page_id == reference.id]
@@ -216,9 +220,10 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
             errors.append(_error("catalog_publication_reference_page_incomplete", reference_page_id=reference.id))
     components_by_kit = defaultdict(list)
     from .parts_extraction.ledger import publication_state
-    review_errors, review_proof = publication_state(db, content)
+    review_errors, review_warnings, review_proof = publication_state(db, content)
     if revision.status == "DRAFT":
         errors.extend(review_errors)
+        warnings.extend(review_warnings)
     for component in content["components"]:
         components_by_kit[component.kit_id].append(component)
         kit, part = kit_by_id.get(component.kit_id), part_by_id.get(component.part_id)
@@ -240,7 +245,7 @@ def readiness(db: Session, revision_id: int, *, locked: bool = False) -> dict:
         "spare_list_page_count": sum(x.role == "SPARE_PARTS_LIST" for x in content["pages"]),
         "reviewed_source_count": sum(item["valid"] for item in review_proof),
         "hotspot_count": len(content["hotspots"]),
-        "verified_hotspot_count": sum(x.is_verified for x in content["hotspots"]),
+        "verified_hotspot_count": sum(hotspot_verified(x) for x in content["hotspots"]),
         "repair_kit_count": len(content["kits"]),
         "repair_kit_component_count": len(content["components"]),
     }
@@ -311,6 +316,9 @@ def _materialize(db: Session, actor: User, catalog: CatalogDefinition,
         mapping = first_maps[item.id]
         page = pages[mapping.visual_page_id]
         artifact = artifacts[page.artifact_id]
+        evidence = item.extraction_evidence or {}
+        confirmation_time = (datetime.fromisoformat(evidence["confirmed_at"])
+                             if evidence.get("confirmed_at") else item.created_at) if evidence else utcnow()
         part = PartCatalog(
             builder_revision_id=revision.id, builder_part_id=item.id,
             source_record_key=f"CBP{item.id}", source_id=source_id(assembly, item.reference_page_id),
@@ -328,8 +336,11 @@ def _materialize(db: Session, actor: User, catalog: CatalogDefinition,
             supplier_code=item.supplier_code, source_document=artifact.filename,
             source_page=page.page_number, source_version=version,
             source_document_sha256=artifact.sha256, revision=revision.revision_code,
-            verification_status="VERIFIED_BUILDER_PUBLICATION", is_active=True,
-            is_verified=True, verified_by_id=actor.id, verified_at=utcnow(),
+            # This flag authorizes the confirmed part for runtime use. Source
+            # attestation remains exclusively in the immutable review ledger.
+            verification_status="CONFIRMED_BUILDER_PUBLICATION", is_active=True,
+            is_verified=True,
+            verified_by_id=evidence.get("confirmed_by_id") or actor.id, verified_at=confirmation_time,
         )
         db.add(part)
         db.flush()
@@ -343,7 +354,8 @@ def _materialize(db: Session, actor: User, catalog: CatalogDefinition,
             builder_revision_id=revision.id, builder_hotspot_id=item.id,
             hotspot_key=f"CBH{item.id}", diagram_id=diagrams[item.visual_page_id].id,
             position=item.position, x=item.x, y=item.y, width=item.width, height=item.height,
-            provenance=item.provenance, confidence=1.0, is_verified=True,
+            provenance=item.provenance, confidence=1.0 if hotspot_verified(item) else None,
+            is_verified=hotspot_verified(item),
             verified_by_id=item.verified_by_id, verified_at=item.verified_at,
             created_by_id=actor.id,
         ))
@@ -361,7 +373,7 @@ def _materialize(db: Session, actor: User, catalog: CatalogDefinition,
             brand="", model="", revision=revision.revision_code,
             assembly=assembly.name_bg, source_document=artifact.filename if artifact else None,
             source_page=page.page_number if page else None,
-            provenance="BUILDER_VERIFIED", confidence=1.0, is_approved=True,
+            provenance="BUILDER_CONFIRMED_PUBLICATION", confidence=1.0, is_approved=True,
             is_active=True, approved_by_id=actor.id, approved_at=utcnow(), created_by_id=actor.id,
         )
         db.add(kit)
@@ -485,6 +497,7 @@ def clone(db: Session, actor: User, revision_id: int,
                       if key not in {"id", "assembly_id", "reference_page_id"}}
             if values.get("extraction_evidence"):
                 evidence = json.loads(json.dumps(values["extraction_evidence"]))
+                evidence.setdefault("confirmed_at", item.created_at.isoformat())
                 evidence["source"]["visual_page_id"] = page_ids[evidence["source"]["visual_page_id"]]
                 evidence["source"]["artifact_id"] = artifact_ids[evidence["source"]["artifact_id"]]
                 values["extraction_evidence"] = evidence

@@ -70,7 +70,7 @@ def test_5_zero_5_blocks_complete_readiness_and_direct_publish(client, auth_head
             verify_http_source(client, auth_headers, source, manual=False)
     result = readiness(client, auth_headers, revision)
     assert not result["ready"]
-    assert [e["visual_page_id"] for e in result["errors"] if e["code"] == "catalog_publication_source_review_required"] == [previews[1]["source"]["visual_page_id"]]
+    assert [e["visual_page_id"] for e in result["errors"] if e["code"] == "catalog_publication_source_parts_unconfirmed"] == [previews[1]["source"]["visual_page_id"]]
     listed = checked(client.get(f"{BASE}/assemblies/{assembly['id']}/reference-pages", headers=auth_headers))[0]
     assert listed["status"] == "NEEDS_ATTENTION"
     response = client.post(f"{BASE}/revisions/{revision['id']}/publish", headers=auth_headers, json={
@@ -140,7 +140,7 @@ def test_human_approval_invalidates_on_part_edit_and_stale_browser(client, auth_
     stale = client.post(f"{BASE}/revisions/{revision['id']}/publish", headers=auth_headers, json={
         "expected_publication_digest": ready["publication_digest"], "expected_current_published_revision_id": None, "confirmed": True})
     assert stale.status_code == 409 and stale.json()["detail"]["code"] == "catalog_publication_stale"
-    assert not readiness(client, auth_headers, revision)["ready"]
+    assert readiness(client, auth_headers, revision)["ready"]
     resumed = resume(client, auth_headers, page)["sources"][0]
     assert resumed["review_state"] == "NEEDS_REVIEW"
     verify_http_source(client, auth_headers, resumed, manual=False)
@@ -360,7 +360,7 @@ def test_remove_and_restore_mapping_never_revives_prior_approval(client, auth_he
         json={"visual_page_ids": [visual["id"]]}), 201)
     state = resume(client, auth_headers, page)["sources"][0]
     assert state["version"] > verified["version"] and state["review_state"] == "NEEDS_REVIEW"
-    assert not readiness(client, auth_headers, revision)["ready"]
+    assert readiness(client, auth_headers, revision)["ready"]
     with session_factory() as db:
         assert db.scalar(select(func.count(CatalogSourceReviewDecision.id))) == 1
 

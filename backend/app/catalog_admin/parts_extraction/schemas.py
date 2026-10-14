@@ -50,10 +50,18 @@ class ConfirmRow(Payload):
     expected_version: int | None = Field(default=None, ge=1)
 
 
+class SourceInspection(Payload):
+    expected_version: int = Field(ge=1)
+    fingerprint: str = Field(min_length=64, max_length=64)
+    inspection_token: str = Field(min_length=1, max_length=4000)
+    reason: str | None = None
+
+
 class ExtractConfirm(Payload):
     token: str = Field(min_length=1, max_length=4_000_000)
     rows: list[ConfirmRow] = Field(min_length=1, max_length=1000)
     confirm_warnings: bool = False
+    inspection: SourceInspection | None = None
 
 
 class CandidateEdit(Payload):

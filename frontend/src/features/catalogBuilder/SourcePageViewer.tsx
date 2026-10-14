@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '../../i18n'
 import usePagePreview from './usePagePreview'
 
-export default function SourcePageViewer({ artifactId, pageCount, number, onPage, fixed = false, region }: {
+export default function SourcePageViewer({ artifactId, pageCount, number, onPage, fixed = false, region, visualPageId, onInspected }: {
+  visualPageId?: number; onInspected?: (receipt: string) => void;
   artifactId: number; pageCount: number; number: number; onPage: (number: number) => void; fixed?: boolean; region?: { left: string; top: string; width: string; height: string } | null
 }) {
   const { t } = useI18n()
-  const preview = usePagePreview(artifactId, number)
+  const preview = usePagePreview(artifactId, number, visualPageId)
   const [zoom, setZoom] = useState(100)
   const [fit, setFit] = useState<'width' | 'page' | null>('page')
   const [jump, setJump] = useState(String(number))
@@ -55,7 +56,7 @@ export default function SourcePageViewer({ artifactId, pageCount, number, onPage
         viewport.current.scrollTop = pan.current.top + pan.current.y - event.clientY
       }} onPointerUp={() => { pan.current = null }} onPointerCancel={() => { pan.current = null }}>
       {preview.error ? <div role="alert" className="reader-message"><p>{t('builder.previewError')}</p><button className="secondary" onClick={preview.retry}>{t('wizard.retry')}</button></div>
-        : preview.url ? <div className="reader-image" style={{ width: `${zoom}%` }}><img ref={image} src={preview.url} draggable={false} onLoad={resize} onError={preview.failed}
+        : preview.url ? <div className="reader-image" style={{ width: `${zoom}%` }}><img ref={image} src={preview.url} draggable={false} onLoad={() => { resize(); if (preview.receipt) onInspected?.(preview.receipt) }} onError={preview.failed}
           style={{ width: '100%' }} alt={t('guided.physicalPage', { number })} />{region && <span className="evidence-highlight" style={region} aria-hidden="true" />}</div>
           : <p role="status" className="reader-message">{t('builder.previewPending')}</p>}
     </div>

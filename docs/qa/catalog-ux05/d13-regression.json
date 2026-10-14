@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "scope": "Regression against retained independently validated extraction; no new human transcription or approval",
+  "source_sha256": "e9540c2af79802d000f186381c403dfbca6ae6b58ecb6cb13b9ecec862558e42",
+  "baseline_sha256": "1e4990de5dbd659a40af29fbb65bcff6bd1970d78341b98dc45906395bfe75ed",
+  "new_extraction_sha256": "186608af4b73a872800381736a87fd5ad20e2951d636c90c2309bbcf72833d96",
+  "new_human_approval": false,
+  "pages": [
+    {
+      "physical_page": 13,
+      "exact_rows_all_five_fields": 20
+    },
+    {
+      "physical_page": 15,
+      "exact_rows_all_five_fields": 10
+    }
+  ],
+  "exact_total": 30
+}
