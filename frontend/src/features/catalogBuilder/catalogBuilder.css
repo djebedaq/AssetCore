@@ -110,3 +110,6 @@
   .catalog-bindings .actions button { flex: 1 1 auto; }
   .binding-pagination { justify-content: flex-start; }
 }
+
+.catalog-bindings > label.binding-select-page { display: flex; align-items: center; gap: 8px; }
+.catalog-bindings input[type=checkbox] { width: 16px; height: 16px; flex: 0 0 16px; margin: 0; }

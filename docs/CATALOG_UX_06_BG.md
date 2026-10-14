@@ -160,8 +160,40 @@ runtime договор. Нови pending връзки са забранени п
 
 ## Проверки и доказателства
 
-Окончателните точни резултати и screenshot manifest ще бъдат добавени след
-приключване на локалните проверки и GitHub CI. Неприключил тест не е PASS.
+Проверени локални резултати:
+
+| Проверка | Команда / обхват | Резултат |
+| --- | --- | --- |
+| SQLite целеви регресии | `python -m pytest -q tests/test_catalog_bindings.py tests/test_catalog_builder.py tests/test_catalog_publication.py tests/test_catalog_ux04.py tests/test_catalog_ux05.py tests/test_catalog_review_fixes.py --tb=short` | 67 passed; 0 failed; 0 skipped |
+| PostgreSQL 16 целеви регресии | `python -m pytest -q tests/postgres/test_catalog_bindings_postgres.py tests/postgres/test_catalog_builder_postgres.py tests/postgres/test_catalog_ux04_postgres.py tests/postgres/test_catalog_ux05_postgres.py tests/postgres/test_catalog_final_audit_postgres.py --tb=short` | 43 passed; 0 failed; 0 skipped |
+| Финална foreign-catalog / authorization регресия | `python -m pytest -q tests/test_catalog_final_audit.py tests/test_catalog_bindings.py tests/test_authorization_web_security.py --tb=short` | 46 passed; 0 failed; 0 skipped |
+| Frontend suite | `pnpm test` | 628 passed, 68 файла |
+| Достъпни имена на selectors | `pnpm exec vitest run src/features/catalogBuilder/CatalogBindings.test.tsx --pool=threads --maxWorkers=1` | 5 passed; default timeout не е променян |
+| TypeScript / ESLint | `pnpm typecheck`; `pnpm lint` | PASS |
+| Frontend build | `pnpm build` | PASS; запазено Vite предупреждение за bundle над 500 kB |
+| Python syntax | `python -m compileall -q backend/app backend/alembic backend/scripts scripts tests` | PASS |
+| Ruff | `python -m ruff check backend/app backend/alembic backend/scripts scripts tests` | PASS |
+| Dependency consistency | `python -m pip check` | No broken requirements found |
+| Dependency security | `python scripts/audit_dependencies.py python --output .tmp/ux06/python-audit.json`; `python scripts/audit_dependencies.py frontend --output .tmp/ux06/frontend-audit.json` | 81 Python / 342 frontend зависимости; 0 blocking; без exceptions |
+| Migration integrity | `python backend/scripts/validate_migration_history.py --require-all-protected` | 34 защитени миграции; без missing/mismatched/new unprotected |
+| Authorization inventory | `python backend/scripts/validate_authorization_inventory.py` | valid; 289 routes с frontend mount, 149 mutations; 255 permission-classified |
+| Catalog verification | `PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py`; `python backend/scripts/build_catalog_translations.py --check` | PASS; 9 authoritative source fingerprints непроменени |
+| Docker | `docker build` към отделен QA tag от curated context на development source | PASS; production tags/containers не са използвани |
+
+Пълните suites се изпълняват в GitHub CI с оригиналните assertions и timeouts:
+`python -m pytest -q -m "not postgres" --durations=10` и
+`python -m pytest -q tests/postgres --durations=10 --junitxml=postgres-test-results.xml`.
+Точният финален статус за текущия PR head е в
+[PR #108 checks](https://github.com/djebedaq/AssetCore/pull/108/checks).
+Пълният PostgreSQL CI run е потвърдил 138 passed, включително migration и
+encrypted backup/restore rehearsal. Локалните частични full runs не са цитирани като PASS.
+
+Backend CI откри един стар foreign-catalog fixture, който свързваше преди
+публикация. Той вече проверява отказа на черновата и свързва след истинска
+публикация; всички foreign-machine/part/kit/document assertions са запазени.
+Browser regression проверява native `option.disabled` property, защото
+Playwright matcher-ът `toBeDisabled` не отчете вече наличния native disabled
+attribute за тези options. Проверката на backend отказа остава отделна.
 
 Добавени са backend HTTP/service tests, fault injection след подготвени редове,
 audit/commit rollback, stale/ABA и pair spoof проверки, pagination >100 машини,
@@ -176,6 +208,34 @@ Browser runner: `python tests/browser/run_catalog_ux06_qa.py` с наличен 
 само в process environment. Не записва auth state/HAR/tokens в доказателствата.
 CI изпълнява UX04, UX05 и UX06 browser scenarios, както и пълните backend,
 PostgreSQL, frontend, security, migration и Docker jobs.
+
+Локалният UX06 browser scenario е PASS: 7 групи acceptance проверки и 8 screenshots
+при 390, 768 и 1440 px. След първоначално създадената disposable база повторните
+локални сценарии използват същата изолирана QA база, като деактивират само собствените
+публикувани QA връзки чрез общия service и запазват историята/pending записа.
+CI runner винаги създава нова база. Проверени са runtime отказ след unbind,
+повторно активиране със същия ID, непроменена историческа заявка, 8 audit събития
+в 6 операции и индивидуалното AMBIGUOUS потвърждение. Preview/execute отказът за
+несъвместимата група се проверява и с валиден preview digest.
+
+Доказателства: [browser manifest](qa/catalog-ux-06/browser-proof.json),
+[desktop active bindings](qa/catalog-ux-06/central-active-1440.png),
+[tablet removal](qa/catalog-ux-06/batch-removal-preview-768.png),
+[mobile connection](qa/catalog-ux-06/central-connect-390.png),
+[incompatible preview](qa/catalog-ux-06/incompatible-preview-1440.png).
+Снимките са визуално прегледани; няма хоризонтално преливане. Мобилният диалог
+използва вертикално превъртане, като действията остават достъпни.
+
+## Рискове и известни ограничения
+
+- Максимум 500 конкретни връзки на операция и 50 реда на UI страница. И двете са
+  видими; няма скрит общ лимит на резултатите или избор на невидими редове.
+- Старият single API запазва своя request договор без задължителен digest;
+  business правилата се проверяват отново под същите locks. Централният UI използва
+  guarded batch договора и за индивидуални операции.
+- Запазеното Vite bundle warning не е security/build failure и не е заглушавано.
+- Ръчните compatibility потвърждения не променят capability или категорийни правила.
+  Външни директни SQL редакции не са поддържан административен workflow.
 
 ## Production защита
 

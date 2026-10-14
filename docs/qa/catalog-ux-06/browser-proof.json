@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "synthetic_only": true,
+  "checks": [
+    "Created and published through the UI with real PDF extraction, confirmed parts and optional UX05 warnings",
+    "Single and batch EXACT connections plus per-machine AMBIGUOUS confirmation; runtime available for all four",
+    "Incompatible group blocked in UI and backend; explicit confirmation cannot bypass and zero partial writes",
+    "Individual removal and atomic batch removal use concrete pairs and immediately revoke runtime availability",
+    "Reactivation reuses the same binding ID; immutable published revision and all confirmed parts remain available",
+    "Historical request remains identical; eight binding audit events share six operation IDs and retain individual confirmation",
+    "Legacy pending binding stays visible and cannot expose draft content in runtime"
+  ],
+  "screenshots": [
+    "central-connect-1440.png",
+    "central-connect-768.png",
+    "central-connect-390.png",
+    "incompatible-preview-1440.png",
+    "batch-removal-preview-768.png",
+    "central-active-1440.png",
+    "central-active-768.png",
+    "central-active-390.png"
+  ]
+}

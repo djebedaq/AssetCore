@@ -39,7 +39,7 @@ try {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await button('Нов каталог').click()
     const creationDialog = page.getByRole('dialog')
-    const name = 'Synthetic QA UX06 central bindings'
+    const name = `Synthetic QA UX06 central bindings ${Date.now()}`
     await creationDialog.getByLabel('Име на каталога', { exact: true }).fill(name)
     await creationDialog.getByRole('combobox').selectOption({ label: 'QA UX04' })
     await creationDialog.getByLabel('Производител', { exact: true }).fill('QA')
@@ -90,6 +90,10 @@ try {
       await expect(dialog).toContainText(`Успешно записани връзки: ${numbers.length}`)
     }
     await connect([1])
+    const historyPart = (await request(`/catalog/v2/search?machine_id=${machine(1).id}&q=QA-UX05-059`))[0]
+    const historicalRequest = await request('/part-requests/multi', { machine_id: machine(1).id,
+      lines: [{ part_id: historyPart.id, description: 'Synthetic QA immutable history', quantity: 1 }] })
+    const historyBefore = (await request('/part-requests/multi')).find(row => row.id === historicalRequest.id)
     const first = (await api(`/bindings?catalog_id=${catalog.id}`)).items.find(link => link.machine_id === machine(1).id)
     await connect([2, 3])
     await connect([4], true)
@@ -103,8 +107,10 @@ try {
     await expect(dialog).toContainText('Несъвместим производител или модел')
     const forged = { catalog_id: catalog.id, machine_ids: [machine(5).id, machine(6).id], confirmed_machine_ids: [machine(5).id] }
     const csrf = (await context.cookies()).find(cookie => cookie.name === 'assetcore_csrf').value
-    const rejected = await page.request.post(base + '/api/admin/catalog-builder/bindings/batch', { data: forged, headers: { 'X-CSRF-Token': csrf } })
+    const invalidPlan = await api('/bindings/preview', forged)
+    const rejected = await page.request.post(base + '/api/admin/catalog-builder/bindings/batch', { data: { ...forged, expected_digest: invalidPlan.digest }, headers: { 'X-CSRF-Token': csrf } })
     expect(rejected.status()).toBe(409)
+    expect((await rejected.json()).detail.code).toBe('catalog_asset_model_mismatch')
     expect((await api(`/bindings?catalog_id=${catalog.id}`)).total).toBe(4)
     expect((await request(`/catalog/v2/machines/${machine(6).id}`)).supported).toBe(false)
     checks.push('Incompatible group blocked in UI and backend; explicit confirmation cannot bypass and zero partial writes')
@@ -122,6 +128,7 @@ try {
     await dialog.getByRole('button', { name: 'Потвърди премахването', exact: true }).click()
     await expect.poll(async () => (await api(`/bindings?catalog_id=${catalog.id}`)).total).toBe(1)
     for (const number of [1, 2, 3]) expect((await request(`/catalog/v2/machines/${machine(number).id}`)).supported).toBe(false)
+    expect((await request('/part-requests/multi')).find(row => row.id === historicalRequest.id)).toEqual(historyBefore)
     checks.push('Individual removal and atomic batch removal use concrete pairs and immediately revoke runtime availability')
     // There are unfinished incompatible selections; the in-dialog close guard preserves them until explicitly discarded.
     await dialog.getByRole('button', { name: 'Затвори', exact: true }).click()
@@ -132,6 +139,12 @@ try {
     expect((await request(`/catalog/v2/search?machine_id=${machine(1).id}&q=QA-UX05-059`)).length).toBe(1)
     expect((await api(`/catalogs/${catalog.id}/revisions`))[0].id).toBe(revision.id)
     checks.push('Reactivation reuses the same binding ID; immutable published revision and all confirmed parts remain available')
+    expect((await request('/part-requests/multi')).find(row => row.id === historicalRequest.id)).toEqual(historyBefore)
+    const audit = (await request('/audit')).filter(row => row.entity_type === 'catalog_asset_binding' && JSON.parse(row.details || '{}').catalog_id === catalog.id)
+    expect(audit).toHaveLength(8)
+    expect(new Set(audit.map(row => row.operation_reference)).size).toBe(6)
+    expect(audit.filter(row => JSON.parse(row.details).compatibility === 'AMBIGUOUS').every(row => JSON.parse(row.details).compatibility_confirmed)).toBe(true)
+    checks.push('Historical request remains identical; eight binding audit events share six operation IDs and retain individual confirmation')
     await dialog.getByRole('button', { name: 'Активни връзки', exact: true }).click()
     await dialog.getByLabel('Каталог', { exact: true }).selectOption('')
     await expect(dialog).toContainText('Synthetic QA pending')

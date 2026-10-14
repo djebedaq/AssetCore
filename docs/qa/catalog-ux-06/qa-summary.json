@@ -1,0 +1,44 @@
+{
+  "synthetic_scenario_only": true,
+  "browser": {
+    "passed": true,
+    "acceptance_groups": 7,
+    "screenshots": 8,
+    "widths": [
+      390,
+      768,
+      1440
+    ]
+  },
+  "local_suites": {
+    "sqlite-targeted": {
+      "tests": 67,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "postgres-targeted": {
+      "tests": 43,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "final-regression": {
+      "tests": 46,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "ci_checks_url": "https://github.com/djebedaq/AssetCore/pull/108/checks",
+  "screenshots_sha256": {
+    "central-connect-1440.png": "c310ef32cb3709cc738f28980acc79dc714e06a7e8848fc6b89680112908ceee",
+    "central-connect-768.png": "7629713d300b180d168c133599c6d90da00e7011c264f55ae269948c5cf6be28",
+    "central-connect-390.png": "8f70eb65ac054348918ab8ab14411e3aaddd61e8cd410510a62404c249be5619",
+    "incompatible-preview-1440.png": "8e42cdd78e5237acdf95a353cc0eefdc2d135a4bdf29b6f394fd4492a23c1247",
+    "batch-removal-preview-768.png": "f18389dc3c40ea9088c851c15226bb1dd0478711c2037ed76451eb3c9d35f3a2",
+    "central-active-1440.png": "735c13e7305b7a9ef510f3c9649f55b7fd9a129a43c7afebe8bd679598f036d2",
+    "central-active-768.png": "9770bddbc749c68c2eb083a001577c39a5804ee35b1552c054988a011cff0b18",
+    "central-active-390.png": "645e1f515666058947dde6fdf7f1590f9acbbd94657e26ef849a4d38fc6140a4"
+  }
+}
