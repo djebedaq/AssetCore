@@ -106,7 +106,7 @@ def test_part_position_and_kit_references_are_safe(client, auth_headers, session
     blocked = client.patch(f"{BASE}/parts/{second['id']}", headers=auth_headers,
                            json={"position": "14"})
     assert blocked.status_code == 409 and blocked.json()["detail"]["code"] == "catalog_part_position_in_use"
-    assert client.delete(f"{BASE}/parts/{second['id']}", headers=auth_headers).status_code == 409
+    assert client.get(f"{BASE}/draft-deletion/part/{second['id']}", headers=auth_headers).json()["counts"]["catalog_revision_position_hotspots"] == 1
 
     invalid_source = _kit(client, auth_headers, pump, source_visual_page_id=scheme)
     assert invalid_source.status_code == 422
@@ -130,9 +130,9 @@ def test_part_position_and_kit_references_are_safe(client, auth_headers, session
                        json={"part_id": first["id"], "quantity": 1}).status_code == 409
     assert client.patch(f"{BASE}/repair-kits/{kit['id']}", headers=auth_headers,
                         json={"expected_version": 2, "code": "CHANGED"}).json()["detail"]["code"] == "catalog_repair_kit_code_immutable"
-    assert client.delete(f"{BASE}/parts/{first['id']}", headers=auth_headers).json()["detail"]["code"] == "catalog_part_in_repair_kit"
-    assert client.delete(f"{BASE}/visual-pages/{spare}", headers=auth_headers).json()["detail"]["code"] == "catalog_repair_kit_source_page_in_use"
-    assert client.delete(f"{BASE}/artifacts/{artifact}", headers=auth_headers).json()["detail"]["code"] == "catalog_repair_kit_source_page_in_use"
+    assert client.get(f"{BASE}/draft-deletion/part/{first['id']}", headers=auth_headers).status_code == 200
+    assert client.get(f"{BASE}/draft-deletion/source/{spare}", headers=auth_headers).status_code == 200
+    assert client.get(f"{BASE}/draft-deletion/document/{artifact}", headers=auth_headers).status_code == 200
     updated = client.patch(f"{BASE}/repair-kit-components/{component['id']}", headers=auth_headers,
                            json={"expected_version": component["version"], "quantity": 3, "note": "Confirmed"})
     assert updated.status_code == 200 and float(updated.json()["quantity"]) == 3

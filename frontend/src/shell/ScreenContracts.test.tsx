@@ -22,6 +22,8 @@ function fixture(permissions: PermissionCode[]) {
     const data = path.endsWith('/auth/me') ? user
       : path.endsWith('/emergency-access/status') ? { active: false }
       : path.endsWith('/machines') ? [machine]
+      : path.endsWith('/machines/category-navigation') ? []
+      : path.includes('/workspace/machines?') ? { items: [machine], total: 1, page: 1, page_size: 25 }
       : path.endsWith('/machines/3/passport') ? passport
       : path.includes('/search?') ? { query: 'Falch', machines: [machine], parts: [], documents: [], repairs: [], part_requests: [], transfers: [], generated_documents: [] }
       : path.endsWith('/audit') ? [{ id: 1, entity_type: 'machine', entity_id: 3, action: 'TEST_ONLY', created_at: '2026-08-27T10:00:00Z', details: JSON.stringify({ nested_value: { valid: true, list: [7] } }) }]

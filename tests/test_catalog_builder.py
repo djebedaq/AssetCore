@@ -37,7 +37,7 @@ def test_builder_requires_parts_manage(client, session_factory, role):
     assert _create(client, headers, "QA_FORBIDDEN", 1).status_code == 403
     assert client.post(f"{BASE}/catalogs/1/revisions", headers=headers,
                        json={"revision_code": "A"}).status_code == 403
-    assert client.post(f"{BASE}/catalogs/1/assets/1", headers=headers).status_code == 403
+    assert client.post(f"{BASE}/catalogs/1/assets/1", headers=headers, json={"compatibility_confirmed": True}).status_code == 403
     assert client.post(f"{BASE}/visual-pages/1/hotspots", headers=headers,
                        json={"position": "1", "x": .1, "y": .1, "width": .1, "height": .1}).status_code == 403
     assert client.patch(f"{BASE}/hotspots/1", headers=headers,
@@ -66,7 +66,7 @@ def test_builder_routes_are_permission_classified():
     report = build_authorization_inventory(app)
     assert report.valid, report.errors
     builder = [route for route in report.routes if route.path.startswith(BASE)]
-    assert len(builder) == 95
+    assert len(builder) == 98
     assert all(route.permission == "parts.manage" for route in builder)
 
 
@@ -111,14 +111,14 @@ def test_generic_builder_bindings_and_lifecycle(client, auth_headers, session_fa
     assert second.status_code == 201
     second_id = second.json()["id"]
     assert _create(client, auth_headers, "QA_CATALOG_A", category_a).json()["detail"]["code"] == "catalog_code_duplicate"
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_b}", headers=auth_headers).json()["detail"]["code"] == "catalog_asset_category_mismatch"
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_a}", headers=auth_headers).status_code == 201
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_a2}", headers=auth_headers).status_code == 201
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_b}", headers=auth_headers, json={"compatibility_confirmed": True}).json()["detail"]["code"] == "catalog_asset_category_mismatch"
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_a}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_a2}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     assert client.patch(f"/api/machines/{machine_a}", headers=auth_headers,
                         json={"category_id": category_b}).json()["detail"]["code"] == "catalog_asset_category_in_use"
     assert client.patch(f"/api/categories/{category_a}", headers=auth_headers,
                         json={"capabilities": []}).json()["detail"]["code"] == "category_capability_in_use"
-    assert client.post(f"{BASE}/catalogs/{second_id}/assets/{machine_a}", headers=auth_headers).json()["detail"]["code"] == "catalog_asset_already_bound"
+    assert client.post(f"{BASE}/catalogs/{second_id}/assets/{machine_a}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     assert len(client.get(f"{BASE}/catalogs/{catalog_id}/assets", headers=auth_headers).json()) == 2
     assert client.patch(f"{BASE}/catalogs/{catalog_id}", headers=auth_headers,
                         json={"asset_category_id": category_b}).json()["detail"]["code"] == "catalog_category_in_use"
@@ -144,7 +144,7 @@ def test_generic_builder_bindings_and_lifecycle(client, auth_headers, session_fa
     assert len(client.get(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers).json()) == 1
     assert client.post(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers,
                        json={"revision_code": "B"}).json()["detail"]["code"] == "catalog_inactive"
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_b}", headers=auth_headers).json()["detail"]["code"] == "catalog_inactive"
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_b}", headers=auth_headers, json={"compatibility_confirmed": True}).json()["detail"]["code"] == "catalog_inactive"
     assert client.patch(f"{BASE}/catalogs/{catalog_id}", headers=auth_headers,
                         json={"is_active": True}).status_code == 200
     assert client.post(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers,
@@ -161,7 +161,7 @@ def test_eligible_assets_and_owner_preview(client, auth_headers, session_factory
     assert [item["id"] for item in client.get(f"{BASE}/catalogs/{catalog_id}/eligible-assets", headers=auth_headers).json()] == [machine_id]
     assert [item["id"] for item in client.get(f"{BASE}/catalogs/{catalog_id}/eligible-assets",
                                                    headers=auth_headers, params={"search": "Any Brand"}).json()] == [machine_id]
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers).status_code == 201
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     assert client.post(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers,
                        json={"revision_code": "A"}).status_code == 201
     with session_factory() as db:
@@ -180,7 +180,7 @@ def test_eligible_assets_and_owner_preview(client, auth_headers, session_factory
             raise AssertionError("ordinary administrator reached owner deletion")
     assert client.delete(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers).status_code == 204
     with session_factory() as db:
-        assert db.scalar(select(CatalogAssetBinding.id).where(CatalogAssetBinding.machine_id == machine_id)) is None
+        assert db.scalar(select(CatalogAssetBinding.id).where(CatalogAssetBinding.machine_id == machine_id, CatalogAssetBinding.is_active.is_(True))) is None
         assert db.get(CatalogDefinition, catalog_id) is not None
         assert db.scalar(select(CatalogRevision.id).where(CatalogRevision.catalog_id == catalog_id)) is not None
 
@@ -189,7 +189,7 @@ def test_owner_deletes_only_builder_children(client, auth_headers, session_facto
     category_id = _category(session_factory, "QA_BUILDER_DELETE")
     machine_id = _machine(session_factory, category_id, "QA_BUILDER_DELETE_ASSET", "QA")
     catalog_id = _create(client, auth_headers, "QA_DELETE_CATALOG", category_id).json()["id"]
-    client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers)
+    client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers, json={"compatibility_confirmed": True})
     revision_id = client.post(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers,
                               json={"revision_code": "A"}).json()["id"]
     assembly_id = client.post(f"{BASE}/revisions/{revision_id}/assemblies", headers=auth_headers,

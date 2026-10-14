@@ -266,7 +266,7 @@ def test_processed_wrong_selection_requires_original_reason_and_retains_attempt_
         {"rows": [], "tables": [], "warnings": [], "method": "NATIVE", "ocr_used": False}
         if operation == "page" and number == 1 else real(raw, operation, number, config))
     extract(client, auth_headers, page, wrong)
-    assert client.delete(f"{BASE}/visual-pages/{wrong['id']}", headers=auth_headers).status_code == 409
+    assert client.get(f"{BASE}/draft-deletion/source/{wrong['id']}", headers=auth_headers).status_code == 200
     state = next(s for s in resume(client, auth_headers, page)["sources"] if s["visual_page_id"] == wrong["id"])
     data = {"expected_version": state["version"], "fingerprint": state["fingerprint"],
         "inspection_token": "not-an-original-receipt", "reason": "QA scheme page selected as a parts list by mistake"}
@@ -291,7 +291,7 @@ def test_processed_wrong_selection_requires_original_reason_and_retains_attempt_
     assert "X-Catalog-Review-Receipt" not in archived.headers
 
 
-def test_legacy_assembly_delete_cannot_bypass_processed_source_review(client, auth_headers, session_factory):
+def test_draft_assembly_delete_removes_owned_review_evidence(client, auth_headers, session_factory):
     from catalog_review_helpers import verify_http_revision
     from test_catalog_builder_parts import part, source, workspace
     _, revision_id, assembly_id, _ = workspace(client, auth_headers, session_factory, include_empty_group=False)
@@ -301,11 +301,9 @@ def test_legacy_assembly_delete_cannot_bypass_processed_source_review(client, au
         json={"visual_page_ids": [spare_id]}).status_code == 201
     verify_http_revision(client, auth_headers, revision_id)
     response = client.delete(f"{BASE}/assemblies/{assembly_id}", headers=auth_headers)
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "catalog_source_correction_review_required"
-    assert client.get(f"{BASE}/assemblies/{assembly_id}/parts", headers=auth_headers).json()[0]["id"] == created["id"]
-    state = checked(client.post(f"{BASE}/assemblies/{assembly_id}/source-review", headers=auth_headers))["sources"][0]
-    assert state["review_state"] == "VERIFIED" and len(state["attempts"]) == 1
+    assert response.status_code == 204
+    with session_factory() as db:
+        assert not db.scalar(select(ledger.ExtractionSession.id).where(ledger.ExtractionSession.assembly_id == assembly_id))
 
 
 def test_owner_catalog_deletion_preserves_durable_review_history(client, auth_headers, session_factory):

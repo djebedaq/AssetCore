@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from itertools import islice, zip_longest
 from typing import Any
 
 from sqlalchemy import select
@@ -22,7 +23,7 @@ from ..models import (
     TechnicalDocument,
 )
 from . import repository
-from .runtime_context import published_binding
+from .runtime_context import published_binding, published_bindings
 from .sources import (
     CATALOG_ROOT,
     CATALOG_VERSION,
@@ -230,9 +231,9 @@ def _builder_pages(db: Session, assembly) -> list[dict]:
     return result
 
 
-def _primary_machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
+def _primary_machine_catalog(db: Session, machine_id: int, selected_binding=None) -> dict[str, Any]:
     machine = require_machine(db, machine_id)
-    binding = published_binding(db, machine)
+    binding = selected_binding or published_binding(db, machine)
     base = {
         "dataset_version": CATALOG_VERSION,
         "machine_id": machine.id,
@@ -251,6 +252,7 @@ def _primary_machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
             pages = _builder_pages(db, assembly)
             diagrams = repository.diagrams_for_source(db, sid)
             assemblies.append({
+                "catalog_id": binding.catalog_id,
                 "source_id": sid, "family": catalog_code,
                 "assembly": assembly.name_bg, "title": assembly.name_bg,
                 "name_bg": assembly.name_bg, "name_en": assembly.name_en, "name_ru": assembly.name_ru,
@@ -307,6 +309,13 @@ def machine_catalog(db: Session, machine_id: int) -> dict[str, Any]:
     from .references import association_dict, associations, supplemental_assemblies
 
     result = _primary_machine_catalog(db, machine_id)
+    bindings = published_bindings(db, require_machine(db, machine_id))
+    for binding in bindings[1:]:
+        result["assemblies"] += _primary_machine_catalog(db, machine_id, binding)["assemblies"]
+    result["catalogs"] = [{"id": binding.catalog_id, "revision_id": binding.revision_id,
+        "name_bg": db.get(CatalogDefinition, binding.catalog_id).name_bg,
+        "name_en": db.get(CatalogDefinition, binding.catalog_id).name_en,
+        "name_ru": db.get(CatalogDefinition, binding.catalog_id).name_ru} for binding in bindings]
     result["references"] = [association_dict(db, row) for row in associations(db, machine_id)]
     primary_ids = {source_id for item in result["assemblies"]
                    for source_id in [item["source_id"], *[page["source_id"] for page in item.get("pages", [])]]}
@@ -326,7 +335,9 @@ def require_compatible_source(
             message="Категорията не поддържа структуриран каталог.",
             operation="catalog_read", stage="capability",
         )
-    binding = published_binding(db, machine)
+    bindings = published_bindings(db, machine)
+    binding = next((item for item in bindings if _builder_assembly(db, item.revision_id, source_id)),
+                   bindings[0] if bindings else None)
     from .references import active_source
 
     owns_source = bool(binding and _builder_assembly(db, binding.revision_id, source_id))
@@ -435,16 +446,23 @@ def search(
         term = query.strip().casefold()
         return [part for part in parts if not term or any(
             term in str(value).casefold() for value in part.values() if value is not None)][:limit]
-    binding = published_binding(db, machine)
-    if binding is not None:
+    bindings = published_bindings(db, machine)
+    if bindings:
         if not asset_supports(machine, "HAS_PARTS_CATALOG"):
             return []
-        _builder_integrity(db, binding.revision_id)
         if source_id:
             require_compatible_source(db, machine_id=machine_id, source_id=source_id)
-        return [serialize_part(part) for part in repository.search_parts(
-            db, query=query, family=db.get(CatalogDefinition, binding.catalog_id).code,
-            source_id=source_id, limit=limit, builder_revision_id=binding.revision_id)]
+        matches = []
+        for binding in bindings:
+            _builder_integrity(db, binding.revision_id)
+            matches.append(repository.search_parts(
+                db, query=query, family=db.get(CatalogDefinition, binding.catalog_id).code,
+                source_id=source_id, limit=limit, builder_revision_id=binding.revision_id,
+                stable_order=len(bindings) > 1))
+        # Round-robin the already scoped, ordered catalogs before applying the
+        # global limit; exhausted catalogs leave their slots to the others.
+        fair_matches = (part for batch in zip_longest(*matches) for part in batch if part is not None)
+        return [serialize_part(part) for part in islice(fair_matches, limit)]
     family = machine_family(machine)
     if family is None or not asset_supports(machine, "HAS_PARTS_CATALOG"):
         return []
@@ -605,16 +623,19 @@ def kits(
     machine = require_machine(db, machine_id)
     if source_id and require_compatible_source(db, machine_id=machine_id, source_id=source_id)[1].get("shared"):
         return []
-    binding = published_binding(db, machine)
-    if binding is not None:
+    bindings = published_bindings(db, machine)
+    if bindings:
         if not asset_supports(machine, "HAS_PARTS_CATALOG"):
             return []
-        _builder_integrity(db, binding.revision_id)
         if source_id:
             require_compatible_source(db, machine_id=machine_id, source_id=source_id)
-        return [serialize_kit(kit) for kit in repository.repair_kits(
-            db, family=db.get(CatalogDefinition, binding.catalog_id).code,
-            source_id=source_id, builder_revision_id=binding.revision_id)]
+        result = []
+        for binding in bindings:
+            _builder_integrity(db, binding.revision_id)
+            result.extend(serialize_kit(kit) for kit in repository.repair_kits(
+                db, family=db.get(CatalogDefinition, binding.catalog_id).code,
+                source_id=source_id, builder_revision_id=binding.revision_id))
+        return result
     family = machine_family(machine)
     if family is None or not asset_supports(machine, "HAS_PARTS_CATALOG"):
         return []

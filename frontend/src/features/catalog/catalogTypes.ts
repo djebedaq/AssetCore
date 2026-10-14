@@ -53,6 +53,7 @@ export type CatalogReferencePage = { id: number; stable_key: string; number: num
   source_id: string; diagrams: CatalogDiagram[]; part_count: number; verified_hotspot_count: number }
 
 export type CatalogAssembly = {
+  catalog_id?: number | null
   is_supplemental?: boolean
   source_id: string
   family: string
@@ -70,6 +71,7 @@ export type CatalogAssembly = {
 }
 
 export type MachineCatalog = {
+  catalogs?: Array<{ id: number; revision_id: number; name_bg: string; name_en: string; name_ru: string }>
   references?: SharedReference[]
   dataset_version: string
   supported: boolean

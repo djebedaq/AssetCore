@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createApiObjectUrl } from '../../api'
+import { requestPdfPreview } from './usePagePreview'
 import { useI18n } from '../../i18n'
 import { builderBase } from './wizardTypes'
 
@@ -12,13 +12,15 @@ export default function DocumentThumbnail({ artifactId, pageNumber }: { artifact
     let active = true
     let objectUrl = ''
     const load = () => {
-      void createApiObjectUrl(`${builderBase}/artifacts/${artifactId}/pages/${pageNumber}/preview?thumbnail=true`)
+      void requestPdfPreview(`${builderBase}/artifacts/${artifactId}/pages/${pageNumber}/preview?thumbnail=true`, () => active)
         .then(result => {
+          if (!result) return
           if (!active) { URL.revokeObjectURL(result.url); return }
           objectUrl = result.url; setUrl(result.url)
         }).catch(() => { if (active) setError(true) })
     }
     setUrl(''); setError(false)
+    if (typeof IntersectionObserver === 'undefined') return () => { active = false }
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) { observer.disconnect(); load() }
     }, { rootMargin: '160px' })

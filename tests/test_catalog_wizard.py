@@ -58,12 +58,14 @@ def simple_workspace(client, headers, factory):
         doc.drawString(50, 700, text)
         doc.showPage()
     doc.save()
+    checked(client.post(f"{BASE}/revisions/{revisions[0]['id']}/groups", headers=headers,
+                        json={"name": "QA initial user assembly"}), 201)
     artifact = checked(client.post(f"{BASE}/revisions/{revisions[0]['id']}/documents", headers=headers, json={
         "title": "QA original", "filename": "qa-original.pdf", "media_type": "application/pdf",
         "content_base64": base64.b64encode(pdf.getvalue()).decode(),
     }), 201)
     initial = checked(client.get(f"{BASE}/revisions/{revisions[0]['id']}/assemblies", headers=headers))[0]
-    assert initial["code"] == "INITIAL_GROUP"
+    assert initial["code"] == "QA_INITIAL_USER_ASSEMBLY"
     renamed = checked(client.patch(f"{BASE}/assemblies/{initial['id']}", headers=headers,
                                    json={key: "QA group A" for key in ("name_bg", "name_en", "name_ru")}))
     assert renamed["code"] == initial["code"]
@@ -164,7 +166,7 @@ def test_simple_flow_late_binding_update_and_immutable_official_evidence(
     with session_factory() as db:
         category = db.get(AssetCategory, catalog["asset_category_id"])
         machines = [Machine(inventory_number=f"QA_WIZARD_{letter}", name="QA ONLY",
-                            category=category.code, category_id=category.id, brand="QA", model="QA",
+                            category=category.code, category_id=category.id, brand="QA corrected", model="QA corrected",
                             serial_number=f"QA-SERIAL-{letter}") for letter in "ABC"]
         db.add_all(machines)
         db.commit()
@@ -175,12 +177,12 @@ def test_simple_flow_late_binding_update_and_immutable_official_evidence(
         with session_factory() as db:
             return [{column.name: getattr(row, column.name) for column in PartCatalog.__table__.columns}
                     for row in db.scalars(select(PartCatalog).where(PartCatalog.builder_revision_id == revision["id"])).all()]
-    checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{a}", headers=auth_headers), 201)
+    checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{a}", headers=auth_headers, json={"compatibility_confirmed": True}), 201)
     assert runtime(a)["supported"] and not runtime(c)["supported"]
     assert len(runtime(a)["assemblies"]) == 2
     rows_before = published_rows()
     assert checked(client.get(f"{BASE}/catalogs/{catalog['id']}/eligible-assets?search=QA-SERIAL-B", headers=auth_headers))[0]["id"] == b
-    checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{b}", headers=auth_headers), 201)
+    checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{b}", headers=auth_headers, json={"compatibility_confirmed": True}), 201)
     assert runtime(b)["supported"] and published_rows() == rows_before
     assert runtime(a)["assemblies"] == runtime(b)["assemblies"]
     source_id = runtime(a)["assemblies"][0]["source_id"]

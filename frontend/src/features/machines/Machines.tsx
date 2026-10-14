@@ -5,6 +5,8 @@ import { statusText, useI18n } from '../../i18n'
 import { hasPermission } from '../../permissions'
 import type { AssetCategory, Department, Location, Machine, RegistryCategory } from '../../types'
 import MachineModal from './MachineModal'
+import MachineCatalogLinks from '../catalogBuilder/MachineCatalogLinks'
+import CatalogDialog from '../catalogBuilder/CatalogDialog'
 import { LazyMachinePassportModal as MachinePassportModal } from '../passport/LazyMachinePassportModal'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
@@ -33,6 +35,7 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
   const [selected, setSelected] = useState<Machine | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [passportId, setPassportId] = useState<number | null>(null)
+  const [catalogLinkId, setCatalogLinkId] = useState<number | null>(null)
   const [error, setError] = useState(false)
   const [navigationFailed, setNavigationFailed] = useState(false)
   const [loadingItems, setLoadingItems] = useState(false)
@@ -107,6 +110,7 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
       id: category.id, code: category.code, name_bg: category.name_bg,
       name_en: category.name_en, name_ru: category.name_ru, is_active: true,
       asset_count: 0, has_pressure: category.capabilities?.includes('HAS_PRESSURE') || false,
+      capabilities: category.capabilities || [],
     }])
     chooseCategory(category.code)
     setRefresh(value => value + 1)
@@ -151,7 +155,8 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
             {showPressure && <td>{machine.pressure_bar != null ? `${machine.pressure_bar} bar` : t('common.notSpecified')}</td>}
             <td><StatusBadge status={machine.status} /></td>
             <td>{machine.location?.name || t('common.notSpecified')}</td>
-            <td><button className="link" onClick={() => onOpenPassport ? onOpenPassport(machine.id) : setPassportId(machine.id)}>{t('passport.tab.passport')}</button>{hasPermission('assets.edit') && <button className="link" onClick={() => setSelected(machine)}>{t('common.details')}</button>}</td>
+            <td><button className="link" onClick={() => onOpenPassport ? onOpenPassport(machine.id) : setPassportId(machine.id)}>{t('passport.tab.passport')}</button>{hasPermission('assets.edit') && <button className="link" onClick={() => setSelected(machine)}>{t('common.details')}</button>}
+              {hasPermission('parts.manage') && category?.capabilities?.includes('HAS_PARTS_CATALOG') && <button className="link" onClick={() => setCatalogLinkId(machine.id)}>{t('ux04.link')}</button>}</td>
           </tr>
         })}
       </tbody></table>
@@ -162,5 +167,6 @@ export default function Machines({ onOpenCatalog, onOpenPassport }: { onOpenCata
     {selected && <MachineModal machine={selected} locations={locations} departments={departments} categories={categories} onClose={() => setSelected(null)} onSaved={() => { setSelected(null); setRefresh((value) => value + 1) }} />}
     {showNew && <MachineModal initialCategoryId={selectedCategory?.is_active ? selectedCategory.id : undefined} locations={locations} departments={departments} categories={categories} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); setRefresh((value) => value + 1) }} onCategoryCreated={categoryCreated} />}
     {passportId && <MachinePassportModal machineId={passportId} onClose={() => setPassportId(null)} onOpenCatalog={() => { setPassportId(null); onOpenCatalog(passportId) }} />}
+    {catalogLinkId && <CatalogDialog title={t('ux04.link')} onClose={() => setCatalogLinkId(null)} wide><MachineCatalogLinks machineId={catalogLinkId} /></CatalogDialog>}
   </>
 }

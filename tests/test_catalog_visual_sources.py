@@ -153,15 +153,10 @@ def test_explicit_roles_preview_and_isolation(client, auth_headers, viewer_heade
         assert db.get(CatalogRevisionArtifact, second_id) is None
         assert db.scalar(select(CatalogRevisionVisualPage.id).where(CatalogRevisionVisualPage.artifact_id == second_id)) is None
         assert db.get(CatalogRevision, revision_id) is not None
-        events = db.scalars(select(AuditLog).where(AuditLog.entity_type.in_(
-            ["catalog_revision_assembly", "catalog_revision_artifact"]))).all()
-        assert {event.action for event in events} >= {
-            "ASSEMBLY_CREATED", "ASSEMBLY_UPDATED", "ASSEMBLY_DELETED",
-            "CATALOG_SOURCE_UPLOADED", "CATALOG_SOURCE_DELETED",
-            "VISUAL_PAGE_ROLE_ASSIGNED", "VISUAL_PAGE_ROLE_REMOVED",
-        }
-        deleted = next(event for event in events if event.action == "ASSEMBLY_DELETED")
-        assert json.loads(deleted.details)["artifacts"][0]["artifact_id"] == second_id
+        events = list(db.scalars(select(AuditLog).where(AuditLog.entity_type == "catalog_draft_deletion")))
+        assert len(events) == 3
+        deleted = next(event for event in events if json.loads(event.details)["kind"] == "assembly")
+        assert json.loads(deleted.details)["counts"]["catalog_revision_artifacts"] == 1
 
 
 def test_pdf_validation_and_draft_guards(client, auth_headers, session_factory, monkeypatch):

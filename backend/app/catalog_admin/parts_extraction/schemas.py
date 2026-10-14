@@ -16,11 +16,17 @@ class PageUpdate(PageCreate):
     sort_order: int | None = Field(default=None, ge=0)
 
 
+class SelectedSourcePage(Payload):
+    page_number: int = Field(ge=1)
+    roles: list[Literal["EXPLODED_SCHEME", "SPARE_PARTS_LIST"]] = Field(min_length=1, max_length=2)
+
+
 class SourceAssign(Payload):
     expected_version: int = Field(ge=1)
     artifact_id: int = Field(gt=0)
-    page_numbers: list[int] = Field(min_length=1, max_length=100)
-    roles: list[Literal["EXPLODED_SCHEME", "SPARE_PARTS_LIST"]] = Field(min_length=1, max_length=2)
+    page_numbers: list[int] = Field(default_factory=list, max_length=100)
+    roles: list[Literal["EXPLODED_SCHEME", "SPARE_PARTS_LIST"]] = Field(default_factory=list, max_length=2)
+    selections: list[SelectedSourcePage] = Field(default_factory=list, max_length=2000)
 
 
 class ExtractSelection(Payload):
@@ -62,7 +68,7 @@ class SourceReview(Payload):
     expected_version: int = Field(ge=1)
     fingerprint: str = Field(min_length=64, max_length=64)
     inspection_token: str = Field(min_length=1, max_length=4000)
-    reason: str = Field(min_length=10, max_length=2000)
+    reason: str | None = Field(default=None, max_length=2000)
     manual_transcription: bool = False
 
 

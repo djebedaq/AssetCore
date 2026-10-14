@@ -8,6 +8,7 @@ from ..models import AssetCategory, CatalogAssetBinding, CatalogDefinition, Cata
 
 def catalogs(db: Session) -> list[dict]:
     bindings = (select(CatalogAssetBinding.catalog_id, func.count().label("n"))
+                .where(CatalogAssetBinding.is_active.is_(True))
                 .group_by(CatalogAssetBinding.catalog_id).subquery())
     drafts = (select(CatalogRevision.catalog_id, func.count().label("n"))
               .where(CatalogRevision.status == "DRAFT")
@@ -48,7 +49,7 @@ def catalogs(db: Session) -> list[dict]:
 def assets(db: Session, catalog_id: int) -> list[dict]:
     rows = db.scalars(select(Machine).join(CatalogAssetBinding,
                                             CatalogAssetBinding.machine_id == Machine.id)
-                      .where(CatalogAssetBinding.catalog_id == catalog_id)
+                      .where(CatalogAssetBinding.catalog_id == catalog_id, CatalogAssetBinding.is_active.is_(True))
                       .order_by(Machine.inventory_number)).all()
     return [asset_dict(item) for item in rows]
 

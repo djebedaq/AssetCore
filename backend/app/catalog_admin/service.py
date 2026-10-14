@@ -1,7 +1,7 @@
 """Builder write rules. Nothing here reads or writes the controlled runtime catalog."""
 
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,9 +36,13 @@ def category_for_builder(db: Session, category_id: int, *, active: bool = True) 
 
 
 def catalog(db: Session, catalog_id: int, *, lock: bool = False) -> CatalogDefinition:
-    query = select(CatalogDefinition).where(CatalogDefinition.id == catalog_id)
     if lock:
-        query = query.with_for_update().execution_options(populate_existing=True)
+        from .visual_sources import lock_catalog
+        item = lock_catalog(db, catalog_id)
+        if item is None:
+            raise fail("catalog_definition_not_found", 404)
+        return item
+    query = select(CatalogDefinition).where(CatalogDefinition.id == catalog_id)
     item = db.scalar(query)
     if item is None:
         raise fail("catalog_definition_not_found", 404)
@@ -76,6 +80,16 @@ def update_catalog(db: Session, actor: User, catalog_id: int, data: CatalogUpdat
     changes = data.model_dump(exclude_unset=True)
     if "code" in changes:
         raise fail("catalog_code_immutable")
+    if any(field in changes and changes[field] != getattr(item, field) for field in ("manufacturer", "model_reference")):
+        from types import SimpleNamespace
+        proposed = SimpleNamespace(manufacturer=changes.get("manufacturer", item.manufacturer),
+            model_reference=changes.get("model_reference", item.model_reference))
+        # Machine identity changes hold a shared catalog lock before applying
+        # values, so these reads remain authoritative without reversing locks.
+        for machine in db.scalars(select(Machine).join(CatalogAssetBinding).where(
+                CatalogAssetBinding.catalog_id == item.id, CatalogAssetBinding.is_active.is_(True))):
+            if compatibility(proposed, machine) == "INCOMPATIBLE":
+                raise HTTPException(409, detail={"code": "catalog_asset_model_mismatch", "machine_id": machine.id, "catalog_id": item.id})
     if any(changes.get(key) is None for key in ("name_bg", "name_en", "name_ru", "is_active", "asset_category_id") if key in changes):
         raise fail("catalog_invalid_update", 422)
     if changes.get("is_active") is False and db.scalar(select(CatalogRevision.id).where(
@@ -166,7 +180,9 @@ def update_revision(db: Session, actor: User, revision_id: int, data: RevisionUp
 def eligible_assets(db: Session, catalog_id: int, search: str | None = None) -> list[dict]:
     item = catalog(db, catalog_id)
     query = (select(Machine).outerjoin(CatalogAssetBinding,
-                                      CatalogAssetBinding.machine_id == Machine.id)
+                                      and_(CatalogAssetBinding.machine_id == Machine.id,
+                                           CatalogAssetBinding.catalog_id == catalog_id,
+                                           CatalogAssetBinding.is_active.is_(True)))
              .where(Machine.category_id == item.asset_category_id, Machine.is_active.is_(True),
                     CatalogAssetBinding.id.is_(None)))
     if search:
@@ -174,13 +190,32 @@ def eligible_assets(db: Session, catalog_id: int, search: str | None = None) -> 
         query = query.where(or_(Machine.inventory_number.ilike(term), Machine.name.ilike(term),
                                 Machine.serial_number.ilike(term),
                                 Machine.brand.ilike(term), Machine.model.ilike(term)))
-    return [repository.asset_dict(machine) for machine in db.scalars(
+    return [{**repository.asset_dict(machine), "compatibility": compatibility(item, machine)} for machine in db.scalars(
         query.order_by(Machine.inventory_number).limit(100)).all()]
 
 
-def bind_asset(db: Session, actor: User, catalog_id: int, machine_id: int) -> dict:
+def compatibility(item, machine) -> str:
+    import re
+    import unicodedata
+
+    def normalized(value):
+        return re.sub(r"[\W_]+", "", unicodedata.normalize("NFKC", value or "").casefold())
+
+    brand, model = normalized(item.manufacturer), normalized(item.model_reference)
+    actual_brand, actual_model = normalized(machine.brand), normalized(machine.model)
+    if brand and actual_brand and brand != actual_brand:
+        return "INCOMPATIBLE"
+    if model and actual_model and model != actual_model:
+        # Partial model designations require a human decision; unrelated known
+        # models cannot be authorized with a generic confirmation checkbox.
+        return "AMBIGUOUS" if model in actual_model or actual_model in model else "INCOMPATIBLE"
+    return "EXACT" if all([brand, model, actual_brand, actual_model]) else "AMBIGUOUS"
+
+
+def bind_asset(db: Session, actor: User, catalog_id: int, machine_id: int,
+               compatibility_confirmed: bool = False) -> dict:
     # PostgreSQL row lock serializes attempts to bind the same machine. The
-    # unique machine_id constraint is the final race-safe guard on both engines.
+    # unique catalog/machine pair is the final guard on both engines.
     machine = db.scalar(select(Machine).where(Machine.id == machine_id)
                         .with_for_update().execution_options(populate_existing=True))
     if machine is None:
@@ -193,10 +228,17 @@ def bind_asset(db: Session, actor: User, catalog_id: int, machine_id: int) -> di
         raise fail("catalog_asset_inactive")
     if machine.category_id != item.asset_category_id:
         raise fail("catalog_asset_category_mismatch")
-    existing = db.scalar(select(CatalogAssetBinding).where(CatalogAssetBinding.machine_id == machine_id))
-    if existing:
+    match = compatibility(item, machine)
+    if match == "INCOMPATIBLE":
+        raise fail("catalog_asset_model_mismatch")
+    if match == "AMBIGUOUS" and not compatibility_confirmed:
+        raise fail("catalog_asset_compatibility_confirmation_required")
+    existing = db.scalar(select(CatalogAssetBinding).where(CatalogAssetBinding.machine_id == machine_id,
+        CatalogAssetBinding.catalog_id == catalog_id))
+    if existing and existing.is_active:
         raise fail("catalog_asset_already_bound")
-    binding = CatalogAssetBinding(catalog_id=item.id, machine_id=machine_id, created_by_id=actor.id)
+    binding = existing or CatalogAssetBinding(catalog_id=item.id, machine_id=machine_id, created_by_id=actor.id)
+    binding.is_active, binding.deactivated_at = True, None
     db.add(binding)
     try:
         db.flush()
@@ -204,22 +246,22 @@ def bind_asset(db: Session, actor: User, catalog_id: int, machine_id: int) -> di
         db.rollback()
         raise fail("catalog_asset_already_bound") from exc
     add_audit_log(db, actor, "catalog_asset_binding", binding.id, "CATALOG_ASSET_BOUND",
-                  {"catalog_code": item.code, "machine_id": machine_id})
+                  {"catalog_code": item.code, "machine_id": machine_id,
+                   "compatibility": match, "compatibility_confirmed": compatibility_confirmed})
     db.commit()
     return repository.asset_dict(machine)
 
 
 def unbind_asset(db: Session, actor: User, catalog_id: int, machine_id: int) -> None:
+    db.scalar(select(Machine).where(Machine.id == machine_id).with_for_update())
     item = catalog(db, catalog_id, lock=True)
     binding = db.scalar(select(CatalogAssetBinding).where(
-        CatalogAssetBinding.catalog_id == catalog_id, CatalogAssetBinding.machine_id == machine_id)
+        CatalogAssetBinding.catalog_id == catalog_id, CatalogAssetBinding.machine_id == machine_id,
+        CatalogAssetBinding.is_active.is_(True))
         .with_for_update())
     if binding is None:
         raise fail("catalog_asset_binding_not_found", 404)
-    if db.scalar(select(CatalogRevision.id).where(
-        CatalogRevision.catalog_id == catalog_id, CatalogRevision.status == "PUBLISHED").limit(1)):
-        raise fail("catalog_asset_binding_protected")
     add_audit_log(db, actor, "catalog_asset_binding", binding.id, "CATALOG_ASSET_UNBOUND",
                   {"catalog_code": item.code, "machine_id": machine_id})
-    db.delete(binding)
+    binding.is_active, binding.deactivated_at = False, utcnow()
     db.commit()

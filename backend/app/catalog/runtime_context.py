@@ -24,26 +24,35 @@ _UNSELECTED = object()
 class PublishedBinding:
     catalog_id: int
     revision_id: int
+    available_revision_ids: tuple[int, ...] = ()
 
 
-def published_binding(db: Session, machine: Machine, *, lock: bool = False) -> PublishedBinding | None:
+def published_bindings(db: Session, machine: Machine, *, lock: bool = False) -> list[PublishedBinding]:
     if lock and db.get_bind().dialect.name == "postgresql":
         # Binding changes lock the machine before the catalog. Hold a shared
         # lock in the same order, including the currently unbound case.
         db.scalar(select(Machine).where(Machine.id == machine.id)
                   .with_for_update(read=True).execution_options(populate_existing=True))
-    binding = db.scalar(select(CatalogAssetBinding).where(CatalogAssetBinding.machine_id == machine.id))
-    if binding is None:
-        return None
-    statement = select(CatalogDefinition).where(CatalogDefinition.id == binding.catalog_id)
+    catalog_ids = select(CatalogAssetBinding.catalog_id).where(CatalogAssetBinding.machine_id == machine.id,
+        CatalogAssetBinding.is_active.is_(True))
+    statement = select(CatalogDefinition).where(CatalogDefinition.id.in_(catalog_ids)).order_by(CatalogDefinition.id)
     if lock and db.get_bind().dialect.name == "postgresql":
         statement = statement.with_for_update(read=True)
-    catalog = db.scalar(statement.execution_options(populate_existing=True))
-    if catalog is None or not catalog.is_active or catalog.asset_category_id != machine.category_id:
-        return None
-    revision = db.scalar(select(CatalogRevision).where(CatalogRevision.catalog_id == catalog.id,
-                                                        CatalogRevision.status == "PUBLISHED"))
-    return PublishedBinding(catalog.id, revision.id) if revision else None
+    result = []
+    for catalog in db.scalars(statement.execution_options(populate_existing=True)):
+        if not catalog.is_active or catalog.asset_category_id != machine.category_id:
+            continue
+        revision = db.scalar(select(CatalogRevision).where(CatalogRevision.catalog_id == catalog.id,
+                                                            CatalogRevision.status == "PUBLISHED"))
+        if revision:
+            result.append((catalog.id, revision.id))
+    available = tuple(revision_id for _, revision_id in result)
+    return [PublishedBinding(catalog_id, revision_id, available) for catalog_id, revision_id in result]
+
+
+def published_binding(db: Session, machine: Machine, *, lock: bool = False) -> PublishedBinding | None:
+    bindings = published_bindings(db, machine, lock=lock)
+    return bindings[0] if bindings else None
 
 
 def require_compatible_part(db: Session, machine: Machine | None, part: PartCatalog,
@@ -55,7 +64,7 @@ def require_compatible_part(db: Session, machine: Machine | None, part: PartCata
     if permits_part(db, machine, part):
         return
     if part.builder_revision_id is not None:
-        if binding is None or binding.revision_id != part.builder_revision_id:
+        if binding is None or part.builder_revision_id not in (binding.available_revision_ids or (binding.revision_id,)):
             raise business_conflict("catalog_runtime_binding_mismatch",
                                     "Частта не принадлежи към текущия каталог на машината.")
     elif binding is not None:
@@ -84,7 +93,7 @@ def require_compatible_kit(db: Session, machine: Machine | None, kit: RepairKit,
                            *, selected: PublishedBinding | None | object = _UNSELECTED) -> None:
     binding = (published_binding(db, machine, lock=True) if machine else None) if selected is _UNSELECTED else selected
     if kit.builder_revision_id is not None:
-        if binding is None or binding.revision_id != kit.builder_revision_id:
+        if binding is None or kit.builder_revision_id not in (binding.available_revision_ids or (binding.revision_id,)):
             raise business_conflict("catalog_runtime_binding_mismatch",
                                     "Комплектът не принадлежи към текущия каталог на машината.")
     elif binding is not None:

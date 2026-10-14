@@ -829,7 +829,7 @@ def catalog(
     selected = published_binding(db, machine) if machine is not None else None
     statement = select(PartCatalog).where(PartCatalog.is_active.is_(True))
     statement = statement.where(
-        PartCatalog.builder_revision_id == selected.revision_id if selected is not None
+        PartCatalog.builder_revision_id.in_(selected.available_revision_ids or (selected.revision_id,)) if selected is not None
         else PartCatalog.builder_revision_id.is_(None)
     )
     if brand and selected is None:

@@ -12,7 +12,9 @@ from uuid import uuid4
 def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_script=None):
     root = Path(__file__).resolve().parents[2]
     qa = root / ".tmp" / (f"catalog03-{scenario}-browser-" + uuid4().hex)
-    qa.mkdir()
+    qa.mkdir(parents=True)
+    runtime_temp = qa / "runtime-temp"
+    runtime_temp.mkdir()
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
@@ -20,6 +22,7 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
     password = secrets.token_urlsafe(32)
     env = os.environ.copy()
     env.update(DATABASE_URL="sqlite:///" + (qa / "qa.db").as_posix(),
+        TMPDIR=str(runtime_temp), TMP=str(runtime_temp), TEMP=str(runtime_temp),
         SECRET_KEY=secrets.token_urlsafe(48), SIGNATURE_ENCRYPTION_KEY=secrets.token_urlsafe(48),
         ADMIN_EMAIL="catalog03a-qa@assetcore.invalid", ASSETCORE_OWNER_EMAIL="catalog03a-qa@assetcore.invalid",
         OWNER_EMAIL="catalog03a-qa@assetcore.invalid", ADMIN_PASSWORD=password, OWNER_INITIAL_PASSWORD="",
@@ -54,6 +57,18 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
                 detail.insert_text((60, 70), "Synthetic QA detail scheme", fontsize=18)
                 detail.insert_text((150, 150), "1", fontsize=18)
             (qa / "synthetic.pdf").write_bytes(pdf.tobytes())
+    elif scenario == "ux04":
+        from catalog_ux04_fixtures import workflow_pdf
+        (qa / "synthetic.pdf").write_bytes(workflow_pdf())
+        from app.models import AssetCategory, Machine
+        with SessionLocal() as db:
+            category = AssetCategory(code="QA_UX04_ONLY", name_bg="QA UX04", name_en="QA UX04", name_ru="QA UX04", capabilities=["HAS_PARTS_CATALOG"])
+            db.add(category)
+            db.flush()
+            for number in range(1, 3):
+                db.add(Machine(inventory_number=f"QA_UX04_{number}", name=f"Synthetic QA machine {number}",
+                    category=category.code, category_id=category.id, brand="QA", model="QA"))
+            db.commit()
     env["QA_BROWSER_CHANNEL"] = "msedge" if os.name == "nt" else ""
     server = None
     try:

@@ -68,6 +68,7 @@ class CatalogReferencePageOut(BaseModel):
 
 
 class CatalogAssemblyOut(BaseModel):
+    catalog_id: int | None = None
     is_supplemental: bool = False
     source_id: str
     family: str
@@ -85,6 +86,7 @@ class CatalogAssemblyOut(BaseModel):
 
 
 class MachineCatalogOut(BaseModel):
+    catalogs: list[dict] = Field(default_factory=list)
     references: list[dict] = Field(default_factory=list)
     dataset_version: str
     supported: bool

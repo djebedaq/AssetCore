@@ -2,6 +2,7 @@ import { ApiError } from '../../api'
 import type { TranslationKey } from '../../i18n'
 
 const messages: Record<string, TranslationKey> = {
+  catalog_part_position_in_use: 'builder.mapping.error.positionInUse',
   catalog_source_correction_review_required: 'guided.correctionRequired',
   catalog_source_review_incomplete: 'guided.reviewIncomplete', catalog_extraction_candidate_unresolved: 'guided.rowConflict',
   catalog_source_review_inspection_required: 'guided.inspectionRequired', catalog_source_review_manual_required: 'guided.manualRequired',

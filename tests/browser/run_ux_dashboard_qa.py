@@ -265,7 +265,7 @@ def main():
                 m.category = c.code
             db.commit()
         for machine_id in ids[4:]:
-            checked(client.post(f"{BASE}/catalogs/{catalog}/assets/{machine_id}", headers=headers))
+            checked(client.post(f"{BASE}/catalogs/{catalog}/assets/{machine_id}", headers=headers, json={"compatibility_confirmed": True}))
         verify_http_revision(client, headers, revision)
         readiness = checked(
             client.get(f"{BASE}/revisions/{revision}/publication-readiness", headers=headers)

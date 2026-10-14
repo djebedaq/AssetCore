@@ -151,7 +151,7 @@ class Outcome:
     code: str | None = None
 
 
-def race(factory, model, identifier, operations, success_status=201):
+def race(factory, model, identifier, operations, success_status=201, expected_statuses=None):
     barrier = Barrier(3, timeout=12)
     pids = [None, None]
     engine = factory.kw["bind"]
@@ -201,7 +201,7 @@ def race(factory, model, identifier, operations, success_status=201):
         finally:
             coordinator.rollback()
         outcomes = [future.result(timeout=50) for future in futures]
-    assert sorted(item.status for item in outcomes) == [success_status, 409]
+    assert sorted(item.status for item in outcomes) == (expected_statuses or [success_status, 409])
     return outcomes
 
 

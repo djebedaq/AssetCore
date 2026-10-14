@@ -97,8 +97,8 @@ def test_repeated_position_multi_scheme_extraction_publication_two_machines_and_
     second_scheme = next(item for item in pages[1]["sources"] if item["role"] == "EXPLODED_SCHEME")
     assert client.post(f"{BASE}/visual-pages/{second_scheme['id']}/hotspots", headers=auth_headers,
         json={"position": "2", "x": .2, "y": .2, "width": .03, "height": .03}).status_code == 422
-    assert client.delete(f"{BASE}/reference-pages/{pages[0]['id']}?expected_version={pages[0]['version']}", headers=auth_headers).status_code == 409
-    assert client.delete(f"{BASE}/reference-pages/{pages[1]['id']}/sources/{second_list['id']}?expected_version={pages[1]['version']}", headers=auth_headers).status_code == 409
+    assert client.get(f"{BASE}/draft-deletion/group/{pages[0]['id']}", headers=auth_headers).status_code == 200
+    assert client.get(f"{BASE}/draft-deletion/source/{second_list['id']}", headers=auth_headers).status_code == 200
     from catalog_review_helpers import verify_http_revision
     verify_http_revision(client, auth_headers, revision['id'])
     ready = checked(client.get(f"{BASE}/revisions/{revision['id']}/publication-readiness", headers=auth_headers))
@@ -116,7 +116,7 @@ def test_repeated_position_multi_scheme_extraction_publication_two_machines_and_
     history = {}
     monkeypatch.setattr(part_request_documents, "convert_docx_to_pdf", lambda _: None)
     for machine_id in machine_ids:
-        checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{machine_id}", headers=auth_headers), 201)
+        checked(client.post(f"{BASE}/catalogs/{catalog['id']}/assets/{machine_id}", headers=auth_headers, json={"compatibility_confirmed": True}), 201)
         runtime = checked(client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers))
         assert len(runtime["assemblies"]) == 1
         logical = runtime["assemblies"][0]["pages"]
@@ -258,7 +258,7 @@ def test_reference_page_stable_reorder_both_shared_sources_and_stale_assignment(
     reordered = checked(client.post(f"{BASE}/assemblies/{first['id']}/reference-pages/reorder", headers=auth_headers, json=stale))
     assert [row["id"] for row in reordered] == [b["id"], a["id"]]
     assert reordered[0]["stable_key"] == b["stable_key"]
-    assert client.delete(f"{BASE}/artifacts/{artifact['id']}", headers=auth_headers).status_code == 409
+    assert client.get(f"{BASE}/draft-deletion/document/{artifact['id']}", headers=auth_headers).status_code == 200
     reference_order = {"expected_ids": [first["id"], second["id"]], "ordered_ids": [second["id"], first["id"]]}
     references = checked(client.post(f"{BASE}/revisions/{revision['id']}/references/reorder", headers=auth_headers, json=reference_order))
     assert [row["id"] for row in references] == reference_order["ordered_ids"]
@@ -267,4 +267,4 @@ def test_reference_page_stable_reorder_both_shared_sources_and_stale_assignment(
     source_order = checked(client.post(f"{BASE}/reference-pages/{a['id']}/sources/reorder", headers=auth_headers, json=sources))
     assert [row["id"] for row in source_order["sources"]] == sources["ordered_ids"]
     assert source_order["id"] == a["id"]
-    assert client.delete(f"{BASE}/assemblies/{first['id']}", headers=auth_headers).status_code == 409
+    assert client.get(f"{BASE}/draft-deletion/assembly/{first['id']}", headers=auth_headers).status_code == 200

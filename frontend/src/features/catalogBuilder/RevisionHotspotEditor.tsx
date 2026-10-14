@@ -1,3 +1,4 @@
+import DraftDeleteButton from './DraftDeleteButton'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { api, ApiError } from '../../api'
 import { useI18n, type TranslationKey } from '../../i18n'
@@ -272,15 +273,6 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
       }
     } catch (caught) { setError(message(caught)); setDraft(null); await refresh() } finally { setBusy(false) }
   }
-  async function remove() {
-    if (!current || busy || !window.confirm(t('builder.mapping.deleteConfirm'))) return
-    setBusy(true)
-    try {
-      await api(`/admin/catalog-builder/hotspots/${current.id}?expected_version=${current.version}`, { method: 'DELETE' })
-      setLastPlaced(previous => previous?.id === current.id ? null : previous)
-      setDraft(null); await refresh(); setError('')
-    } catch (caught) { setError(message(caught)); setDraft(null); await refresh() } finally { setBusy(false) }
-  }
   function fitPage() {
     const img = canvas.current?.querySelector('img')
     const view = viewport.current
@@ -395,7 +387,7 @@ export default function RevisionHotspotEditor({ assemblyId, editable, highlightP
               onClick={() => void save()}>{t(simple ? saveState === 'retry' ? 'wizard.retry' : 'workspace.saveGeometry' : 'common.save')}</button>
               {current && <><button className="secondary compact" disabled={busy || dirty} onClick={() => void verify(!current.is_verified)}>
                 {t(current.is_verified ? 'builder.mapping.unverify' : 'builder.mapping.verify')}</button>
-                <button className="secondary compact" disabled={busy} onClick={() => void remove()}>{t('common.remove')}</button></>}</div>
+                <DraftDeleteButton kind="hotspot" identity={current.id} disabled={busy} label={t('common.remove')} onDeleted={async () => { setLastPlaced(previous => previous?.id === current.id ? null : previous); setDraft(null); await refresh(); setError('') }} /></>}</div>
             <p>{current?.is_verified && !dirty ? t('builder.mapping.verified') : t('builder.mapping.unverified')}</p>
           </>}
           {!!highlightPositions.length && <p>{t('builder.mapping.highlighted', { count: highlightPositions.length })}</p>}

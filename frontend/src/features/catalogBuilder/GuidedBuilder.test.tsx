@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n'
@@ -100,7 +100,7 @@ it('keeps exact BG/EN/RU guided terminology parity without obsolete inference co
   expect(Object.keys(guidedEn).some(key => /candidate|group_key|extractor_version/.test(key))).toBe(false)
 })
 
-it('uploads a large PDF in Scheme mode and assigns the current readable page without role checkboxes', async () => {
+it('uploads a large PDF and assigns selected physical pages and roles together', async () => {
   vi.stubGlobal('XMLHttpRequest', UploadTestTransport)
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const NativeURL = URL
@@ -126,11 +126,11 @@ it('uploads a large PDF in Scheme mode and assigns the current readable page wit
   fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } })
   fireEvent.keyDown(screen.getByRole('spinbutton'), { key: 'Enter' })
   await screen.findByRole('img', { name: 'PDF страница 5' })
-  expect(screen.queryByRole('checkbox')).toBeNull()
-  await user.click(screen.getByRole('button', { name: 'Добави тази страница като схема' }))
-  await waitFor(() => expect(assigned).toEqual({ expected_version: 1, artifact_id: 20, page_numbers: [5], roles: ['EXPLODED_SCHEME'] }))
+  await user.click(within(window.document.querySelectorAll('.pdf-page-picker article')[4] as HTMLElement).getAllByRole('checkbox')[0])
+  await user.click(screen.getByRole('button', { name: 'Добави избраните страници (1)' }))
+  await waitFor(() => expect(assigned).toEqual({ expected_version: 1, artifact_id: 20, selections: [{ page_number: 5, roles: ['EXPLODED_SCHEME'] }] }))
   expect(changed).toHaveBeenCalled()
-  expect(screen.getByLabelText('Избор на PDF страници')).toBeVisible()
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
 
@@ -146,11 +146,11 @@ it('creates and renames human references and sends one atomic reorder request', 
   const changed = vi.fn(async () => {})
   render(<I18nProvider><GuidedWorkspace revisionId={8} groups={groups} task="references" changed={changed} onDirtyChange={vi.fn()} /></I18nProvider>)
   const user = userEvent.setup()
-  await user.type(screen.getByLabelText('Референция'), 'Human reference')
-  await user.click(screen.getByRole('button', { name: 'Добави референция' }))
+  await user.type(screen.getByLabelText('Възел'), 'Human reference')
+  await user.click(screen.getByRole('button', { name: 'Добави възел' }))
   await waitFor(() => expect(writes[0].body).toEqual({ name: 'Human reference' }))
   await user.click(screen.getAllByRole('button', { name: 'Редактиране' })[0])
-  await user.clear(screen.getByLabelText('Референция')); await user.type(screen.getByLabelText('Референция'), 'Human rename')
+  await user.clear(screen.getByLabelText('Възел')); await user.type(screen.getByLabelText('Възел'), 'Human rename')
   await user.click(screen.getByRole('button', { name: 'Запази' }))
   await waitFor(() => expect(writes.some(item => item.path.endsWith('/assemblies/1') && item.body.name_bg === 'Human rename')).toBe(true))
   await user.click(screen.getAllByRole('button', { name: 'Премести нагоре' })[1])

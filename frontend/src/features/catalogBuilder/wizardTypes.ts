@@ -10,7 +10,7 @@ export type Catalog = Names & { id: number; code: string; asset_category_id: num
 export type Revision = { id: number; revision_code: string; status: 'DRAFT' | 'PUBLISHED' | 'RETIRED'; created_at: string }
 export type Group = Names & { id: number; code: string; part_count: number; exploded_page_count: number; spare_list_page_count: number;
   artifact_count?: number; hotspot_count?: number; repair_kit_count?: number; repair_kit_component_count?: number }
-export type Document = { id: number; filename: string; title: string; sha256: string; page_count: number;
+export type Document = { id: number; assembly_id?: number; filename: string; title: string; sha256: string; page_count: number;
   artifact_ids?: number[];
   assignments: Array<{ id: number; artifact_id: number; page_number: number; assembly_id: number; role: Role }> }
 export type Role = 'EXPLODED_SCHEME' | 'SPARE_PARTS_LIST'
@@ -21,6 +21,7 @@ export type Workflow = { ready: boolean; publication_digest: string; current_pub
   progress: { position_count: number; completed_positions: number }; resume_step: Step }
 
 export const problemKeys: Record<string, TranslationKey> = {
+  catalog_asset_model_mismatch: 'ux04.incompatible', catalog_asset_compatibility_confirmation_required: 'ux04.ambiguous',
   catalog_publication_source_review_required: 'guided.sourceReviewBlocked',
   catalog_publication_reference_page_incomplete: 'guided.incomplete',
   catalog_reference_page_stale: 'guided.stale', catalog_reference_page_in_use: 'guided.inUse',

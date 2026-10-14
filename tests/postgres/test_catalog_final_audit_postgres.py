@@ -88,13 +88,13 @@ def test_request_selection_locks_an_unbound_machine_until_transaction_finishes(p
             writer.execute(text("SET LOCAL lock_timeout = '100ms'"))
             actor = writer.scalar(select(User).where(User.is_system_owner.is_(True)))
             with pytest.raises(OperationalError) as caught:
-                bind_asset(writer, actor, catalog_id, machine_id)
+                bind_asset(writer, actor, catalog_id, machine_id, compatibility_confirmed=True)
             assert caught.value.orig.sqlstate == "55P03"
             writer.rollback()
         reader.rollback()
     with pg_factory() as writer:
         actor = writer.scalar(select(User).where(User.is_system_owner.is_(True)))
-        bind_asset(writer, actor, catalog_id, machine_id)
+        bind_asset(writer, actor, catalog_id, machine_id, compatibility_confirmed=True)
         assert writer.scalar(select(CatalogAssetBinding).where(
             CatalogAssetBinding.machine_id == machine_id)).catalog_id == catalog_id
 

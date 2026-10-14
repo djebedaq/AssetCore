@@ -83,3 +83,11 @@
   .source-review-row b { width: 100%; }
   .catalog-workbench .source-summary { grid-template-columns: 1fr; }
 }
+.pdf-page-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; max-height: 45vh; overflow: auto; margin: 16px 0; }
+.pdf-page-picker article { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--border, #dbe2ea); border-radius: 8px; min-width: 0; }
+.pdf-page-picker button { display: block; width: 100%; }
+.pdf-page-picker label { display: flex; align-items: center; gap: 6px; }
+.pdf-page-picker input { width: auto; }
+.pdf-page-picker .builder-thumbnail { height: 100px; }
+.catalog-navigation { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 600px) { .catalog-navigation { display: flex; flex-direction: column; } .guided-single-workflow { display: block; } .reference-sidebar { max-width: 100%; } }

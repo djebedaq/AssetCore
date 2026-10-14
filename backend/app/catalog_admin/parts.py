@@ -11,7 +11,7 @@ import io
 import json
 import time
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,7 +21,6 @@ from ..models import (
     CatalogRevisionPart,
     CatalogRevisionPartPageMap,
     CatalogRevisionPositionHotspot,
-    CatalogRevisionRepairKitComponent,
     CatalogRevisionVisualPage,
     User,
     utcnow,
@@ -174,7 +173,7 @@ def create_part(db: Session, actor: User, assembly_id: int, data: PartCreate, *,
     return _dict(db, item)
 
 
-def update_part(db: Session, actor: User, part_id: int, data: PartUpdate) -> dict:
+def update_part(db: Session, actor: User, part_id: int, data: PartUpdate, *, commit: bool = True) -> dict:
     item, assembly, revision, catalog = _part(db, part_id, mutate=True)
     changes = data.model_dump(exclude_unset=True)
     values = _clean({**{key: getattr(item, key) for key in PartCreate.model_fields}, **changes})
@@ -187,6 +186,12 @@ def update_part(db: Session, actor: User, part_id: int, data: PartUpdate) -> dic
         item.updated_at = utcnow()
         from .parts_extraction.ledger import invalidate_scope
         invalidate_scope(db, actor, assembly.id, item.reference_page_id, "PART_UPDATED")
+        from ..models import CatalogExtractionCandidate
+        for candidate in db.scalars(select(CatalogExtractionCandidate).where(
+                CatalogExtractionCandidate.part_id == item.id,
+                CatalogExtractionCandidate.part_created_at == item.created_at,
+                CatalogExtractionCandidate.state == "ACCEPTED")):
+            candidate.version += 1
     try:
         db.flush()
     except IntegrityError as exc:
@@ -196,26 +201,14 @@ def update_part(db: Session, actor: User, part_id: int, data: PartUpdate) -> dic
         add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_UPDATED",
                       _meta(catalog, revision, assembly, before=before,
                             after={key: values[key] for key in changes}))
-    db.commit()
+    if commit:
+        db.commit()
     return _dict(db, item)
 
 
 def delete_part(db: Session, actor: User, part_id: int) -> None:
-    item, assembly, revision, catalog = _part(db, part_id, mutate=True)
-    if db.scalar(select(CatalogRevisionRepairKitComponent.id).where(
-        CatalogRevisionRepairKitComponent.part_id == item.id).limit(1)) is not None:
-        raise fail("catalog_part_in_repair_kit")
-    if _last_position_in_use(db, item):
-        raise fail("catalog_part_position_in_use")
-    removed = [row["visual_page_id"] for row in _maps(db, item.id)]
-    from .parts_extraction.ledger import invalidate_scope
-    invalidate_scope(db, actor, assembly.id, item.reference_page_id, "PART_DELETED")
-    db.execute(delete(CatalogRevisionPartPageMap).where(CatalogRevisionPartPageMap.part_id == item.id))
-    add_audit_log(db, actor, "catalog_revision_part", item.id, "BUILDER_PART_DELETED",
-                  _meta(catalog, revision, assembly, position=item.position,
-                        part_number=item.part_number, unmapped_visual_page_ids=removed))
-    db.delete(item)
-    db.commit()
+    from .draft_deletion import remove
+    remove(db, actor, "part", part_id)
 
 
 def list_mappings(db: Session, part_id: int) -> list[dict]:
