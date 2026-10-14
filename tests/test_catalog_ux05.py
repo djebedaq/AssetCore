@@ -153,6 +153,7 @@ def test_old_accepted_parts_and_same_flow_inspection_need_no_source_attestation(
     ("accepted_link", "catalog_publication_candidate_mapping_invalid"),
     ("conflict_selection", "catalog_publication_candidate_conflict"),
     ("evidence", "catalog_publication_extraction_integrity"),
+    ("provenance_mapping", "catalog_publication_candidate_mapping_invalid"),
 ])
 def test_actual_integrity_errors_remain_blocking(client, auth_headers, session_factory, damage, code):
     _, revision, _, _, artifact, parts = setup(client, auth_headers, session_factory)
@@ -167,6 +168,14 @@ def test_actual_integrity_errors_remain_blocking(client, auth_headers, session_f
             db.get(CatalogRevisionPart, parts[0]["id"]).part_number = ""
         elif damage == "evidence":
             db.scalar(select(ledger.Attempt)).evidence_digest = "0" * 64
+        elif damage == "provenance_mapping":
+            mapping = db.scalar(select(CatalogRevisionPartPageMap))
+            mapping.visual_page_id = db.scalar(select(ledger.CatalogRevisionVisualPage.id).where(
+                ledger.CatalogRevisionVisualPage.role == "SPARE_PARTS_LIST",
+                ledger.CatalogRevisionVisualPage.id != mapping.visual_page_id))
+            # Also protect old accepted parts when there is no current accepted
+            # ledger link to detect the mismatch on their behalf.
+            db.scalar(select(ledger.Candidate).where(ledger.Candidate.part_id == mapping.part_id)).state = "PENDING"
         else:
             candidate = db.scalar(select(ledger.Candidate))
             if damage in {"conflict", "conflict_selection"}:

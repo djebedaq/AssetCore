@@ -193,6 +193,18 @@ def publication_state(db, content):
     errors, warnings, proof, scopes = [], [], [], {}
     assemblies = {a.id: a for a in content["assemblies"]}
     artifacts = {a.id: a for a in content["artifacts"]}
+    pages = {p.id: p for p in content["pages"]}
+    for part in content["parts"]:
+        if not part.extraction_evidence:
+            continue
+        original = part.extraction_evidence.get("source", {})
+        page = pages.get(original.get("visual_page_id"))
+        artifact = artifacts.get(page.artifact_id) if page else None
+        if (artifact is None or page.role != "SPARE_PARTS_LIST"
+                or original.get("artifact_id") != artifact.id or original.get("sha256") != artifact.sha256
+                or original.get("page_number") != page.page_number
+                or not any(m.part_id == part.id and m.visual_page_id == page.id for m in content["maps"])):
+            errors.append({"code": "catalog_publication_candidate_mapping_invalid", "part_id": part.id})
     from ...models import CatalogRevision
     for page in content["pages"]:
         if page.role != "SPARE_PARTS_LIST":
@@ -243,14 +255,6 @@ def publication_state(db, content):
                             or part.reference_page_id != page.reference_page_id):
                         errors.append({"code": "catalog_publication_candidate_mapping_invalid", "visual_page_id": page.id,
                                        "candidate_id": candidate.id})
-        for part in content["parts"]:
-            if part.id not in mapped_ids or not part.extraction_evidence:
-                continue
-            original = part.extraction_evidence.get("source", {})
-            if original.get("visual_page_id") == page.id and (
-                    original.get("sha256") != artifact.sha256 or original.get("page_number") != page.page_number):
-                errors.append({"code": "catalog_publication_candidate_mapping_invalid", "visual_page_id": page.id,
-                               "part_id": part.id})
         proof.append({"visual_page_id": page.id, "session_id": active.id if active else None,
             "source_id": source.id if source else None, "version": source.version if source else None,
             "fingerprint": fingerprint(db, source, active, scope_digest=scope_digest) if source else None,
