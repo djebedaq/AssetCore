@@ -57,9 +57,10 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
                 detail.insert_text((60, 70), "Synthetic QA detail scheme", fontsize=18)
                 detail.insert_text((150, 150), "1", fontsize=18)
             (qa / "synthetic.pdf").write_bytes(pdf.tobytes())
-    elif scenario == "ux04":
+    elif scenario in {"ux04", "ux05"}:
         from catalog_ux04_fixtures import workflow_pdf
-        (qa / "synthetic.pdf").write_bytes(workflow_pdf())
+        from catalog_ux05_fixtures import publication_pdf
+        (qa / "synthetic.pdf").write_bytes(publication_pdf() if scenario == "ux05" else workflow_pdf())
         from app.models import AssetCategory, Machine
         with SessionLocal() as db:
             category = AssetCategory(code="QA_UX04_ONLY", name_bg="QA UX04", name_en="QA UX04", name_ru="QA UX04", capabilities=["HAS_PARTS_CATALOG"])

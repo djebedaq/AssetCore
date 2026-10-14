@@ -268,6 +268,13 @@ def remap(db: Session, actor, page_id: int, data) -> dict:
 
 def confirm(db: Session, actor, page_id: int, data) -> dict:
     claim, (page, assembly, revision, catalog) = _read(db, actor, page_id, data.token)
+    inspection = None
+    if data.inspection is not None:
+        from .review import inspected
+        state, active, *_ = ledger.source_context(db, claim["source"]["visual_page_id"])
+        inspected(db, actor, state, active, data.inspection)
+        inspection = {"fingerprint": data.inspection.fingerprint,
+                      "inspection_digest": ledger.hashed(data.inspection.inspection_token)}
     indices = [row.index for row in data.rows]
     if len(indices) != len(set(indices)) or any(index >= len(claim["rows"]) for index in indices):
         raise fail("catalog_extraction_token_invalid", 422)
@@ -291,9 +298,11 @@ def confirm(db: Session, actor, page_id: int, data) -> dict:
                 raise fail("catalog_reference_page_stale")
             key = ledger.hashed([claim["source"]["sha256"], claim["source"]["page_number"], candidate.stable_key])
             values = parts._clean(selection.part.model_dump())
-            item = CatalogRevisionPart(assembly_id=assembly.id, reference_page_id=page.id,
+            confirmed_at = ledger.utcnow()
+            item = CatalogRevisionPart(assembly_id=assembly.id, reference_page_id=page.id, created_at=confirmed_at,
                 extraction_key=key, extraction_evidence={"source": claim["source"], "row": row,
-                "extractor": claim.get("attempt_extractor", EXTRACTOR_VERSION), "confirmed_by_id": actor.id}, created_by_id=actor.id, **values)
+                "extractor": claim.get("attempt_extractor", EXTRACTOR_VERSION), "confirmed_by_id": actor.id,
+                "confirmed_at": confirmed_at.isoformat(), "inspection": inspection}, created_by_id=actor.id, **values)
             db.add(item)
             db.flush()
             db.add(CatalogRevisionPartPageMap(part_id=item.id,
@@ -310,7 +319,7 @@ def confirm(db: Session, actor, page_id: int, data) -> dict:
             ledger.invalidate_scope(db, actor, assembly.id, page.id, "EXTRACTED_PARTS_CONFIRMED")
         add_audit_log(db, actor, "catalog_reference_page", page.id, "SPARE_PARTS_CONFIRMED",
             _meta(catalog, revision, assembly, created_count=len(created), existing_count=len(existing),
-                  visual_page_id=claim["source"]["visual_page_id"]))
+                  visual_page_id=claim["source"]["visual_page_id"], inspection=inspection))
         db.commit()
     except IntegrityError as exc:
         db.rollback()

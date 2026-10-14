@@ -1,0 +1,114 @@
+{
+  "passed": true,
+  "synthetic_only": true,
+  "checks": [
+    "59/59 markers: one bulk parts acceptance, 1/4 optional attestations, warnings allow UI publication and runtime request",
+    "45/59 markers: one bulk parts acceptance, 1/4 optional attestations, warnings allow UI publication and runtime request",
+    "0/59 markers: one bulk parts acceptance, 1/4 optional attestations, warnings allow UI publication and runtime request"
+  ],
+  "screenshots": [
+    "publication-59-59-1440.png",
+    "publication-45-59-1440.png",
+    "publication-45-59-768.png",
+    "publication-45-59-390.png",
+    "publication-0-59-1440.png"
+  ],
+  "cases": [
+    {
+      "parts": 59,
+      "markers": 59,
+      "source_attestations": "1/4",
+      "ready": true,
+      "warnings": [
+        {
+          "code": "catalog_publication_source_review_required",
+          "visual_page_id": 5,
+          "assembly_id": 1,
+          "reference_page_id": 1
+        },
+        {
+          "code": "catalog_publication_source_review_required",
+          "visual_page_id": 6,
+          "assembly_id": 1,
+          "reference_page_id": 1
+        },
+        {
+          "code": "catalog_publication_source_review_required",
+          "visual_page_id": 7,
+          "assembly_id": 1,
+          "reference_page_id": 1
+        }
+      ],
+      "published": true,
+      "missing_part_searchable_and_requestable": false
+    },
+    {
+      "parts": 59,
+      "markers": 45,
+      "source_attestations": "1/4",
+      "ready": true,
+      "warnings": [
+        {
+          "code": "catalog_publication_hotspot_coverage",
+          "assembly_id": 2,
+          "reference_page_id": 2,
+          "missing_positions": 14
+        },
+        {
+          "code": "catalog_publication_source_review_required",
+          "visual_page_id": 12,
+          "assembly_id": 2,
+          "reference_page_id": 2
+        },
+        {
+          "code": "catalog_publication_source_review_required",
+          "visual_page_id": 13,
+          "assembly_id": 2,
+          "reference_page_id": 2
+        },
+        {
+          "code": "catalog_publication_source_review_required",
+          "visual_page_id": 14,
+          "assembly_id": 2,
+          "reference_page_id": 2
+        }
+      ],
+      "published": true,
+      "missing_part_searchable_and_requestable": true
+    },
+    {
+      "parts": 59,
+      "markers": 0,
+      "source_attestations": "1/4",
+      "ready": true,
+      "warnings": [
+        {
+          "code": "catalog_publication_hotspot_coverage",
+          "assembly_id": 3,
+          "reference_page_id": 3,
+          "missing_positions": 59
+        },
+        {
+          "code": "catalog_publication_source_review_required",
+          "visual_page_id": 19,
+          "assembly_id": 3,
+          "reference_page_id": 3
+        },
+        {
+          "code": "catalog_publication_source_review_required",
+          "visual_page_id": 20,
+          "assembly_id": 3,
+          "reference_page_id": 3
+        },
+        {
+          "code": "catalog_publication_source_review_required",
+          "visual_page_id": 21,
+          "assembly_id": 3,
+          "reference_page_id": 3
+        }
+      ],
+      "published": true,
+      "missing_part_searchable_and_requestable": true
+    }
+  ]
+}

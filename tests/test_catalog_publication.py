@@ -165,7 +165,7 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
     assert clone_parts[0]["position"] == position and clone_parts[0]["source_pages"]
     assert client.patch(f"{BASE}/parts/{clone_parts[0]['id']}", headers=auth_headers,
                         json={"name_en": "Next test part"}).status_code == 200
-    assert not client.get(f"{BASE}/revisions/{clone_id}/publication-readiness", headers=auth_headers).json()["ready"]
+    assert client.get(f"{BASE}/revisions/{clone_id}/publication-readiness", headers=auth_headers).json()["ready"]
     verify_http_revision(client, auth_headers, clone_id)
     next_preview = client.get(f"{BASE}/revisions/{clone_id}/publication-readiness", headers=auth_headers)
     assert next_preview.status_code == 200 and next_preview.json()["ready"], next_preview.text
@@ -429,7 +429,8 @@ def test_readiness_blocks_incomplete_graph_and_corrupt_source(client, auth_heade
     preview = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness",
                          headers=auth_headers).json()
     assert {item["code"] for item in preview["errors"]} >= {
-        "catalog_publication_part_incomplete", "catalog_publication_hotspot_unverified"}
+        "catalog_publication_part_incomplete"}
+    assert "catalog_publication_hotspot_unverified" in {item["code"] for item in preview["warnings"]}
     assert client.post(f"{BASE}/parts/{part.json()['id']}/source-pages", headers=auth_headers,
                        json={"visual_page_ids": [spare_page_id]}).status_code == 201
     assert client.post(f"{BASE}/hotspots/{hotspot.json()['id']}/verify", headers=auth_headers,

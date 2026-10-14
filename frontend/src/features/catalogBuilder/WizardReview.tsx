@@ -21,7 +21,7 @@ export default function WizardReview({ workflow, editable, busy, onFix, onPublis
             {issue.page_number && <> · {t('guided.physicalPage', { number: issue.page_number })}</>}
             {issue.filename && <small>{issue.filename}</small>}
             <br />{t(problemKeys[issue.code] || 'builder.error.generic', { count: issue.missing_positions || 0 })}</span>
-          <button className="secondary" disabled={busy} onClick={() => onFix(issue)}>{t('wizard.fix')}</button>
+          <button className="secondary" disabled={busy} onClick={() => onFix(issue)}>{t(severity === 'errors' ? 'wizard.fix' : 'ux05.inspect')}</button>
         </li>)}</ul>
       </section>)}
       <button className="primary" disabled={busy || !workflow.ready || workflow.summary.part_count === 0} onClick={onPublish}>

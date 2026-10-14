@@ -40,9 +40,10 @@ def test_two_catalogs_late_binding_unbind_and_delete_rev2_preserve_published_acc
             marker = checked(client.post(f"{BASE}/visual-pages/{scheme['id']}/hotspots", headers=auth_headers,
                 json={"position": position, "x": .1, "y": .1, "width": .03, "height": .03}), 201)
             checked(client.post(f"{BASE}/hotspots/{marker['id']}/verify", headers=auth_headers, json={"expected_version": marker["version"]}))
-        # No source review means even a complete diagram/table cannot publish.
+        # Separate source review is optional after the parts are accepted.
         ready = checked(client.get(f"{BASE}/revisions/{revision['id']}/publication-readiness", headers=auth_headers))
-        assert not ready["ready"]
+        assert ready["ready"]
+        assert any(w["code"] == "catalog_publication_source_review_required" for w in ready["warnings"])
         verify_http_revision(client, auth_headers, revision["id"])
         ready = checked(client.get(f"{BASE}/revisions/{revision['id']}/publication-readiness", headers=auth_headers))
         assert ready["ready"]

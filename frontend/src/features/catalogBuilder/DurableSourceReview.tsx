@@ -69,7 +69,7 @@ export default function DurableSourceReview({ session, reload, parts, busy, targ
     } catch (caught) { setError(t(guidedError(caught))) } finally { setWorking(false) }
   }
   return <section className="guided-source-results durable-review" aria-label={t('guided.sourceReview')}>
-    <h4>{t('guided.sourceReview')}</h4><p className="muted">{t('guided.sourceReviewHelp')}</p>
+    <h4>{t('guided.sourceReview')}</h4><p className="muted">{t('ux05.optionalReview')}</p>
     {error && <p role="alert" className="error">{error}</p>}
     {session?.sources?.map(item => <div key={item.id} className="source-review-row">
       <b>{item.source.filename} · {t('guided.physicalPage', { number: item.source.page_number })}</b>

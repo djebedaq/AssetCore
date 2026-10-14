@@ -1,0 +1,1360 @@
+{
+  "scope": "REAL_EXISTING_VERIFIED_LIBRARY_POST_EXTRACTION_COMPARISON",
+  "cases": [
+    {
+      "case": "falch_1000/drive_pump",
+      "source_sha256": "81eb5c94e2c2c2a2b8e868acb3721dddfecd642c2744093046fe34fdf9213c82",
+      "control_sha256": "82520e11051e1cd8c02fb10836914831cc4b4343cbc762ba449883b863e3b830",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 30,
+            "candidate_rows": 30,
+            "missing_rows": 0,
+            "partial_rows": 30,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.813,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 4,
+          "extracted_candidates": 4,
+          "ordered_exact_fields": {
+            "position": 4,
+            "part_number": 4,
+            "quantity_raw": 4,
+            "quantity_value": 4,
+            "numeric_quantity": 4,
+            "original_description": 4
+          },
+          "paired_fields": {
+            "position_number_pair": 4,
+            "numeric_quantity": 4,
+            "quantity_raw": 4,
+            "original_description": 4
+          },
+          "exact_rows_unordered_all_five_fields": 4,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 4,
+            "candidate_rows": 4,
+            "missing_rows": 0,
+            "partial_rows": 4,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 4,
+              "covered_rows": 4,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 0.922,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_1000/liquid_part",
+      "source_sha256": "a238920e0392b9c5be56452eef1da9187e530d8dea6925b721784b06418a5278",
+      "control_sha256": "6ca3f1caf2ba653d20079fb5b200e42c48f01961c23fd701a5ae27de945ee457",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 30,
+            "candidate_rows": 30,
+            "missing_rows": 0,
+            "partial_rows": 30,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.672,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 16,
+          "extracted_candidates": 16,
+          "ordered_exact_fields": {
+            "position": 16,
+            "part_number": 16,
+            "quantity_raw": 16,
+            "quantity_value": 16,
+            "numeric_quantity": 16,
+            "original_description": 16
+          },
+          "paired_fields": {
+            "position_number_pair": 16,
+            "numeric_quantity": 16,
+            "quantity_raw": 16,
+            "original_description": 16
+          },
+          "exact_rows_unordered_all_five_fields": 16,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "MIXED_PHYSICAL_AND_TEXT_REGIONS",
+            "observed_rows": 23,
+            "candidate_rows": 16,
+            "missing_rows": 7,
+            "partial_rows": 16,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 16,
+              "covered_rows": 16,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.172,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_1000/wheel_jet",
+      "source_sha256": "acc612f796ec891cf8aeb0bc86b7150630f7b4874ea370d0c4f5503aff73675d",
+      "control_sha256": "cdc55cba5ec75b26bef19f22f8e6b1843ed58c848efbc162bfb690607e9c2c09",
+      "pages": [
+        {
+          "physical_page": 4,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 30,
+            "candidate_rows": 30,
+            "missing_rows": 0,
+            "partial_rows": 30,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.36,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 5,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 30,
+            "candidate_rows": 30,
+            "missing_rows": 0,
+            "partial_rows": 30,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.375,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 6,
+          "expected_rows": 22,
+          "extracted_candidates": 22,
+          "ordered_exact_fields": {
+            "position": 22,
+            "part_number": 22,
+            "quantity_raw": 22,
+            "quantity_value": 22,
+            "numeric_quantity": 22,
+            "original_description": 22
+          },
+          "paired_fields": {
+            "position_number_pair": 22,
+            "numeric_quantity": 22,
+            "quantity_raw": 22,
+            "original_description": 22
+          },
+          "exact_rows_unordered_all_five_fields": 22,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 22,
+            "candidate_rows": 22,
+            "missing_rows": 0,
+            "partial_rows": 22,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 22,
+              "covered_rows": 22,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.343,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 7,
+          "expected_rows": 25,
+          "extracted_candidates": 25,
+          "ordered_exact_fields": {
+            "position": 25,
+            "part_number": 25,
+            "quantity_raw": 25,
+            "quantity_value": 25,
+            "numeric_quantity": 25,
+            "original_description": 25
+          },
+          "paired_fields": {
+            "position_number_pair": 25,
+            "numeric_quantity": 25,
+            "quantity_raw": 25,
+            "original_description": 25
+          },
+          "exact_rows_unordered_all_five_fields": 25,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 25,
+            "candidate_rows": 25,
+            "missing_rows": 0,
+            "partial_rows": 25,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 25,
+              "covered_rows": 25,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.594,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 8,
+          "expected_rows": 34,
+          "extracted_candidates": 34,
+          "ordered_exact_fields": {
+            "position": 34,
+            "part_number": 34,
+            "quantity_raw": 34,
+            "quantity_value": 34,
+            "numeric_quantity": 34,
+            "original_description": 34
+          },
+          "paired_fields": {
+            "position_number_pair": 34,
+            "numeric_quantity": 34,
+            "quantity_raw": 34,
+            "original_description": 34
+          },
+          "exact_rows_unordered_all_five_fields": 34,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 34,
+            "candidate_rows": 34,
+            "missing_rows": 0,
+            "partial_rows": 34,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 34,
+              "covered_rows": 34,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 3.031,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 9,
+          "expected_rows": 23,
+          "extracted_candidates": 23,
+          "ordered_exact_fields": {
+            "position": 23,
+            "part_number": 23,
+            "quantity_raw": 23,
+            "quantity_value": 23,
+            "numeric_quantity": 23,
+            "original_description": 23
+          },
+          "paired_fields": {
+            "position_number_pair": 23,
+            "numeric_quantity": 23,
+            "quantity_raw": 23,
+            "original_description": 23
+          },
+          "exact_rows_unordered_all_five_fields": 23,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "MIXED_PHYSICAL_AND_TEXT_REGIONS",
+            "observed_rows": 27,
+            "candidate_rows": 23,
+            "missing_rows": 4,
+            "partial_rows": 23,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 23,
+              "covered_rows": 23,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 3.953,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/pump",
+      "source_sha256": "0f9d3e8d178272b7e65a57a37f495a448fc24c31730ac2c107e5d50f29a317c4",
+      "control_sha256": "9916db79efb81fb97b89ad82ee301e0f508bfe6bb44c08c3fdc236a89506d3cb",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 30,
+            "candidate_rows": 30,
+            "missing_rows": 0,
+            "partial_rows": 30,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.282,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 31,
+          "extracted_candidates": 31,
+          "ordered_exact_fields": {
+            "position": 31,
+            "part_number": 31,
+            "quantity_raw": 31,
+            "quantity_value": 31,
+            "numeric_quantity": 31,
+            "original_description": 31
+          },
+          "paired_fields": {
+            "position_number_pair": 31,
+            "numeric_quantity": 31,
+            "quantity_raw": 31,
+            "original_description": 31
+          },
+          "exact_rows_unordered_all_five_fields": 31,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 31,
+            "candidate_rows": 31,
+            "missing_rows": 0,
+            "partial_rows": 31,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 31,
+              "covered_rows": 31,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.75,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 4,
+          "expected_rows": 4,
+          "extracted_candidates": 4,
+          "ordered_exact_fields": {
+            "position": 4,
+            "part_number": 4,
+            "quantity_raw": 4,
+            "quantity_value": 4,
+            "numeric_quantity": 4,
+            "original_description": 4
+          },
+          "paired_fields": {
+            "position_number_pair": 4,
+            "numeric_quantity": 4,
+            "quantity_raw": 4,
+            "original_description": 4
+          },
+          "exact_rows_unordered_all_five_fields": 4,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "MIXED_PHYSICAL_AND_TEXT_REGIONS",
+            "observed_rows": 14,
+            "candidate_rows": 4,
+            "missing_rows": 10,
+            "partial_rows": 4,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 4,
+              "covered_rows": 4,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 4.437,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/unloader_valve",
+      "source_sha256": "5382954ff92c616622b0d4cfdc3a2a12581f442c209c6329d8d2e50cb40fc1d5",
+      "control_sha256": "534711b67a462e4a77842bd08b682943a60c73e87f5cf112147f9fdb481ec6c0",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "MIXED_PHYSICAL_AND_TEXT_REGIONS",
+            "observed_rows": 32,
+            "candidate_rows": 30,
+            "missing_rows": 2,
+            "partial_rows": 30,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 15.625,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 33,
+          "extracted_candidates": 33,
+          "ordered_exact_fields": {
+            "position": 33,
+            "part_number": 33,
+            "quantity_raw": 33,
+            "quantity_value": 33,
+            "numeric_quantity": 33,
+            "original_description": 33
+          },
+          "paired_fields": {
+            "position_number_pair": 33,
+            "numeric_quantity": 33,
+            "quantity_raw": 33,
+            "original_description": 33
+          },
+          "exact_rows_unordered_all_five_fields": 33,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "MIXED_PHYSICAL_AND_TEXT_REGIONS",
+            "observed_rows": 35,
+            "candidate_rows": 33,
+            "missing_rows": 2,
+            "partial_rows": 33,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 33,
+              "covered_rows": 33,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 3.047,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 4,
+          "expected_rows": 2,
+          "extracted_candidates": 2,
+          "ordered_exact_fields": {
+            "position": 2,
+            "part_number": 2,
+            "quantity_raw": 2,
+            "quantity_value": 2,
+            "numeric_quantity": 2,
+            "original_description": 2
+          },
+          "paired_fields": {
+            "position_number_pair": 2,
+            "numeric_quantity": 2,
+            "quantity_raw": 2,
+            "original_description": 2
+          },
+          "exact_rows_unordered_all_five_fields": 2,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "MIXED_PHYSICAL_AND_TEXT_REGIONS",
+            "observed_rows": 14,
+            "candidate_rows": 2,
+            "missing_rows": 12,
+            "partial_rows": 2,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 2,
+              "covered_rows": 2,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 1.219,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/valve_500bar",
+      "source_sha256": "ff4a643c60109636e6ebc619551d46ab57b05542fca32a46e3390dec130d14af",
+      "control_sha256": "f328b396c963e7bdbe4864f2177cfcc6e128998b5f3d51a9e8e871071fbebca8",
+      "pages": [
+        {
+          "physical_page": 2,
+          "expected_rows": 29,
+          "extracted_candidates": 29,
+          "ordered_exact_fields": {
+            "position": 29,
+            "part_number": 29,
+            "quantity_raw": 29,
+            "quantity_value": 29,
+            "numeric_quantity": 29,
+            "original_description": 29
+          },
+          "paired_fields": {
+            "position_number_pair": 29,
+            "numeric_quantity": 29,
+            "quantity_raw": 29,
+            "original_description": 29
+          },
+          "exact_rows_unordered_all_five_fields": 29,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "MIXED_PHYSICAL_AND_TEXT_REGIONS",
+            "observed_rows": 31,
+            "candidate_rows": 29,
+            "missing_rows": 2,
+            "partial_rows": 29,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 29,
+              "covered_rows": 29,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 3.391,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 3,
+          "expected_rows": 3,
+          "extracted_candidates": 3,
+          "ordered_exact_fields": {
+            "position": 3,
+            "part_number": 3,
+            "quantity_raw": 3,
+            "quantity_value": 3,
+            "numeric_quantity": 3,
+            "original_description": 3
+          },
+          "paired_fields": {
+            "position_number_pair": 3,
+            "numeric_quantity": 3,
+            "quantity_raw": 3,
+            "original_description": 3
+          },
+          "exact_rows_unordered_all_five_fields": 3,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "MIXED_PHYSICAL_AND_TEXT_REGIONS",
+            "observed_rows": 20,
+            "candidate_rows": 3,
+            "missing_rows": 17,
+            "partial_rows": 3,
+            "needs_context": true,
+            "physical_coverage": {
+              "observed_rows": 3,
+              "covered_rows": 3,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.875,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "falch_500/wheel_jet",
+      "source_sha256": "baab518592c770457ba493d056e7e7112ddfa15d45d8db93214fe339ec36af85",
+      "control_sha256": "ea019471999df2e4a175101e3857f4b232f261e486be91529ba9dffd08b5518b",
+      "pages": [
+        {
+          "physical_page": 4,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 30,
+            "candidate_rows": 30,
+            "missing_rows": 0,
+            "partial_rows": 30,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.203,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 5,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 30,
+            "candidate_rows": 30,
+            "missing_rows": 0,
+            "partial_rows": 30,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 3.079,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 6,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 30,
+            "candidate_rows": 30,
+            "missing_rows": 0,
+            "partial_rows": 30,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.515,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 7,
+          "expected_rows": 30,
+          "extracted_candidates": 30,
+          "ordered_exact_fields": {
+            "position": 30,
+            "part_number": 30,
+            "quantity_raw": 30,
+            "quantity_value": 30,
+            "numeric_quantity": 30,
+            "original_description": 30
+          },
+          "paired_fields": {
+            "position_number_pair": 30,
+            "numeric_quantity": 30,
+            "quantity_raw": 30,
+            "original_description": 30
+          },
+          "exact_rows_unordered_all_five_fields": 30,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 30,
+            "candidate_rows": 30,
+            "missing_rows": 0,
+            "partial_rows": 30,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 30,
+              "covered_rows": 30,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.797,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        },
+        {
+          "physical_page": 8,
+          "expected_rows": 27,
+          "extracted_candidates": 27,
+          "ordered_exact_fields": {
+            "position": 27,
+            "part_number": 27,
+            "quantity_raw": 27,
+            "quantity_value": 27,
+            "numeric_quantity": 27,
+            "original_description": 27
+          },
+          "paired_fields": {
+            "position_number_pair": 27,
+            "numeric_quantity": 27,
+            "quantity_raw": 27,
+            "original_description": 27
+          },
+          "exact_rows_unordered_all_five_fields": 27,
+          "missing_quantity_candidates": 0,
+          "control_blank_part_numbers": 0,
+          "control_nonnumeric_quantities": 0,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 27,
+            "candidate_rows": 27,
+            "missing_rows": 0,
+            "partial_rows": 27,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 27,
+              "covered_rows": 27,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 2.781,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    },
+    {
+      "case": "hydwin_fussen_500/plunger_pump",
+      "source_sha256": "5b5d89b5ebcd71dc8f203d7a6ef419e9f131eaf7f95a1cbe3221992d5c6b7056",
+      "control_sha256": "df3b508f3d5bde0f64f3e33af1744f989f7885eb788432e0a1ebeee0545da7e8",
+      "pages": [
+        {
+          "physical_page": 22,
+          "expected_rows": 58,
+          "extracted_candidates": 58,
+          "ordered_exact_fields": {
+            "position": 58,
+            "part_number": 58,
+            "quantity_raw": 58,
+            "quantity_value": 58,
+            "numeric_quantity": 57,
+            "original_description": 58
+          },
+          "paired_fields": {
+            "position_number_pair": 58,
+            "numeric_quantity": 58,
+            "quantity_raw": 58,
+            "original_description": 58
+          },
+          "exact_rows_unordered_all_five_fields": 58,
+          "missing_quantity_candidates": 1,
+          "control_blank_part_numbers": 3,
+          "control_nonnumeric_quantities": 1,
+          "missing_control_rows": 0,
+          "additional_candidates": 0,
+          "automatic_exact_acceptance": "PASS",
+          "unmatched_candidates": 0,
+          "provenance": true,
+          "quality": {
+            "state": "NEEDS_REVIEW",
+            "basis": "PHYSICAL_ROW_BANDS",
+            "observed_rows": 58,
+            "candidate_rows": 58,
+            "missing_rows": 0,
+            "partial_rows": 4,
+            "needs_context": false,
+            "physical_coverage": {
+              "observed_rows": 58,
+              "covered_rows": 58,
+              "missing_rows": 0,
+              "truncated": false
+            }
+          },
+          "error": null,
+          "resources": {
+            "wall_seconds": 1.469,
+            "sampled_cpu_seconds": 0,
+            "sampled_peak_tree_rss_mib": 0.0,
+            "peak_process_count_including_controller": 0,
+            "sample_interval_ms": 20,
+            "descendants_remaining_after_worker": null,
+            "queue_wait_seconds": 0
+          },
+          "review_state": "NOT_REVIEWED"
+        }
+      ]
+    }
+  ],
+  "passed": true,
+  "universal_manufacturer_accuracy_claim": false,
+  "hammelmann": "NOT_AVAILABLE"
+}

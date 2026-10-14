@@ -1,5 +1,6 @@
 import { catalogUxBg, catalogUxEn, catalogUxRu } from './features/catalogBuilder/catalogUxTranslations'
 import { ux04Bg, ux04En, ux04Ru } from './features/catalogBuilder/ux04Translations'
+import { ux05Bg, ux05En, ux05Ru } from './features/catalogBuilder/ux05Translations'
 import { referenceBg, referenceEn, referenceRu } from './features/catalogBuilder/referenceTranslations'
 import { workspaceBg, workspaceEn, workspaceRu } from './features/catalogBuilder/workspaceTranslations'
 import { uxBg, uxEn, uxRu } from './ui/translations'
@@ -19,6 +20,7 @@ import {
 
 export const bg = {
   ...ux04Bg,
+  ...ux05Bg,
   ...uxBg,
   ...referenceBg,
   ...workspaceBg,
@@ -1191,8 +1193,8 @@ export const bg = {
   'builder.publication.mappingInvalid': 'Картата на част към страница е невалидна.',
   'builder.publication.partIncomplete': 'Има непълна или некартирана част.',
   'builder.publication.hotspotInvalid': 'Има невалидна позиция върху схема.',
-  'builder.publication.hotspotUnverified': 'Проверете всички нанесени позиции.',
-  'builder.publication.hotspotCoverage': '{{count}} позиции нямат отбелязване върху схема.',
+  'builder.publication.hotspotUnverified': 'Непроверен маркер ще остане скрит в машинния каталог. Публикацията е позволена.',
+  'builder.publication.hotspotCoverage': '{{count}} позиции нямат проверен маркер върху схемата. Частите ще бъдат достъпни в списъка и търсенето.',
   'builder.publication.kitIncomplete': 'Има непълен ремонтен комплект.',
   'builder.openRevision': 'Отвори ревизия', 'builder.revisionWorkspace': 'Работно пространство на ревизията',
   'builder.assembliesSources': 'Възли и източници', 'builder.addAssembly': 'Добави възел',
@@ -1315,6 +1317,7 @@ export const en: Catalog = Object.fromEntries(
 
 Object.assign(en, {
   ...ux04En,
+  ...ux05En,
   ...uxEn,
   ...referenceEn,
   ...wizardEn,
@@ -1861,8 +1864,8 @@ Object.assign(en, {
   'builder.publication.mappingInvalid': 'A part page mapping is invalid.',
   'builder.publication.partIncomplete': 'A part is incomplete or unmapped.',
   'builder.publication.hotspotInvalid': 'A scheme hotspot is invalid.',
-  'builder.publication.hotspotUnverified': 'Verify every staged hotspot.',
-  'builder.publication.hotspotCoverage': '{{count}} positions have no scheme hotspot.',
+  'builder.publication.hotspotUnverified': 'An unverified hotspot will remain hidden in the machine catalog. Publication is allowed.',
+  'builder.publication.hotspotCoverage': '{{count}} positions have no verified scheme hotspot. Their parts remain available in the list and search.',
   'builder.publication.kitIncomplete': 'A repair kit is incomplete.',
   'builder.openRevision': 'Open revision', 'builder.revisionWorkspace': 'Revision workspace',
   'builder.assembliesSources': 'Assemblies & Sources', 'builder.addAssembly': 'Add assembly',
@@ -1982,6 +1985,7 @@ export const ru: Catalog = Object.fromEntries(
 
 Object.assign(ru, {
   ...ux04Ru,
+  ...ux05Ru,
   ...uxRu,
   ...referenceRu,
   ...wizardRu,
@@ -2531,8 +2535,8 @@ Object.assign(ru, {
   'builder.publication.mappingInvalid': 'Привязка детали к странице недействительна.',
   'builder.publication.partIncomplete': 'Есть неполная или непривязанная деталь.',
   'builder.publication.hotspotInvalid': 'Недействительная позиция на схеме.',
-  'builder.publication.hotspotUnverified': 'Подтвердите все нанесённые позиции.',
-  'builder.publication.hotspotCoverage': '{{count}} позиций не отмечены на схеме.',
+  'builder.publication.hotspotUnverified': 'Непроверенный маркер останется скрытым в каталоге машины. Публикация разрешена.',
+  'builder.publication.hotspotCoverage': 'У {{count}} позиций нет проверенного маркера на схеме. Детали будут доступны в списке и поиске.',
   'builder.publication.kitIncomplete': 'Есть неполный ремонтный комплект.',
   'builder.openRevision': 'Открыть редакцию', 'builder.revisionWorkspace': 'Рабочая область редакции',
   'builder.assembliesSources': 'Узлы и источники', 'builder.addAssembly': 'Добавить узел',
