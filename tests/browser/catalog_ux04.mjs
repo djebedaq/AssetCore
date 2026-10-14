@@ -132,8 +132,8 @@ try {
   const bindingDialog = page.getByRole('dialog')
   await bindingDialog.getByLabel('Категория активи', { exact: true }).selectOption({ label: 'QA UX04' })
   await expect(bindingDialog.locator('article')).toHaveCount(2)
-  await expect(bindingDialog.getByRole('option', { name: /Synthetic QA shared catalog A/ })).toBeDisabled()
-  await expect(bindingDialog.getByRole('option', { name: /Synthetic QA shared catalog B/ })).toBeDisabled()
+  await expect(bindingDialog.getByRole('option', { name: /Synthetic QA shared catalog A/ })).toHaveJSProperty('disabled', true)
+  await expect(bindingDialog.getByRole('option', { name: /Synthetic QA shared catalog B/ })).toHaveJSProperty('disabled', true)
   const catalogs = await api('/catalogs'), machines = (await (await page.request.get(base + '/api/machines')).json()).filter(row => row.inventory_number.startsWith('QA_UX04_'))
   const csrf = (await context.cookies()).find(cookie => cookie.name === 'assetcore_csrf').value
   for (const item of catalogs) {
