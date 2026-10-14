@@ -166,6 +166,8 @@ runtime договор. Нови pending връзки са забранени п
 | --- | --- | --- |
 | SQLite целеви регресии | `python -m pytest -q tests/test_catalog_bindings.py tests/test_catalog_builder.py tests/test_catalog_publication.py tests/test_catalog_ux04.py tests/test_catalog_ux05.py tests/test_catalog_review_fixes.py --tb=short` | 67 passed; 0 failed; 0 skipped |
 | PostgreSQL 16 целеви регресии | `python -m pytest -q tests/postgres/test_catalog_bindings_postgres.py tests/postgres/test_catalog_builder_postgres.py tests/postgres/test_catalog_ux04_postgres.py tests/postgres/test_catalog_ux05_postgres.py tests/postgres/test_catalog_final_audit_postgres.py --tb=short` | 43 passed; 0 failed; 0 skipped |
+| PostgreSQL full локално | `python -m pytest -q tests/postgres --tb=short` | 137 passed, 1 failed; виж ограничението по-долу |
+| Самостоятелен повторен transfer concurrency тест | `python -m pytest -q tests/postgres/test_concurrency.py::test_two_issue_transactions_create_one_active_transfer --tb=short` | 1 passed, 8.75 s; без промяна на теста/timeouts |
 | Финална foreign-catalog / authorization регресия | `python -m pytest -q tests/test_catalog_final_audit.py tests/test_catalog_bindings.py tests/test_authorization_web_security.py --tb=short` | 46 passed; 0 failed; 0 skipped |
 | Frontend suite | `pnpm test` | 628 passed, 68 файла |
 | Достъпни имена на selectors | `pnpm exec vitest run src/features/catalogBuilder/CatalogBindings.test.tsx --pool=threads --maxWorkers=1` | 5 passed; default timeout не е променян |
@@ -234,6 +236,12 @@ CI runner винаги създава нова база. Проверени са
   business правилата се проверяват отново под същите locks. Централният UI използва
   guarded batch договора и за индивидуални операции.
 - Запазеното Vite bundle warning не е security/build failure и не е заглушавано.
+- В пълния локален PostgreSQL run съществуващият
+  `test_two_issue_transactions_create_one_active_transfer` еднократно получи
+  `[201, 500]` вместо `[201, 409]`. Самостоятелното повторение мина без промени
+  (1 passed, 8.75 s), а пълният PostgreSQL CI suite е 138 passed. Точната причина
+  за единичния локален 500 не е установена; transfer кодът не е променян.
+  Това наблюдение остава за независим review, без отслабване на assertions/timeouts.
 - Ръчните compatibility потвърждения не променят capability или категорийни правила.
   Външни директни SQL редакции не са поддържан административен workflow.
 
@@ -255,5 +263,7 @@ production директорията, credentials, база или backups. Не 
 - Проверете responsive screenshots, keyboard focus, индивидуални confirmations,
   selection persistence и изричните page/batch limits.
 - Проверете точните CI резултати и окончателния diff за verified business material.
+- Преценете единичния локален transfer concurrency отказ спрямо успешното
+  самостоятелно повторение и пълните PostgreSQL CI резултати.
 
 Merge и deployment остават отделни, изрично неодобрени действия в тази задача.

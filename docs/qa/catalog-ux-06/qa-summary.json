@@ -28,6 +28,18 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0
+    },
+    "postgres-full": {
+      "tests": 138,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "postgres-transfer-repeat": {
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
     }
   },
   "ci_checks_url": "https://github.com/djebedaq/AssetCore/pull/108/checks",
@@ -40,5 +52,19 @@
     "central-active-1440.png": "735c13e7305b7a9ef510f3c9649f55b7fd9a129a43c7afebe8bd679598f036d2",
     "central-active-768.png": "9770bddbc749c68c2eb083a001577c39a5804ee35b1552c054988a011cff0b18",
     "central-active-390.png": "645e1f515666058947dde6fdf7f1590f9acbbd94657e26ef849a4d38fc6140a4"
+  },
+  "local_pg_full_observation": {
+    "case": "tests/postgres/test_concurrency.py::test_two_issue_transactions_create_one_active_transfer",
+    "observed_statuses": [
+      201,
+      500
+    ],
+    "expected_statuses": [
+      201,
+      409
+    ],
+    "isolated_repeat": "passed without test/timeout changes",
+    "cause": "not established",
+    "transfer_source_changed": false
   }
 }
