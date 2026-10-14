@@ -3,6 +3,7 @@
   "synthetic_only": true,
   "checks": [
     "Created and published through the UI with real PDF extraction, confirmed parts and optional UX05 warnings",
+    "Category change cancel preserves selection, preview and individual confirmation; accept clears them and restores keyboard focus",
     "Single and batch EXACT connections plus per-machine AMBIGUOUS confirmation; runtime available for all four",
     "Incompatible group blocked in UI and backend; explicit confirmation cannot bypass and zero partial writes",
     "Individual removal and atomic batch removal use concrete pairs and immediately revoke runtime availability",
@@ -11,6 +12,8 @@
     "Legacy pending binding stays visible and cannot expose draft content in runtime"
   ],
   "screenshots": [
+    "category-change-confirmation-1440.png",
+    "category-change-confirmation-390.png",
     "central-connect-1440.png",
     "central-connect-768.png",
     "central-connect-390.png",

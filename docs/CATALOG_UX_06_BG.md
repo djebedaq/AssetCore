@@ -169,8 +169,8 @@ runtime договор. Нови pending връзки са забранени п
 | PostgreSQL full локално | `python -m pytest -q tests/postgres --tb=short` | 137 passed, 1 failed; виж ограничението по-долу |
 | Самостоятелен повторен transfer concurrency тест | `python -m pytest -q tests/postgres/test_concurrency.py::test_two_issue_transactions_create_one_active_transfer --tb=short` | 1 passed, 8.75 s; без промяна на теста/timeouts |
 | Финална foreign-catalog / authorization регресия | `python -m pytest -q tests/test_catalog_final_audit.py tests/test_catalog_bindings.py tests/test_authorization_web_security.py --tb=short` | 46 passed; 0 failed; 0 skipped |
-| Frontend suite | `pnpm test` | 629 passed, 68 файла |
-| Достъпни имена на selectors | `pnpm exec vitest run src/features/catalogBuilder/CatalogBindings.test.tsx --pool=threads --maxWorkers=1` | 6 passed; default timeout не е променян |
+| Frontend suite след review корекцията | `pnpm exec vitest run --pool=threads --maxWorkers=1` | 636 passed, 68 файла, 227.71 s |
+| Bindings component в пълния frontend suite | същата команда | 13 passed, включително 7 нови регресии; default timeout не е променян |
 | TypeScript / ESLint | `pnpm typecheck`; `pnpm lint` | PASS |
 | Frontend build | `pnpm build` | PASS; запазено Vite предупреждение за bundle над 500 kB |
 | Python syntax | `python -m compileall -q backend/app backend/alembic backend/scripts scripts tests` | PASS |
@@ -211,7 +211,7 @@ Browser runner: `python tests/browser/run_catalog_ux06_qa.py` с наличен 
 CI изпълнява UX04, UX05 и UX06 browser scenarios, както и пълните backend,
 PostgreSQL, frontend, security, migration и Docker jobs.
 
-Локалният UX06 browser scenario е PASS: 7 групи acceptance проверки и 8 screenshots
+Локалният UX06 browser scenario е PASS: 8 групи acceptance проверки и 10 screenshots
 при 390, 768 и 1440 px. След първоначално създадената disposable база повторните
 локални сценарии използват същата изолирана QA база, като деактивират само собствените
 публикувани QA връзки чрез общия service и запазват историята/pending записа.
@@ -227,6 +227,46 @@ CI runner винаги създава нова база. Проверени са
 [incompatible preview](qa/catalog-ux-06/incompatible-preview-1440.png).
 Снимките са визуално прегледани; няма хоризонтално преливане. Мобилният диалог
 използва вертикално превъртане, като действията остават достъпни.
+
+## Корекция след независим review: смяна на категория
+
+В `CatalogBindings` новата категория се държи като чакащ избор, докато операторът
+изрично потвърди изчистването. Потвърждението е в същия централен прозорец, с focus
+върху заглавието и връщане към category selector след отговор. „Отказ“ запазва
+категорията, избраните машини, индивидуалните compatibility потвърждения и preview.
+При приемане се изчистват машините, потвържденията, preview и избраният каталог;
+данните се зареждат за новата категория. Закъснели preview отговори остават
+защитени от съществуващия effect cleanup.
+
+Търсенето и страницирането в същата категория запазват избора. Понеже category
+state е общ за двата изгледа, защитата важи и за временно скрита селекция за
+свързване при работа в „Активни връзки“. Избраните конкретни bindings за премахване
+продължават да се запазват при филтриране. Предупреждението и поясненията са
+преведени с еднакви ключове на BG/EN/RU. Няма промени по backend, schema, audit,
+transaction/locking договорите или verified business material в тази корекция.
+
+Добавените frontend регресии проверяват отказа, приемането, повторното избиране на
+AMBIGUOUS машини без наследени потвърждения, нов preview за друга категория,
+изчистване на категорията, смяна без селекция, търсене/странициране и общата
+категория между изгледите. Browser сценарият допълнително проверява отказ и
+приемане с реална AMBIGUOUS машина, focus и responsive confirmation screenshots.
+
+Локални проверки на корекцията:
+
+- `python -m pytest -q tests/test_catalog_bindings.py`: 26 passed, 9 deprecation
+  warnings, 109.98 s. Използван е project virtualenv и изолирани SQLite fixtures.
+- `pnpm exec vitest run --pool=threads --maxWorkers=1`: 636 passed в 68 файла,
+  227.71 s; 13 binding component теста. Първият default-worker run получи
+  634 passed / 1 failed: непромененият SourceWorkspace navigation тест достигна
+  своя 5000 ms timeout. Пълното повторение мина без промени по теста или timeout-а.
+- `pnpm typecheck`, `pnpm lint`, `pnpm build`: PASS; съществуващото Vite bundle
+  предупреждение остава видимо.
+- `node tests/browser/catalog_ux06.mjs` през локалния disposable QA runner:
+  8 acceptance групи / 10 screenshots, PASS. Новите снимки са
+  [desktop confirmation](qa/catalog-ux-06/category-change-confirmation-1440.png) и
+  [mobile confirmation](qa/catalog-ux-06/category-change-confirmation-390.png).
+  Те са визуално прегледани; текстът и двата бутона са достъпни без преливане.
+  Всички снимки и SHA-256 стойности в QA manifest са обновени от същия run.
 
 ## Рискове и известни ограничения
 

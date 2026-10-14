@@ -2,8 +2,8 @@
   "synthetic_scenario_only": true,
   "browser": {
     "passed": true,
-    "acceptance_groups": 7,
-    "screenshots": 8,
+    "acceptance_groups": 8,
+    "screenshots": 10,
     "widths": [
       390,
       768,
@@ -44,14 +44,16 @@
   },
   "ci_checks_url": "https://github.com/djebedaq/AssetCore/pull/108/checks",
   "screenshots_sha256": {
-    "central-connect-1440.png": "f36511915af9d3efe55fe8166f55524526b26211ca4de8071b6ac8ac04cf0371",
-    "central-connect-768.png": "9cf69ed57bb28944a06de456d98eac703bc3473cb23911a2d15d4ca400313c68",
-    "central-connect-390.png": "5a3e870bd80ea52e356979830c25c7518b938ef7cc3bbe94ba257bd2baecdabf",
-    "incompatible-preview-1440.png": "a50620d87a6dbf016f62a31b6a3ea875091d43f03caa1c837e3cda60ec3ce0a2",
-    "batch-removal-preview-768.png": "d1e4e94ab9bdc5266291f83bd5ac5e5082ad672f7e783c37cf1d862fdf4b7dee",
-    "central-active-1440.png": "3b8bc582958a999ba60282531587f52287974556fc21a7dff603da65b6f28df1",
-    "central-active-768.png": "32953b25b216da639a55b146b6af1685d67bbec0b2b558e1234f6493e475062c",
-    "central-active-390.png": "e4d08e04599b5cdab4e0fe822737deb53ff6c10db7b5026bb2ee9b5067a7b447"
+    "category-change-confirmation-1440.png": "e0776e9422027325ece548f14ba4be832bb231300b8adebb95b9fd5fd73a91dd",
+    "category-change-confirmation-390.png": "931511867c0a768111ceecd78201482e896271092e5a57fa6b884e9bec06a054",
+    "central-connect-1440.png": "a7c28327e0f2b39e83559c82c21a6b058049181d681b6e059e7ce9fd929527a6",
+    "central-connect-768.png": "146869eea81112f22cd89c255e200cffbc32e5f230e305d4f5e2bfe3ce8f0c42",
+    "central-connect-390.png": "84e86f69dc3d116aa6174085f367445ebf6d43032f6c197e0cc78c021764ae59",
+    "incompatible-preview-1440.png": "e9dd1b126e234835d973c241c9dd1604a3aeaa66c3f3abc7e5392f2bbf49b01e",
+    "batch-removal-preview-768.png": "300459366129cf85250d7ccbd273e1d0d90c11c0164104954a0a16d6d2c61c21",
+    "central-active-1440.png": "71b0889f29476e9844ec14d2482c8a302560bf02956bbae864a37f9c2d913127",
+    "central-active-768.png": "0d3b17f7a9773d92c6936351f6cdfe032b07cd6f4a778221a45267f179563375",
+    "central-active-390.png": "1b0ec90fac533d267c4a953e799780839c00c753ad3765e288a9901d2e243a46"
   },
   "local_pg_full_observation": {
     "case": "tests/postgres/test_concurrency.py::test_two_issue_transactions_create_one_active_transfer",
@@ -68,9 +70,30 @@
     "transfer_source_changed": false
   },
   "frontend": {
-    "command": "pnpm test",
-    "passed": 629,
+    "command": "pnpm exec vitest run --pool=threads --maxWorkers=1",
+    "passed": 636,
     "files": 68,
-    "binding_component_tests": 6
+    "binding_component_tests": 13
+  },
+  "review_fix": {
+    "backend_bindings": {
+      "passed": 26,
+      "failed": 0
+    },
+    "frontend_added_regressions": 7,
+    "initial_frontend_run": {
+      "passed": 634,
+      "failed": 1,
+      "case": "SourceWorkspace.test.tsx: browses first, middle, last, previous/next and zoom without loading an entire manual",
+      "failure": "5000ms timeout; unchanged assertions and timeout"
+    },
+    "single_worker_full_repeat": {
+      "passed": 636,
+      "failed": 0,
+      "files": 68
+    },
+    "typecheck": "passed",
+    "eslint": "passed",
+    "build": "passed"
   }
 }

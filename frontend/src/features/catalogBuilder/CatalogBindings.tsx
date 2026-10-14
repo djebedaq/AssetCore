@@ -37,6 +37,7 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
   const [plan, setPlan] = useState<Plan | null>(null)
   const [stage, setStage] = useState<'select' | 'review' | 'remove'>('select')
   const [closeWarning, setCloseWarning] = useState(false)
+  const [pendingCategory, setPendingCategory] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -46,6 +47,8 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
   const [issues, setIssues] = useState<Machine[]>([])
   const [success, setSuccess] = useState('')
   const heading = useRef<HTMLHeadingElement>(null)
+  const categoryControl = useRef<HTMLSelectElement>(null)
+  const categoryWarningOpened = useRef(false)
   const chosen = catalogs.find(row => row.id === catalog)
   const name = (row: Names) => row[`name_${locale}`] || row.name_bg
   const reason = (code?: string | null) => code ? t(problemKeys[code] || 'builder.error.generic') : ''
@@ -55,13 +58,17 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
   const dirty = rows.length > 0 || removals.length > 0 || !!removalPreview?.length
   useEffect(() => { heading.current?.focus() }, [stage, closeWarning])
   useEffect(() => {
+    if (pendingCategory !== null) { heading.current?.focus(); categoryWarningOpened.current = true }
+    else if (categoryWarningOpened.current) { categoryControl.current?.focus(); categoryWarningOpened.current = false }
+  }, [pendingCategory])
+  useEffect(() => {
     const before = (event: BeforeUnloadEvent) => { if (dirty || busy) event.preventDefault() }
     window.addEventListener('beforeunload', before)
     return () => window.removeEventListener('beforeunload', before)
   }, [dirty, busy])
   useEffect(() => {
     let active = true
-    if (mode === 'connect' && !category) { setMachines(empty()); return }
+    if (mode === 'connect' && !category) { setMachines(empty()); setLoading(false); return }
     setLoading(true); setError(''); setMachines(empty()); setLinks(empty())
     const query = new URLSearchParams({ offset: String(offset), limit: '50', search })
     if (category) query.set('category_id', String(category))
@@ -86,6 +93,18 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
     return () => { active = false }
   }, [catalog, selected, confirmed, mode, refresh, t])
   function close() { if (busyRef.current) return; if (dirty) setCloseWarning(true); else onClose() }
+  function applyCategory(next: number) {
+    setCategory(next); setCatalog(0); setMachineFilter(0); setOffset(0)
+    setSelected({}); setConfirmed([]); setPlan(null); setPreviewLoading(false)
+    setPendingCategory(null)
+  }
+  function changeCategory(next: number) {
+    if (busyRef.current || next === category) return
+    // Category is shared by both views; never retain a hidden connection
+    // selection from a different category when changing the active filters.
+    if (rows.length) setPendingCategory(next)
+    else applyCategory(next)
+  }
   function resetSelection() {
     if (mode === 'connect') { setSelected({}); setConfirmed([]); setPlan(null) }
     else setRemoving({})
@@ -145,7 +164,12 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
       {success && <p role="status" className="success">{success}</p>}
       {closeWarning ? <section><h4 ref={heading} tabIndex={-1}>{t('ux06.discard')}</h4><div className="actions">
         <button className="secondary" onClick={() => setCloseWarning(false)}>{t('common.cancel')}</button>
-        <button className="danger" onClick={onClose}>{t('common.close')}</button></div></section> : stage !== 'select' ? <section>
+        <button className="danger" onClick={onClose}>{t('common.close')}</button></div></section> : pendingCategory !== null ? <section>
+        <h4 ref={heading} tabIndex={-1}>{t('ux06.changeCategory')}</h4>
+        <p>{t('ux06.categorySelectionWarning')}</p><p>{t('ux06.selected', { count: rows.length })}</p>
+        <div className="actions"><button className="secondary" onClick={() => setPendingCategory(null)}>{t('common.cancel')}</button>
+          <button className="danger" onClick={() => applyCategory(pendingCategory)}>{t('ux06.clearAndChangeCategory')}</button></div>
+      </section> : stage !== 'select' ? <section>
         <h4 ref={heading} tabIndex={-1}>{t(stage === 'review' ? 'ux06.preview' : 'ux06.removePreview')}</h4>
         {stage === 'review' ? <><p><b>{chosen && name(chosen)}</b> · {chosen && name(chosen.asset_category)} · {plan?.published_revision?.revision_code}</p>
           <p>{t('ux06.selected', { count: rows.length })} · {(['EXACT', 'AMBIGUOUS', 'INCOMPATIBLE'] as const).map(code => `${t(`ux06.${code}`)}: ${plan?.machines.filter(row => row.compatibility === code).length || 0}`).join(' · ')} · {t('ux06.already')}: {plan?.machines.filter(row => row.code === 'catalog_asset_already_bound').length || 0}</p>
@@ -161,7 +185,7 @@ export default function CatalogBindings({ catalogs, categories, catalogId, onClo
         <nav className="actions" aria-label={t('ux06.title')}>{(['connect', 'active'] as const).map(value => <button className="secondary" disabled={busy} aria-pressed={mode === value} key={value} onClick={() => { setMode(value); setOffset(0); setSearch(''); setMachineFilter(0); setStage('select') }}>{t(`ux06.${value}`)}</button>)}
           <button className="secondary" disabled={busy} onClick={() => void reload()}>{t('ux06.refresh')}</button></nav>
         <div className="binding-filters">
-          <label>{t('builder.category')}<select aria-label={t('builder.category')} value={category} onChange={event => { setCategory(Number(event.target.value)); setCatalog(0); setMachineFilter(0); setOffset(0) }}><option value="">{t(mode === 'active' ? 'ux06.allCategories' : 'guided.select')}</option>{categories.filter(row => row.capabilities.includes('HAS_PARTS_CATALOG') && (mode === 'active' || row.is_active)).map(row => <option key={row.id} value={row.id}>{name(row)}</option>)}</select></label>
+          <label>{t('builder.category')}<select ref={categoryControl} aria-label={t('builder.category')} value={category} onChange={event => changeCategory(Number(event.target.value))}><option value="">{t(mode === 'active' ? 'ux06.allCategories' : 'guided.select')}</option>{categories.filter(row => row.capabilities.includes('HAS_PARTS_CATALOG') && (mode === 'active' || row.is_active)).map(row => <option key={row.id} value={row.id}>{name(row)}</option>)}</select></label>
           <label>{t('ux06.search')}<input type="search" maxLength={120} value={search} onChange={event => { setSearch(event.target.value); setOffset(0) }} /></label>
         </div>
         {mode === 'connect' ? <>
