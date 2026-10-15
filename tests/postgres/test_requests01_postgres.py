@@ -38,14 +38,17 @@ def make_requests(factory, count=1):
         for index in range(count):
             request = PartRequest(
                 part_name="QA request",
-                request_kind="FREE_FORM",
+                request_kind="FREE_FORM" if index % 2 == 0 else "CATALOG",
                 department="QA",
                 status="WAITING_APPROVAL",
                 requested_by_id=actor.id,
             )
             request.lines.append(
                 PartRequestLine(
-                    description="QA exact quantity", quantity=2.5, exact_quantity="2.5", unit="l"
+                    description="QA exact quantity",
+                    quantity=2.5 if index % 2 == 0 else 1,
+                    exact_quantity="2.5" if index % 2 == 0 else None,
+                    unit="l" if index % 2 == 0 else "pcs",
                 )
             )
             db.add(request)

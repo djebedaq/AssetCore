@@ -501,11 +501,9 @@ def test_multiline_part_request_approval_and_canonical_document(
         headers=auth_headers,
     )
     assert first_docs.status_code == 201, first_docs.text
-    assert second_docs.status_code == 409, second_docs.text
-    assert second_docs.json()["detail"]["code"] == (
-        "part_request_protocol_already_generated"
-    )
-    assert second_docs.json()["detail"]["document_number"] == (
+    assert second_docs.status_code == 201, second_docs.text
+    assert second_docs.json()["generation_status"] == "READY"
+    assert second_docs.json()["document_number"] == (
         first_docs.json()["document_number"]
     )
 

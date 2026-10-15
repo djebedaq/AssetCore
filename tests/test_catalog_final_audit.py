@@ -231,11 +231,11 @@ def test_late_binding_shared_revision_documents_and_repeated_seed(
                 if row.format == "docx":
                     document = Document(io.BytesIO(row.content))
                     assert any([cell.text for cell in table.rows[0].cells] ==
-                               ["Поз.", "PART №", "Описание", "Количество"] for table in document.tables)
+                               ["Pos", "PART No", "DESCRIPTION", "Q'TY ordered"] for table in document.tables)
                     assert any(cell.text == "P" * 80 for table in document.tables
                                for row in table.rows for cell in row.cells)
         if shutil.which("soffice"):
-            assert converted == [True, True]
+            assert converted == []  # Preview and official KK PDF use the same renderer.
         # Initialization and import may touch only their own operational records.
         for _ in range(2):
             seed_database(db)

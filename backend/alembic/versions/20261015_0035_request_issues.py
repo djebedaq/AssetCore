@@ -142,9 +142,6 @@ def upgrade():
             re.fullmatch(r"KK[0-9]+", row[0] or "") and int(row[0][2:]) >= 1000 for row in values
         ):
             raise RuntimeError("REQUESTS01_HISTORICAL_KK_CONFLICT")
-    if "request_approval_snapshots" in inspector.get_table_names():
-        # The bootstrap creates current metadata for a fresh installation.
-        return
     # Nullable additive fields preserve every historical row and binary document.
     columns = {
         "request_kind": "VARCHAR(20) NOT NULL DEFAULT 'CATALOG'",
@@ -157,9 +154,21 @@ def upgrade():
         "cancellation_reason": "TEXT",
         "replacement_request_id": "INTEGER REFERENCES part_requests(id)",
     }
+    existing = {column["name"] for column in inspector.get_columns("part_requests")}
     for name, ddl in columns.items():
-        op.execute(sa.text(f"ALTER TABLE part_requests ADD COLUMN {name} {ddl}"))
-    op.add_column("part_request_lines", sa.Column("exact_quantity", sa.String(32), nullable=True))
+        if name not in existing:
+            op.execute(sa.text(f"ALTER TABLE part_requests ADD COLUMN {name} {ddl}"))
+    if "exact_quantity" not in {
+        column["name"] for column in inspector.get_columns("part_request_lines")
+    }:
+        op.add_column(
+            "part_request_lines", sa.Column("exact_quantity", sa.String(32), nullable=True)
+        )
+    if "request_approval_snapshots" in inspector.get_table_names():
+        # Bootstrap metadata already created the new tables, but their guards
+        # must wait until every published legacy migration has finished.
+        install_guards(bind)
+        return
     op.create_table(
         "request_number_counter",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -219,6 +228,17 @@ def upgrade():
     op.create_index(
         "ix_request_delivery_events_request_id", "request_delivery_events", ["request_id"]
     )
+    install_guards(bind)
+
+
+def install_guards(bind):
+    query = (
+        "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='freeze_request_fields'"
+        if bind.dialect.name == "sqlite"
+        else "SELECT 1 FROM pg_trigger WHERE tgname='freeze_request_fields' AND tgrelid='part_requests'::regclass"
+    )
+    if bind.execute(sa.text(query)).first():
+        return
     for sql in statements(bind.dialect.name):
         op.execute(sa.text(sql))
 

@@ -114,6 +114,8 @@ def statements(dialect: str) -> list[str]:
 
 def install(metadata):
     def created(_target, connection, **kwargs):
+        if connection.info.get("assetcore_schema_migration"):
+            return
         # Published bootstrap migrations call create_all(checkfirst=True) more than once.
         # Metadata events also fire when no table was created.
         if not any(

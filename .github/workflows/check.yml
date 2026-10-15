@@ -68,9 +68,9 @@ jobs:
           PYTHONPATH: backend
         run: python backend/scripts/build_catalog_translations.py --check
       - name: Production configuration regression gate
-        run: python -m pytest -q tests/test_runtime_deployment_hardening.py
+        run: python -m pytest -q --tb=short tests/test_runtime_deployment_hardening.py
       - name: Full backend suite (real PostgreSQL cases run in postgres job)
-        run: python -m pytest -q -m "not postgres" --durations=10
+        run: python -m pytest -q -m "not postgres" --tb=short --durations=10
       - run: python scripts/verify_release.py --output release-verification
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -184,7 +184,7 @@ jobs:
       - name: Create isolated concurrency database
         run: psql -h localhost -U assetcore -d assetcore_test_source -v ON_ERROR_STOP=1 -c 'CREATE DATABASE assetcore_test_concurrency;'
       - name: Real PostgreSQL overlapping domain transactions
-        run: python -m pytest -q tests/postgres --durations=10 --junitxml=postgres-test-results.xml
+        run: python -m pytest -q tests/postgres --tb=short --durations=10 --junitxml=postgres-test-results.xml
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
