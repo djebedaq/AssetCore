@@ -47,7 +47,11 @@ def session_factory(tmp_path: Path) -> Iterator[sessionmaker[Session]]:
         f"sqlite:///{database_path}",
         connect_args={"check_same_thread": False, "timeout": 30},
     )
-    Base.metadata.create_all(engine)
+    # sqlite3 legacy mode does not begin a transaction for DDL. Group the schema
+    # and its immutable-evidence triggers atomically instead of fsync per table.
+    with engine.begin() as connection:
+        connection.exec_driver_sql("BEGIN")
+        Base.metadata.create_all(connection)
     factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     with factory() as session:
         seed_database(session)
