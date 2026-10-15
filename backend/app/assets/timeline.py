@@ -12,7 +12,7 @@ from datetime import timezone
 
 from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
-from sqlalchemy.orm import Session, raiseload
+from sqlalchemy.orm import Session, joinedload, raiseload
 
 from ..models import (
     ApprovalDecision,
@@ -27,6 +27,7 @@ from ..models import (
     RepairEvent,
     RepairPart,
     RepairStatus,
+    RequestApprovalSnapshot,
     TransferOperationStatus,
     TransferProtocol,
     User,
@@ -353,7 +354,8 @@ def _request_events(machine_id, requests, approvals, transitions) -> list[Machin
     }
     for request in requests.values():
         related = {"part_request_id": request.id, "repair_id": request.repair_id}
-        common = {"reference": request.request_reference, "related": related}
+        reference = request.approval_snapshot.official_number if request.approval_snapshot else request.request_reference
+        common = {"reference": reference, "related": related}
         milestones = [
             ("created", "CREATED", request.created_at, None),
             (
@@ -452,7 +454,7 @@ def _request_events(machine_id, requests, approvals, transitions) -> list[Machin
                 f"PART_REQUEST_{new}",
                 transition.created_at,
                 TimelineCategory.PARTS,
-                reference=request.request_reference,
+                reference=request.approval_snapshot.official_number if request.approval_snapshot else request.request_reference,
                 status_before=previous,
                 status_after=new,
                 related={"part_request_id": request.id, "repair_id": request.repair_id},
@@ -645,7 +647,12 @@ def machine_timeline(
                 r.id: r
                 for r in db.scalars(
                     select(PartRequest)
-                    .options(raiseload("*"))
+                    .options(
+                        raiseload("*"),
+                        joinedload(PartRequest.approval_snapshot).load_only(
+                            RequestApprovalSnapshot.official_number, raiseload=True
+                        ),
+                    )
                     .where(
                         or_(
                             PartRequest.machine_id == machine_id,

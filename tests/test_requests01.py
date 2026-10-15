@@ -61,6 +61,16 @@ def test_free_form_edit_preview_approval_archive(client, auth_headers, session_f
     approved = approve(client, auth_headers, item)
     assert approved["official_number"] == "KK1000"
     assert approved["generation_status"] == "READY", approved.get("generation_error")
+    search = client.get("/api/search?q=KK1000", headers=auth_headers)
+    assert search.status_code == 200
+    assert search.json()["part_requests"][0]["official_number"] == "KK1000"
+    activity = client.get("/api/dashboard", headers=auth_headers).json()["recent_activity"]
+    references = [
+        row["reference"]
+        for row in activity
+        if row["module"] == "parts" and row["record_id"] == item["id"]
+    ]
+    assert references and all(value == "KK1000" for value in references)
     assert {d["filename"] for d in approved["documents"]} == {"KK1000.pdf", "KK1000.docx"}
     again = approve(client, auth_headers, item)
     assert again["official_number"] == "KK1000"

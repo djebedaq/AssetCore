@@ -1008,6 +1008,18 @@ def test_kk_approval_archives_real_retained_catalog_visual_evidence(
     data = future_catalog(session_factory)
     request = _request(client, auth_headers, data, factory=session_factory, historical=False)
     assert request["official_number"] == "KK1000" and request["generation_status"] == "READY"
+    passport = client.get(f"/api/machines/{data['machine_id']}/passport", headers=auth_headers)
+    assert passport.status_code == 200
+    saved = next(row for row in passport.json()["part_requests"] if row["id"] == request["id"])
+    assert saved["official_number"] == "KK1000"
+    timeline = client.get(f"/api/machines/{data['machine_id']}/timeline", headers=auth_headers)
+    assert timeline.status_code == 200
+    events = [
+        row
+        for row in timeline.json()["items"]
+        if row.get("related", {}).get("part_request_id") == request["id"]
+    ]
+    assert events and all(row["reference"] == "KK1000" for row in events)
     records = _records(session_factory, request["id"])
     assert set(records) == {"docx", "pdf"}
     manifest = records["docx"][2]["visual_appendix"]

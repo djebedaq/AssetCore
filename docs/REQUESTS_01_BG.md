@@ -51,6 +51,8 @@ DB triggers забраняват промяна/изтриване на snapshot
 потвърждение и причина.
 
 Историческите одобрени заявки остават с предишния си workflow и номера.
+Новият KK се показва също в общото търсене, началната активност, машинния
+паспорт и timeline. Техническият PR идентификатор остава отделно API поле.
 Съществуващи чакащи заявки получават KK при бъдещо одобрение. Старите
 едноредови заявки използват съществуващите си part_name/part_number/quantity
 при оформяне на ред за бъдещото одобрение. Исторически дробни каталожни
@@ -97,7 +99,8 @@ PR: [REQUESTS-01, #109](https://github.com/djebedaq/AssetCore/pull/109).
 Променените модули са models, Alembic env/0035/manifest, part_requests
 (schemas/service/official/routes), industrial API, workspace, document rendering
 и registration, generic official-document guards, owner-deletion references,
-каталогът и проследяването във frontend, BG/EN/RU преводите и съответните тестове/CI.
+каталогът и проследяването във frontend, паспортът/timeline/общото търсене,
+BG/EN/RU преводите и съответните тестове/CI.
 
 Пълната проверка на 482f2b6 е [Build check 38755988809](https://github.com/djebedaq/AssetCore/actions/runs/38755988809):
 
@@ -149,6 +152,13 @@ Windows named mutex и два съществуващи transfer print теста
 пренася бутоните. Браузърният gate вече проверява ширината вътре в диалога,
 границите на всяко поле/бутон и минимална използваема ширина на полетата.
 Последващият CI след тази CSS поправка е достъпен от Checks на PR.
+
+Последната целева проверка на KK в общото търсене, dashboard, паспорт и timeline,
+заедно с целия `tests/test_machine_lifecycle_timeline.py`, даде 59 passed.
+Първоначално един от петте целеви теста откри липсващо eager loading в timeline;
+поправката зарежда само официалния номер чрез scalar joined relationship и
+запазва забраната за зареждане на snapshot JSON/бинарни данни в този изглед.
+Повторната проверка на всичките 59 случая е успешна; typecheck и lint също.
 
 Примерният пакет се генерира с
 `ASSETCORE_REQUESTS01_QA_OUTPUT=<temporary-output> python -m pytest -q --tb=short tests/test_requests01.py::test_export_review_examples`.

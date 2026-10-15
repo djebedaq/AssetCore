@@ -646,6 +646,12 @@ def recent_activity(db: Session, user: User, limit: int = 8) -> list[dict]:
                 )
             )
     if has_permission(user, Permission.REQUESTS_VIEW):
+        request_reference = func.coalesce(
+            select(RequestApprovalSnapshot.official_number)
+            .where(RequestApprovalSnapshot.request_id == PartRequest.id)
+            .scalar_subquery(),
+            PartRequest.request_reference,
+        )
         sources.append(
             event(
                 select(PartRequest).outerjoin(Repair, PartRequest.repair_id == Repair.id),
@@ -654,7 +660,7 @@ def recent_activity(db: Session, user: User, limit: int = 8) -> list[dict]:
                 PartRequest.id,
                 PartRequest.created_at,
                 func.coalesce(PartRequest.machine_id, Repair.machine_id),
-                PartRequest.request_reference,
+                request_reference,
                 literal(None),
             )
         )
@@ -682,7 +688,7 @@ def recent_activity(db: Session, user: User, limit: int = 8) -> list[dict]:
                             PartRequest.id,
                             PartRequestApproval.decided_at,
                             func.coalesce(PartRequest.machine_id, Repair.machine_id),
-                            PartRequest.request_reference,
+                            request_reference,
                             PartRequestApproval.decision,
                             PartRequestApproval.id,
                         )
@@ -698,7 +704,7 @@ def recent_activity(db: Session, user: User, limit: int = 8) -> list[dict]:
                         PartRequest.id,
                         column,
                         func.coalesce(PartRequest.machine_id, Repair.machine_id),
-                        PartRequest.request_reference,
+                        request_reference,
                         literal(status),
                     )
                 )

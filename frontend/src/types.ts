@@ -203,7 +203,7 @@ export type MachinePassport = {
   history: Array<{ id: number; event_type: string; reference?: string | null; previous_status?: string | null; new_status?: string | null; details?: Record<string, unknown> | null; user_id?: number | null; created_at: string }>;
   repairs: Array<{ id: number; repair_reference?: string | null; status: string; reported_problem: string; opened_at: string; closed_at?: string | null }>;
   transfers: Array<{ id: number; protocol_number: string; batch_reference?: string | null; is_active: boolean; issued_at?: string | null; returned_at?: string | null; location_text?: string | null; accepted_by?: string | null }>;
-  part_requests: Array<{ id: number; request_reference?: string | null; status: string; priority: string; created_at: string }>;
+  part_requests: Array<{ id: number; request_reference?: string | null; official_number?: string | null; status: string; priority: string; created_at: string }>;
   parts_used: Array<{ id: number; repair_id: number; repair_reference?: string | null; catalog_part_id?: number | null; part_number?: string | null; description: string; quantity: number; unit?: string | null; source?: string | null; created_at: string }>;
   generated_documents: Array<{ id: number; document_number: string; document_type: string; format: string; filename: string; created_at: string; download_endpoint: string; display_separately?: boolean }>;
   official_documents: Array<{
@@ -366,7 +366,7 @@ export type GlobalSearchResults = {
   parts: Array<{ id: number; part_number: string; description: string; brand: string; model?: string | null; assembly?: string | null; is_verified: boolean }>;
   documents: Array<{ id: number; title: string; brand: string; category: string; download_endpoint: string }>;
   repairs: Array<{ id: number; repair_reference?: string | null; machine_number: string; reported_problem: string; status: string }>;
-  part_requests: Array<{ id: number; request_reference?: string | null; status: string; part_name: string }>
+  part_requests: Array<{ id: number; request_reference?: string | null; official_number?: string | null; status: string; part_name: string }>
   transfers: Array<{ id: number; protocol_number: string; batch_reference?: string | null; machine_number: string; company_unit?: string | null; vessel?: string | null; location_text?: string | null; is_active: boolean }>;
   generated_documents: Array<{ id: number; document_number: string; document_type: string; format: string; filename: string; download_endpoint: string }>
 }
