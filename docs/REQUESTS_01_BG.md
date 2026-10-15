@@ -46,6 +46,9 @@ DB triggers забраняват промяна/изтриване на snapshot
 презаписване на архивирани GeneratedDocument и промяна/изтриване на доставки.
 Съществуващият generic документен API не може да издава ръчно KK номер или
 да подменя snapshot на KK заявка чрез supersede.
+Общият cancel endpoint за неподписани документи също отказва KK заявки;
+тяхната отмяна преминава единствено през request workflow с необходимото право,
+потвърждение и причина.
 
 Историческите одобрени заявки остават с предишния си workflow и номера.
 Съществуващи чакащи заявки получават KK при бъдещо одобрение. Старите
@@ -134,7 +137,8 @@ counter се отказват. SQLite домейн тестовете прове
 
 Последните локални проверки дадоха още 2 passed за frozen metadata/QA export
 и 5 passed за директните SQL защити на файлове/доставки и идентичните файлове
-след отмяна. Четирите skips в Linux backend job са незаявен optional QA export,
+след отмяна. Допълнителните 2 cancel/namespace теста минават и след затварянето
+на generic document cancel пътя за KK. Четирите skips в Linux backend job са незаявен optional QA export,
 Windows named mutex и два съществуващи transfer print теста без LibreOffice.
 Експортът е изпълнен отделно, а реалният converter е проверен в Docker job.
 Наличните deprecation предупреждения и Vite предупреждението за голям bundle

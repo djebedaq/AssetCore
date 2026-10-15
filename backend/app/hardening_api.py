@@ -884,6 +884,10 @@ def cancel_document(
         raise HTTPException(
             404, detail={"code": "document_not_found", "message": "Документът не е намерен."}
         )
+    from .models import RequestApprovalSnapshot
+    if db.scalar(select(RequestApprovalSnapshot.request_id).where(RequestApprovalSnapshot.official_number == document.document_number)):
+        raise HTTPException(409, detail={"code": "approved_request_is_immutable",
+                                        "message": "Използвайте отмяна на заявката с потвърждение и причина."})
     version = db.get(OfficialDocumentVersion, document.current_version_id)
     if version.status in {
         OfficialDocumentStatus.SIGNED.value,

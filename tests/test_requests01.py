@@ -417,6 +417,13 @@ def test_kk_namespace_and_generic_document_correction_are_blocked(
     )
     assert blocked.status_code == 409
     blocked = client.post(
+        f"/api/official-documents/{document_id}/cancel",
+        headers=auth_headers,
+        json={"reason": "QA forbidden generic cancellation"},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "approved_request_is_immutable"
+    blocked = client.post(
         "/api/official-documents",
         headers=auth_headers,
         json={
