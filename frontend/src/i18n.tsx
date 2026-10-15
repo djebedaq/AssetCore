@@ -2701,7 +2701,7 @@ const repairStatusKeys: Record<string, TranslationKey> = {
 }
 
 const partStatusKeys: Record<string, TranslationKey> = {
-  DRAFT: 'status.draft', SUBMITTED: 'status.submitted', WAITING_APPROVAL: 'status.waitingApproval', APPROVED: 'status.approved',
+  RETURNED_FOR_CHANGES: 'requests01.returned', DRAFT: 'status.draft', SUBMITTED: 'status.submitted', WAITING_APPROVAL: 'status.waitingApproval', APPROVED: 'status.approved',
   REJECTED: 'status.rejected', ORDERED: 'status.ordered', PARTIALLY_DELIVERED: 'status.partiallyDelivered',
   DELIVERED: 'status.delivered', CANCELLED: 'status.cancelled', LOW: 'status.low', NORMAL: 'status.normal', URGENT: 'status.urgent',
   'Чернова': 'status.draft', 'Изпратена': 'status.submitted', 'Подадена': 'status.submitted', 'Одобрена': 'status.approved',

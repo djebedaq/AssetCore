@@ -61,7 +61,7 @@ try {
   dialog = page.getByRole('dialog')
   await dialog.getByLabel('Получено количество', { exact: true }).first().fill('0,75')
   await dialog.getByRole('button', { name: 'Запази', exact: true }).click()
-  await expect(card).toContainText('0.75 / 2.5')
+  await expect(card).toContainText('0,75 / 2,5')
   await card.getByRole('button', { name: 'Отмени заявката', exact: true }).click()
   dialog = page.getByRole('dialog')
   await dialog.getByLabel('Причина за отмяна', { exact: true }).fill('QA controlled cancellation')

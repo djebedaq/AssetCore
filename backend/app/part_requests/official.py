@@ -31,11 +31,10 @@ def canonical_hash(data):
 
 
 def utc_iso(value):
-    return (
-        value.replace(tzinfo=UTC).isoformat()
-        if value and value.tzinfo is None
-        else (value.isoformat() if value else None)
-    )
+    if value is None:
+        return None
+    value = value.replace(tzinfo=UTC) if value.tzinfo is None else value
+    return value.astimezone(UTC).isoformat()
 
 
 def kind(request):

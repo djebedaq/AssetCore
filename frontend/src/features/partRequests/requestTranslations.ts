@@ -1,5 +1,6 @@
 export const requests01Bg = {
   'requests01.return': 'Върни за промени',
+  'requests01.returned': 'Върната за промени',
   'requests01.history': 'История на действията',
   'requests01.event.CREATED': 'Създадена заявка',
   'requests01.event.FREE_FORM_CREATED': 'Създадена свободна заявка',
@@ -55,6 +56,7 @@ export const requests01Bg = {
 type Translations = Record<keyof typeof requests01Bg, string>
 export const requests01En: Translations = {
   'requests01.return': 'Return for changes',
+  'requests01.returned': 'Returned for changes',
   'requests01.history': 'Action history',
   'requests01.event.CREATED': 'Request created',
   'requests01.event.FREE_FORM_CREATED': 'Free-form request created',
@@ -92,6 +94,7 @@ export const requests01En: Translations = {
 }
 export const requests01Ru: Translations = {
   'requests01.return': 'Вернуть на доработку',
+  'requests01.returned': 'Возвращена на доработку',
   'requests01.history': 'История действий',
   'requests01.event.CREATED': 'Заявка создана',
   'requests01.event.FREE_FORM_CREATED': 'Свободная заявка создана',

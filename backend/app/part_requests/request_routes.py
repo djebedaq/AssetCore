@@ -133,7 +133,7 @@ def create_free_form(
     )
     db.add(request)
     db.flush()
-    request.request_reference = f"PR-{request.id:06d}"
+    request.request_reference = f"PR-{request.created_at:%Y}-{request.id:06d}"
     write_lines(db, request, payload)
     if payload.submit_for_approval:
         submit_for_approval(db, request, user)

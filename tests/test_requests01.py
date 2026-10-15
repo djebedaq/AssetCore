@@ -303,7 +303,7 @@ def test_all_request_kinds_share_the_sequence_and_search(client, auth_headers, s
     assert first["official_number"] == "KK1000"
     with session_factory() as db:
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
-        kit = RepairKit(code="QA-REQUESTS01", name="QA request kit")
+        kit = RepairKit(code="QA-REQUESTS01", name="QA request kit", created_by_id=actor.id)
         db.add(kit)
         db.flush()
         for index, kind in enumerate(("CATALOG", "UNKNOWN_PART", "REPAIR_KIT"), 1001):
@@ -374,6 +374,7 @@ def test_export_review_examples(client, auth_headers):
     import json
     import os
     from pathlib import Path
+
     target = os.environ.get("ASSETCORE_REQUESTS01_QA_OUTPUT")
     if not target:
         pytest.skip("Optional QA examples export is not requested.")
@@ -381,13 +382,17 @@ def test_export_review_examples(client, auth_headers):
     target = Path(target).resolve()
     assert target.is_relative_to(root.resolve())
     target.mkdir(parents=True, exist_ok=True)
-    data = payload(department="QA — ПРИМЕР ЗА ПРЕГЛЕД", reason="QA пример от заданието; не е производствена заявка.", lines=[
-        {"description": "Тефлонова лента", "quantity": "20", "unit": "pcs"},
-        {"description": "WD-40", "quantity": "3", "unit": "pcs"},
-        {"description": "Масло", "quantity": "2.5", "unit": "l"},
-        {"description": "Грес", "quantity": "0.75", "unit": "kg"},
-        {"description": "Маркуч", "quantity": "7.5", "unit": "m"},
-    ])
+    data = payload(
+        department="QA — ПРИМЕР ЗА ПРЕГЛЕД",
+        reason="QA пример от заданието; не е производствена заявка.",
+        lines=[
+            {"description": "Тефлонова лента", "quantity": "20", "unit": "pcs"},
+            {"description": "WD-40", "quantity": "3", "unit": "pcs"},
+            {"description": "Масло", "quantity": "2.5", "unit": "l"},
+            {"description": "Грес", "quantity": "0.75", "unit": "kg"},
+            {"description": "Маркуч", "quantity": "7.5", "unit": "m"},
+        ],
+    )
     draft = create(client, auth_headers, **data)
     response = client.get(f"/api/part-requests/{draft['id']}/preview", headers=auth_headers)
     assert response.status_code == 200
@@ -395,7 +400,9 @@ def test_export_review_examples(client, auth_headers):
     client.post(f"/api/part-requests/{draft['id']}/submit", headers=auth_headers)
     item = approve(client, auth_headers, draft)
     assert item["generation_status"] == "READY"
-    (target / "free-form-request.json").write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    (target / "free-form-request.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     for record in item["documents"]:
         response = client.get(f"/api{record['download_endpoint']}", headers=auth_headers)
         assert response.status_code == 200
@@ -403,4 +410,6 @@ def test_export_review_examples(client, auth_headers):
     for filename in ("request-preview.pdf", "KK1000.pdf"):
         with fitz.open(target / filename) as pdf:
             for index, page in enumerate(pdf, 1):
-                page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5)).save(target / f"{filename}-{index}.png")
+                page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5)).save(
+                    target / f"{filename}-{index}.png"
+                )

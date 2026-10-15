@@ -10,6 +10,10 @@ export function formatTransactionalPartQuantity(value: number): string {
   return Number.isInteger(value) ? value.toFixed(0) : String(value)
 }
 
+export function formatExactPartQuantity(value: string, locale: 'bg' | 'en' | 'ru'): string {
+  return locale === 'en' ? value : value.replace('.', ',')
+}
+
 export function formatCatalogSourceQuantity(
   quantity: number | null | undefined,
   quantityRaw: string,

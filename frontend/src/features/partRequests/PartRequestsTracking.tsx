@@ -27,6 +27,7 @@ import type { CatalogPartEnhanced, MultiPartRequest } from '../../types'
 import { notifyPartRequestsChanged } from './partRequestEvents'
 import {
   formatTransactionalPartQuantity,
+  formatExactPartQuantity,
   isDeliveredPartQuantity,
 } from './partRequestQuantities'
 
@@ -125,7 +126,7 @@ function nextActionKey(request: MultiPartRequest): TranslationKey {
 }
 
 export function PartRequestsTracking({ initialRecordId }: { initialRecordId?: number } = {}) {
-  const { date, t } = useI18n()
+  const { date, t, locale } = useI18n()
   const [refresh, setRefresh] = useState(0)
   const [recordId, setRecordId] = useState(initialRecordId)
   const filter = useWorkspaceFilters()
@@ -207,7 +208,7 @@ export function PartRequestsTracking({ initialRecordId }: { initialRecordId?: nu
       {request.cancellation_reason && <p>{t('requests01.cancelReason')}: {request.cancellation_reason} · {request.cancelled_at && date(request.cancelled_at)}</p>}
       {request.quantity_compatibility.status === 'LEGACY_FRACTIONAL' && <div className="conflict-notice" role="alert"><b>{t('requests.legacyQuantityWarning')}</b><p>{t(`requests.legacyRecovery.${request.quantity_compatibility.recovery_action}` as TranslationKey)}</p><small>{t('requests.legacyQuantityAffectedLines', { lines: request.quantity_compatibility.affected_line_ids.join(', ') })}</small></div>}
       <div className="request-next-action"><b>{t('requests.nextAction')}</b><span>{t(nextActionKey(request))}</span></div>
-      <div className="request-line-list">{request.lines.map((line) => <div className={line.is_unknown_part ? 'unknown-part-request-line' : ''} key={line.id}><span><b>{line.is_unknown_part ? t('unknownPart.label') : line.part_number || (request.request_kind === 'FREE_FORM' ? line.position : t('common.noValue'))}</b><small>{line.is_unknown_part && line.assembly ? `${t('unknownPart.assembly')}: ${line.assembly} · ` : ''}{line.description}</small>{line.linked_part_number && <small className="verified">{t('unknownPart.linkedTo')}: {line.linked_part_number} · {line.linked_part_description}</small>}</span><span className="request-line-side"><em>{line.exact_quantity && request.official_number ? `${t('requests01.received')}: ${line.received_quantity} / ${line.exact_quantity} ${request.request_kind === 'FREE_FORM' ? t(`requests01.${line.unit}` as TranslationKey) : line.unit} · ${t('requests01.remaining')}: ${line.remaining_quantity}` : <>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${formatTransactionalPartQuantity(line.delivered_quantity)} / ` : ''}{line.exact_quantity || formatTransactionalPartQuantity(line.quantity)} {request.request_kind === 'FREE_FORM' ? t(`requests01.${line.unit}` as TranslationKey) : line.unit}</>}</em>{!request.official_number && line.is_unknown_part && !line.linked_catalog_part_id && hasPermission('parts.manage') && <button className="secondary compact" onClick={() => setUnknownLink({ request, line })}><ShieldCheck size={14} />{t('unknownPart.linkAction')}</button>}</span></div>)}</div>
+      <div className="request-line-list">{request.lines.map((line) => <div className={line.is_unknown_part ? 'unknown-part-request-line' : ''} key={line.id}><span><b>{line.is_unknown_part ? t('unknownPart.label') : line.part_number || (request.request_kind === 'FREE_FORM' ? line.position : t('common.noValue'))}</b><small>{line.is_unknown_part && line.assembly ? `${t('unknownPart.assembly')}: ${line.assembly} · ` : ''}{line.description}</small>{line.linked_part_number && <small className="verified">{t('unknownPart.linkedTo')}: {line.linked_part_number} · {line.linked_part_description}</small>}</span><span className="request-line-side"><em>{line.exact_quantity && request.official_number ? `${t('requests01.received')}: ${formatExactPartQuantity(line.received_quantity || '0', locale)} / ${formatExactPartQuantity(line.exact_quantity, locale)} ${request.request_kind === 'FREE_FORM' ? t(`requests01.${line.unit}` as TranslationKey) : line.unit} · ${t('requests01.remaining')}: ${formatExactPartQuantity(line.remaining_quantity || '0', locale)}` : <>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${formatTransactionalPartQuantity(line.delivered_quantity)} / ` : ''}{line.exact_quantity ? formatExactPartQuantity(line.exact_quantity, locale) : formatTransactionalPartQuantity(line.quantity)} {request.request_kind === 'FREE_FORM' ? t(`requests01.${line.unit}` as TranslationKey) : line.unit}</>}</em>{!request.official_number && line.is_unknown_part && !line.linked_catalog_part_id && hasPermission('parts.manage') && <button className="secondary compact" onClick={() => setUnknownLink({ request, line })}><ShieldCheck size={14} />{t('unknownPart.linkAction')}</button>}</span></div>)}</div>
       {request.reason && <p>{t('parts.reason')}: {request.reason}</p>}
       <RequestActionHistory requestId={request.id} status={request.status} />
       <RequestDeliveryHistory request={request} onSaved={() => void load()} />
