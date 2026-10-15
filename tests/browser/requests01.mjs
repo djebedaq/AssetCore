@@ -21,6 +21,13 @@ async function api(path, data, method = 'POST') {
 async function shot(name, width) {
   await page.setViewportSize({ width, height: 1000 })
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
+  await expect.poll(() => page.getByRole('dialog').evaluate(dialog => {
+    const bounds = dialog.getBoundingClientRect()
+    return dialog.scrollWidth <= dialog.clientWidth + 1 && [...dialog.querySelectorAll('input, textarea, select, button')].every(control => {
+      const rect = control.getBoundingClientRect()
+      return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1
+    })
+  })).toBe(true)
   await page.screenshot({ path: `${out}/${name}-${width}.png`, fullPage: true })
 }
 try {
