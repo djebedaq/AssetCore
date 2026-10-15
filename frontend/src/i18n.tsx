@@ -1,3 +1,4 @@
+import { requests01Bg, requests01En, requests01Ru } from './features/partRequests/requestTranslations'
 import { ux06Bg, ux06En, ux06Ru } from './features/catalogBuilder/ux06Translations'
 import { catalogUxBg, catalogUxEn, catalogUxRu } from './features/catalogBuilder/catalogUxTranslations'
 import { ux04Bg, ux04En, ux04Ru } from './features/catalogBuilder/ux04Translations'
@@ -20,6 +21,7 @@ import {
 } from './locale'
 
 export const bg = {
+  ...requests01Bg,
   ...ux04Bg,
   ...ux05Bg,
   ...ux06Bg,
@@ -1318,6 +1320,7 @@ export const en: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(en, {
+  ...requests01En,
   ...ux04En,
   ...ux05En,
   ...ux06En,
@@ -1987,6 +1990,7 @@ export const ru: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(ru, {
+  ...requests01Ru,
   ...ux04Ru,
   ...ux05Ru,
   ...ux06Ru,

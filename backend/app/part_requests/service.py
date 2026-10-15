@@ -6,7 +6,7 @@ from threading import RLock
 from typing import Iterator
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..audit import add_audit_log
@@ -40,6 +40,8 @@ def _is_whole_quantity(value: float) -> bool:
 
 
 def part_request_quantity_compatibility(request: PartRequest) -> dict:
+    if request.request_kind == "FREE_FORM":
+        return {"status": "COMPATIBLE", "affected_line_ids": [], "recovery_action": "NONE"}
     affected_lines = [
         {
             "line_id": line.id,
@@ -137,10 +139,14 @@ def _request_statement(request_id: int):
 def load_request(
     db: Session, request_id: int, *, lock: bool = False
 ) -> PartRequest | None:
+    if lock and db.bind is not None and db.bind.dialect.name == "sqlite":
+        # Acquire SQLite's transactional writer lock before reading workflow state.
+        db.execute(update(PartRequest).where(PartRequest.id == request_id)
+                   .values(status=PartRequest.status).execution_options(synchronize_session=False))
     statement = _request_statement(request_id)
     if lock and db.bind is not None and db.bind.dialect.name == "postgresql":
         statement = statement.with_for_update(of=PartRequest)
-    return db.scalar(statement)
+    return db.scalar(statement.execution_options(populate_existing=lock))
 
 
 @contextmanager
@@ -203,6 +209,9 @@ def decide_request(
     decision: ApprovalDecision,
     note: str | None,
 ) -> None:
+    # Idempotent repeated approval never issues a second number or audit decision.
+    if request.approval_snapshot is not None and decision == ApprovalDecision.APPROVED:
+        return
     if request.status != PartRequestStatus.WAITING_APPROVAL.value:
         raise business_conflict(
             "part_request_not_waiting_approval",
@@ -218,6 +227,11 @@ def decide_request(
         raise legacy_quantity_conflict(request)
     previous_status = request.status
     if decision == ApprovalDecision.APPROVED:
+        if not request.lines:
+            # Older single-row requests keep their verified summary as the source.
+            request.lines.append(PartRequestLine(description=request.part_name,
+                                                  part_number=request.part_number,
+                                                  quantity=request.quantity))
         request.status = PartRequestStatus.APPROVED.value
     elif decision == ApprovalDecision.REJECTED:
         request.status = PartRequestStatus.REJECTED.value
@@ -225,7 +239,13 @@ def decide_request(
         request.status = PartRequestStatus.DRAFT.value
     request.decided_at = utcnow()
     request.decided_by_id = user.id
+    request.decided_by = user
     request.decision_note = note
+    # Flush the approved fields before the immutable snapshot installs their DB lock.
+    db.flush()
+    if decision == ApprovalDecision.APPROVED:
+        from .official import issue_number
+        issue_number(db, request)
     db.add(
         PartRequestApproval(
             request_id=request.id,

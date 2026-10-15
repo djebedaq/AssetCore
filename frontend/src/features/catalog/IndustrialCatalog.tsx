@@ -16,12 +16,15 @@ import { addPart, addRepairKit } from './catalogState'
 import type { AssemblyDetails, CatalogCartLine, CatalogPart, CatalogRepairKit, MachineCatalog, PositionHotspot } from './catalogTypes'
 import { Select } from '../../ui/Select'
 import { CategorySelect, MachineSelect, useCategories } from '../../ui/workspace'
+import { hasPermission } from '../../permissions'
+import { FreeFormRequestModal } from '../partRequests/FreeFormRequestModal'
 
 type Props = { defaultMachineId?: number }
 type MachineCartState = { machineId: number | null; lines: CatalogCartLine[] }
 const EMPTY_MACHINE_CART: MachineCartState = { machineId: null, lines: [] }
 
 export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
+  const [freeForm, setFreeForm] = useState(false)
   const { t, locale } = useI18n()
   const [machines, setMachines] = useState<Machine[]>([])
   const [machineId, setMachineId] = useState<number | ''>(defaultMachineId || '')
@@ -183,7 +186,8 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
   }
 
   return <>
-    <div className="toolbar"><div><h3>{t('catalog.title')}</h3><p className="muted">{t('ux.catalogHint')}</p></div></div>
+    <div className="toolbar"><div><h3>{t('catalog.title')}</h3><p className="muted">{t('ux.catalogHint')}</p></div>{hasPermission('requests.create') && <button className="primary" onClick={() => setFreeForm(true)}>{t('requests01.new')}</button>}</div>
+    {freeForm && <FreeFormRequestModal onClose={() => setFreeForm(false)} onSaved={() => setToast(t('requests01.saved'))} />}
     {toast && <div className="success catalog-v2-toast" role="status"><CheckCircle2 size={18} />{toast}<button className="link" onClick={() => setToast('')}>{t('common.close')}</button></div>}
     {error && <div className="error">{error}</div>}
     {categoryError && <div className="error" role="alert">{t('catalog.loadError')}</div>}

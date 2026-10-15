@@ -35,6 +35,7 @@
     "20261001_0031_catalog_auto_ingest.py": "93609bba17ba3987cbe6b4f79a0be8a39d21da6b47632914713d7fb35fab891a",
     "20261009_0032_catalog_reference_associations.py": "c33d1a34fffb1290dc9e4b56f24dcb6c2dd4f392b26d835b75822b7d208659bb",
     "20261009_0033_durable_source_review.py": "d46390c91df1a801a6a07779aa5b1351c387c5990f29641d639aff9dafcc8125",
-    "20261013_0034_catalog_multiple_bindings.py": "359668c11231f51cb45f11f74ebb4cf5c3b80518690dbe634a95017820cc66e3"
+    "20261013_0034_catalog_multiple_bindings.py": "359668c11231f51cb45f11f74ebb4cf5c3b80518690dbe634a95017820cc66e3",
+    "20261015_0035_request_issues.py": "7b252c814fb88820e44f6736ade8ea24c57d5b56d675bcee767233e2b9c6df40"
   }
 }

@@ -23,6 +23,11 @@ os.environ.setdefault("ASSETCORE_OWNER_EMAIL", "admin@assetcore.local")
 os.environ.setdefault("ADMIN_PASSWORD", "AssetCore123!")
 os.environ.setdefault("OWNER_JOB_TITLE", "Тестов системен администратор")
 os.environ.setdefault("BEARER_COMPATIBILITY_ENABLED", "true")
+if os.environ.get("PYTEST_XDIST_WORKER"):
+    # Workers inherit the parent's secure Settings-test environment after the
+    # parent has imported the explicitly bearer-compatible legacy test app.
+    # Reconstruct that same test app; the secure default is restored below.
+    os.environ["BEARER_COMPATIBILITY_ENABLED"] = "true"
 
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402

@@ -8,6 +8,7 @@ import json
 import mimetypes
 import time
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
@@ -112,6 +113,7 @@ from .models import (
     RepairPart,
     RepairParticipant,
     RepairStatus,
+    RequestApprovalSnapshot,
     TechnicalDocument,
     TechnicalDocumentRevision,
     TransferBatch,
@@ -129,6 +131,8 @@ from .part_requests import (
     pending_action_count,
     submit_for_approval,
 )
+from .part_requests.official import ensure_editable, presentation, quantity, received, utc_iso
+from .part_requests.request_routes import router as requests_router
 from .part_requests.visual_routes import router as visual_snapshot_router
 from .part_requests.visual_snapshots import capture_snapshot, create_request_line, snapshot_response
 from .permissions import (
@@ -153,6 +157,7 @@ from .workflow import (
 
 router = APIRouter(prefix="/api", tags=["industrial-platform"])
 router.include_router(visual_snapshot_router)
+router.include_router(requests_router)
 
 PROTECTED_HPWJ_NUMBERS = {
     "4", "5", "7", "8", "9", "10", "11", "13", "14", "15", "16",
@@ -357,7 +362,10 @@ def _load_repair(db: Session, repair_id: int, *, lock: bool = False) -> Repair:
 
 
 def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) -> dict:
+    totals = received(item) if item.approval_snapshot else {}
+    frozen = item.approval_snapshot.data if item.approval_snapshot else {}
     return {
+        **presentation(item),
         "id": item.id,
         "request_reference": item.request_reference or f"PR-{item.id:06d}",
         "machine_id": item.machine_id,
@@ -371,17 +379,17 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
         "language": item.language,
         "reason": item.reason,
         "requested_by_id": item.requested_by_id,
-        "requested_by_name": item.requested_by.full_name if item.requested_by else None,
-        "decided_by_name": item.decided_by.full_name if item.decided_by else None,
-        "submitted_at": item.submitted_at,
-        "decided_at": item.decided_at,
+        "requested_by_name": frozen.get("requested_by_name") or (item.requested_by.full_name if item.requested_by else None),
+        "decided_by_name": frozen.get("approved_by_name") or (item.decided_by.full_name if item.decided_by else None),
+        "submitted_at": utc_iso(item.submitted_at),
+        "decided_at": utc_iso(item.decided_at),
         "decision_note": item.decision_note,
         "department": item.department,
         "supplier": item.supplier,
         "delivery_note": item.delivery_note,
         "ordered_at": item.ordered_at,
         "delivered_at": item.delivered_at,
-        "created_at": item.created_at,
+        "created_at": utc_iso(item.created_at),
         "quantity_compatibility": part_request_quantity_compatibility(item),
         "lines": [
             {
@@ -392,6 +400,9 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
                 "part_number": line.part_number,
                 "description": line.description,
                 "quantity": line.quantity,
+                "exact_quantity": str(quantity(line)),
+                "received_quantity": str(totals.get(line.id, line.delivered_quantity)),
+                "remaining_quantity": str(quantity(line) - totals.get(line.id, Decimal(str(line.delivered_quantity)))),
                 "unit": line.unit,
                 "reason": line.reason,
                 "source_document": line.source_document,
@@ -417,7 +428,7 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
                 "note": approval.note,
                 "decided_by_id": approval.decided_by_id,
                 "decided_by_name": approval.decided_by.full_name if approval.decided_by else None,
-                "decided_at": approval.decided_at,
+                "decided_at": utc_iso(approval.decided_at),
             }
             for approval in item.approvals
         ],
@@ -1223,7 +1234,7 @@ def create_multi_part_request(
     first_catalog = catalog_parts.get(first.catalog_part_id) if first.catalog_part_id else None
     first_name = kit.name if kit and payload.repair_kit_mode == "KIT" else first_catalog.description if first_catalog else first.description
     first_number = kit.code if kit and payload.repair_kit_mode == "KIT" else (first_catalog.replaced_by_part_number or first_catalog.part_number) if first_catalog else first.part_number
-    request_item = PartRequest(machine_id=resolved_machine_id, repair_id=payload.repair_id, repair_kit_id=payload.repair_kit_id, repair_kit_mode=payload.repair_kit_mode if kit else None, part_name=first_name, part_number=first_number, quantity=first.quantity, reason=payload.reason, department=payload.department, priority=payload.priority.value, status=PartRequestStatus.DRAFT.value, language=payload.language.value, requested_by_id=user.id)
+    request_item = PartRequest(request_kind="REPAIR_KIT" if payload.repair_kit_id else "CATALOG", machine_id=resolved_machine_id, repair_id=payload.repair_id, repair_kit_id=payload.repair_kit_id, repair_kit_mode=payload.repair_kit_mode if kit else None, part_name=first_name, part_number=first_number, quantity=first.quantity, reason=payload.reason, department=payload.department, priority=payload.priority.value, status=PartRequestStatus.DRAFT.value, language=payload.language.value, requested_by_id=user.id)
     db.add(request_item)
     db.flush()
     request_item.request_reference = f"PR-{request_item.created_at:%Y}-{request_item.id:06d}"
@@ -1284,6 +1295,7 @@ def create_unknown_part_request(
             },
         )
     request_item = PartRequest(
+        request_kind="UNKNOWN_PART",
         machine_id=machine.id,
         repair_id=repair.id if repair else None,
         part_name="Част без потвърден part number",
@@ -1368,6 +1380,7 @@ def link_unknown_part_to_catalog(
     request_item = load_request(db, request_id, lock=True)
     if request_item is None:
         raise HTTPException(404, "Заявката не е намерена.")
+    ensure_editable(request_item)
     line = next((value for value in request_item.lines if value.id == line_id), None)
     if line is None:
         raise HTTPException(404, "Редът на заявката не е намерен.")
@@ -1461,9 +1474,10 @@ def add_part_request_attachment(
     user: User = Depends(require_parts_operator),
     db: Session = Depends(get_db),
 ) -> dict:
-    request_item = db.get(PartRequest, request_id)
+    request_item = load_request(db, request_id, lock=True)
     if request_item is None:
         raise HTTPException(404, "Заявката не е намерена.")
+    ensure_editable(request_item)
     filename, content = _decode_file(payload)
     item = PartRequestAttachment(
         request_id=request_item.id,
@@ -1538,8 +1552,13 @@ def decide_part_request(
         raise HTTPException(404, "Заявката не е намерена.")
     decide_request(db, item, user, payload.decision, payload.note)
     _commit(db)
-    db.refresh(item)
-    return _part_request_dict(item, [])
+    documents = []
+    if item.approval_snapshot is not None:
+        from .documents.request_issue_documents import generate_safely
+        item = load_request(db, request_id, lock=True)
+        documents = generate_safely(db, item, user)
+        _commit(db)
+    return _part_request_dict(item, documents)
 
 
 @router.patch("/part-requests/{request_id}/fulfillment")
@@ -1552,6 +1571,24 @@ def update_part_request_fulfillment(
     item = load_request(db, request_id, lock=True)
     if item is None:
         raise HTTPException(404, "Заявката не е намерена.")
+    if payload.status == "CANCELLED":
+        from .part_requests.request_routes import cancel
+        from .part_requests.request_schemas import RequestCancel
+        ensure_permission(user, Permission.REQUESTS_APPROVE)
+        if not payload.confirmed or not (payload.note or "").strip() or payload.lines:
+            raise business_conflict("cancellation_confirmation_required", "Потвърдете отмяната и посочете причина без промяна на редове.")
+        cancel(db, item, user, RequestCancel(confirmed=True, reason=payload.note,
+                                           replacement_request_id=payload.replacement_request_id))
+        _commit(db)
+        return _part_request_dict(item, [])
+    if item.approval_snapshot is not None:
+        if payload.status != "ORDERED" or item.status != "APPROVED" or payload.lines:
+            raise business_conflict("use_request_delivery_events", "Отчитайте доставките чрез отделни събития.")
+        item.status, item.ordered_at = "ORDERED", utcnow()
+        item.supplier, item.delivery_note = payload.supplier, payload.note
+        add_audit_log(db, user, "part_request", item.id, "REQUEST_ORDERED", {"supplier": payload.supplier, "note": payload.note})
+        _commit(db)
+        return _part_request_dict(item, [])
     allowed = {
         PartRequestStatus.APPROVED.value: {
             PartRequestStatus.ORDERED.value,
@@ -1668,6 +1705,16 @@ def generate_part_request_documents(
         item = load_request(db, request_id, lock=True)
         if item is None:
             raise HTTPException(404, "Заявката не е намерена.")
+        if item.approval_snapshot is not None:
+            from .documents.request_issue_documents import generate_safely
+            if language and language != item.language:
+                raise business_conflict("approved_document_language_locked", "Езикът на одобрения документ е заключен.")
+            documents = generate_safely(db, item, user)
+            _commit(db)
+            return {"document_number": item.approval_snapshot.official_number,
+                    "generation_status": item.generation_status, "generation_error": item.generation_error,
+                    "documents": [{"id": d.id, "format": d.format, "filename": d.filename,
+                                   "download_endpoint": f"/generated-documents/{d.id}/download"} for d in documents]}
         canonical_number = item.request_reference or f"PR-{item.id:06d}"
         existing_documents = db.scalars(
             select(GeneratedDocument)
@@ -2606,6 +2653,14 @@ def download_generated_document(
     item = db.get(GeneratedDocument, document_id)
     if item is None:
         raise HTTPException(404, "Генерираният документ не е намерен.")
+    if item.part_request_id and db.get(RequestApprovalSnapshot, item.part_request_id):
+        if hashlib.sha256(item.content).hexdigest() != item.sha256:
+            raise business_conflict("request_archive_integrity_failed", "Архивираният документ не премина проверката за цялост.")
+        return Response(item.content, media_type=item.media_type, headers={
+            "Content-Disposition": f'attachment; filename="{item.filename}"',
+            "X-Content-Type-Options": "nosniff", "X-Content-SHA256": item.sha256,
+            "Cache-Control": "private, no-store",
+        })
     official = db.scalar(
         select(OfficialDocument).where(
             OfficialDocument.document_number == item.document_number

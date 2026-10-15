@@ -579,6 +579,8 @@ class PartRequestFulfillmentUpdate(BaseModel):
     status: Literal["ORDERED", "PARTIALLY_DELIVERED", "DELIVERED", "CANCELLED"]
     supplier: str | None = Field(default=None, max_length=255)
     note: str | None = None
+    confirmed: bool = False
+    replacement_request_id: int | None = Field(default=None, gt=0)
     lines: list[PartRequestDeliveryLine] = Field(default_factory=list)
 
     @model_validator(mode="after")

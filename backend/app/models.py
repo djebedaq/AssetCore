@@ -706,6 +706,21 @@ class PartRequest(Base):
     ordered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    request_kind: Mapped[str] = mapped_column(String(20), default="CATALOG", server_default="CATALOG")
+    generation_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    generation_error: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    replacement_request_id: Mapped[int | None] = mapped_column(ForeignKey("part_requests.id"), nullable=True)
+
+    approval_snapshot: Mapped[RequestApprovalSnapshot | None] = relationship(
+        back_populates="request", uselist=False, lazy="selectin", passive_deletes="all"
+    )
+    delivery_events: Mapped[list[RequestDeliveryEvent]] = relationship(
+        back_populates="request", lazy="selectin", passive_deletes="all"
+    )
+
     machine: Mapped[Machine | None] = relationship()
     repair: Mapped[Repair | None] = relationship(back_populates="part_requests")
     requested_by: Mapped[User | None] = relationship(
@@ -713,7 +728,7 @@ class PartRequest(Base):
     )
     decided_by: Mapped[User | None] = relationship(foreign_keys=[decided_by_id])
     lines: Mapped[list[PartRequestLine]] = relationship(
-        back_populates="request", cascade="all, delete-orphan"
+        back_populates="request", cascade="all, delete-orphan", order_by="PartRequestLine.id"
     )
     approvals: Mapped[list[PartRequestApproval]] = relationship(
         back_populates="request", cascade="all, delete-orphan"
@@ -1596,6 +1611,54 @@ class GeneratedDocument(Base):
     created_by: Mapped[User] = relationship()
 
 
+class RequestNumberCounter(Base):
+    __tablename__ = "request_number_counter"
+    __table_args__ = (CheckConstraint("id = 1 AND next_value >= 1000", name="ck_request_counter"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    next_value: Mapped[int] = mapped_column(Integer, default=1000)
+
+
+class RequestApprovalSnapshot(Base):
+    __tablename__ = "request_approval_snapshots"
+    __table_args__ = (
+        UniqueConstraint("number", name="uq_request_kk_number"),
+        UniqueConstraint("official_number", name="uq_request_official_number"),
+        CheckConstraint("number >= 1000", name="ck_request_kk_minimum"),
+    )
+    request_id: Mapped[int] = mapped_column(ForeignKey("part_requests.id", ondelete="RESTRICT"), primary_key=True)
+    number: Mapped[int] = mapped_column(Integer)
+    official_number: Mapped[str] = mapped_column(String(80))
+    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    approved_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    data: Mapped[dict] = mapped_column(JSON)
+    sha256: Mapped[str] = mapped_column(String(64))
+    template_version_id: Mapped[int | None] = mapped_column(ForeignKey("document_template_versions.id"), nullable=True)
+    template_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    request: Mapped[PartRequest] = relationship(back_populates="approval_snapshot", foreign_keys=[request_id])
+
+
+class RequestDeliveryEvent(Base):
+    __tablename__ = "request_delivery_events"
+    __table_args__ = (
+        UniqueConstraint("request_id", "idempotency_key", name="uq_request_delivery_idempotency"),
+        UniqueConstraint("correction_of_id", name="uq_request_delivery_correction"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(ForeignKey("part_requests.id", ondelete="RESTRICT"), index=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    actor_name: Mapped[str] = mapped_column(String(255))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    kind: Mapped[str] = mapped_column(String(20))
+    quantities: Mapped[dict] = mapped_column(JSON)
+    supplier: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    correction_of_id: Mapped[int | None] = mapped_column(ForeignKey("request_delivery_events.id", ondelete="RESTRICT"), nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(80))
+    payload_sha256: Mapped[str] = mapped_column(String(64))
+    request: Mapped[PartRequest] = relationship(back_populates="delivery_events", foreign_keys=[request_id])
+    actor: Mapped[User] = relationship(foreign_keys=[actor_id])
+
+
 class PartRequestLine(Base):
     __tablename__ = "part_request_lines"
 
@@ -1608,6 +1671,9 @@ class PartRequestLine(Base):
     part_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     description: Mapped[str] = mapped_column(Text)
     quantity: Mapped[float] = mapped_column(Float, default=1.0)
+    # Canonical decimal text avoids SQLite Numeric's implicit binary-float conversion.
+    # Historical Float values are never converted or rewritten.
+    exact_quantity: Mapped[str | None] = mapped_column(String(32), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_document: Mapped[str | None] = mapped_column(String(700), nullable=True)
@@ -2318,3 +2384,9 @@ class DocumentSignature(Base):
     batch_manifest_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     signed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+# Install only after all participating tables exist.
+from .request_schema_guards import install as install_request_guards  # noqa: E402
+
+install_request_guards(Base.metadata)

@@ -572,6 +572,9 @@ def create_official_document(
     actor: User = Depends(require_permission(Permission.DOCUMENTS_GENERATE)),
     db: Session = Depends(get_db),
 ) -> dict:
+    if data.document_number.startswith("KK") and data.document_number[2:].isdigit():
+        raise HTTPException(409, detail={"code": "kk_number_requires_request_approval",
+                                        "message": "KK номер се издава само при одобрение на заявка."})
     _require_complete_profile(actor)
     if data.document_type in {
         DocumentType.TRANSFER_ISSUE.value,
@@ -836,6 +839,10 @@ def supersede_document(document_id: int, data: SupersedeDocumentRequest, request
     document = db.scalar(select(OfficialDocument).where(OfficialDocument.id == document_id).with_for_update())
     if document is None:
         raise HTTPException(404, detail={"code": "document_not_found", "message": "Документът не е намерен."})
+    from .models import RequestApprovalSnapshot
+    if db.scalar(select(RequestApprovalSnapshot.request_id).where(RequestApprovalSnapshot.official_number == document.document_number)):
+        raise HTTPException(409, detail={"code": "approved_request_is_immutable",
+                                        "message": "Одобрените данни са заключени. Създайте заместваща заявка."})
     previous = require_current_version(db, document)
     if previous.status in {OfficialDocumentStatus.SUPERSEDED.value, OfficialDocumentStatus.CANCELLED.value}:
         raise HTTPException(409, detail={"code": "document_not_current", "message": "Тази версия не може да бъде коригирана."})

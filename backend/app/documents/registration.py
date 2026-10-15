@@ -106,6 +106,7 @@ def _register_official_version(
     batch_id: int | None = None,
     template_version_id: int | None = None,
     initial_status: str = OfficialDocumentStatus.DRAFT.value,
+    prepared_by_snapshot: dict | None = None,
 ) -> OfficialDocument:
     existing = db.scalar(
         select(OfficialDocument).where(OfficialDocument.document_number == number)
@@ -115,9 +116,9 @@ def _register_official_version(
             f"Официален документ с номер {number} вече съществува и няма да бъде презаписан."
         )
     preparer = db.get(User, created_by_id)
-    preparer_values = _preparer_values(db, created_by_id)
+    preparer_values = _preparer_values(db, created_by_id) if prepared_by_snapshot is None else None
     official_snapshot = dict(snapshot)
-    official_snapshot["prepared_by"] = {
+    official_snapshot["prepared_by"] = prepared_by_snapshot or {
         "user_id": preparer.id,
         "first_name": preparer.first_name,
         "middle_name": preparer.middle_name,

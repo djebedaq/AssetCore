@@ -278,6 +278,7 @@ export type RepairCase = {
 }
 
 export type MultiPartRequestLine = {
+  exact_quantity?: string; received_quantity?: string; remaining_quantity?: string;
   id: number; request_id: number; catalog_part_id?: number | null; position?: string | null;
   part_number?: string | null; description: string; quantity: number; unit?: string | null;
   reason?: string | null; source_document?: string | null; source_page?: number | null; delivered_quantity: number;
@@ -294,6 +295,14 @@ export type PartRequestQuantityCompatibility = {
 }
 
 export type MultiPartRequest = {
+  request_kind?: 'FREE_FORM' | 'CATALOG' | 'UNKNOWN_PART' | 'REPAIR_KIT';
+  official_number?: string | null; approved_at?: string | null;
+  generation_status?: 'PENDING' | 'READY' | 'FAILED' | null; generation_error?: string | null;
+  cancelled_at?: string | null; cancelled_by_id?: number | null; cancellation_reason?: string | null;
+  replacement_request_id?: number | null;
+  delivery_events?: Array<{ id: number; kind: 'RECEIPT' | 'CORRECTION'; quantities: Record<string, string>;
+    actor_id: number; actor_name: string; occurred_at: string; supplier?: string | null; note?: string | null; correction_of_id?: number | null }>;
+
   id: number; request_reference: string; machine_id?: number | null; machine_number?: string | null;
   repair_id?: number | null; repair_reference?: string | null;
   repair_kit_id?: number | null; repair_kit_mode?: 'COMPONENTS' | 'KIT' | null;
