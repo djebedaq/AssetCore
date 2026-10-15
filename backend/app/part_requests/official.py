@@ -192,7 +192,13 @@ def issue_number(db, request):
 
 
 def ensure_editable(request):
-    if request.approval_snapshot is not None:
+    if request.approval_snapshot is not None or request.status in {
+        "APPROVED",
+        "ORDERED",
+        "PARTIALLY_DELIVERED",
+        "DELIVERED",
+        "CANCELLED",
+    }:
         raise business_conflict("approved_request_is_immutable", "Одобрените данни са заключени.")
 
 

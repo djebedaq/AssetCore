@@ -308,6 +308,21 @@ jobs:
           docker run --rm --read-only --network none
           --tmpfs /tmp:rw,nosuid,noexec,size=512m
           assetcore:ci python backend/scripts/part_visual_appendix_smoke.py
+      - name: Verify REQUESTS-01 multi-page DOCX through the application converter
+        run: |
+          mkdir -p .tmp/requests01-docx
+          chmod 777 .tmp/requests01-docx
+          docker run --rm --read-only --network none \
+            --tmpfs /tmp:rw,nosuid,noexec,size=512m \
+            --mount "type=bind,source=$PWD/.tmp/requests01-docx,target=/qa-output" \
+            assetcore:ci python backend/scripts/requests01_document_smoke.py --output /qa-output
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: requests01-docx-layout
+          path: .tmp/requests01-docx
+          include-hidden-files: true
+          if-no-files-found: warn
       # Builder uses the same official renderer; verify its actual graph too.
       - name: Verify offline OCR of an explicitly selected synthetic parts list
         run: >-

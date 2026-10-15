@@ -19,8 +19,13 @@ from ..audit import add_audit_log
 from ..models import DocumentType, GeneratedDocument
 from ..part_requests.official import canonical_hash, capture_data
 from ..template_engine import source_bytes
-from .part_request_documents import OFFICIAL_HEADER
-from .part_request_grouped_visuals import append_docx, pdf_flowables, prepare_appendix
+from .part_request_documents import OFFICIAL_HEADER, _part_request_line_description
+from .part_request_grouped_visuals import (
+    append_docx,
+    appendix_manifest,
+    pdf_flowables,
+    prepare_appendix,
+)
 from .registration import _generated_documents, _register_official_version
 from .rendering import (
     _clear_body,
@@ -88,7 +93,17 @@ def _rows(data):
         values = [str(index) if free else line["position"] or str(index)]
         if not free:
             values.append(line["part_number"] or line["linked_part_number"] or "")
-        values.extend([line["description"], f"{amount} {unit}".strip()])
+        description = line["description"]
+        if not free and line.get("is_unknown_part"):
+            linked = (
+                SimpleNamespace(part_number=line["linked_part_number"])
+                if line.get("linked_part_number")
+                else None
+            )
+            description = _part_request_line_description(
+                SimpleNamespace(**{**line, "linked_catalog_part": linked}), data["language"]
+            )
+        values.extend([description, f"{amount} {unit}".strip()])
         rows.append(values)
     return rows
 
@@ -294,6 +309,9 @@ def archive(db, request, actor):
     ):
         raise ValueError("approval_template_integrity_failed")
     appendix = _appendix(db, request, snapshot.data)
+    document_snapshot = {**snapshot.data, "approval_snapshot_sha256": snapshot.sha256}
+    if appendix is not None:
+        document_snapshot["visual_appendix"] = appendix_manifest(appendix)
     docx = build_docx(snapshot.data, content, appendix)
     pdf = build_pdf(snapshot.data, appendix)
     _register_official_version(
@@ -303,7 +321,7 @@ def archive(db, request, actor):
         language=snapshot.data["language"],
         docx=docx,
         pdf=pdf,
-        snapshot=snapshot.data,
+        snapshot=document_snapshot,
         created_by_id=snapshot.approved_by_id,
         machine_id=request.machine_id,
         template_version_id=template_id,
@@ -316,7 +334,7 @@ def archive(db, request, actor):
         template_version=SimpleNamespace(id=template_id),
         docx=docx,
         pdf=pdf,
-        snapshot=snapshot.data,
+        snapshot=document_snapshot,
         created_by_id=snapshot.approved_by_id,
         machine_id=request.machine_id,
         part_request_id=request.id,
