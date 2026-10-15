@@ -63,6 +63,11 @@ def main():
             amount = "0.75" if language == "en" else "0,75"
             assert content.count(amount) == 48
             for index, page in enumerate(document, 1):
+                assert any(
+                    rectangle.y1 < 120 and page.rect.contains(rectangle)
+                    for image in page.get_images(full=True)
+                    for rectangle in page.get_image_rects(image[0])
+                ), "company_header_missing"
                 if "QA ROW" in page.get_text():
                     assert "DESCRIPTION" in page.get_text() and "Q'TY ordered" in page.get_text()
                 for rectangle in page.search_for(amount):

@@ -257,6 +257,12 @@ def test_cancel_permissions_and_locked_attachment(client, auth_headers, session_
     assert response.status_code == 403
     response = client.patch(
         f"/api/part-requests/{item['id']}/fulfillment",
+        headers=auth_headers,
+        json={"status": "CANCELLED", "confirmed": "true", "note": "QA"},
+    )
+    assert response.status_code == 422
+    response = client.patch(
+        f"/api/part-requests/{item['id']}/fulfillment",
         headers=mechanic,
         json={"status": "CANCELLED", "confirmed": True, "note": "QA"},
     )
@@ -367,6 +373,45 @@ def test_kk_namespace_and_generic_document_correction_are_blocked(
         },
     )
     assert blocked.status_code == 409
+
+
+def test_approval_retains_header_bytes_across_render_retry(
+    client, auth_headers, session_factory, monkeypatch, tmp_path
+):
+    import zipfile
+
+    from app.documents import request_issue_documents
+    from app.documents.part_request_documents import OFFICIAL_HEADER
+    from PIL import Image
+
+    original_header_hash = hashlib.sha256(OFFICIAL_HEADER.read_bytes()).hexdigest()
+    renderer = request_issue_documents.build_pdf
+    monkeypatch.setattr(
+        request_issue_documents,
+        "build_pdf",
+        lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("QA retry")),
+    )
+    item = approve(client, auth_headers, create(client, auth_headers, submit_for_approval=True))
+    assert item["generation_status"] == "FAILED"
+    changed = tmp_path / "qa-other-header.png"
+    Image.new("RGB", (100, 20), "red").save(changed)
+    changed_hash = hashlib.sha256(changed.read_bytes()).hexdigest()
+    monkeypatch.setattr(request_issue_documents, "OFFICIAL_HEADER", changed)
+    monkeypatch.setattr(request_issue_documents, "build_pdf", renderer)
+    retry = client.post(f"/api/part-requests/{item['id']}/documents", headers=auth_headers)
+    assert retry.status_code == 201 and retry.json()["generation_status"] == "READY"
+    with session_factory() as db:
+        record = db.scalar(select(GeneratedDocument).where(GeneratedDocument.format == "docx"))
+        assert record.snapshot["header_image_sha256"] == original_header_hash
+        import io
+
+        with zipfile.ZipFile(io.BytesIO(record.content)) as archive:
+            hashes = {
+                hashlib.sha256(archive.read(name)).hexdigest()
+                for name in archive.namelist()
+                if name.startswith("word/media/")
+            }
+        assert original_header_hash in hashes and changed_hash not in hashes
 
 
 def test_export_review_examples(client, auth_headers):

@@ -133,7 +133,11 @@ def upgrade():
         ("generated_documents", "document_number"),
         ("part_requests", "request_reference"),
     ):
-        values = bind.execute(sa.text(f"SELECT {column} FROM {table} WHERE {column} LIKE 'KK%'"))
+        values = bind.execute(
+            sa.text(
+                f"SELECT UPPER(TRIM({column})) FROM {table} WHERE UPPER(TRIM({column})) LIKE 'KK%'"
+            )
+        )
         if any(
             re.fullmatch(r"KK[0-9]+", row[0] or "") and int(row[0][2:]) >= 1000 for row in values
         ):

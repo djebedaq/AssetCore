@@ -572,7 +572,7 @@ def create_official_document(
     actor: User = Depends(require_permission(Permission.DOCUMENTS_GENERATE)),
     db: Session = Depends(get_db),
 ) -> dict:
-    if data.document_number.startswith("KK") and data.document_number[2:].isdigit():
+    if re.match(r"KK\s*[0-9]", data.document_number.strip(), re.IGNORECASE):
         raise HTTPException(409, detail={"code": "kk_number_requires_request_approval",
                                         "message": "KK номер се издава само при одобрение на заявка."})
     _require_complete_profile(actor)

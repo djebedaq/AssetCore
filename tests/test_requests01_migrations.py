@@ -143,12 +143,14 @@ def test_sqlite_upgrade_preserves_historical_float_and_binary(session_factory):
     verify_upgrade(session_factory.kw["bind"])
 
 
-def test_historical_kk_conflict_fails_closed(session_factory):
+@pytest.mark.parametrize("old_number", ["KK1000", "kk1000", " KK1000 "])
+def test_historical_kk_conflict_fails_closed(session_factory, old_number):
     with session_factory.kw["bind"].begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO part_requests (part_name, quantity, status, request_reference, language, created_at, priority) VALUES ('QA conflict', 1, 'APPROVED', 'KK1000', 'bg', CURRENT_TIMESTAMP, 'NORMAL')"
-            )
+                "INSERT INTO part_requests (part_name, quantity, status, request_reference, language, created_at, priority) VALUES ('QA conflict', 1, 'APPROVED', :old_number, 'bg', CURRENT_TIMESTAMP, 'NORMAL')"
+            ),
+            {"old_number": old_number},
         )
         migration = revision()
         migration.op = Operations(MigrationContext.configure(connection))

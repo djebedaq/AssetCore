@@ -9,14 +9,15 @@ from zoneinfo import ZoneInfo
 
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.shared import Mm, Pt
+from docx.oxml.ns import qn
+from docx.shared import Mm, Pt, RGBColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table
 from sqlalchemy import select
 
 from ..audit import add_audit_log
-from ..models import DocumentType, GeneratedDocument
+from ..models import DocumentType, GeneratedDocument, PartVisualArtifact
 from ..part_requests.official import canonical_hash, capture_data
 from ..template_engine import source_bytes
 from .part_request_documents import OFFICIAL_HEADER, _part_request_line_description
@@ -139,17 +140,36 @@ def _meta(data):
     return result
 
 
-def build_docx(data, template_content, appendix=None):
+def build_docx(data, template_content, appendix=None, *, header_content=None):
     document = Document(io.BytesIO(template_content))
     _clear_body(document)
     section = document.sections[0]
     section.page_width, section.page_height = Mm(210), Mm(297)
     section.left_margin = section.right_margin = Mm(11)
     section.top_margin, section.bottom_margin = Mm(41), Mm(15)
+    section.header_distance = Mm(8)
+    document.settings.odd_and_even_pages_header_footer = False
+    section.different_first_page_header_footer = False
+    section.header.is_linked_to_previous = False
+    for child in list(section.header._element):
+        section.header._element.remove(child)
+    header = section.header.add_paragraph()
+    header.alignment = 1
+    header.paragraph_format.space_after = Pt(0)
+    header.add_run().add_picture(
+        io.BytesIO(header_content or OFFICIAL_HEADER.read_bytes()), width=Mm(188), height=Mm(27)
+    )
     style = document.styles["Normal"]
     style.font.name, style.font.size = "Arial", Pt(9)
+    title_style = document.styles["Title"]
+    title_style.font.color.rgb = RGBColor(0, 0, 0)
+    if title_style.element.pPr is not None:
+        for border in list(title_style.element.pPr.findall(qn("w:pBdr"))):
+            title_style.element.pPr.remove(border)
     p = document.add_paragraph("TECHNICAL SPECIFICATION\nFOR SPARE PARTS SUPPLY", "Title")
     p.alignment = 1
+    for border in list(p._p.get_or_add_pPr().findall(qn("w:pBdr"))):
+        p._p.get_or_add_pPr().remove(border)
     p.paragraph_format.keep_with_next = True
     p.paragraph_format.space_after = Pt(11)
     for run in p.runs:
@@ -179,7 +199,7 @@ def build_docx(data, template_content, appendix=None):
     )
 
 
-def build_pdf(data, appendix=None, *, preview=False):
+def build_pdf(data, appendix=None, *, preview=False, header_content=None):
     _, _, body, label, title, small = _pdf_styles()
     output = io.BytesIO()
     pdf = SimpleDocTemplate(
@@ -193,7 +213,11 @@ def build_pdf(data, appendix=None, *, preview=False):
         author="AssetCore",
     )
     story = [
-        Image(str(OFFICIAL_HEADER), width=188 * mm, height=27 * mm),
+        Image(
+            io.BytesIO(header_content or OFFICIAL_HEADER.read_bytes()),
+            width=188 * mm,
+            height=27 * mm,
+        ),
         Spacer(1, 4 * mm),
         Paragraph("TECHNICAL SPECIFICATION<br/>FOR SPARE PARTS SUPPLY", title),
         Spacer(1, 4 * mm),
@@ -309,11 +333,18 @@ def archive(db, request, actor):
     ):
         raise ValueError("approval_template_integrity_failed")
     appendix = _appendix(db, request, snapshot.data)
+    header = db.get(PartVisualArtifact, snapshot.data["header_image_sha256"])
+    if (
+        header is None
+        or header.byte_length != len(header.content)
+        or hashlib.sha256(header.content).hexdigest() != header.sha256
+    ):
+        raise ValueError("approval_header_integrity_failed")
     document_snapshot = {**snapshot.data, "approval_snapshot_sha256": snapshot.sha256}
     if appendix is not None:
         document_snapshot["visual_appendix"] = appendix_manifest(appendix)
-    docx = build_docx(snapshot.data, content, appendix)
-    pdf = build_pdf(snapshot.data, appendix)
+    docx = build_docx(snapshot.data, content, appendix, header_content=header.content)
+    pdf = build_pdf(snapshot.data, appendix, header_content=header.content)
     _register_official_version(
         db,
         number=snapshot.official_number,

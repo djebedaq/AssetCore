@@ -5,7 +5,7 @@ import json
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
@@ -14,6 +14,7 @@ from ..models import (
     GeneratedDocument,
     OfficialDocument,
     PartRequest,
+    PartVisualArtifact,
     RequestApprovalSnapshot,
     RequestDeliveryEvent,
     RequestNumberCounter,
@@ -55,9 +56,10 @@ def quantity(line):
 
 
 def capture_data(request):
-    from ..documents.part_request_documents import _request_snapshot
+    from ..documents.part_request_documents import OFFICIAL_HEADER, _request_snapshot
 
     data = _request_snapshot(request)
+    data["header_image_sha256"] = hashlib.sha256(OFFICIAL_HEADER.read_bytes()).hexdigest()
     data["submitted_at"], data["decided_at"] = (
         utc_iso(request.submitted_at),
         utc_iso(request.decided_at),
@@ -149,17 +151,35 @@ def issue_number(db, request):
     official_number = f"KK{number}"
     if (
         db.scalar(
-            select(OfficialDocument.id).where(OfficialDocument.document_number == official_number)
+            select(OfficialDocument.id).where(
+                func.upper(func.trim(OfficialDocument.document_number)) == official_number
+            )
         )
         or db.scalar(
-            select(GeneratedDocument.id).where(GeneratedDocument.document_number == official_number)
+            select(GeneratedDocument.id).where(
+                func.upper(func.trim(GeneratedDocument.document_number)) == official_number
+            )
         )
-        or db.scalar(select(PartRequest.id).where(PartRequest.request_reference == official_number))
+        or db.scalar(
+            select(PartRequest.id).where(
+                func.upper(func.trim(PartRequest.request_reference)) == official_number
+            )
+        )
     ):
         raise business_conflict(
             "kk_historical_number_conflict", "Номерът е зает от исторически документ."
         )
     data = capture_data(request)
+    from ..documents.part_request_documents import OFFICIAL_HEADER
+
+    header = OFFICIAL_HEADER.read_bytes()
+    if hashlib.sha256(header).hexdigest() != data["header_image_sha256"]:
+        raise ValueError("approval_header_changed_during_capture")
+    db.execute(
+        insert(PartVisualArtifact)
+        .values(sha256=data["header_image_sha256"], content=header, byte_length=len(header))
+        .on_conflict_do_nothing()
+    )
     approved_at = datetime.now(UTC)
     data.update(
         {
