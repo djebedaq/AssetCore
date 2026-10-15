@@ -220,4 +220,57 @@ def upgrade():
 
 
 def downgrade():
-    raise RuntimeError("REQUESTS01_ROLL_FORWARD_REQUIRED_PRESERVE_OFFICIAL_HISTORY")
+    bind = op.get_bind()
+    checks = (
+        "SELECT 1 FROM request_approval_snapshots LIMIT 1",
+        "SELECT 1 FROM request_delivery_events LIMIT 1",
+        "SELECT 1 FROM request_number_counter WHERE next_value <> 1000 LIMIT 1",
+        "SELECT 1 FROM part_request_lines WHERE exact_quantity IS NOT NULL LIMIT 1",
+        "SELECT 1 FROM part_requests WHERE request_kind <> 'CATALOG' OR generation_status IS NOT NULL "
+        "OR generation_error IS NOT NULL OR cancelled_at IS NOT NULL OR cancelled_by_id IS NOT NULL "
+        "OR cancellation_reason IS NOT NULL OR replacement_request_id IS NOT NULL LIMIT 1",
+    )
+    if any(bind.execute(sa.text(sql)).first() for sql in checks):
+        raise RuntimeError("REQUESTS01_ROLL_FORWARD_REQUIRED_PRESERVE_OFFICIAL_HISTORY")
+    # Empty-feature rehearsal only. Never discard a number, exact quantity or event.
+    for sql in statements(bind.dialect.name):
+        match = re.search(r"CREATE TRIGGER (\w+).*? ON (\w+)", sql, re.S)
+        if match:
+            name, table = match.groups()
+            suffix = f" ON {table}" if bind.dialect.name == "postgresql" else ""
+            op.execute(sa.text(f"DROP TRIGGER IF EXISTS {name}{suffix}"))
+    if bind.dialect.name == "postgresql":
+        for sql in statements("postgresql"):
+            match = re.search(r"CREATE FUNCTION (\w+)\(", sql)
+            if match:
+                op.execute(sa.text(f"DROP FUNCTION IF EXISTS {match.group(1)}()"))
+    for table in (
+        "request_delivery_events",
+        "request_approval_snapshots",
+        "request_number_counter",
+    ):
+        op.drop_table(table)
+    columns = (
+        "request_kind",
+        "generation_status",
+        "generation_error",
+        "cancelled_at",
+        "cancelled_by_id",
+        "cancellation_reason",
+        "replacement_request_id",
+    )
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table(
+            "part_requests",
+            naming_convention={"fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s"},
+        ) as batch:
+            batch.drop_constraint("fk_part_requests_cancelled_by_id_users", type_="foreignkey")
+            batch.drop_constraint(
+                "fk_part_requests_replacement_request_id_part_requests", type_="foreignkey"
+            )
+            for column in columns:
+                batch.drop_column(column)
+    else:
+        for column in columns:
+            op.drop_column("part_requests", column)
+    op.drop_column("part_request_lines", "exact_quantity")

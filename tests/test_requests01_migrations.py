@@ -129,8 +129,14 @@ def verify_upgrade(engine):
             )
             == 19
         )
-        with pytest.raises(RuntimeError, match="ROLL_FORWARD"):
-            migration.downgrade()
+        migration.downgrade()
+        assert (
+            connection.scalar(
+                text("SELECT content FROM generated_documents WHERE document_number='PR-QA-OLD'")
+            )
+            == content
+        )
+        migration.upgrade()
 
 
 def test_sqlite_upgrade_preserves_historical_float_and_binary(session_factory):
@@ -155,3 +161,16 @@ def test_frozen_database_guards_match_application():
 
     for dialect in ("sqlite", "postgresql"):
         assert revision().statements(dialect) == statements(dialect)
+
+
+def test_downgrade_refuses_exact_quantities(session_factory):
+    with session_factory.kw["bind"].begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO part_requests (part_name, quantity, status, request_reference, language, created_at, priority, request_kind) VALUES ('QA downgrade guard', 1, 'DRAFT', 'PR-QA-DOWNGRADE', 'bg', CURRENT_TIMESTAMP, 'NORMAL', 'FREE_FORM')"
+            )
+        )
+        migration = revision()
+        migration.op = Operations(MigrationContext.configure(connection))
+        with pytest.raises(RuntimeError, match="ROLL_FORWARD"):
+            migration.downgrade()

@@ -227,6 +227,12 @@ def decide_request(
         raise legacy_quantity_conflict(request)
     previous_status = request.status
     if decision == ApprovalDecision.APPROVED:
+        from ..documents.templates import _preparer_values
+        from ..template_engine import TemplateValidationError
+        try:
+            _preparer_values(db, user.id)
+        except TemplateValidationError as exc:
+            raise business_conflict("approval_profile_incomplete", str(exc)) from exc
         if not request.lines:
             # Older single-row requests keep their verified summary as the source.
             request.lines.append(PartRequestLine(description=request.part_name,
