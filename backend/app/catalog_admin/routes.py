@@ -2,7 +2,7 @@
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Path, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from ..catalog.references import ReferenceCreate, ReferenceRevoke
@@ -10,6 +10,7 @@ from ..database import get_db
 from ..models import User
 from ..permissions import Permission, require_permission
 from . import (
+    bindings,
     hotspots,
     parts,
     publication,
@@ -24,6 +25,8 @@ from .schemas import (
     ArtifactUpload,
     AssemblyCreate,
     AssemblyUpdate,
+    BatchBind,
+    BatchUnbind,
     BindingCreate,
     CatalogCreate,
     CatalogUpdate,
@@ -52,6 +55,37 @@ from .schemas import (
 
 router = APIRouter(prefix="/api/admin/catalog-builder", tags=["catalog-builder"])
 manager = require_permission(Permission.PARTS_MANAGE)
+
+
+@router.get("/bindings/machines")
+def binding_machines(category_id: int = Query(gt=0), catalog_id: int | None = Query(default=None, gt=0),
+                     search: str | None = Query(default=None, max_length=120),
+                     offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=100),
+                     _: User = Depends(manager), db: Session = Depends(get_db)):
+    return bindings.machine_page(db, category_id, catalog_id, search, offset, limit)
+
+
+@router.get("/bindings")
+def list_bindings(category_id: int | None = Query(default=None, gt=0), catalog_id: int | None = Query(default=None, gt=0),
+                  machine_id: int | None = Query(default=None, gt=0), search: str | None = Query(default=None, max_length=120),
+                  offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=100),
+                  _: User = Depends(manager), db: Session = Depends(get_db)):
+    return bindings.binding_page(db, category_id, catalog_id, machine_id, search, offset, limit)
+
+
+@router.post("/bindings/preview")
+def preview_bindings(data: BatchBind, _: User = Depends(manager), db: Session = Depends(get_db)):
+    return bindings.preview(db, data)
+
+
+@router.post("/bindings/batch", status_code=201)
+def batch_bind(data: BatchBind, actor: User = Depends(manager), db: Session = Depends(get_db)):
+    return bindings.bind(db, actor, data)
+
+
+@router.post("/bindings/batch-deactivate")
+def batch_unbind(data: BatchUnbind, actor: User = Depends(manager), db: Session = Depends(get_db)):
+    return bindings.unbind(db, actor, data)
 
 
 @router.get("/draft-deletion/{kind}/{identity}")
@@ -269,13 +303,13 @@ def eligible_assets(catalog_id: int, search: str | None = Query(default=None, ma
 
 
 @router.post("/catalogs/{catalog_id}/assets/{machine_id}", status_code=201)
-def bind_asset(catalog_id: int, machine_id: int, data: BindingCreate = BindingCreate(), actor: User = Depends(manager),
+def bind_asset(catalog_id: int = Path(gt=0), machine_id: int = Path(gt=0), data: BindingCreate = BindingCreate(), actor: User = Depends(manager),
                db: Session = Depends(get_db)) -> dict:
     return service.bind_asset(db, actor, catalog_id, machine_id, data.compatibility_confirmed)
 
 
 @router.delete("/catalogs/{catalog_id}/assets/{machine_id}", status_code=204)
-def unbind_asset(catalog_id: int, machine_id: int, actor: User = Depends(manager),
+def unbind_asset(catalog_id: int = Path(gt=0), machine_id: int = Path(gt=0), actor: User = Depends(manager),
                  db: Session = Depends(get_db)) -> Response:
     service.unbind_asset(db, actor, catalog_id, machine_id)
     return Response(status_code=204)

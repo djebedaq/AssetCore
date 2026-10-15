@@ -74,7 +74,11 @@ def test_failed_replacement_preserves_current_publication_and_all_live_rows(pg_f
 
 
 def test_request_selection_locks_an_unbound_machine_until_transaction_finishes(pg_factory):
-    catalog_id, _ = _setup(pg_factory)
+    catalog_id, revisions = _setup(pg_factory)
+    plan = _preview(pg_factory, revisions[0][0])
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        publication.publish(db, actor, revisions[0][0], plan["publication_digest"], None, True)
     with pg_factory() as db:
         catalog = db.get(CatalogDefinition, catalog_id)
         machine = Machine(inventory_number="QA_BIND_RACE", name="QA", category="QA",

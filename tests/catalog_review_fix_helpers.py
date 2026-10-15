@@ -26,6 +26,7 @@ from app.models import (
     User,
     utcnow,
 )
+from catalog_binding_fixtures import legacy_binding
 from catalog_review_helpers import verify_service_sources
 from reportlab.pdfgen import canvas
 from sqlalchemy import inspect, select
@@ -110,8 +111,8 @@ def assert_search_fairness(factory):
         # Preserve the original single-catalog ordering and limit behavior.
         single = search(4)
         assert single == identities[0][:4]
-        for index in [1, 3]:
-            service.bind_asset(db, actor, entries[index][0].id, machines[0].id)
+        service.bind_asset(db, actor, entries[1][0].id, machines[0].id)
+        legacy_binding(db, actor, entries[3][0].id, machines[0].id)
         first, second = identities[:2]
         expected = [first[0], second[0], first[1], second[1], *first[2:]]
         for limit in [1, 2, 3, 4, 5, 7, 10]:
@@ -143,10 +144,10 @@ def assert_publication_active_binding_count(factory, with_active_binding):
     with factory() as db:
         actor, category, machines = context(db)
         catalog, revision, assembly = draft(db, actor, category, "AUDIT", 1)
-        service.bind_asset(db, actor, catalog.id, machines[0].id)
+        legacy_binding(db, actor, catalog.id, machines[0].id)
         service.unbind_asset(db, actor, catalog.id, machines[0].id)
         if with_active_binding:
-            service.bind_asset(db, actor, catalog.id, machines[1].id)
+            legacy_binding(db, actor, catalog.id, machines[1].id)
         columns = [attribute.key for attribute in inspect(AuditLog).column_attrs]
         before = {row.id: tuple(getattr(row, key) for key in columns) for row in db.scalars(select(AuditLog))}
         publish(db, actor, revision, assembly)

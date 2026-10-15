@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../../api'
 import { useI18n } from '../../i18n'
 import { OwnerDeleteButton } from '../administration/OwnerDeleteButton'
-import WizardMachines from './WizardMachines'
 import RevisionVisualSources from './RevisionVisualSources'
 import useDraftGuard from './useDraftGuard'
 import { guidedError } from './guidedErrors'
@@ -13,8 +12,8 @@ type Asset = { id: number; inventory_number: string; name: string }
 
 // Catalog administration is scoped to the selected definition. Creation,
 // extraction, review and publication have a single guided workspace.
-export default function CatalogMaintenance({ catalogId, onChanged, onDirtyChange }: {
-  catalogId: number; onChanged: () => Promise<void>; onDirtyChange: (dirty: boolean) => void
+export default function CatalogMaintenance({ catalogId, onChanged, onDirtyChange, onManageBindings }: {
+  catalogId: number; onChanged: () => Promise<void>; onDirtyChange: (dirty: boolean) => void; onManageBindings?: () => void
 }) {
   const { t, locale, date } = useI18n()
   const [item, setItem] = useState<Definition | null>(null)
@@ -80,11 +79,11 @@ export default function CatalogMaintenance({ catalogId, onChanged, onDirtyChange
         <button className="primary" disabled={busy}>{t('common.save')}</button><button type="button" className="secondary" onClick={() => setRevisionEdit(null)}>{t('common.cancel')}</button>
       </form>}
     </details>
-    <details><summary>{t('builder.assets')}</summary><WizardMachines catalogId={catalogId} onChanged={load} />
-      {assets.map(asset => <p key={asset.id}>{asset.inventory_number} · {asset.name} <button className="secondary" disabled={busy} onClick={() => {
-        if (window.confirm(t('builder.removeBindingConfirm'))) void action(() => api(`${builderBase}/catalogs/${catalogId}/assets/${asset.id}`, { method: 'DELETE' }))
-      }}>{t('builder.removeBinding')}</button></p>)}
-    </details>
+    <section><p>{t('ux06.boundCount', { count: item.active_asset_count || 0 })}</p>
+      {!!item.pending_asset_count && <p>{t('ux06.pendingCount', { count: item.pending_asset_count })}</p>}
+      {assets.map(asset => <p key={asset.id}>{asset.inventory_number} · {asset.name}</p>)}
+      {onManageBindings && <button className="secondary" disabled={busy || editing || !!revisionEdit || childDirty} onClick={onManageBindings}>{t('ux06.title')}</button>}
+    </section>
     <details><summary>{t('catalogUx.sourceTools')}</summary><label>{t('catalogUx.revision')}<select disabled={busy || childDirty} value={legacyId || ''} onChange={event => setLegacyId(Number(event.target.value) || null)}><option value="">{t('guided.select')}</option>{revisions.map(row => <option value={row.id} key={row.id}>{row.revision_code} · {t(`builder.status.${row.status}`)}</option>)}</select></label>
       {legacyId && <RevisionVisualSources revisionId={legacyId} editable={revisions.find(row => row.id === legacyId)?.status === 'DRAFT'} onDirtyChange={setChildDirty} />}
     </details>

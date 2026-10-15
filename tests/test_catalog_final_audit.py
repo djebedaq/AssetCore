@@ -310,7 +310,7 @@ def test_multiple_exact_pages_variants_and_foreign_machine_ids(client, auth_head
         "name_bg": "QA", "name_en": "QA", "name_ru": "QA",
     }).json()["id"]
     assert client.post(f"{BASE}/catalogs/{foreign_catalog}/assets/{foreign_machine}",
-                       headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
+                       headers=auth_headers, json={"compatibility_confirmed": True}).json()["detail"]["code"] == "catalog_not_published"
     foreign_revision = client.post(f"{BASE}/catalogs/{foreign_catalog}/revisions", headers=auth_headers,
                                    json={"revision_code": "A"}).json()["id"]
     foreign_assembly = client.post(f"{BASE}/revisions/{foreign_revision}/assemblies", headers=auth_headers,
@@ -320,6 +320,8 @@ def test_multiple_exact_pages_variants_and_foreign_machine_ids(client, auth_head
     assert client.post(f"{BASE}/parts/{foreign_part}/source-pages", headers=auth_headers,
                        json={"visual_page_ids": [foreign_spare]}).status_code == 201
     _publish(client, auth_headers, foreign_revision)
+    assert client.post(f"{BASE}/catalogs/{foreign_catalog}/assets/{foreign_machine}",
+                       headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     runtime_kits = client.get(f"/api/catalog/v2/repair-kits?machine_id={machine_id}",
                               headers=auth_headers)
     assert runtime_kits.status_code == 200 and len(runtime_kits.json()) == 1, runtime_kits.text

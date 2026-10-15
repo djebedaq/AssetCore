@@ -18,6 +18,7 @@ from app.models import (
     User,
 )
 from app.security import create_access_token
+from catalog_binding_fixtures import legacy_pending
 from fastapi import HTTPException
 from reportlab.pdfgen import canvas
 from sqlalchemy import func, select
@@ -66,7 +67,7 @@ def test_builder_routes_are_permission_classified():
     report = build_authorization_inventory(app)
     assert report.valid, report.errors
     builder = [route for route in report.routes if route.path.startswith(BASE)]
-    assert len(builder) == 98
+    assert len(builder) == 103
     assert all(route.permission == "parts.manage" for route in builder)
 
 
@@ -112,13 +113,16 @@ def test_generic_builder_bindings_and_lifecycle(client, auth_headers, session_fa
     second_id = second.json()["id"]
     assert _create(client, auth_headers, "QA_CATALOG_A", category_a).json()["detail"]["code"] == "catalog_code_duplicate"
     assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_b}", headers=auth_headers, json={"compatibility_confirmed": True}).json()["detail"]["code"] == "catalog_asset_category_mismatch"
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_a}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_a2}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_a}", headers=auth_headers, json={"compatibility_confirmed": True}).json()["detail"]["code"] == "catalog_not_published"
+    legacy_pending(session_factory, catalog_id, machine_a)
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_a2}", headers=auth_headers, json={"compatibility_confirmed": True}).json()["detail"]["code"] == "catalog_not_published"
+    legacy_pending(session_factory, catalog_id, machine_a2)
     assert client.patch(f"/api/machines/{machine_a}", headers=auth_headers,
                         json={"category_id": category_b}).json()["detail"]["code"] == "catalog_asset_category_in_use"
     assert client.patch(f"/api/categories/{category_a}", headers=auth_headers,
                         json={"capabilities": []}).json()["detail"]["code"] == "category_capability_in_use"
-    assert client.post(f"{BASE}/catalogs/{second_id}/assets/{machine_a}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
+    assert client.post(f"{BASE}/catalogs/{second_id}/assets/{machine_a}", headers=auth_headers, json={"compatibility_confirmed": True}).json()["detail"]["code"] == "catalog_not_published"
+    legacy_pending(session_factory, second_id, machine_a)
     assert len(client.get(f"{BASE}/catalogs/{catalog_id}/assets", headers=auth_headers).json()) == 2
     assert client.patch(f"{BASE}/catalogs/{catalog_id}", headers=auth_headers,
                         json={"asset_category_id": category_b}).json()["detail"]["code"] == "catalog_category_in_use"
@@ -161,7 +165,8 @@ def test_eligible_assets_and_owner_preview(client, auth_headers, session_factory
     assert [item["id"] for item in client.get(f"{BASE}/catalogs/{catalog_id}/eligible-assets", headers=auth_headers).json()] == [machine_id]
     assert [item["id"] for item in client.get(f"{BASE}/catalogs/{catalog_id}/eligible-assets",
                                                    headers=auth_headers, params={"search": "Any Brand"}).json()] == [machine_id]
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers, json={"compatibility_confirmed": True}).json()["detail"]["code"] == "catalog_not_published"
+    legacy_pending(session_factory, catalog_id, machine_id)
     assert client.post(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers,
                        json={"revision_code": "A"}).status_code == 201
     with session_factory() as db:
@@ -189,7 +194,7 @@ def test_owner_deletes_only_builder_children(client, auth_headers, session_facto
     category_id = _category(session_factory, "QA_BUILDER_DELETE")
     machine_id = _machine(session_factory, category_id, "QA_BUILDER_DELETE_ASSET", "QA")
     catalog_id = _create(client, auth_headers, "QA_DELETE_CATALOG", category_id).json()["id"]
-    client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers, json={"compatibility_confirmed": True})
+    legacy_pending(session_factory, catalog_id, machine_id)
     revision_id = client.post(f"{BASE}/catalogs/{catalog_id}/revisions", headers=auth_headers,
                               json={"revision_code": "A"}).json()["id"]
     assembly_id = client.post(f"{BASE}/revisions/{revision_id}/assemblies", headers=auth_headers,

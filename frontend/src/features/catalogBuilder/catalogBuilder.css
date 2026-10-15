@@ -91,3 +91,25 @@
 .pdf-page-picker .builder-thumbnail { height: 100px; }
 .catalog-navigation { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 600px) { .catalog-navigation { display: flex; flex-direction: column; } .guided-single-workflow { display: block; } .reference-sidebar { max-width: 100%; } }
+.catalog-bindings { min-width: 0; display: grid; gap: 12px; }
+.binding-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.binding-filters label, .catalog-bindings > label { display: grid; gap: 6px; min-width: 0; }
+.catalog-bindings select, .catalog-bindings input:not([type=checkbox]) { width: 100%; min-width: 0; max-width: 100%; }
+.binding-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border, #dce1e7); overflow-wrap: anywhere; }
+.binding-card label { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.binding-card input[type=checkbox] { flex-shrink: 0; width: auto; }
+.binding-card small, .catalog-binding-counts small { display: block; }
+.binding-card button { flex-shrink: 0; }
+.binding-selection, .binding-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.binding-pagination { justify-content: space-between; }
+.catalog-bindings .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.catalog-binding-summary { border-top: 1px solid var(--border, #dce1e7); padding-top: 12px; }
+@media (max-width: 640px) {
+  .binding-filters { grid-template-columns: minmax(0, 1fr); }
+  .binding-card { align-items: flex-start; flex-direction: column; }
+  .catalog-bindings .actions button { flex: 1 1 auto; }
+  .binding-pagination { justify-content: flex-start; }
+}
+
+.catalog-bindings > label.binding-select-page { display: flex; align-items: center; gap: 8px; }
+.catalog-bindings input[type=checkbox] { width: 16px; height: 16px; flex: 0 0 16px; margin: 0; }

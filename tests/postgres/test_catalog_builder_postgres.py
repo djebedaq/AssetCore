@@ -5,7 +5,14 @@ from threading import Barrier
 
 import pytest
 from app.catalog_admin.service import bind_asset
-from app.models import AssetCategory, CatalogAssetBinding, CatalogDefinition, Machine, User
+from app.models import (
+    AssetCategory,
+    CatalogAssetBinding,
+    CatalogDefinition,
+    CatalogRevision,
+    Machine,
+    User,
+)
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from test_concurrency import pg_factory as pg_factory  # noqa: F811
@@ -29,6 +36,8 @@ def test_catalog_pair_uniqueness_allows_distinct_catalogs_concurrently(pg_factor
         second = CatalogDefinition(code="QA_RACE_SECOND", asset_category_id=category.id,
                                    name_bg="QA", name_en="QA", name_ru="QA", created_by_id=owner.id)
         db.add_all([first, second])
+        db.flush()
+        db.add_all([CatalogRevision(catalog_id=row.id, revision_code="QA", status="PUBLISHED", created_by_id=owner.id) for row in [first, second]])
         db.commit()
         machine_id, catalog_ids = machine.id, [first.id, second.id]
         if same_catalog:

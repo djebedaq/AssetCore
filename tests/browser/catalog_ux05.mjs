@@ -35,7 +35,7 @@ try {
   await page.locator('input[type=email]').fill(process.env.QA_EMAIL)
   await page.locator('input[type=password]').fill(process.env.QA_PASSWORD)
   await button('Вход').click()
-  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Каталожен конструктор', exact: true }).click()
+  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Управление на каталози', exact: true }).click()
   for (const coverage of [59, 45, 0]) {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await button('Нов каталог').click()

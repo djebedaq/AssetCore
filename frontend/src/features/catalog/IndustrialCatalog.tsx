@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, CheckCircle2, ChevronRight } from 'lucide-react'
 
 import SharedReferences from './SharedReferences'
-import { hasPermission } from '../../permissions'
-import MachineCatalogLinks from '../catalogBuilder/MachineCatalogLinks'
 import { api } from '../../api'
 import { friendlyError } from '../../industrialUi'
 import { statusText, useI18n } from '../../i18n'
@@ -195,7 +193,6 @@ export function IndustrialCatalog({ defaultMachineId }: Props = {}) {
       {machine && <div><b>№{machine.inventory_number} · {machine.brand}</b><span>{machine.model || t('common.noValue')}</span><small>{machine.pressure_bar != null && <>{t('machines.pressure')}: {machine.pressure_bar} · </>}{t('common.status')}: {statusText(t, machine.status)} · {t('common.location')}: {machine.location?.name || t('common.noValue')}</small></div>}
       {context?.supported && <label>{t('catalog.chooseAssembly')}<Select label={t('catalog.chooseAssembly')} value={reference?.source_id || sourceId} onChange={value => { const item = context.assemblies.find(assembly => assembly.source_id === value); setSourceId(item?.pages?.[0]?.source_id || value) }} options={context.assemblies.map(assembly => ({ value: assembly.source_id, label: `${context.catalogs?.find(catalog => catalog.id === assembly.catalog_id)?.[`name_${locale}`] || t(assembly.is_supplemental ? 'ref.additional' : 'ref.primary')} · ${assembly[`name_${locale}`] || assembly.title} · ${assembly.part_count}` }))} /></label>}
     </section>
-    {machineId && hasPermission('parts.manage') && <details><summary>{t('ux04.link')}</summary><MachineCatalogLinks machineId={machineId} onChanged={() => setReferenceRefresh(value => value + 1)} /></details>}
     {context && <SharedReferences references={context.references || []} onChanged={() => setReferenceRefresh(value => value + 1)} />}
     {pendingMachineId !== null && <div className="catalog-v2-machine-switch panel" role="dialog" aria-modal="true" aria-labelledby="catalog-machine-switch-title"><h3 id="catalog-machine-switch-title">{t('catalog.changeMachineTitle')}</h3><p>{t('catalog.changeMachineWarning')}</p><div className="actions"><button className="secondary" onClick={() => { setPendingMachineId(null); setPendingCategoryId(null) }}>{t('common.cancel')}</button><button className="primary" onClick={() => { applyMachineSelection(pendingMachineId); if (pendingCategoryId !== null) setCategoryId(pendingCategoryId); setPendingCategoryId(null) }}>{t('catalog.changeMachineConfirm')}</button></div></div>}
     {loading && <div className="empty-state">{t('common.loading')}</div>}

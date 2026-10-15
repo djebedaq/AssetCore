@@ -41,7 +41,7 @@ it('edits language-specific metadata without sending a replacement catalog code'
   expect(writes[0].body).not.toHaveProperty('code')
 })
 
-it('retains explicit revision cloning and confirms machine unbinding without adding another publication flow', async () => {
+it('retains revision cloning and read-only machines without a second binding write path', async () => {
   const writes = setup(), user = userEvent.setup()
   vi.spyOn(window, 'confirm').mockReturnValue(false)
   await user.click(await screen.findByText('История на версиите', { selector: 'summary' }))
@@ -50,11 +50,8 @@ it('retains explicit revision cloning and confirms machine unbinding without add
   await user.type(screen.getByLabelText('Бележка за промяната'), 'QA audited clone')
   await user.click(screen.getByRole('button', { name: 'Запази' }))
   await waitFor(() => expect(writes).toContainEqual({ path: '/api/admin/catalog-builder/revisions/12/clone', method: 'POST', body: { revision_code: 'C', change_note: 'QA audited clone' } }))
-  await user.click(screen.getByText('Активи', { selector: 'summary' }))
-  await user.click(screen.getByRole('button', { name: 'Премахни връзката' }))
+  expect(screen.getByText(/QA-ONLY/)).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Премахни връзката' })).not.toBeInTheDocument()
   expect(writes.filter(row => row.method === 'DELETE')).toHaveLength(0)
-  vi.mocked(window.confirm).mockReturnValue(true)
-  await user.click(screen.getByRole('button', { name: 'Премахни връзката' }))
-  await waitFor(() => expect(writes.filter(row => row.method === 'DELETE')).toEqual([{ path: '/api/admin/catalog-builder/catalogs/10/assets/1', method: 'DELETE', body: undefined }]))
   expect(screen.queryByRole('button', { name: /Публикувай/ })).not.toBeInTheDocument()
 })

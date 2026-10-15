@@ -80,7 +80,7 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
         db.commit()
         machine_id, other_id = machine.id, other.id
     assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}",
-                       headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
+                       headers=auth_headers, json={"compatibility_confirmed": True}).json()["detail"]["code"] == "catalog_not_published"
     before = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers)
     assert before.status_code == 200 and not before.json()["supported"]
     verify_http_revision(client, auth_headers, revision_id)
@@ -95,6 +95,8 @@ def test_publish_binding_request_and_clone(client, auth_headers, session_factory
                             json={"expected_publication_digest": preview.json()["publication_digest"],
                                   "expected_current_published_revision_id": None, "confirmed": True})
     assert published.status_code == 200, published.text
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}",
+                       headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     catalog = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers)
     assert catalog.status_code == 200 and catalog.json()["supported"], catalog.text
     runtime_source = catalog.json()["assemblies"][0]["source_id"]
@@ -352,7 +354,6 @@ def test_separate_pdf_pages_group_two_requested_positions(client, auth_headers, 
         db.add(machine)
         db.commit()
         machine_id = machine.id
-    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     verify_http_revision(client, auth_headers, revision_id)
     preview = client.get(f"{BASE}/revisions/{revision_id}/publication-readiness", headers=auth_headers).json()
     assert preview["ready"], preview
@@ -360,6 +361,7 @@ def test_separate_pdf_pages_group_two_requested_positions(client, auth_headers, 
                             json={"expected_publication_digest": preview["publication_digest"],
                                   "expected_current_published_revision_id": None, "confirmed": True})
     assert published.status_code == 200, published.text
+    assert client.post(f"{BASE}/catalogs/{catalog_id}/assets/{machine_id}", headers=auth_headers, json={"compatibility_confirmed": True}).status_code == 201
     runtime = client.get(f"/api/catalog/v2/machines/{machine_id}", headers=auth_headers).json()
     detail = client.get(f"/api/catalog/v2/assemblies/{runtime['assemblies'][0]['source_id']}?machine_id={machine_id}",
                         headers=auth_headers)
