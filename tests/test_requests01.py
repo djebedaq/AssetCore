@@ -127,6 +127,12 @@ def test_preview_watermark_every_page_and_no_issue(client, auth_headers, session
 
 def test_delivery_correction_cancellation(client, auth_headers):
     item = approve(client, auth_headers, create(client, auth_headers, submit_for_approval=True))
+    original_files = {
+        record["download_endpoint"]: client.get(
+            f"/api{record['download_endpoint']}", headers=auth_headers
+        ).content
+        for record in item["documents"]
+    }
     line = item["lines"][0]
     url = f"/api/part-requests/{item['id']}"
     receipt = {
@@ -176,6 +182,51 @@ def test_delivery_correction_cancellation(client, auth_headers):
     )
     assert body["status"] == "CANCELLED" and len(body["delivery_events"]) == 3
     assert body["lines"][0]["received_quantity"] == "0.1"
+    for endpoint, content in original_files.items():
+        response = client.get(f"/api{endpoint}", headers=auth_headers)
+        assert response.status_code == 200 and response.content == content
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE generated_documents SET filename = 'QA overwritten' WHERE part_request_id = :id",
+        "DELETE FROM generated_documents WHERE part_request_id = :id",
+        "UPDATE request_delivery_events SET note = 'QA overwritten' WHERE request_id = :id",
+        "DELETE FROM request_delivery_events WHERE request_id = :id",
+    ],
+)
+def test_sqlite_archive_and_delivery_database_guards(
+    client, auth_headers, session_factory, statement
+):
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    item = approve(client, auth_headers, create(client, auth_headers, submit_for_approval=True))
+    response = client.post(
+        f"/api/part-requests/{item['id']}/deliveries",
+        headers=auth_headers,
+        json={
+            "idempotency_key": "qa-evidence-guard",
+            "lines": [{"line_id": item["lines"][0]["id"], "quantity": "0.75"}],
+        },
+    )
+    assert response.status_code == 201
+    with session_factory() as db, pytest.raises(DBAPIError):
+        db.execute(text(statement), {"id": item["id"]})
+        db.commit()
+    with session_factory() as db:
+        request = db.get(PartRequest, item["id"])
+        assert request.delivery_events[0].quantities == {str(item["lines"][0]["id"]): "0.75"}
+        documents = list(
+            db.scalars(
+                select(GeneratedDocument).where(GeneratedDocument.part_request_id == item["id"])
+            )
+        )
+        assert len(documents) == 2
+        for document in documents:
+            assert document.filename in {"KK1000.pdf", "KK1000.docx"}
+            assert hashlib.sha256(document.content).hexdigest() == document.sha256
 
 
 def test_render_failure_preserves_issue_and_retry_snapshot(
