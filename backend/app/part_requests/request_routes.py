@@ -13,9 +13,8 @@ from ..models import AuditLog, PartRequest, PartRequestLine, RequestDeliveryEven
 from ..permissions import Permission, require_permission
 from ..persistence import _commit
 from ..workflow import business_conflict
-from .official import canonical_hash, ensure_editable, quantity, received, utc_iso
+from .official import canonical_hash, ensure_editable, quantity, received, record_receipt, utc_iso
 from .request_schemas import (
-    INDIVISIBLE,
     DeliveryCorrection,
     DeliveryCreate,
     FreeFormRequest,
@@ -229,44 +228,16 @@ def add_delivery(
     digest = canonical_hash(payload.model_dump(mode="json"))
     if _existing(request, payload.idempotency_key, digest):
         return output(request, db)
-    if request.approval_snapshot is None or request.status not in {
-        "APPROVED",
-        "ORDERED",
-        "PARTIALLY_DELIVERED",
-    }:
-        raise business_conflict("request_not_deliverable", "Заявката не допуска доставка.")
-    lines = {line.id: line for line in request.lines}
-    totals = received(request)
-    for row in payload.lines:
-        if row.line_id not in lines:
-            raise business_conflict(
-                "part_request_line_mismatch", "Редът не принадлежи към заявката."
-            )
-        line = lines[row.line_id]
-        unit = line.unit or "pcs"
-        if request.request_kind != "FREE_FORM" or unit in INDIVISIBLE:
-            if row.quantity != row.quantity.to_integral_value():
-                raise business_conflict(
-                    "indivisible_unit_requires_integer", "Мерната единица изисква цяло количество."
-                )
-        if totals[row.line_id] + row.quantity > quantity(line):
-            raise business_conflict(
-                "delivery_exceeds_requested", "Доставката надвишава заявеното количество."
-            )
-    event = RequestDeliveryEvent(
-        request_id=request.id,
-        actor_id=user.id,
-        actor_name=user.full_name,
-        occurred_at=datetime.now(UTC),
-        kind="RECEIPT",
-        quantities={str(r.line_id): decimal_text(r.quantity) for r in payload.lines},
+    event = record_receipt(
+        db,
+        request,
+        user,
+        {row.line_id: row.quantity for row in payload.lines},
         supplier=payload.supplier,
         note=payload.note,
-        idempotency_key=payload.idempotency_key,
-        payload_sha256=digest,
+        key=payload.idempotency_key,
+        digest=digest,
     )
-    request.delivery_events.append(event)
-    db.flush()
     _status(request)
     add_audit_log(
         db, user, "part_request", request.id, "REQUEST_DELIVERY_RECORDED", {"event_id": event.id}
@@ -345,6 +316,9 @@ def cancel(db, request, user, payload):
         request.id,
         "REQUEST_CANCELLED",
         {"reason": payload.reason, "replacement_request_id": payload.replacement_request_id},
+        request.approval_snapshot.official_number
+        if request.approval_snapshot
+        else request.request_reference,
     )
 
 

@@ -15,11 +15,12 @@ from ..models import (
     OfficialDocument,
     PartRequest,
     RequestApprovalSnapshot,
+    RequestDeliveryEvent,
     RequestNumberCounter,
 )
 from ..template_engine import source_bytes
 from ..workflow import business_conflict
-from .request_schemas import decimal_text
+from .request_schemas import INDIVISIBLE, decimal_text
 
 
 def canonical_hash(data):
@@ -57,7 +58,10 @@ def capture_data(request):
     from ..documents.part_request_documents import _request_snapshot
 
     data = _request_snapshot(request)
-    data["submitted_at"], data["decided_at"] = utc_iso(request.submitted_at), utc_iso(request.decided_at)
+    data["submitted_at"], data["decided_at"] = (
+        utc_iso(request.submitted_at),
+        utc_iso(request.decided_at),
+    )
     data.update(
         {
             "schema_version": 1,
@@ -198,6 +202,54 @@ def received(request):
         for line_id, delta in event.quantities.items():
             totals[int(line_id)] += Decimal(delta)
     return totals
+
+
+def record_receipt(db, request, user, quantities, *, supplier, note, key, digest):
+    """Shared exact validation for event API and the cumulative legacy adapter."""
+    if request.approval_snapshot is None or request.status not in {
+        "APPROVED",
+        "ORDERED",
+        "PARTIALLY_DELIVERED",
+    }:
+        raise business_conflict("request_not_deliverable", "Заявката не допуска доставка.")
+    lines = {line.id: line for line in request.lines}
+    totals = received(request)
+    for identifier, amount in quantities.items():
+        if identifier not in lines:
+            raise business_conflict(
+                "part_request_line_mismatch", "Редът не принадлежи към заявката."
+            )
+        line = lines[identifier]
+        if not amount.is_finite() or amount <= 0:
+            raise business_conflict(
+                "invalid_delivered_quantity", "Доставката изисква положително количество."
+            )
+        if request.request_kind != "FREE_FORM" or (line.unit or "pcs") in INDIVISIBLE:
+            if amount != amount.to_integral_value():
+                raise business_conflict(
+                    "indivisible_unit_requires_integer", "Мерната единица изисква цяло количество."
+                )
+        if totals[identifier] + amount > quantity(line):
+            raise business_conflict(
+                "delivery_exceeds_requested", "Доставката надвишава заявеното количество."
+            )
+    event = RequestDeliveryEvent(
+        request_id=request.id,
+        actor_id=user.id,
+        actor_name=user.full_name,
+        occurred_at=datetime.now(UTC),
+        kind="RECEIPT",
+        quantities={
+            str(identifier): decimal_text(amount) for identifier, amount in quantities.items()
+        },
+        supplier=supplier,
+        note=note,
+        idempotency_key=key,
+        payload_sha256=digest,
+    )
+    request.delivery_events.append(event)
+    db.flush()
+    return event
 
 
 def presentation(request):

@@ -131,7 +131,15 @@ from .part_requests import (
     pending_action_count,
     submit_for_approval,
 )
-from .part_requests.official import ensure_editable, presentation, quantity, received, utc_iso
+from .part_requests.official import (
+    canonical_hash,
+    ensure_editable,
+    presentation,
+    quantity,
+    received,
+    record_receipt,
+    utc_iso,
+)
 from .part_requests.request_routes import router as requests_router
 from .part_requests.visual_routes import router as visual_snapshot_router
 from .part_requests.visual_snapshots import capture_snapshot, create_request_line, snapshot_response
@@ -407,7 +415,7 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
                 "reason": line.reason,
                 "source_document": line.source_document,
                 "source_page": line.source_page,
-                "delivered_quantity": line.delivered_quantity,
+                "delivered_quantity": float(totals[line.id]) if item.approval_snapshot else line.delivered_quantity,
                 "is_unknown_part": line.is_unknown_part,
                 "assembly": line.assembly,
                 "note": line.note,
@@ -1575,6 +1583,8 @@ def update_part_request_fulfillment(
         from .part_requests.request_routes import cancel
         from .part_requests.request_schemas import RequestCancel
         ensure_permission(user, Permission.REQUESTS_APPROVE)
+        if payload.lines and part_request_quantity_compatibility(item)["status"] == "LEGACY_FRACTIONAL":
+            raise business_conflict("legacy_fractional_cancellation_requires_no_line_updates", "Отмяната не допуска промяна на историческите редове.")
         if not payload.confirmed or not (payload.note or "").strip() or payload.lines:
             raise business_conflict("cancellation_confirmation_required", "Потвърдете отмяната и посочете причина без промяна на редове.")
         cancel(db, item, user, RequestCancel(confirmed=True, reason=payload.note,
@@ -1582,11 +1592,46 @@ def update_part_request_fulfillment(
         _commit(db)
         return _part_request_dict(item, [])
     if item.approval_snapshot is not None:
-        if payload.status != "ORDERED" or item.status != "APPROVED" or payload.lines:
-            raise business_conflict("use_request_delivery_events", "Отчитайте доставките чрез отделни събития.")
-        item.status, item.ordered_at = "ORDERED", utcnow()
-        item.supplier, item.delivery_note = payload.supplier, payload.note
-        add_audit_log(db, user, "part_request", item.id, "REQUEST_ORDERED", {"supplier": payload.supplier, "note": payload.note})
+        from .part_requests.request_routes import _status
+        allowed_next = {"APPROVED": {"ORDERED"}, "ORDERED": {"PARTIALLY_DELIVERED", "DELIVERED"},
+                        "PARTIALLY_DELIVERED": {"PARTIALLY_DELIVERED", "DELIVERED"}}
+        if payload.status not in allowed_next.get(item.status, set()):
+            raise business_conflict("invalid_part_request_status_transition", "Преходът на заявката към избрания статус не е разрешен.")
+        totals = received(item)
+        lines = {line.id: line for line in item.lines}
+        prospective = dict(totals)
+        deltas = {}
+        for update in payload.lines:
+            if update.line_id not in lines:
+                raise business_conflict("part_request_line_mismatch", "Подаден е чужд ред.")
+            target = Decimal(update.delivered_quantity)
+            if target < totals[update.line_id] or target > quantity(lines[update.line_id]):
+                raise business_conflict("invalid_delivered_quantity", "Доставеното количество не може да намалява или да надвишава заявеното.")
+            prospective[update.line_id] = target
+            if target > totals[update.line_id]:
+                deltas[update.line_id] = target - totals[update.line_id]
+        if payload.status == "ORDERED":
+            if deltas:
+                raise business_conflict("invalid_delivered_quantity", "Поръчката не отчита доставка.")
+            item.status, item.ordered_at = "ORDERED", utcnow()
+        else:
+            complete = all(prospective[line.id] == quantity(line) for line in item.lines)
+            if payload.status == "DELIVERED" and not complete:
+                raise business_conflict("delivery_incomplete", "Не всички количества са получени.")
+            if payload.status == "PARTIALLY_DELIVERED" and (complete or not any(prospective.values())):
+                raise business_conflict("partial_delivery_quantities_invalid", "Частичната доставка изисква получено и оставащо количество.")
+            if deltas:
+                record_receipt(db, item, user, deltas, supplier=payload.supplier, note=payload.note,
+                               key="legacy-fulfillment-" + uuid4().hex,
+                               digest=canonical_hash(payload.model_dump(mode="json")))
+            _status(item)
+        if payload.supplier is not None:
+            item.supplier = payload.supplier
+        if payload.note is not None:
+            item.delivery_note = payload.note
+        add_audit_log(db, user, "part_request", item.id,
+                      "REQUEST_ORDERED" if payload.status == "ORDERED" else "REQUEST_DELIVERY_RECORDED",
+                      {"status": item.status, "source": "LEGACY_CUMULATIVE_API"}, item.approval_snapshot.official_number)
         _commit(db)
         return _part_request_dict(item, [])
     allowed = {

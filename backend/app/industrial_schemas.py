@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from .master_data.capabilities import CAPABILITY_CODES
 from .models import (
@@ -579,7 +579,7 @@ class PartRequestFulfillmentUpdate(BaseModel):
     status: Literal["ORDERED", "PARTIALLY_DELIVERED", "DELIVERED", "CANCELLED"]
     supplier: str | None = Field(default=None, max_length=255)
     note: str | None = None
-    confirmed: bool = False
+    confirmed: StrictBool = False
     replacement_request_id: int | None = Field(default=None, gt=0)
     lines: list[PartRequestDeliveryLine] = Field(default_factory=list)
 

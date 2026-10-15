@@ -66,15 +66,15 @@ export function FreeFormRequestModal({ request, onClose, onSaved }: { request?: 
   }
   return <Modal title={t(request ? 'requests01.edit' : 'requests01.new')} onClose={onClose} wide>
     <form className="form-grid free-form-request" onSubmit={event => { event.preventDefault(); void save('submit') }}>
-      <label className="wide">{t('requests.department')}<input required maxLength={255} value={department} disabled={busy} onChange={event => { setDepartment(event.target.value); setSaved(false); setPreviewUrl('') }} /></label>
+      <label className="wide">{t('requests.department')}<input aria-label={t('requests.department')} required maxLength={255} value={department} disabled={busy} onChange={event => { setDepartment(event.target.value); setSaved(false); setPreviewUrl('') }} /></label>
       <div className="wide free-form-rows">{rows.map((row, index) => <div className="free-form-row" key={row.key}>
-        <label>{t('requests01.description')}<textarea required maxLength={4000} value={row.description} disabled={busy} onChange={event => change(index, { description: event.target.value })} /></label>
-        <label>{t('requests01.quantity')}<input required inputMode="decimal" value={row.quantity} disabled={busy} onChange={event => change(index, { quantity: event.target.value })} /></label>
+        <label>{t('requests01.description')}<textarea aria-label={t('requests01.description')} required maxLength={4000} value={row.description} disabled={busy} onChange={event => change(index, { description: event.target.value })} /></label>
+        <label>{t('requests01.quantity')}<input aria-label={t('requests01.quantity')} required inputMode="decimal" value={row.quantity} disabled={busy} onChange={event => change(index, { quantity: event.target.value })} /></label>
         <label>{t('requests01.unit')}<select aria-label={t('requests01.unit')} value={row.unit} disabled={busy} onChange={event => change(index, { unit: event.target.value })}>{REQUEST_UNITS.map(unit => <option key={unit} value={unit}>{t(`requests01.${unit}` as TranslationKey)}</option>)}</select></label>
         <button type="button" className="secondary compact" disabled={busy || rows.length === 1} aria-label={`${t('common.remove')} ${index + 1}`} onClick={() => { setRows(current => current.filter((_, i) => i !== index)); setSaved(false); setPreviewUrl('') }}><Trash2 size={16} /></button>
       </div>)}</div>
       <button type="button" className="secondary" disabled={busy || rows.length >= 500} onClick={() => { setRows(current => [...current, { key: Math.max(...current.map(row => row.key)) + 1, description: '', quantity: '1', unit: 'pcs' }]); setPreviewUrl(''); setSaved(false) }}><Plus size={16} />{t('requests01.addRow')}</button>
-      <label className="wide">{t('parts.reason')}<textarea maxLength={8000} disabled={busy} value={reason} onChange={event => { setReason(event.target.value); setSaved(false); setPreviewUrl('') }} /></label>
+      <label className="wide">{t('parts.reason')}<textarea aria-label={t('parts.reason')} maxLength={8000} disabled={busy} value={reason} onChange={event => { setReason(event.target.value); setSaved(false); setPreviewUrl('') }} /></label>
       {error && <div role="alert" className="error wide">{error}</div>}
       {saved && <div role="status" className="success wide">{t('requests01.saved')}</div>}
       <div className="actions wide"><button type="button" className="secondary" disabled={busy} onClick={() => void save('draft')}>{t('requests01.saveDraft')}</button><button type="button" className="secondary" disabled={busy} onClick={() => void save('preview')}>{t('requests01.preview')}</button><button className="primary" disabled={busy}>{t('requests.submit')}</button></div>
