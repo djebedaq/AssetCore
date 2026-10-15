@@ -60,6 +60,8 @@ def capture_data(request):
 
     data = _request_snapshot(request)
     data["header_image_sha256"] = hashlib.sha256(OFFICIAL_HEADER.read_bytes()).hexdigest()
+    data["header_reference"] = OFFICIAL_HEADER.name
+    data["repair_kit_id"], data["repair_kit_mode"] = request.repair_kit_id, request.repair_kit_mode
     data["submitted_at"], data["decided_at"] = (
         utc_iso(request.submitted_at),
         utc_iso(request.decided_at),
@@ -127,6 +129,7 @@ def capture_data(request):
                 "id": line.id,
                 "quantity": decimal_text(quantity(line)),
                 "visual_sha256": line.visual_snapshot.sha256 if line.visual_snapshot else None,
+                "reason": line.reason,
             }
         )
         # Execution fields are intentionally absent from approval evidence.

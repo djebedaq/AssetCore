@@ -335,6 +335,9 @@ def test_all_request_kinds_share_the_sequence_and_search(client, auth_headers, s
             )
             assert request.approval_snapshot.official_number == f"KK{index}"
             assert request.approval_snapshot.data["request_kind"] == kind
+            if kind == "REPAIR_KIT":
+                assert request.approval_snapshot.data["repair_kit_id"] == kit.id
+            assert request.approval_snapshot.data["lines"][0]["reason"] is None
         db.commit()
     result = client.get(
         "/api/workspace/requests?q=KK1000&request_kind=FREE_FORM", headers=auth_headers
