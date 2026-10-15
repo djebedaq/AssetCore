@@ -316,6 +316,7 @@
 .request-preview { width: 100%; height: 65vh; border: 1px solid var(--border, #d9d9d9); }
 .request-delivery-event { display: grid; gap: .35rem; padding: .7rem 0; border-bottom: 1px solid var(--border, #d9d9d9); }
 @media (max-width: 600px) {
+  .free-form-request { grid-template-columns: minmax(0, 1fr); }
   .free-form-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
   .free-form-row > label:first-child { grid-column: 1 / -1; }
   .free-form-request .actions > button { flex: 1 1 100%; justify-content: center; }

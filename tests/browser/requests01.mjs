@@ -25,7 +25,8 @@ async function shot(name, width) {
     const bounds = dialog.getBoundingClientRect()
     return dialog.scrollWidth <= dialog.clientWidth + 1 && [...dialog.querySelectorAll('input, textarea, select, button')].every(control => {
       const rect = control.getBoundingClientRect()
-      return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1
+      return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1 &&
+        (control.tagName === 'BUTTON' || rect.width >= 80)
     })
   })).toBe(true)
   await page.screenshot({ path: `${out}/${name}-${width}.png`, fullPage: true })

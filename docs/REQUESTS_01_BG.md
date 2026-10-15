@@ -96,11 +96,11 @@ PR: [REQUESTS-01, #109](https://github.com/djebedaq/AssetCore/pull/109).
 и registration, generic official-document guards, owner-deletion references,
 каталогът и проследяването във frontend, BG/EN/RU преводите и съответните тестове/CI.
 
-Пълната проверка на ff29d25 е [Build check 38747976750](https://github.com/djebedaq/AssetCore/actions/runs/38747976750):
+Пълната проверка на 482f2b6 е [Build check 38755988809](https://github.com/djebedaq/AssetCore/actions/runs/38755988809):
 
 | Команда / проверка | Резултат |
 | --- | --- |
-| `python -m pytest -q -m "not postgres" --tb=short --durations=10` | 1420 passed, 4 skipped, 146 deselected; PostgreSQL тестовете са в отделния job |
+| `python -m pytest -q -m "not postgres" --tb=short --durations=10` | 1424 passed, 4 skipped, 146 deselected; PostgreSQL тестовете са в отделния job |
 | `python -m pytest -q tests/postgres --tb=short --durations=10 --junitxml=postgres-test-results.xml` | 146 passed, реален PostgreSQL 16 |
 | `pnpm test` | 638 passed, 69 файла |
 | `pnpm typecheck`, `pnpm lint`, `pnpm build` | всички успешни |
@@ -131,6 +131,20 @@ counter се отказват. SQLite домейн тестовете прове
 инсталирани triggers при upgrade на стар SQLite. Поправките са покрити от
 горния пълен зелен CI. Тези неуспешни междинни резултати не са представени като
 успешни проверки.
+
+Последните локални проверки дадоха още 2 passed за frozen metadata/QA export
+и 5 passed за директните SQL защити на файлове/доставки и идентичните файлове
+след отмяна. Четирите skips в Linux backend job са незаявен optional QA export,
+Windows named mutex и два съществуващи transfer print теста без LibreOffice.
+Експортът е изпълнен отделно, а реалният converter е проверен в Docker job.
+Наличните deprecation предупреждения и Vite предупреждението за голям bundle
+не са скрити; security, lint, typecheck и build проверките са успешни.
+
+Ръчният преглед откри изрязани дълги руски надписи на 390 px въпреки първоначалната
+проверка за ширина на страницата. Мобилната форма използва една колона и
+пренася бутоните. Браузърният gate вече проверява ширината вътре в диалога,
+границите на всяко поле/бутон и минимална използваема ширина на полетата.
+Последващият CI след тази CSS поправка е достъпен от Checks на PR.
 
 Примерният пакет се генерира с
 `ASSETCORE_REQUESTS01_QA_OUTPUT=<temporary-output> python -m pytest -q --tb=short tests/test_requests01.py::test_export_review_examples`.
