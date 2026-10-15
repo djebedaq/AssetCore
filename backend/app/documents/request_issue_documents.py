@@ -237,10 +237,12 @@ def _appendix(db, request, data):
             raise ValueError("approval_visual_integrity_failed")
         frozen.append(
             SimpleNamespace(
-                **line,
-                visual_snapshot=live.visual_snapshot,
-                catalog_part=None,
-                linked_catalog_part=None,
+                **{
+                    **line,
+                    "visual_snapshot": live.visual_snapshot,
+                    "catalog_part": None,
+                    "linked_catalog_part": None,
+                }
             )
         )
     return prepare_appendix(db, SimpleNamespace(lines=frozen))
