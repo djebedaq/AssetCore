@@ -58,11 +58,12 @@ def quantity(line):
 def capture_data(request):
     from ..documents import company_header
     from ..documents.part_request_documents import OFFICIAL_HEADER, _request_snapshot
+    from ..documents.request_machine_section import snapshot as machine_snapshot
 
     data = _request_snapshot(request)
     data["header_image_sha256"] = hashlib.sha256(OFFICIAL_HEADER.read_bytes()).hexdigest()
     data["header_reference"] = OFFICIAL_HEADER.name
-    data["document_layout_version"] = 2
+    data["document_layout_version"] = 3 if request.machine is not None else 2
     data["company_header"] = company_header.manifest()
     data["repair_kit_id"], data["repair_kit_mode"] = request.repair_kit_id, request.repair_kit_mode
     data["submitted_at"], data["decided_at"] = (
@@ -79,21 +80,7 @@ def capture_data(request):
             else None,
             "approved_by_name": request.decided_by.full_name if request.decided_by else None,
             "approved_by_job_title": request.decided_by.job_title if request.decided_by else None,
-            "machine": (
-                {
-                    key: getattr(request.machine, key)
-                    for key in (
-                        "name",
-                        "inventory_number",
-                        "brand",
-                        "model",
-                        "serial_number",
-                        "pressure_bar",
-                    )
-                }
-                if request.machine
-                else None
-            ),
+            "machine": machine_snapshot(request.machine) if request.machine is not None else None,
             "attachments": [
                 {
                     "id": a.id,

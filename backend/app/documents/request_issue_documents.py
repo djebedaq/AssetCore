@@ -125,7 +125,7 @@ def _meta(data):
         f"{department}: {data.get('department') or ''}",
         f"{requester}: {data.get('requested_by_name') or ''}",
     ]
-    if data.get("machine"):
+    if data.get("machine") and data.get("document_layout_version") != 3:
         m = data["machine"]
         result.append(
             " · ".join(
@@ -142,7 +142,9 @@ def _meta(data):
 
 
 def build_docx(data, template_content, appendix=None, *, header_content=None, resources=None):
-    if data.get("document_layout_version") == 2:
+    if data.get("document_layout_version") not in (None, 1, 2, 3):
+        raise ValueError("unsupported_request_document_layout_version")
+    if data.get("document_layout_version") in (2, 3):
         resources = resources if resources is not None else company_header.current_resources()
         company_header.verify(resources, data["company_header"])
         return request_layout_v2.build_docx(
@@ -153,6 +155,7 @@ def build_docx(data, template_content, appendix=None, *, header_content=None, re
             date=_date(data),
             resources=resources,
             appendix=appendix,
+            machine_section=data.get("machine") if data["document_layout_version"] == 3 else None,
         )
     return _legacy_build_docx(data, template_content, appendix, header_content=header_content)
 
@@ -219,7 +222,9 @@ def _legacy_build_docx(data, template_content, appendix=None, *, header_content=
 def build_pdf(
     data, appendix=None, *, preview=False, header_content=None, resources=None, docx=None
 ):
-    if data.get("document_layout_version") == 2:
+    if data.get("document_layout_version") not in (None, 1, 2, 3):
+        raise ValueError("unsupported_request_document_layout_version")
+    if data.get("document_layout_version") in (2, 3):
         docx = docx if docx is not None else build_docx(data, None, appendix, resources=resources)
         return request_layout_v2.build_pdf(
             data,
@@ -375,7 +380,7 @@ def archive(db, request, actor):
     if appendix is not None:
         document_snapshot["visual_appendix"] = appendix_manifest(appendix)
     resources = None
-    if snapshot.data.get("document_layout_version") == 2:
+    if snapshot.data.get("document_layout_version") in (2, 3):
         resources = {}
         for name, evidence in snapshot.data["company_header"]["parts"].items():
             resource = db.get(PartVisualArtifact, evidence["sha256"])

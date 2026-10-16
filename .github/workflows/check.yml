@@ -112,6 +112,16 @@ jobs:
           path: .tmp/requests01-examples
           include-hidden-files: true
           if-no-files-found: error
+      - name: Export machine layout examples from verified seeds in a disposable database
+        env:
+          ASSETCORE_MACHINE_LAYOUT_QA_OUTPUT: ${{ github.workspace }}/.tmp/requests01-machine-layout
+        run: python -m pytest -q --tb=short tests/test_request_machine_layout.py::test_catalog_preview_approval_and_review_export
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: requests01-machine-layout
+          path: .tmp/requests01-machine-layout
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Install pinned browser test runner in disposable directory
         run: |
           npm install --prefix "$RUNNER_TEMP/assetcore-browser" playwright@1.62.1

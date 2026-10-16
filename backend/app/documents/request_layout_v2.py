@@ -14,6 +14,7 @@ from ..template_engine import convert_docx_to_pdf
 from . import company_header
 from .part_request_grouped_visuals import append_docx
 from .rendering import _clear_body, _pdf_styles, _set_repeat_table_header
+from .request_machine_section import add_docx as add_machine_table
 
 APPROVER = {"bg": "Одобрил", "en": "Approved by", "ru": "Утвердил"}
 
@@ -44,7 +45,9 @@ def borders(table, visible=True):
     table._tbl.tblPr.append(edges)
 
 
-def build_docx(data, template_content, *, rows, meta, date, resources, appendix=None):
+def build_docx(
+    data, template_content, *, rows, meta, date, resources, appendix=None, machine_section=None
+):
     document = Document(io.BytesIO(template_content)) if template_content else Document()
     _clear_body(document)
     section = document.sections[0]
@@ -79,6 +82,17 @@ def build_docx(data, template_content, *, rows, meta, date, resources, appendix=
     gap = document.add_paragraph()
     gap.paragraph_format.space_after = Pt(0)
     gap.paragraph_format.line_spacing = Mm(4)
+    if machine_section is not None:
+        add_machine_table(
+            document,
+            machine_section,
+            data["language"],
+            paragraph_style=paragraph_style,
+            borders=borders,
+        )
+        gap = document.add_paragraph()
+        gap.paragraph_format.space_after = Pt(0)
+        gap.paragraph_format.line_spacing = Mm(4)
     table = document.add_table(rows=0, cols=len(rows[0]))
     table.alignment, table.autofit = WD_TABLE_ALIGNMENT.CENTER, False
     widths = [14.2, 140.4, 30] if len(rows[0]) == 3 else [14.2, 38.2, 102.2, 30]
