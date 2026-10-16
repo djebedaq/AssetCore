@@ -41,7 +41,7 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -72,7 +72,7 @@ jobs:
       - name: Production configuration regression gate
         run: python -m pytest -q --tb=short tests/test_runtime_deployment_hardening.py
       - name: Full backend suite (real PostgreSQL cases run in postgres job)
-        run: python -m pytest -q -m "not postgres" --tb=short --durations=10
+        run: python -m pytest -q -n 2 --dist loadfile -m "not postgres" --tb=short --durations=10
       - run: python scripts/verify_release.py --output release-verification
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

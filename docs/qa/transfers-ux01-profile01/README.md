@@ -40,6 +40,7 @@ pnpm --dir frontend lint
 pnpm --dir frontend test
 pnpm --dir frontend build
 python -m pytest -q tests/test_optional_middle_name.py tests/test_transfers_ux01.py --tb=short
+python -m pytest -q -n 2 --dist loadfile -m "not postgres" --tb=short --durations=10
 python -m pytest -q tests/test_bulk_transfers.py tests/test_transfer_lifecycle_projection.py tests/test_ux_workspace.py tests/test_user_accounts.py tests/test_production_hardening.py --tb=short
 python -m pytest -q tests/postgres/test_transfers_ux01_postgres.py tests/postgres/test_transfer_lifecycle_projection_postgres.py tests/postgres/test_concurrency.py::test_two_issue_transactions_create_one_active_transfer --tb=short
 python tests/browser/run_transfers_profile01_qa.py
@@ -50,3 +51,5 @@ python backend/scripts/validate_authorization_inventory.py
 ```
 
 Документните проверки изискват LibreOffice. PostgreSQL проверките използват само специалната QA база и произволни мигрирани схеми; runner-ът отказва друга база. Браузърният runner генерира нова локална тестова база и пароли в паметта. Не записва пароли, capability tokens или сесийни заглавки в доказателствата.
+
+Пълният backend CI набор използва два pytest-xdist workers с групиране по файл. Запазени са всички тестове, петте jobs и съществуващият security gate за лимит до 30 минути; няма нова production зависимост.
