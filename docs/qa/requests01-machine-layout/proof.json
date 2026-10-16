@@ -1,0 +1,25 @@
+{
+  "reference_sha256": {
+    "old": "375fbd7822449326f2f9e729f090b6ccc184d6a7ed8952a7210bb0ff0fa754a3",
+    "new": "fb517409426368c6e0761b3e29d67aa9dc834313c95050462311473a0ee59f29"
+  },
+  "qa_files": {
+    "catalog-docx-render/catalog-KK1000.pdf": "96666e88c1dc02da17490d91e82dbe152993e4011d0651a7faa9bd7896ffacc9",
+    "catalog-KK1000.docx": "31f2dffaba4975ad644eadee74781dc52c1483c1809ff4445481aa1337f3e95d",
+    "catalog-KK1000.pdf": "33de24944de041ed75bbdcd8fba260e65513610a03e1c300698f9fb7a2ce3895",
+    "catalog-preview.pdf": "50dd6d9442ad64fda75e445c1beb4a9580fab3dfd0d8d0a531b70475623e8b40",
+    "free-docx-render/KK1000.pdf": "ed86b8d5df534f08aa70b50199aaad5d5115ebfbce027b5c56228d692bfb03cb",
+    "free-form/KK1000.docx": "1252cd1711cd9969f399d8d502c8eb58f20b22fc7716f9ecab9c69b34a536ac9",
+    "free-form/KK1000.pdf": "f1f7461a8330ff0abe14a14d6f6e1ba115a374815697570ed15e2cb2bed7c400",
+    "free-form/request-preview.pdf": "807d4295afff7685e27bc51552aaac85ace82a5c521e827953a3be234a1ea705"
+  },
+  "visually_reviewed": {
+    "supplied_reference_pages": 6,
+    "official_pdf_pages": 4,
+    "preview_pdf_pages": 3,
+    "canonical_docx_pages": 4
+  },
+  "app_docx_pdf_pixels": "identical on every page (regression tests)",
+  "free_form_v2_v3_without_machine_pixels": "identical (regression test)",
+  "controlled_sources_modified": false
+}

@@ -91,6 +91,47 @@ def main():
                     "quantities_unclipped": True,
                 }
             )
+    # Same renderer with a conditional machine section; explicit QA values only.
+    for language in ("bg", "en", "ru"):
+        linked = {
+            **data,
+            "document_layout_version": 3,
+            "request_kind": "CATALOG",
+            "language": language,
+            "machine": {
+                "name": "QA machine section",
+                "inventory_number": "QA-SECTION",
+                "brand": "QA",
+                "model": "QA",
+                "serial_number": None,
+                "pressure_bar": 0,
+                "batch_reference": None,
+            },
+            "lines": [
+                {
+                    "position": "1",
+                    "part_number": "QA-PART",
+                    "linked_part_number": None,
+                    "description": "QA machine section check",
+                    "quantity": "1",
+                    "unit": "pcs",
+                }
+            ],
+        }
+        docx = build_docx(linked, None)
+        pdf = convert_docx_to_pdf(docx)
+        assert pdf is not None
+        (target / f"machine-{language}.docx").write_bytes(docx)
+        (target / f"machine-{language}.pdf").write_bytes(pdf)
+        with fitz.open(stream=pdf, filetype="pdf") as document:
+            assert len(document) == 1
+            text = document[0].get_text()
+            assert "0 bar" in text and text.count("QA-SECTION") == 1
+            assert "QA-PART" in text and "KK1000" in text
+            document[0].get_pixmap(matrix=fitz.Matrix(1.25, 1.25)).save(
+                target / f"machine-{language}-page-1.png"
+            )
+        report.append({"language": language, "machine_section": True, "zero_pressure": True})
     # A single description can exceed one page; Word must split that row safely.
     data["language"] = "bg"
     data["lines"] = [

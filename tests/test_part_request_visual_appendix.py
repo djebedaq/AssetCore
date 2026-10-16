@@ -1028,6 +1028,13 @@ def test_kk_approval_archives_real_retained_catalog_visual_evidence(
     docx = Document(io.BytesIO(records["docx"][0]))
     assert len(docx.tables[0].columns) == 4
     assert [cell.text for cell in docx.tables[0].rows[0].cells] == [
+        "Машина",
+        "Synthetic QA compressor",
+        "Инвентарен №",
+        "QA-FUTURE-9001",
+    ]
+    assert docx.tables[0].rows[2].cells[3].text == "0 bar"
+    assert [cell.text for cell in docx.tables[1].rows[0].cells] == [
         "Pos",
         "PART No",
         "DESCRIPTION",
