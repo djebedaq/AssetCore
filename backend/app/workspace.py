@@ -19,6 +19,7 @@ from .models import (
     AssetCategory,
     GeneratedDocument,
     Machine,
+    OfficialDocument,
     PartRequest,
     PartRequestApproval,
     PartRequestAttachment,
@@ -30,6 +31,7 @@ from .models import (
     TransferProtocol,
     User,
 )
+from .official_documents.registry import transfer_document_records
 from .permissions import (
     Permission,
     ensure_permission,
@@ -373,6 +375,7 @@ def batches(
             func.count(func.distinct(func.coalesce(Machine.category_id, -1))).label(
                 "category_count"
             ),
+            func.min(t.issued_at).label("issued_at"),
         )
         .join(Machine, t.machine_id == Machine.id)
         .where(t.batch_id.is_not(None))
@@ -448,6 +451,7 @@ def batches(
             returned_count,
             pending_count,
             category_count,
+            issued_at,
         ) = row
         # Present the same canonical relationship used to choose the context.
         # Legacy batch labels may be stale; never rewrite their stored history.
@@ -464,6 +468,7 @@ def batches(
                 "batch_reference": batch.batch_reference,
                 "status": state,
                 "stored_status": batch.status,
+                "issued_at": issued_at,
                 "total_machines": issued_count,
                 "registered_machines": total,
                 "issued_machines": issued_count,
@@ -495,31 +500,52 @@ def transfers(
     statement = (
         select(t)
         .join(Machine)
+        .outerjoin(TransferBatch, t.batch_id == TransferBatch.id)
         .where(category_scope(db, "transfers", f))
         .options(
+            joinedload(t.batch),
             joinedload(t.machine).joinedload(Machine.location),
             joinedload(t.machine).joinedload(Machine.category_definition),
         )
     )
     if f.q:
         statement = statement.where(
-            search(
+            or_(search(
                 f,
                 Machine.inventory_number,
+                Machine.name,
+                Machine.brand,
+                Machine.model,
                 Machine.serial_number,
                 t.protocol_number,
-                t.batch_reference,
-            )
+                TransferBatch.batch_reference,
+            ), select(OfficialDocument.id).where(
+                OfficialDocument.transfer_id == t.id,
+                search(f, OfficialDocument.document_number),
+            ).correlate(t).exists(), select(GeneratedDocument.id).where(
+                GeneratedDocument.transfer_id == t.id,
+                GeneratedDocument.document_type.in_(("TRANSFER_ISSUE", "TRANSFER_RETURN")),
+                search(f, GeneratedDocument.document_number),
+            ).correlate(t).exists())
         )
+    completed = and_(t.issue_status == "COMPLETED", t.return_status == "COMPLETED",
+                     t.is_active.is_(False), t.issued_at.is_not(None), t.returned_at.is_not(None))
     if f.status == "completed":
-        statement = statement.where(
-            t.issue_status == "COMPLETED", t.return_status == "COMPLETED", t.is_active.is_(False)
-        )
+        statement = statement.where(completed)
+    elif f.status == "awaiting_issue":
+        statement = statement.where(t.issue_status == "AWAITING_SIGNATURE")
+    elif f.status == "awaiting_return":
+        statement = statement.where(t.return_status == "AWAITING_SIGNATURE")
+    elif f.status == "cancelled":
+        statement = statement.where(or_(t.issue_status == "CANCELLED", t.return_status == "CANCELLED"))
+    elif f.status == "other":
+        statement = statement.where(~func.coalesce(completed, False))
     if f.record_id:
         statement = statement.where(t.id == f.record_id)
     if f.machine_id:
         statement = statement.where(t.machine_id == f.machine_id)
-    rows, meta = page_rows(db, dated(statement, t.created_at, f), t.created_at, t.id, f)
+    timestamp = t.returned_at if f.status == "completed" else func.coalesce(t.issued_at, t.created_at)
+    rows, meta = page_rows(db, dated(statement, timestamp, f), timestamp, t.id, f)
     return meta | {
         "items": [
             {
@@ -540,6 +566,36 @@ def transfers(
             }
             for (value,) in rows
         ]
+    }
+
+
+@router.get("/transfers/{transfer_id}")
+def transfer_details(
+    transfer_id: int,
+    user: User = Depends(require_permission(Permission.TRANSFERS_VIEW)),
+    db: Session = Depends(get_db),
+):
+    transfer = db.scalar(select(TransferProtocol).where(TransferProtocol.id == transfer_id).options(
+        joinedload(TransferProtocol.machine).joinedload(Machine.location),
+        joinedload(TransferProtocol.machine).joinedload(Machine.category_definition),
+    ))
+    if transfer is None:
+        raise HTTPException(404, detail={"code": "transfer_not_found"})
+    return {
+        "id": transfer.id,
+        "protocol_number": transfer.protocol_number,
+        "batch_id": transfer.batch_id,
+        "batch_reference": transfer.batch_reference,
+        "issue_status": transfer.issue_status,
+        "return_status": transfer.return_status,
+        "is_active": transfer.is_active,
+        "issued_at": transfer.issued_at,
+        "returned_at": transfer.returned_at if transfer.return_status == "COMPLETED" else None,
+        "machine": _machine_with_capabilities(transfer.machine),
+        "category": {key: getattr(transfer.machine.category_definition, key)
+                     for key in ("name_bg", "name_en", "name_ru")}
+        if transfer.machine.category_definition else None,
+        "documents": transfer_document_records(db, transfer),
     }
 
 

@@ -143,7 +143,7 @@ export type ReturnOperation = {
 export type BatchProgress = {
   batch_id: number; batch_reference: string; status: string; total_machines: number;
   returned_machines: number; still_issued_machines: number; awaiting_signature_machines: number;
-  machine_numbers: string[]; created_at?: string; operation?: string;
+  machine_numbers: string[]; created_at?: string; issued_at?: string | null; operation?: string;
   cancellable_batch_ids?: number[]; return_operations?: ReturnOperation[]
 }
 

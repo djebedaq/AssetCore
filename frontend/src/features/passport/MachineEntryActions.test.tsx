@@ -30,7 +30,7 @@ it.each(['issue', 'return'] as const)('%s uses the existing workflow once, waits
   const fetchMock = entryApi({ passport: action === 'return' ? issuedPassport : entryPassport, intercept: (path) => path === '/api/transfers/availability' ? pending.then((response) => response.clone()) : undefined })
   start()
   await userEvent.click(within(await passportDialog()).getByRole('button', { name: bg[`entry.${action}`] }))
-  expect(window.location.pathname).toBe('/')
+  expect(window.location.pathname).toBe('/transfers')
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(mutations(fetchMock)).toHaveLength(0)
   await act(async () => resolve(json(available)))
