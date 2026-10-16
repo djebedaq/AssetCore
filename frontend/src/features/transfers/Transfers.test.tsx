@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { I18nProvider } from '../../i18n'
+import { bg, I18nProvider } from '../../i18n'
 import { clearSessionUser, setSessionUser } from '../../permissions'
 import type { UserSession } from '../../types'
 import Transfers from './Transfers'
@@ -122,4 +122,42 @@ it('restores a direct cycle link after remount and ignores a late response after
   resolve(new Response(JSON.stringify(cycle(7)), { status: 200 }))
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   expect(window.location.search).not.toContain('record_id')
+})
+
+it('keeps completed batches and their cancelled return operations reachable through the secondary control', async () => {
+  const operation = { batch_id: 12, batch_reference: 'QA-CANCELLED-RETURN', created_at: '2026-10-01T12:00:00Z',
+    status: 'CANCELLED', signing_status: 'CANCELLED', machine_numbers: ['QA-7'], transfer_ids: [7], issue_batch_ids: [11], signing_document_id: 90, batch_manifest_sha256: null }
+  const batch = { batch_id: 11, batch_reference: 'QA-COMPLETED', status: 'RETURNED', total_machines: 1,
+    returned_machines: 1, still_issued_machines: 0, awaiting_signature_machines: 0, machine_numbers: ['QA-7'],
+    category_ids: [], mixed_categories: false, registered_machines: 1, created_at: '2026-10-01T12:00:00Z',
+    transfers: [], return_operations: [operation], zip_download_endpoint: '/transfer-batches/11/documents.zip' }
+  const calls = mockWorkspace(url => url.pathname === '/api/workspace/batches' ? page(url.searchParams.get('context') === 'all' ? [batch] : []) : url.pathname === '/api/transfer-batches/11' ? batch : url.pathname === '/api/workspace/machines' ? page([]) : [])
+  render(<I18nProvider initialLocale="bg"><Transfers /></I18nProvider>)
+  await userEvent.selectOptions(screen.getByLabelText('Показване'), 'all_batches')
+  await userEvent.click(await screen.findByRole('button', { name: 'Детайли' }))
+  expect(await screen.findByText(/QA-CANCELLED-RETURN/)).toBeVisible()
+  expect(screen.getAllByRole('tab')).toHaveLength(2)
+  expect(calls.some(url => url.pathname === '/api/workspace/batches' && url.searchParams.get('context') === 'all')).toBe(true)
+})
+
+it('refreshes availability exactly once after cancellation from the main workspace', async () => {
+  setSessionUser({ permissions: ['assets.view', 'transfers.view', 'transfers.create', 'transfers.return'], preferred_language: 'bg' } as UserSession)
+  let cancelled = false
+  const batch = { batch_id: 11, batch_reference: 'QA-PENDING', status: 'AWAITING_SIGNATURE', total_machines: 0,
+    returned_machines: 0, still_issued_machines: 0, awaiting_signature_machines: 1, machine_numbers: ['QA-7'],
+    category_ids: [], mixed_categories: false, registered_machines: 1, created_at: '2026-10-01T12:00:00Z',
+    operation: 'ISSUE', transfers: [], cancellable_batch_ids: [11], zip_download_endpoint: '/transfer-batches/11/documents.zip' }
+  const calls = mockWorkspace(url => {
+    if (url.pathname.endsWith('/cancel')) { cancelled = true; return { batch_id: 11, batch_reference: 'QA-PENDING', status: 'CANCELLED', cancelled_transfers: 1, invalidated_signing_sessions: 2, message: 'QA' } }
+    if (url.pathname === '/api/transfer-batches/11') return batch
+    if (url.pathname === '/api/workspace/batches') return page(cancelled ? [] : [batch])
+    return url.pathname === '/api/workspace/machines' ? page([]) : []
+  })
+  render(<I18nProvider initialLocale="bg"><Transfers /></I18nProvider>)
+  await userEvent.click(await screen.findByRole('button', { name: bg['bulk.cancelPendingAction'] }))
+  const dialog = await screen.findByRole('dialog')
+  await userEvent.type(within(dialog).getByLabelText(bg['bulk.cancelReason']), 'QA cancellation reason')
+  await userEvent.click(within(dialog).getByRole('button', { name: bg['bulk.cancelConfirm'] }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  await waitFor(() => expect(calls.filter(url => url.pathname === '/api/transfers/availability')).toHaveLength(2))
 })

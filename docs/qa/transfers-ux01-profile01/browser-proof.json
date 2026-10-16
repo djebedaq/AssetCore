@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "checks": [
+    "two tabs; signed A/B reissue; correct progress; independent machine cycles; filters; archived PDF/DOCX/ZIP; preview; mobile; keyboard; direct-link refresh; pending/cancelled access",
+    "two-name user creation and edit through actual forms",
+    "self completion without legal exception and operational login",
+    "two-name administrator approval and real official PDF/DOCX archive",
+    "BG/EN/RU and no browser exceptions"
+  ],
+  "errors": []
+}

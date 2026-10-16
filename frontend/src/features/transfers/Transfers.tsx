@@ -14,7 +14,7 @@ import { TransferRecordDetails, TransferStatus, type CycleDetails, type Transfer
 
 type BatchRow = BatchProgress & { category_ids: number[]; mixed_categories: boolean; registered_machines: number }
 type Tab = 'issued' | 'history'
-type Scope = 'active' | 'pending' | 'awaiting_issue' | 'awaiting_return' | 'cancelled' | 'other' | 'all'
+type Scope = 'active' | 'pending' | 'all_batches' | 'awaiting_issue' | 'awaiting_return' | 'cancelled' | 'other' | 'all'
 type Target = { kind: 'batch' | 'cycle'; id: number }
 function routeTarget(): Target | null {
   if (window.location.pathname !== '/transfers') return null
@@ -62,9 +62,9 @@ export default function Transfers({ entryIntent, onEntryConsumed, initialRecordI
   const [error, setError] = useState('')
   const { categories, error: categoryError } = useCategories('transfers', refresh)
   const filter = useWorkspaceFilters()
-  const batchView = tab === 'issued' && (scope === 'active' || scope === 'pending')
+  const batchView = tab === 'issued' && (scope === 'active' || scope === 'pending' || scope === 'all_batches')
   const params = { ...filter.params, status: tab === 'history' ? 'completed' : scope === 'all' ? undefined : scope }
-  const path = `/workspace/${batchView ? 'batches' : 'transfers'}?${queryParams({ ...params, context: batchView ? scope : undefined })}`
+  const path = `/workspace/${batchView ? 'batches' : 'transfers'}?${queryParams({ ...params, context: batchView ? scope === 'all_batches' ? 'all' : scope : undefined })}`
   const batches = usePage<BatchRow>(batchView ? path : null, refresh)
   const records = usePage<TransferRecord>(batchView ? null : path, refresh)
   const result = batchView ? batches : records
@@ -84,13 +84,13 @@ export default function Transfers({ entryIntent, onEntryConsumed, initialRecordI
     catch { setError(t('transfers.loadError')) }
   }
   function download(path: string, filename: string) { void downloadApiFile(path, filename).catch(() => setError(t('transfers.downloadError'))) }
-  function changeTab(value: Tab) { setTab(value); setTarget(null); filter.setPage(1) }
+  function changeTab(value: Tab) { setTab(value); setTarget(null); if (value === 'history' && filter.values.category === 'mixed') filter.change('category', ''); else filter.setPage(1) }
   function categoryName(id?: number | null) {
     const category = categories.find(item => item.id === id)
     return category?.[`name_${locale}`] || category?.name_bg || t('ux.legacy')
   }
   return <>
-    <BulkTransfers hideBatchPanel entryIntent={entryIntent} onEntryConsumed={onEntryConsumed} onChanged={changed} />
+    <BulkTransfers hideBatchPanel refreshKey={refresh} entryIntent={entryIntent} onEntryConsumed={onEntryConsumed} onChanged={changed} />
     <div className="ac-context-tabs" role="tablist" aria-label={t('nav.transfers')}>
       {(['issued', 'history'] as const).map(value => <button id={`transfers-tab-${value}`} role="tab" aria-selected={value === tab} aria-controls="transfers-results" tabIndex={value === tab ? 0 : -1} key={value} type="button" onClick={() => changeTab(value)} onKeyDown={event => {
         if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
@@ -106,7 +106,7 @@ export default function Transfers({ entryIntent, onEntryConsumed, initialRecordI
       <DateFilters from={filter.values.from} to={filter.values.to} onFrom={value => filter.change('from', value)} onTo={value => filter.change('to', value)} />
       <SortSelect value={filter.values.sort} onChange={value => filter.change('sort', value)} />
       {tab === 'issued' && <label className="ac-filter"><span>{t('transfersUX.scope')}</span><select className="ac-native-select" aria-label={t('transfersUX.scope')} value={scope} onChange={event => { setScope(event.target.value as Scope); filter.setPage(1) }}>
-        <option value="active">{t('transfersUX.active')}</option><option value="pending">{t('transfersUX.pendingBatches')}</option>
+        <option value="active">{t('transfersUX.active')}</option><option value="pending">{t('transfersUX.pendingBatches')}</option><option value="all_batches">{t('transfersUX.allBatches')}</option>
         <option value="awaiting_issue">{t('transfersUX.awaitingIssue')}</option><option value="awaiting_return">{t('transfersUX.awaitingReturn')}</option>
         <option value="cancelled">{t('status.cancelled')}</option><option value="other">{t('transfersUX.other')}</option><option value="all">{t('transfersUX.all')}</option>
       </select></label>}

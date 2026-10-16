@@ -188,3 +188,18 @@ def test_cycle_documents_stay_pinned_when_a_correcting_draft_is_created(
             assert client.get("/api" + file["download_endpoint"], headers=auth_headers).status_code == 200
     with session_factory() as db:
         assert fingerprint(db) == before
+
+
+def test_cancelled_return_stays_reachable_after_later_successful_completion(
+    client, auth_headers, issue_payload, qa_machines
+):
+    issued = issue(client, auth_headers, issue_payload, qa_machines[:1])
+    cancelled = receive(client, auth_headers, issued["transfers"], sign=False)
+    assert client.post(f"/api/transfer-batches/{cancelled['batch_id']}/cancel", headers=auth_headers,
+                       json={"reason": "Synthetic QA cancellation before successful return"}).status_code == 200
+    completed = receive(client, auth_headers, issued["transfers"])
+    assert workspace(client, auth_headers, "batches", "context=active")["total"] == 0
+    assert workspace(client, auth_headers, "batches", "context=all")["items"][0]["batch_id"] == issued["batch_id"]
+    detail = read(client, auth_headers, f"/api/transfer-batches/{issued['batch_id']}")
+    operations = {op["batch_id"]: op["signing_status"] for op in detail["return_operations"]}
+    assert operations == {cancelled["batch_id"]: "CANCELLED", completed["batch_id"]: "COMPLETED"}

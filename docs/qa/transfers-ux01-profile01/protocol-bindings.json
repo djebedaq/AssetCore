@@ -1,0 +1,100 @@
+[
+  {
+    "cycle_id": 4,
+    "machine_id": 20,
+    "batch_id": 3,
+    "documents": [
+      {
+        "document_type": "TRANSFER_RETURN",
+        "document_number": "QA_TRANSFERS01-20261016-000004-R",
+        "official_document_id": 15,
+        "version": 1,
+        "version_status": "SIGNED",
+        "files": [
+          {
+            "format": "docx",
+            "download_endpoint": "/official-documents/15/versions/1/download/docx",
+            "preview_endpoint": "/official-documents/15/preview/docx"
+          },
+          {
+            "format": "pdf",
+            "download_endpoint": "/official-documents/15/versions/1/download/pdf",
+            "preview_endpoint": "/official-documents/15/preview/pdf"
+          }
+        ],
+        "created_at": "2026-10-16T12:21:48.143729",
+        "finalized_at": "2026-10-16T12:22:00.614367"
+      },
+      {
+        "document_type": "TRANSFER_ISSUE",
+        "document_number": "QA_TRANSFERS01-20261016-000004",
+        "official_document_id": 8,
+        "version": 1,
+        "version_status": "SIGNED",
+        "files": [
+          {
+            "format": "docx",
+            "download_endpoint": "/official-documents/8/versions/1/download/docx",
+            "preview_endpoint": "/official-documents/8/preview/docx"
+          },
+          {
+            "format": "pdf",
+            "download_endpoint": "/official-documents/8/versions/1/download/pdf",
+            "preview_endpoint": "/official-documents/8/preview/pdf"
+          }
+        ],
+        "created_at": "2026-10-16T12:19:38.503999",
+        "finalized_at": "2026-10-16T12:19:39.119764"
+      }
+    ]
+  },
+  {
+    "cycle_id": 1,
+    "machine_id": 20,
+    "batch_id": 1,
+    "documents": [
+      {
+        "document_type": "TRANSFER_RETURN",
+        "document_number": "QA_TRANSFERS01-20261016-000001-R",
+        "official_document_id": 5,
+        "version": 1,
+        "version_status": "SIGNED",
+        "files": [
+          {
+            "format": "docx",
+            "download_endpoint": "/official-documents/5/versions/1/download/docx",
+            "preview_endpoint": "/official-documents/5/preview/docx"
+          },
+          {
+            "format": "pdf",
+            "download_endpoint": "/official-documents/5/versions/1/download/pdf",
+            "preview_endpoint": "/official-documents/5/preview/pdf"
+          }
+        ],
+        "created_at": "2026-10-16T12:19:37.041777",
+        "finalized_at": "2026-10-16T12:19:37.603062"
+      },
+      {
+        "document_type": "TRANSFER_ISSUE",
+        "document_number": "QA_TRANSFERS01-20261016-000001",
+        "official_document_id": 1,
+        "version": 1,
+        "version_status": "SIGNED",
+        "files": [
+          {
+            "format": "docx",
+            "download_endpoint": "/official-documents/1/versions/1/download/docx",
+            "preview_endpoint": "/official-documents/1/preview/docx"
+          },
+          {
+            "format": "pdf",
+            "download_endpoint": "/official-documents/1/versions/1/download/pdf",
+            "preview_endpoint": "/official-documents/1/preview/pdf"
+          }
+        ],
+        "created_at": "2026-10-16T12:19:34.511905",
+        "finalized_at": "2026-10-16T12:19:35.856011"
+      }
+    ]
+  }
+]
