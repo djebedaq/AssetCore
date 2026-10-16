@@ -19,7 +19,7 @@ from ..models import (
     User,
     utcnow,
 )
-from ..permissions import Permission, has_permission
+from ..permissions import Permission, ensure_request_draft_editor, has_permission
 from ..workflow import business_conflict
 
 OFFICIAL_DOCUMENT_STATUSES = frozenset(
@@ -174,6 +174,8 @@ def submit_for_approval(
             current_status=request.status,
         )
     resolved_line_count = len(request.lines) if line_count is None else line_count
+    if request.request_kind == "FREE_FORM":
+        ensure_request_draft_editor(user, request.requested_by_id)
     if resolved_line_count < 1:
         raise business_conflict(
             "part_request_has_no_lines", "Заявката няма редове с части."

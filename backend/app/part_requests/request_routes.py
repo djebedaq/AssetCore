@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ..audit import add_audit_log
 from ..database import get_db
 from ..models import AuditLog, PartRequest, PartRequestLine, RequestDeliveryEvent, User, utcnow
-from ..permissions import Permission, can_edit_request_draft, require_permission
+from ..permissions import Permission, ensure_request_draft_editor, require_permission
 from ..persistence import _commit
 from ..workflow import business_conflict
 from .official import canonical_hash, ensure_editable, quantity, received, record_receipt, utc_iso
@@ -157,8 +157,7 @@ def edit_free_form(
 ):
     request = required(db, request_id)
     ensure_editable(request)
-    if not can_edit_request_draft(user, request.requested_by_id):
-        raise HTTPException(403, detail={"code": "request_draft_edit_forbidden"})
+    ensure_request_draft_editor(user, request.requested_by_id)
     if request.request_kind != "FREE_FORM" or request.status != "DRAFT":
         raise business_conflict(
             "request_not_editable_draft", "Редакция е допустима само за чернова на свободна заявка."

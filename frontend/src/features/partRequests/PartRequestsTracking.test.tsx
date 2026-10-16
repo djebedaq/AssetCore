@@ -54,6 +54,24 @@ describe('Заявени части tracking', () => {
     vi.unstubAllGlobals()
   })
 
+  it.each([
+    { role: 'mechanic', id: 4, allowed: true },
+    { role: 'mechanic', id: 9, allowed: false },
+    { role: 'director', id: 9, allowed: false },
+    { role: 'administrator', id: 9, allowed: true },
+  ])('limits all free-form draft controls for $role ($id)', async ({ role, id, allowed }) => {
+    setSessionUser({ id, role, permissions: ['requests.view', 'requests.create'] } as UserSession)
+    vi.stubGlobal('fetch', vi.fn(async () => response([
+      { ...request, request_kind: 'FREE_FORM', status: 'DRAFT', documents: [] },
+    ])))
+    withWorkspaceRoutes(vi.mocked(fetch))
+    const view = render(<I18nProvider initialLocale="bg"><PartRequestsTracking /></I18nProvider>)
+    await screen.findByText('Verified source description')
+    expect(!!screen.queryByRole('button', { name: 'Редактиране на свободна заявка' })).toBe(allowed)
+    expect(!!screen.queryByRole('button', { name: 'Подай за одобрение' })).toBe(allowed)
+    expect(view.container.querySelectorAll('input[type="file"]')).toHaveLength(allowed ? 1 : 0)
+  })
+
   it('is history-first, shows required data, and hides approval from a mechanic', async () => {
     setSessionUser({ role: 'mechanic', permissions: ['requests.view', 'requests.create', 'parts.view', 'documents.view', 'documents.generate'] } as UserSession)
     vi.stubGlobal('fetch', vi.fn(async () => response([

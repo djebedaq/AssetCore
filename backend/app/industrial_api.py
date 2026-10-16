@@ -146,6 +146,7 @@ from .part_requests.visual_snapshots import capture_snapshot, create_request_lin
 from .permissions import (
     Permission,
     ensure_permission,
+    ensure_request_draft_editor,
     is_observer,
     require_permission,
 )
@@ -1486,6 +1487,8 @@ def add_part_request_attachment(
     if request_item is None:
         raise HTTPException(404, "Заявката не е намерена.")
     ensure_editable(request_item)
+    if request_item.request_kind == "FREE_FORM":
+        ensure_request_draft_editor(user, request_item.requested_by_id)
     filename, content = _decode_file(payload)
     item = PartRequestAttachment(
         request_id=request_item.id,

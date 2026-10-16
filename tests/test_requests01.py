@@ -214,6 +214,8 @@ def test_delivery_correction_cancellation(client, auth_headers):
 
 @pytest.mark.parametrize("role", ["mechanic", "director", "administrator"])
 def test_free_form_draft_ownership(client, auth_headers, session_factory, role):
+    import base64
+
     from test_part_request_canonical_workflow import _add_user, _login
 
     email = f"qa-draft-{role}@assetcore.test"
@@ -226,6 +228,21 @@ def test_free_form_draft_ownership(client, auth_headers, session_factory, role):
         json=payload(reason="QA attempted edit"),
     )
     assert response.status_code == (200 if role == "administrator" else 403)
+    with fitz.open() as document:
+        document.new_page()
+        content = base64.b64encode(document.tobytes()).decode()
+    attachment = client.post(
+        f"/api/part-requests/{item['id']}/attachments",
+        headers=other,
+        json={"filename": "qa.pdf", "media_type": "application/pdf", "content_base64": content},
+    )
+    assert attachment.status_code == (201 if role == "administrator" else 403)
+    submitted = client.post(f"/api/part-requests/{item['id']}/submit", headers=other)
+    assert submitted.status_code == (200 if role == "administrator" else 403)
+    with session_factory() as db:
+        saved = db.get(PartRequest, item["id"])
+        assert len(saved.attachments) == (1 if role == "administrator" else 0)
+        assert saved.status == ("WAITING_APPROVAL" if role == "administrator" else "DRAFT")
     # Read access and the creator's ability to edit remain available.
     assert client.get(f"/api/part-requests/{item['id']}/history", headers=other).status_code == 200
     own = create(client, other)
@@ -237,6 +254,7 @@ def test_free_form_draft_ownership(client, auth_headers, session_factory, role):
         ).status_code
         == 200
     )
+    assert client.post(f"/api/part-requests/{own['id']}/submit", headers=other).status_code == 200
 
 
 @pytest.mark.parametrize(

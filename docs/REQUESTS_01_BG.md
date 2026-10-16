@@ -22,7 +22,9 @@ LibreOffice е необходим и в Development; при липса одоб�
 запазват със статус FAILED за retry, без различен резервен PDF renderer.
 
 Редакцията на свободна чернова изисква REQUESTS_CREATE и собственост или
-administrator. Общите права за преглед и одобрение са запазени. След CANCELLED
+administrator. Общите права за преглед и одобрение са запазени.
+Същото ограничение важи за приложенията и подаването на свободна чернова;
+каталожните потоци запазват общите си права. След CANCELLED
 сторнирането на доставка връща 409 преди запис или idempotent replay. UI
 прилага същите ограничения; решаващите проверки остават в API.
 
@@ -34,6 +36,11 @@ administrator. Общите права за преглед и одобрение
   **46 passed**.
 - Целевите frontend проверки: 14 passed за ownership/form/tracking и 6 passed
   за ownership и ограниченията на delivery history.
+- След затваряне на пътищата за приложения/подаване:
+  `python -m pytest -q --tb=short --disable-warnings -p no:cacheprovider tests/test_requests01.py::test_free_form_draft_ownership tests/test_part_request_canonical_workflow.py`
+  — 11 passed; отделно `tests/test_authorization_web_security.py` — 13 passed.
+  `pnpm test src/features/partRequests/PartRequestsTracking.test.tsx src/permissions.requests.test.ts`
+  — 16 passed; typecheck, lint и authorization inventory са успешни.
 - `pnpm typecheck`, `pnpm lint`, пълният `ruff check` и `git diff --check`:
   успешни след корекциите.
 - Каноничният `render_docx.py` рендерира оригинала, KK1000 и BG/EN/RU
