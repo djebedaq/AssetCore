@@ -20,6 +20,7 @@ from ..audit import add_audit_log
 from ..models import DocumentType, GeneratedDocument, PartVisualArtifact
 from ..part_requests.official import canonical_hash, capture_data
 from ..template_engine import source_bytes
+from . import company_header, request_layout_v2
 from .part_request_documents import OFFICIAL_HEADER, _part_request_line_description
 from .part_request_grouped_visuals import (
     append_docx,
@@ -140,7 +141,23 @@ def _meta(data):
     return result
 
 
-def build_docx(data, template_content, appendix=None, *, header_content=None):
+def build_docx(data, template_content, appendix=None, *, header_content=None, resources=None):
+    if data.get("document_layout_version") == 2:
+        resources = resources if resources is not None else company_header.current_resources()
+        company_header.verify(resources, data["company_header"])
+        return request_layout_v2.build_docx(
+            data,
+            template_content,
+            rows=_rows(data),
+            meta=_meta(data),
+            date=_date(data),
+            resources=resources,
+            appendix=appendix,
+        )
+    return _legacy_build_docx(data, template_content, appendix, header_content=header_content)
+
+
+def _legacy_build_docx(data, template_content, appendix=None, *, header_content=None):
     document = Document(io.BytesIO(template_content))
     _clear_body(document)
     section = document.sections[0]
@@ -199,7 +216,21 @@ def build_docx(data, template_content, appendix=None, *, header_content=None):
     )
 
 
-def build_pdf(data, appendix=None, *, preview=False, header_content=None):
+def build_pdf(
+    data, appendix=None, *, preview=False, header_content=None, resources=None, docx=None
+):
+    if data.get("document_layout_version") == 2:
+        docx = docx if docx is not None else build_docx(data, None, appendix, resources=resources)
+        return request_layout_v2.build_pdf(
+            data,
+            docx,
+            preview=preview,
+            watermark=LABELS[data["language"]][3],
+        )
+    return _legacy_build_pdf(data, appendix, preview=preview, header_content=header_content)
+
+
+def _legacy_build_pdf(data, appendix=None, *, preview=False, header_content=None):
     _, _, body, label, title, small = _pdf_styles()
     output = io.BytesIO()
     pdf = SimpleDocTemplate(
@@ -343,8 +374,21 @@ def archive(db, request, actor):
     document_snapshot = {**snapshot.data, "approval_snapshot_sha256": snapshot.sha256}
     if appendix is not None:
         document_snapshot["visual_appendix"] = appendix_manifest(appendix)
-    docx = build_docx(snapshot.data, content, appendix, header_content=header.content)
-    pdf = build_pdf(snapshot.data, appendix, header_content=header.content)
+    resources = None
+    if snapshot.data.get("document_layout_version") == 2:
+        resources = {}
+        for name, evidence in snapshot.data["company_header"]["parts"].items():
+            resource = db.get(PartVisualArtifact, evidence["sha256"])
+            if resource is None or resource.byte_length != len(resource.content):
+                raise ValueError("approval_company_header_integrity_failed")
+            resources[name] = resource.content
+        company_header.verify(resources, snapshot.data["company_header"])
+    docx = build_docx(
+        snapshot.data, content, appendix, header_content=header.content, resources=resources
+    )
+    pdf = build_pdf(
+        snapshot.data, appendix, header_content=header.content, resources=resources, docx=docx
+    )
     _register_official_version(
         db,
         number=snapshot.official_number,

@@ -192,9 +192,51 @@ def test_delivery_correction_cancellation(client, auth_headers):
     )
     assert body["status"] == "CANCELLED" and len(body["delivery_events"]) == 3
     assert body["lines"][0]["received_quantity"] == "0.1"
+    for key, identifier in (
+        ("qa-after-cancel", again.json()["delivery_events"][-1]["id"]),
+        ("qa-reverse", event_id),
+    ):
+        blocked = client.post(
+            url + f"/deliveries/{identifier}/reverse",
+            headers=auth_headers,
+            json={"idempotency_key": key, "reason": "QA корекция"},
+        )
+        assert blocked.status_code == 409
+        assert blocked.json()["detail"]["code"] == "cancelled_request_delivery_locked"
+    unchanged = client.get("/api/part-requests/multi", headers=auth_headers).json()
+    saved = next(row for row in unchanged if row["id"] == item["id"])
+    assert saved["status"] == "CANCELLED" and saved["delivery_events"] == body["delivery_events"]
+    assert saved["lines"][0]["received_quantity"] == "0.1"
     for endpoint, content in original_files.items():
         response = client.get(f"/api{endpoint}", headers=auth_headers)
         assert response.status_code == 200 and response.content == content
+
+
+@pytest.mark.parametrize("role", ["mechanic", "director", "administrator"])
+def test_free_form_draft_ownership(client, auth_headers, session_factory, role):
+    from test_part_request_canonical_workflow import _add_user, _login
+
+    email = f"qa-draft-{role}@assetcore.test"
+    _add_user(session_factory, email=email, role=role)
+    other = _login(client, email)
+    item = create(client, auth_headers)
+    response = client.put(
+        f"/api/part-requests/{item['id']}/free-form",
+        headers=other,
+        json=payload(reason="QA attempted edit"),
+    )
+    assert response.status_code == (200 if role == "administrator" else 403)
+    # Read access and the creator's ability to edit remain available.
+    assert client.get(f"/api/part-requests/{item['id']}/history", headers=other).status_code == 200
+    own = create(client, other)
+    assert (
+        client.put(
+            f"/api/part-requests/{own['id']}/free-form",
+            headers=other,
+            json=payload(),
+        ).status_code
+        == 200
+    )
 
 
 @pytest.mark.parametrize(
@@ -359,7 +401,7 @@ def test_documents_all_languages(client, auth_headers, language):
                 "DESCRIPTION",
                 "Q'TY ordered",
             ]
-            assert "KK1000" in " ".join(p.text for p in document.paragraphs)
+            assert "KK1000" in " ".join(cell.text for cell in document.tables[-1].rows[0].cells)
 
 
 def test_all_request_kinds_share_the_sequence_and_search(client, auth_headers, session_factory):
@@ -451,11 +493,10 @@ def test_approval_retains_header_bytes_across_render_retry(
 ):
     import zipfile
 
-    from app.documents import request_issue_documents
-    from app.documents.part_request_documents import OFFICIAL_HEADER
-    from PIL import Image
+    from app.documents import company_header, request_issue_documents
 
-    original_header_hash = hashlib.sha256(OFFICIAL_HEADER.read_bytes()).hexdigest()
+    original_resources = company_header.current_resources()
+    original_hashes = {hashlib.sha256(value).hexdigest() for value in original_resources.values()}
     renderer = request_issue_documents.build_pdf
     monkeypatch.setattr(
         request_issue_documents,
@@ -464,16 +505,19 @@ def test_approval_retains_header_bytes_across_render_retry(
     )
     item = approve(client, auth_headers, create(client, auth_headers, submit_for_approval=True))
     assert item["generation_status"] == "FAILED"
-    changed = tmp_path / "qa-other-header.png"
-    Image.new("RGB", (100, 20), "red").save(changed)
-    changed_hash = hashlib.sha256(changed.read_bytes()).hexdigest()
-    monkeypatch.setattr(request_issue_documents, "OFFICIAL_HEADER", changed)
+
+    # Retry must need neither the current resources nor the current approved template.
+    def unavailable():
+        raise AssertionError("active header resources must not be read on retry")
+
+    monkeypatch.setattr(company_header, "current_resources", unavailable)
+    monkeypatch.setattr(request_issue_documents, "_template_version", unavailable)
     monkeypatch.setattr(request_issue_documents, "build_pdf", renderer)
     retry = client.post(f"/api/part-requests/{item['id']}/documents", headers=auth_headers)
     assert retry.status_code == 201 and retry.json()["generation_status"] == "READY"
     with session_factory() as db:
         record = db.scalar(select(GeneratedDocument).where(GeneratedDocument.format == "docx"))
-        assert record.snapshot["header_image_sha256"] == original_header_hash
+        assert record.snapshot["company_header"] == company_header.manifest(original_resources)
         import io
 
         with zipfile.ZipFile(io.BytesIO(record.content)) as archive:
@@ -482,7 +526,30 @@ def test_approval_retains_header_bytes_across_render_retry(
                 for name in archive.namelist()
                 if name.startswith("word/media/")
             }
-        assert original_header_hash in hashes and changed_hash not in hashes
+        assert original_hashes <= hashes
+
+
+def test_stored_pdf_matches_docx_render(client, auth_headers, session_factory):
+    from app.template_engine import convert_docx_to_pdf
+
+    item = approve(client, auth_headers, create(client, auth_headers, submit_for_approval=True))
+    with session_factory() as db:
+        records = {
+            row.format: row.content
+            for row in db.scalars(
+                select(GeneratedDocument).where(GeneratedDocument.part_request_id == item["id"])
+            )
+        }
+        independently_rendered = convert_docx_to_pdf(records["docx"])
+        assert independently_rendered is not None
+        with (
+            fitz.open(stream=records["pdf"], filetype="pdf") as pdf,
+            fitz.open(stream=independently_rendered, filetype="pdf") as docx,
+        ):
+            assert len(pdf) == len(docx)
+            for stored, converted in zip(pdf, docx, strict=True):
+                assert stored.get_pixmap().samples == converted.get_pixmap().samples
+                assert "EST 1955" in stored.get_text()
 
 
 def test_export_review_examples(client, auth_headers):

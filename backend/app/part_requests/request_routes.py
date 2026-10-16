@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from ..audit import add_audit_log
 from ..database import get_db
 from ..models import AuditLog, PartRequest, PartRequestLine, RequestDeliveryEvent, User, utcnow
-from ..permissions import Permission, require_permission
+from ..permissions import Permission, can_edit_request_draft, require_permission
 from ..persistence import _commit
 from ..workflow import business_conflict
 from .official import canonical_hash, ensure_editable, quantity, received, record_receipt, utc_iso
@@ -157,6 +157,8 @@ def edit_free_form(
 ):
     request = required(db, request_id)
     ensure_editable(request)
+    if not can_edit_request_draft(user, request.requested_by_id):
+        raise HTTPException(403, detail={"code": "request_draft_edit_forbidden"})
     if request.request_kind != "FREE_FORM" or request.status != "DRAFT":
         raise business_conflict(
             "request_not_editable_draft", "Редакция е допустима само за чернова на свободна заявка."
@@ -256,6 +258,10 @@ def reverse_delivery(
 ):
     request = required(db, request_id)
     digest = canonical_hash({**payload.model_dump(), "event_id": event_id})
+    if request.status == "CANCELLED":
+        raise business_conflict(
+            "cancelled_request_delivery_locked", "Доставките на отменена заявка са заключени."
+        )
     if _existing(request, payload.idempotency_key, digest):
         return output(request, db)
     original = next((e for e in request.delivery_events if e.id == event_id), None)

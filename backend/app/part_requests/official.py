@@ -56,11 +56,14 @@ def quantity(line):
 
 
 def capture_data(request):
+    from ..documents import company_header
     from ..documents.part_request_documents import OFFICIAL_HEADER, _request_snapshot
 
     data = _request_snapshot(request)
     data["header_image_sha256"] = hashlib.sha256(OFFICIAL_HEADER.read_bytes()).hexdigest()
     data["header_reference"] = OFFICIAL_HEADER.name
+    data["document_layout_version"] = 2
+    data["company_header"] = company_header.manifest()
     data["repair_kit_id"], data["repair_kit_mode"] = request.repair_kit_id, request.repair_kit_mode
     data["submitted_at"], data["decided_at"] = (
         utc_iso(request.submitted_at),
@@ -183,6 +186,20 @@ def issue_number(db, request):
         .values(sha256=data["header_image_sha256"], content=header, byte_length=len(header))
         .on_conflict_do_nothing()
     )
+    from ..documents import company_header
+
+    resources = company_header.current_resources()
+    company_header.verify(resources, data["company_header"])
+    for name, resource in resources.items():
+        db.execute(
+            insert(PartVisualArtifact)
+            .values(
+                sha256=data["company_header"]["parts"][name]["sha256"],
+                content=resource,
+                byte_length=len(resource),
+            )
+            .on_conflict_do_nothing()
+        )
     approved_at = datetime.now(UTC)
     data.update(
         {

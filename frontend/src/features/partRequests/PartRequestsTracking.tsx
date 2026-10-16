@@ -22,7 +22,7 @@ import {
   friendlyError,
 } from '../../industrialUi'
 import { statusText, useI18n, type TranslationKey } from '../../i18n'
-import { hasPermission } from '../../permissions'
+import { canEditRequestDraft, hasPermission } from '../../permissions'
 import type { CatalogPartEnhanced, MultiPartRequest } from '../../types'
 import { notifyPartRequestsChanged } from './partRequestEvents'
 import {
@@ -216,7 +216,7 @@ export function PartRequestsTracking({ initialRecordId }: { initialRecordId?: nu
       {request.attachments.length > 0 && <details><summary>{t('requests.attachments')} ({request.attachments.length})</summary><AttachmentList items={request.attachments} /></details>}
       <div className="request-actions">
         {!request.official_number && ['DRAFT', 'WAITING_APPROVAL', 'REJECTED', 'SUBMITTED'].includes(request.status) && <RequestPreviewButton requestId={request.id} />}
-        {request.request_kind === 'FREE_FORM' && request.status === 'DRAFT' && hasPermission('requests.create') && <button className="secondary" onClick={() => setEditing(request)}>{t('requests01.edit')}</button>}
+        {request.request_kind === 'FREE_FORM' && request.status === 'DRAFT' && canEditRequestDraft(request.requested_by_id) && <button className="secondary" onClick={() => setEditing(request)}>{t('requests01.edit')}</button>}
         {request.official_number && ['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.create') && <button className="secondary" onClick={() => setDelivery(request)}>{t('requests01.delivery')}</button>}
         {['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.approve') && <button className="secondary" onClick={() => setCancelling(request)}>{t('requests01.cancel')}</button>}
 

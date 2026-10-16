@@ -81,6 +81,6 @@ export function RequestDeliveryHistory({ request, onSaved }: { request: MultiPar
   return <>{error && <div className="error" role="alert">{t('requests.fulfillmentError')}</div>}{!!request.delivery_events?.length && <details><summary>{t('requests01.deliveryHistory')} ({request.delivery_events.length})</summary>{request.delivery_events.map(event => <div className="request-delivery-event" key={event.id}>
     <b>{t(event.kind === 'RECEIPT' ? 'requests01.RECEIPT' : 'requests01.CORRECTION')}</b><span>{event.actor_name} · {date(event.occurred_at)} · {event.supplier}</span>
     {Object.entries(event.quantities).map(([id, quantity]) => <small key={id}>{request.lines.find(line => line.id === Number(id))?.description}: {formatExactPartQuantity(quantity, locale)}</small>)}{event.note && <p>{event.note}</p>}
-    {event.kind === 'RECEIPT' && !request.delivery_events?.some(other => other.correction_of_id === event.id) && hasPermission('requests.create') && <button className="secondary compact" disabled={busy} onClick={() => void reverse(event.id)}>{t('requests01.reverse')}</button>}
+    {request.status !== 'CANCELLED' && event.kind === 'RECEIPT' && !request.delivery_events?.some(other => other.correction_of_id === event.id) && hasPermission('requests.create') && <button className="secondary compact" disabled={busy} onClick={() => void reverse(event.id)}>{t('requests01.reverse')}</button>}
   </div>)}</details>}</>
 }

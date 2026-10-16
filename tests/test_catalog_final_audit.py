@@ -10,7 +10,7 @@ from app.catalog import service as runtime_service
 from app.catalog.importer import import_authoritative_catalog
 from app.catalog.runtime_context import require_compatible_part
 from app.catalog.sources import CATALOG_VERSION
-from app.documents import part_request_documents
+from app.documents import request_layout_v2
 from app.documents.part_request_grouped_visuals import prepare_appendix
 from app.models import (
     CatalogDefinition,
@@ -168,14 +168,14 @@ def test_late_binding_shared_revision_documents_and_repeated_seed(
     client, auth_headers, session_factory, monkeypatch, tmp_path,
 ):
     converted = []
-    converter = part_request_documents.convert_docx_to_pdf
+    converter = request_layout_v2.convert_docx_to_pdf
 
     def actual_conversion(content):
         result = converter(content)
         converted.append(result is not None)
         return result
 
-    monkeypatch.setattr(part_request_documents, "convert_docx_to_pdf", actual_conversion)
+    monkeypatch.setattr(request_layout_v2, "convert_docx_to_pdf", actual_conversion)
     catalog_id, revision_id, _, _, part_id, scheme_id = _draft(client, auth_headers, session_factory)
     hotspot = client.post(f"{BASE}/visual-pages/{scheme_id}/hotspots", headers=auth_headers,
                           json={"position": "P" * 80, "x": .2, "y": .3, "width": .1, "height": .1})
@@ -235,7 +235,7 @@ def test_late_binding_shared_revision_documents_and_repeated_seed(
                     assert any(cell.text == "P" * 80 for table in document.tables
                                for row in table.rows for cell in row.cells)
         if shutil.which("soffice"):
-            assert converted == []  # Preview and official KK PDF use the same renderer.
+            assert converted == [True, True]  # Each official PDF uses its archived DOCX.
         # Initialization and import may touch only their own operational records.
         for _ in range(2):
             seed_database(db)

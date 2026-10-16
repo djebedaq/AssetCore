@@ -41,7 +41,7 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -54,6 +54,8 @@ jobs:
             backend/requirements.txt
             backend/requirements-dev.txt
             backend/requirements-ci.txt
+      - name: Install the official DOCX/PDF converter
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-dejavu fonts-liberation
       - run: python -m pip install -r backend/requirements.txt -r backend/requirements-ci.txt
       - run: python -m pip check
       - name: Python dependency security (high/critical/unknown gate)
@@ -97,6 +99,8 @@ jobs:
       - run: corepack enable
       - run: pnpm install --frozen-lockfile && pnpm build
         working-directory: frontend
+      - name: Install the official DOCX/PDF converter
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer fonts-dejavu fonts-liberation
       - run: python -m pip install -r backend/requirements.txt -r backend/requirements-ci.txt
       - name: Export REQUESTS-01 examples from a disposable test database
         env:
@@ -177,7 +181,7 @@ jobs:
       - name: Install explicitly versioned PostgreSQL 16 clients
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client-16
+          sudo apt-get install -y --no-install-recommends postgresql-client-16 libreoffice-writer fonts-dejavu fonts-liberation
           echo '/usr/lib/postgresql/16/bin' >> "$GITHUB_PATH"
       - run: python -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt
       - name: Assert PostgreSQL 16 client contract
