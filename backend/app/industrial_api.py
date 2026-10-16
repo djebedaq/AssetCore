@@ -8,6 +8,7 @@ import json
 import mimetypes
 import time
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
@@ -112,6 +113,7 @@ from .models import (
     RepairPart,
     RepairParticipant,
     RepairStatus,
+    RequestApprovalSnapshot,
     TechnicalDocument,
     TechnicalDocumentRevision,
     TransferBatch,
@@ -129,11 +131,22 @@ from .part_requests import (
     pending_action_count,
     submit_for_approval,
 )
+from .part_requests.official import (
+    canonical_hash,
+    ensure_editable,
+    presentation,
+    quantity,
+    received,
+    record_receipt,
+    utc_iso,
+)
+from .part_requests.request_routes import router as requests_router
 from .part_requests.visual_routes import router as visual_snapshot_router
 from .part_requests.visual_snapshots import capture_snapshot, create_request_line, snapshot_response
 from .permissions import (
     Permission,
     ensure_permission,
+    ensure_request_draft_editor,
     is_observer,
     require_permission,
 )
@@ -153,6 +166,7 @@ from .workflow import (
 
 router = APIRouter(prefix="/api", tags=["industrial-platform"])
 router.include_router(visual_snapshot_router)
+router.include_router(requests_router)
 
 PROTECTED_HPWJ_NUMBERS = {
     "4", "5", "7", "8", "9", "10", "11", "13", "14", "15", "16",
@@ -357,13 +371,16 @@ def _load_repair(db: Session, repair_id: int, *, lock: bool = False) -> Repair:
 
 
 def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) -> dict:
+    totals = received(item) if item.approval_snapshot else {}
+    frozen = item.approval_snapshot.data if item.approval_snapshot else {}
     return {
+        **presentation(item),
         "id": item.id,
         "request_reference": item.request_reference or f"PR-{item.id:06d}",
         "machine_id": item.machine_id,
-        "machine_number": item.machine.inventory_number if item.machine else None,
+        "machine_number": frozen.get("machine_number") or (item.machine.inventory_number if item.machine else None),
         "repair_id": item.repair_id,
-        "repair_reference": item.repair.repair_reference if item.repair else None,
+        "repair_reference": frozen.get("repair_reference") or (item.repair.repair_reference if item.repair else None),
         "repair_kit_id": item.repair_kit_id,
         "repair_kit_mode": item.repair_kit_mode,
         "priority": item.priority,
@@ -371,17 +388,17 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
         "language": item.language,
         "reason": item.reason,
         "requested_by_id": item.requested_by_id,
-        "requested_by_name": item.requested_by.full_name if item.requested_by else None,
-        "decided_by_name": item.decided_by.full_name if item.decided_by else None,
-        "submitted_at": item.submitted_at,
-        "decided_at": item.decided_at,
+        "requested_by_name": frozen.get("requested_by_name") or (item.requested_by.full_name if item.requested_by else None),
+        "decided_by_name": frozen.get("approved_by_name") or (item.decided_by.full_name if item.decided_by else None),
+        "submitted_at": utc_iso(item.submitted_at),
+        "decided_at": utc_iso(item.decided_at),
         "decision_note": item.decision_note,
         "department": item.department,
         "supplier": item.supplier,
         "delivery_note": item.delivery_note,
         "ordered_at": item.ordered_at,
         "delivered_at": item.delivered_at,
-        "created_at": item.created_at,
+        "created_at": utc_iso(item.created_at),
         "quantity_compatibility": part_request_quantity_compatibility(item),
         "lines": [
             {
@@ -392,11 +409,14 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
                 "part_number": line.part_number,
                 "description": line.description,
                 "quantity": line.quantity,
+                "exact_quantity": str(quantity(line)),
+                "received_quantity": str(totals.get(line.id, line.delivered_quantity)),
+                "remaining_quantity": str(quantity(line) - totals.get(line.id, Decimal(str(line.delivered_quantity)))),
                 "unit": line.unit,
                 "reason": line.reason,
                 "source_document": line.source_document,
                 "source_page": line.source_page,
-                "delivered_quantity": line.delivered_quantity,
+                "delivered_quantity": float(totals[line.id]) if item.approval_snapshot else line.delivered_quantity,
                 "is_unknown_part": line.is_unknown_part,
                 "assembly": line.assembly,
                 "note": line.note,
@@ -417,7 +437,7 @@ def _part_request_dict(item: PartRequest, documents: list[GeneratedDocument]) ->
                 "note": approval.note,
                 "decided_by_id": approval.decided_by_id,
                 "decided_by_name": approval.decided_by.full_name if approval.decided_by else None,
-                "decided_at": approval.decided_at,
+                "decided_at": utc_iso(approval.decided_at),
             }
             for approval in item.approvals
         ],
@@ -1223,7 +1243,7 @@ def create_multi_part_request(
     first_catalog = catalog_parts.get(first.catalog_part_id) if first.catalog_part_id else None
     first_name = kit.name if kit and payload.repair_kit_mode == "KIT" else first_catalog.description if first_catalog else first.description
     first_number = kit.code if kit and payload.repair_kit_mode == "KIT" else (first_catalog.replaced_by_part_number or first_catalog.part_number) if first_catalog else first.part_number
-    request_item = PartRequest(machine_id=resolved_machine_id, repair_id=payload.repair_id, repair_kit_id=payload.repair_kit_id, repair_kit_mode=payload.repair_kit_mode if kit else None, part_name=first_name, part_number=first_number, quantity=first.quantity, reason=payload.reason, department=payload.department, priority=payload.priority.value, status=PartRequestStatus.DRAFT.value, language=payload.language.value, requested_by_id=user.id)
+    request_item = PartRequest(request_kind="REPAIR_KIT" if payload.repair_kit_id else "CATALOG", machine_id=resolved_machine_id, repair_id=payload.repair_id, repair_kit_id=payload.repair_kit_id, repair_kit_mode=payload.repair_kit_mode if kit else None, part_name=first_name, part_number=first_number, quantity=first.quantity, reason=payload.reason, department=payload.department, priority=payload.priority.value, status=PartRequestStatus.DRAFT.value, language=payload.language.value, requested_by_id=user.id)
     db.add(request_item)
     db.flush()
     request_item.request_reference = f"PR-{request_item.created_at:%Y}-{request_item.id:06d}"
@@ -1284,6 +1304,7 @@ def create_unknown_part_request(
             },
         )
     request_item = PartRequest(
+        request_kind="UNKNOWN_PART",
         machine_id=machine.id,
         repair_id=repair.id if repair else None,
         part_name="Част без потвърден part number",
@@ -1368,6 +1389,7 @@ def link_unknown_part_to_catalog(
     request_item = load_request(db, request_id, lock=True)
     if request_item is None:
         raise HTTPException(404, "Заявката не е намерена.")
+    ensure_editable(request_item)
     line = next((value for value in request_item.lines if value.id == line_id), None)
     if line is None:
         raise HTTPException(404, "Редът на заявката не е намерен.")
@@ -1461,9 +1483,12 @@ def add_part_request_attachment(
     user: User = Depends(require_parts_operator),
     db: Session = Depends(get_db),
 ) -> dict:
-    request_item = db.get(PartRequest, request_id)
+    request_item = load_request(db, request_id, lock=True)
     if request_item is None:
         raise HTTPException(404, "Заявката не е намерена.")
+    ensure_editable(request_item)
+    if request_item.request_kind == "FREE_FORM":
+        ensure_request_draft_editor(user, request_item.requested_by_id)
     filename, content = _decode_file(payload)
     item = PartRequestAttachment(
         request_id=request_item.id,
@@ -1538,8 +1563,13 @@ def decide_part_request(
         raise HTTPException(404, "Заявката не е намерена.")
     decide_request(db, item, user, payload.decision, payload.note)
     _commit(db)
-    db.refresh(item)
-    return _part_request_dict(item, [])
+    documents = []
+    if item.approval_snapshot is not None:
+        from .documents.request_issue_documents import generate_safely
+        item = load_request(db, request_id, lock=True)
+        documents = generate_safely(db, item, user)
+        _commit(db)
+    return _part_request_dict(item, documents)
 
 
 @router.patch("/part-requests/{request_id}/fulfillment")
@@ -1552,6 +1582,61 @@ def update_part_request_fulfillment(
     item = load_request(db, request_id, lock=True)
     if item is None:
         raise HTTPException(404, "Заявката не е намерена.")
+    if payload.status == "CANCELLED":
+        from .part_requests.request_routes import cancel
+        from .part_requests.request_schemas import RequestCancel
+        ensure_permission(user, Permission.REQUESTS_APPROVE)
+        if payload.lines and part_request_quantity_compatibility(item)["status"] == "LEGACY_FRACTIONAL":
+            raise business_conflict("legacy_fractional_cancellation_requires_no_line_updates", "Отмяната не допуска промяна на историческите редове.")
+        if not payload.confirmed or not (payload.note or "").strip() or payload.lines:
+            raise business_conflict("cancellation_confirmation_required", "Потвърдете отмяната и посочете причина без промяна на редове.")
+        cancel(db, item, user, RequestCancel(confirmed=True, reason=payload.note,
+                                           replacement_request_id=payload.replacement_request_id))
+        _commit(db)
+        return _part_request_dict(item, [])
+    if item.approval_snapshot is not None:
+        from .part_requests.request_routes import _status
+        allowed_next = {"APPROVED": {"ORDERED"}, "ORDERED": {"PARTIALLY_DELIVERED", "DELIVERED"},
+                        "PARTIALLY_DELIVERED": {"PARTIALLY_DELIVERED", "DELIVERED"}}
+        if payload.status not in allowed_next.get(item.status, set()):
+            raise business_conflict("invalid_part_request_status_transition", "Преходът на заявката към избрания статус не е разрешен.")
+        totals = received(item)
+        lines = {line.id: line for line in item.lines}
+        prospective = dict(totals)
+        deltas = {}
+        for update in payload.lines:
+            if update.line_id not in lines:
+                raise business_conflict("part_request_line_mismatch", "Подаден е чужд ред.")
+            target = Decimal(update.delivered_quantity)
+            if target < totals[update.line_id] or target > quantity(lines[update.line_id]):
+                raise business_conflict("invalid_delivered_quantity", "Доставеното количество не може да намалява или да надвишава заявеното.")
+            prospective[update.line_id] = target
+            if target > totals[update.line_id]:
+                deltas[update.line_id] = target - totals[update.line_id]
+        if payload.status == "ORDERED":
+            if deltas:
+                raise business_conflict("invalid_delivered_quantity", "Поръчката не отчита доставка.")
+            item.status, item.ordered_at = "ORDERED", utcnow()
+        else:
+            complete = all(prospective[line.id] == quantity(line) for line in item.lines)
+            if payload.status == "DELIVERED" and not complete:
+                raise business_conflict("delivery_incomplete", "Не всички количества са получени.")
+            if payload.status == "PARTIALLY_DELIVERED" and (complete or not any(prospective.values())):
+                raise business_conflict("partial_delivery_quantities_invalid", "Частичната доставка изисква получено и оставащо количество.")
+            if deltas:
+                record_receipt(db, item, user, deltas, supplier=payload.supplier, note=payload.note,
+                               key="legacy-fulfillment-" + uuid4().hex,
+                               digest=canonical_hash(payload.model_dump(mode="json")))
+            _status(item)
+        if payload.supplier is not None:
+            item.supplier = payload.supplier
+        if payload.note is not None:
+            item.delivery_note = payload.note
+        add_audit_log(db, user, "part_request", item.id,
+                      "REQUEST_ORDERED" if payload.status == "ORDERED" else "REQUEST_DELIVERY_RECORDED",
+                      {"status": item.status, "source": "LEGACY_CUMULATIVE_API"}, item.approval_snapshot.official_number)
+        _commit(db)
+        return _part_request_dict(item, [])
     allowed = {
         PartRequestStatus.APPROVED.value: {
             PartRequestStatus.ORDERED.value,
@@ -1668,6 +1753,16 @@ def generate_part_request_documents(
         item = load_request(db, request_id, lock=True)
         if item is None:
             raise HTTPException(404, "Заявката не е намерена.")
+        if item.approval_snapshot is not None:
+            from .documents.request_issue_documents import generate_safely
+            if language and language != item.language:
+                raise business_conflict("approved_document_language_locked", "Езикът на одобрения документ е заключен.")
+            documents = generate_safely(db, item, user)
+            _commit(db)
+            return {"document_number": item.approval_snapshot.official_number,
+                    "generation_status": item.generation_status, "generation_error": item.generation_error,
+                    "documents": [{"id": d.id, "format": d.format, "filename": d.filename,
+                                   "download_endpoint": f"/generated-documents/{d.id}/download"} for d in documents]}
         canonical_number = item.request_reference or f"PR-{item.id:06d}"
         existing_documents = db.scalars(
             select(GeneratedDocument)
@@ -2606,6 +2701,14 @@ def download_generated_document(
     item = db.get(GeneratedDocument, document_id)
     if item is None:
         raise HTTPException(404, "Генерираният документ не е намерен.")
+    if item.part_request_id and db.get(RequestApprovalSnapshot, item.part_request_id):
+        if hashlib.sha256(item.content).hexdigest() != item.sha256:
+            raise business_conflict("request_archive_integrity_failed", "Архивираният документ не премина проверката за цялост.")
+        return Response(item.content, media_type=item.media_type, headers={
+            "Content-Disposition": f'attachment; filename="{item.filename}"',
+            "X-Content-Type-Options": "nosniff", "X-Content-SHA256": item.sha256,
+            "Cache-Control": "private, no-store",
+        })
     official = db.scalar(
         select(OfficialDocument).where(
             OfficialDocument.document_number == item.document_number
@@ -2679,7 +2782,7 @@ def global_search(
     parts = db.scalars(select(PartCatalog).where(PartCatalog.is_active.is_(True), or_(PartCatalog.part_number.ilike(term), PartCatalog.replaced_by_part_number.ilike(term), PartCatalog.alternative_part_number.ilike(term), PartCatalog.description.ilike(term), PartCatalog.name_bg.ilike(term), PartCatalog.name_en.ilike(term), PartCatalog.name_ru.ilike(term), PartCatalog.original_name.ilike(term), PartCatalog.brand.ilike(term), PartCatalog.model.ilike(term), PartCatalog.assembly.ilike(term), PartCatalog.position.ilike(term), PartCatalog.repair_kit_code.ilike(term))).limit(limit)).all()
     documents = db.scalars(select(TechnicalDocument).where(TechnicalDocument.is_active.is_(True), or_(TechnicalDocument.title.ilike(term), TechnicalDocument.brand.ilike(term), TechnicalDocument.category.ilike(term), TechnicalDocument.model.ilike(term), TechnicalDocument.extracted_text.ilike(term), TechnicalDocument.notes.ilike(term), TechnicalDocument.revision.ilike(term), TechnicalDocument.source_label.ilike(term))).limit(limit)).all()
     repairs = db.scalars(select(Repair).options(joinedload(Repair.machine)).where(or_(Repair.repair_reference.ilike(term), Repair.reported_problem.ilike(term), Repair.symptoms.ilike(term), Repair.diagnosis.ilike(term), Repair.required_work.ilike(term), Repair.work_performed.ilike(term), Repair.result.ilike(term))).limit(limit)).all()
-    requests = db.scalars(select(PartRequest).where(or_(PartRequest.request_reference.ilike(term), PartRequest.part_name.ilike(term), PartRequest.part_number.ilike(term), PartRequest.reason.ilike(term), PartRequest.lines.any(or_(PartRequestLine.part_number.ilike(term), PartRequestLine.description.ilike(term), PartRequestLine.position.ilike(term))))).limit(limit)).all()
+    requests = db.scalars(select(PartRequest).where(or_(PartRequest.approval_snapshot.has(RequestApprovalSnapshot.official_number.ilike(term)), PartRequest.request_reference.ilike(term), PartRequest.part_name.ilike(term), PartRequest.part_number.ilike(term), PartRequest.reason.ilike(term), PartRequest.lines.any(or_(PartRequestLine.part_number.ilike(term), PartRequestLine.description.ilike(term), PartRequestLine.position.ilike(term))))).limit(limit)).all()
     transfers = db.scalars(
         select(TransferProtocol)
         .options(joinedload(TransferProtocol.machine), joinedload(TransferProtocol.batch))
@@ -2717,7 +2820,7 @@ def global_search(
         "parts": [{"id": item.id, "part_number": item.part_number, "description": item.description, "brand": item.brand, "model": item.model, "assembly": item.assembly, "is_verified": item.is_verified} for item in parts],
         "documents": [{"id": item.id, "title": item.title, "brand": item.brand, "category": item.category, "download_endpoint": f"/technical-library/{item.id}/download"} for item in documents],
         "repairs": [{"id": item.id, "repair_reference": item.repair_reference, "machine_number": item.machine.inventory_number, "reported_problem": item.reported_problem, "status": item.status} for item in repairs],
-        "part_requests": [{"id": item.id, "request_reference": item.request_reference, "status": item.status, "part_name": item.part_name} for item in requests],
+        "part_requests": [{"id": item.id, "request_reference": item.request_reference, "official_number": item.approval_snapshot.official_number if item.approval_snapshot else None, "status": item.status, "part_name": item.part_name} for item in requests],
         "transfers": [{"id": item.id, "protocol_number": item.protocol_number, "batch_reference": item.batch_reference, "machine_number": item.machine.inventory_number, "company_unit": item.company_unit, "vessel": item.vessel, "location_text": item.location_text, "is_active": item.is_active} for item in transfers],
         "generated_documents": (
             [{"id": item.id, "document_number": item.document_number, "document_type": item.document_type, "format": item.format, "filename": item.filename, "download_endpoint": f"/generated-documents/{item.id}/download"} for item in generated_documents]

@@ -107,6 +107,8 @@ REFERENCE_LABELS = {
     "generated_documents": "generatedDocuments",
     "part_request_lines": "partRequests",
     "part_request_approvals": "partRequests",
+    "request_approval_snapshots": "partRequests",
+    "request_delivery_events": "partRequests",
     "part_request_attachments": "partRequests",
     "part_hotspots": "catalog",
     "repair_kits": "repairKits",

@@ -209,7 +209,7 @@ def test_simple_flow_late_binding_update_and_immutable_official_evidence(
     download = client.get(f"/api/generated-documents/{docx_id}/download", headers=auth_headers)
     assert download.status_code == 200, download.text
     document = Document(io.BytesIO(download.content))
-    assert any([cell.text for cell in table.rows[0].cells] == part_request_documents.REQUEST_HEADERS["bg"]
+    assert any([cell.text for cell in table.rows[0].cells] == ["Pos", "PART No", "DESCRIPTION", "Q'TY ordered"]
                for table in document.tables)
     draft = checked(client.post(f"{BASE}/catalogs/{catalog['id']}/edit", headers=auth_headers), 201)
     assert draft["revision_code"] == "REV-2" and draft["status"] == "DRAFT"

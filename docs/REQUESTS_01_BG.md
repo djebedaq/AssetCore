@@ -1,0 +1,248 @@
+# REQUESTS-01
+
+## Финални корекции за PR #109 — 16.10.2026
+
+Новите одобрения използват `document_layout_version=2`: оригиналните KRZ и
+ODESSOS ресурси и RINA/AQAP от утвърдения протокол, в три клетки с черна рамка
+и EST 1955. Тези три ресурса се запазват отделно в content-addressed архива,
+а хешовете, размерите и версията на шапката са част от approval snapshot.
+Retry използва архивираните ресурси и шаблон, без да чете активните им версии.
+Старите snapshots запазват стария renderer; готовите официални файлове се
+връщат със съществуващите SHA-256 проверки. Няма промяна на номерацията,
+атомарното одобрение, seed данните, source register или контролирани binaries.
+
+Оформлението следва реално рендерирания KK1031/M: серифен шрифт 12 pt,
+центрирано заглавие на два реда, бяла таблица с черни рамки и долен ред
+ENQ/DATE/Одобрил. Използва A4 като протоколите; колоната за количество е
+разширена до 30 mm, за да няма изрязването в оригинала. Свободната заявка има
+три колони; каталожната запазва PART No и техническите приложения. Официалният
+PDF се конвертира от точно архивирания DOCX чрез LibreOffice. Preview използва
+същото оформление с воден знак на всяка страница и празни номер/дата/одобрил.
+LibreOffice е необходим и в Development; при липса одобрението/номерът се
+запазват със статус FAILED за retry, без различен резервен PDF renderer.
+
+Редакцията на свободна чернова изисква REQUESTS_CREATE и собственост или
+administrator. Общите права за преглед и одобрение са запазени.
+Същото ограничение важи за приложенията и подаването на свободна чернова;
+каталожните потоци запазват общите си права. След CANCELLED
+сторнирането на доставка връща 409 преди запис или idempotent replay. UI
+прилага същите ограничения; решаващите проверки остават в API.
+
+Локална проверка с реалния конвертор в изолиран Development QA контейнер:
+
+- `python -m pytest -q --tb=short -p no:cacheprovider tests/test_requests01.py`
+  с включен QA export: **33 passed**.
+- `python -m pytest -q --tb=short -p no:cacheprovider tests/test_part_request_canonical_workflow.py tests/test_part_request_visual_appendix.py tests/test_catalog_final_audit.py tests/test_catalog_wizard.py`:
+  **46 passed**.
+- Целевите frontend проверки: 14 passed за ownership/form/tracking и 6 passed
+  за ownership и ограниченията на delivery history.
+- След затваряне на пътищата за приложения/подаване:
+  `python -m pytest -q --tb=short --disable-warnings -p no:cacheprovider tests/test_requests01.py::test_free_form_draft_ownership tests/test_part_request_canonical_workflow.py`
+  — 11 passed; отделно `tests/test_authorization_web_security.py` — 13 passed.
+  `pnpm test src/features/partRequests/PartRequestsTracking.test.tsx src/permissions.requests.test.ts`
+  — 16 passed; typecheck, lint и authorization inventory са успешни.
+- `pnpm typecheck`, `pnpm lint`, пълният `ruff check` и `git diff --check`:
+  успешни след корекциите.
+- Каноничният `render_docx.py` рендерира оригинала, KK1000 и BG/EN/RU
+  многостраничните DOCX. Независимото рендериране на KK1000 е пикселно
+  идентично с архивирания PDF. Прегледани са всички 27 страници на
+  многостраничните примери: 48 дълги реда и 9 страници на език.
+
+[QA изображения и сравнение](qa/requests01-final/README.md). Петте CI направления
+се изпълняват отново за новия commit; окончателните резултати са в Checks на
+[PR #109](https://github.com/djebedaq/AssetCore/pull/109). Числата в по-стария
+раздел по-долу са доказателства за предходната версия, а не за финалния commit.
+
+Първият CI на финалните корекции даде 1429 passed / 2 skipped / 1 failed:
+единственият отказ беше guard за увеличения backend timeout (40 вместо
+допустимите максимум 30 минути). Timeout е върнат на 30 минути; това не
+променя функционалния код или QA оформлението. Останалите четири CI направления
+минаха, включително PostgreSQL 16 с 146 passed и frontend с 644 passed.
+
+## Архитектура
+
+Основата е main с CATALOG-UX-06 (40ef775). Използват се съществуващите
+PartRequest, PartRequestLine, REQUESTS_CREATE / REQUESTS_APPROVE, одит, езикови
+шаблони, GeneratedDocument и OfficialDocument/OfficialDocumentVersion.
+
+Свободната заявка е FREE_FORM в същия workflow. Няма машина, каталожна
+позиция, part number, възел или задължителна снимка. Ограничението е 500 реда,
+4000 знака за описание, положително количество под 1 милиард с до 6
+десетични знака. Бройки, комплекти и чифтове са неделими. API приема канонични
+кодове за мерни единици; интерфейсът ги превежда на BG/EN/RU.
+
+## Миграция 0035
+
+Добавя nullable полета за изпълнение, тип на заявката и точен десетичен текст
+към редовете. Старите Float полета, историческите номера и бинарните файлове
+не се конвертират. Новите количества и доставките се изчисляват с Decimal;
+каноничният текст избягва и SQLite Numeric преобразуването през binary float.
+
+Новите таблици са:
+
+- request_number_counter: един транзакционен ред, започващ от 1000.
+- request_approval_snapshots: един неизменяем snapshot и уникален KK номер за заявка.
+- request_delivery_events: неизтриваеми доставки и сторниращи събития.
+
+Миграцията проверява исторически конфликти с KK номера, преди да променя
+схемата. При конфликт спира с REQUESTS01_HISTORICAL_KK_CONFLICT; няма автоматично
+преномериране или презаписване. Downgrade е допустим само преди използване на новата функционалност, без
+издадени номера, точни количества, събития или нови метаданни. След това е
+забранен: използва се контролирана следваща миграция, която запазва историята. Миграционният манифест пази всички
+предишни 34 хеша и добавя 0035.
+
+## Инварианти
+
+Одобрението заключва реда на заявката с FOR UPDATE OF part_requests в
+PostgreSQL. INSERT ON CONFLICT осигурява един counter, а UPDATE ... RETURNING
+взема следващото число под транзакционно заключване. Решението, номерът,
+snapshot-ът и одитът се commit-ват заедно. Rollback връща и counter-а. Повторно
+одобрение на същата заявка връща същия номер. Няма sequence, годишен reset или
+несинхронизиран MAX+1. SQLite взема writer lock преди четенето на workflow.
+
+DB triggers забраняват промяна/изтриване на snapshot, counter reset, промяна на
+официални полета и редове, добавяне/промяна на приложения след одобрение,
+презаписване на архивирани GeneratedDocument и промяна/изтриване на доставки.
+Съществуващият generic документен API не може да издава ръчно KK номер или
+да подменя snapshot на KK заявка чрез supersede.
+Общият cancel endpoint за неподписани документи също отказва KK заявки;
+тяхната отмяна преминава единствено през request workflow с необходимото право,
+потвърждение и причина.
+
+Историческите одобрени заявки остават с предишния си workflow и номера.
+Новият KK се показва също в общото търсене, началната активност, машинния
+паспорт и timeline. Техническият PR идентификатор остава отделно API поле.
+Съществуващи чакащи заявки получават KK при бъдещо одобрение. Старите
+едноредови заявки използват съществуващите си part_name/part_number/quantity
+при оформяне на ред за бъдещото одобрение. Исторически дробни каталожни
+количества остават защитени от съществуващия recovery workflow.
+
+## Документи и доставки
+
+Образецът „КК1031M - Заявка консумативи.docx“ е прочетен като контролирана
+референция. Запазени са ODESSOS, английското заглавие и ENQ/DATE. Свободната
+таблица има Pos / DESCRIPTION / Q'TY ordered. Каталожните заявки пазят
+part number и приложението от неизменяемите визуални snapshots.
+
+Snapshot-ът съдържа одобрените редове, реда им, заявителя и одобрилия,
+машината/ремонта/ремонтния комплект, приложенията и хеша/байтовете на избрания
+одобрен езиков шаблон. Фирмената шапка също се запазва по SHA-256 в съществуващото
+неизменяемо хранилище за изображения в транзакцията на одобрението. Промяна на
+текущия ресурс или на имената на потребителите не променя бъдещ retry.
+Генерирането е след commit на одобрението. Грешка оставя PENDING/FAILED
+и запазва номера. Retry работи от същия snapshot; след READY връща същите два
+архивирани файла и SHA-256. При липсващ одобрен шаблон няма езиков fallback;
+retry може да използва одобрен шаблон за същия език, когато е наличен.
+
+Предварителният PDF няма номер/дата на одобрение и поставя воден знак на
+всяка страница. Не променя статус, counter или регистър.
+
+Доставките са положителни Decimal събития с потребител, UTC момент,
+доставчик и бележка. Idempotency key предотвратява повторно отчитане.
+Корекцията сторнира цялото избрано събитие с причина; правилното количество
+се отчита като нова доставка. Няма редакция/изтриване на предишното събитие.
+Получените и оставащите количества и статусът се изчисляват автоматично.
+Старият cumulative fulfillment PATCH за новите KK заявки записва само
+положителната разлика като същото проследимо събитие. Повторение със същите
+стойности не създава доставка. Намаление се извършва единствено със сторниране.
+
+Отмяната изисква REQUESTS_APPROVE, изрично потвърждение и причина и допуска
+връзка към заместваща заявка. Запазва номера, одобрението, файловете и
+получените количества. Старият fulfillment endpoint има същите проверки;
+механик не може да ги заобиколи с директен PATCH.
+
+## Проверки и предаване
+
+PR: [REQUESTS-01, #109](https://github.com/djebedaq/AssetCore/pull/109).
+
+Променените модули са models, Alembic env/0035/manifest, part_requests
+(schemas/service/official/routes), industrial API, workspace, document rendering
+и registration, generic official-document guards, owner-deletion references,
+каталогът и проследяването във frontend, паспортът/timeline/общото търсене,
+BG/EN/RU преводите и съответните тестове/CI.
+
+Пълната проверка на 482f2b6 е [Build check 38755988809](https://github.com/djebedaq/AssetCore/actions/runs/38755988809):
+
+| Команда / проверка | Резултат |
+| --- | --- |
+| `python -m pytest -q -m "not postgres" --tb=short --durations=10` | 1424 passed, 4 skipped, 146 deselected; PostgreSQL тестовете са в отделния job |
+| `python -m pytest -q tests/postgres --tb=short --durations=10 --junitxml=postgres-test-results.xml` | 146 passed, реален PostgreSQL 16 |
+| `pnpm test` | 638 passed, 69 файла |
+| `pnpm typecheck`, `pnpm lint`, `pnpm build` | всички успешни |
+| `python -m pip check` и `python -m compileall -q backend/app backend/alembic backend/scripts scripts tests` | успешни |
+| `python -m ruff check backend/app backend/alembic backend/scripts scripts tests` | успешна |
+| `python backend/scripts/validate_migration_history.py --require-all-protected` | 35 защитени ревизии, без несъответствия |
+| `python backend/scripts/validate_authorization_inventory.py` | 296 маршрута с 3 static mount; 154 мутиращи маршрута класифицирани |
+| `PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py` и `python backend/scripts/build_catalog_translations.py --check` | успешни; провереният инвентар остава 19 машини |
+| `python scripts/verify_release.py --output release-verification` | успешна |
+| `python tests/browser/run_requests01_qa.py` | 3 сценария; BG/EN/RU × 390/768/1440, 9 снимки; съществуващите UX04/05/06 също успешни |
+| Docker job | build, non-root/read-only runtime, readiness, LibreOffice, приложения, OCR, PostgreSQL 16 encrypted backup/restore и PG17 rejection: успешни |
+| `backend/scripts/requests01_document_smoke.py` в точния Docker образ | 48 дълги реда × 3 езика; 5 страници на език, фирмена шапка и повторени колони на всяка страница |
+
+Доказателствата за KK инвариантите са в `tests/postgres/test_requests01_postgres.py`:
+8 едновременни одобрения на смесени FREE_FORM/CATALOG заявки дават точно
+KK1000…KK1007; 8 повторни одобрения на една заявка дават един snapshot/номер;
+rollback не изразходва номер; конкурентни доставки не превишават заявеното.
+Преките PostgreSQL SQL опити за промяна на официалните полета, snapshot и
+counter се отказват. SQLite домейн тестовете проверяват и архива/доставките.
+`tests/test_requests01.py` доказва общата поредица за четирите вида,
+неизменяеми файлове/SHA-256, отказ на неразрешена отмяна, сторниране и retry.
+
+Локалните целеви проверки след поправките дадоха 74 passed/1 skipped за домейна,
+26 passed за визуални/authorization/owner/history регресии и 10 passed за
+последните миграционни и каталожни регресии. Първият пълен локален запуск беше
+23 failed/1385 passed/12 skipped; предходният CI беше 4 failed/1413 passed.
+Причините бяха стари очаквания за оформление/повторно генериране и ранно
+инсталирани triggers при upgrade на стар SQLite. Поправките са покрити от
+горния пълен зелен CI. Тези неуспешни междинни резултати не са представени като
+успешни проверки.
+
+Последните локални проверки дадоха още 2 passed за frozen metadata/QA export
+и 5 passed за директните SQL защити на файлове/доставки и идентичните файлове
+след отмяна. Допълнителните 2 cancel/namespace теста минават и след затварянето
+на generic document cancel пътя за KK. Четирите skips в Linux backend job са незаявен optional QA export,
+Windows named mutex и два съществуващи transfer print теста без LibreOffice.
+Експортът е изпълнен отделно, а реалният converter е проверен в Docker job.
+Наличните deprecation предупреждения и Vite предупреждението за голям bundle
+не са скрити; security, lint, typecheck и build проверките са успешни.
+
+Ръчният преглед откри изрязани дълги руски надписи на 390 px въпреки първоначалната
+проверка за ширина на страницата. Мобилната форма използва една колона и
+пренася бутоните. Браузърният gate вече проверява ширината вътре в диалога,
+границите на всяко поле/бутон и минимална използваема ширина на полетата.
+Последващият CI след тази CSS поправка е достъпен от Checks на PR.
+
+Последната целева проверка на KK в общото търсене, dashboard, паспорт и timeline,
+заедно с целия `tests/test_machine_lifecycle_timeline.py`, даде 59 passed.
+Първоначално един от петте целеви теста откри липсващо eager loading в timeline;
+поправката зарежда само официалния номер чрез scalar joined relationship и
+запазва забраната за зареждане на snapshot JSON/бинарни данни в този изглед.
+Повторната проверка на всичките 59 случая е успешна; typecheck и lint също.
+
+Примерният пакет се генерира с
+`ASSETCORE_REQUESTS01_QA_OUTPUT=<temporary-output> python -m pytest -q --tb=short tests/test_requests01.py::test_export_review_examples`.
+Artifact `requests01-examples` съдържа `free-form-request.json`,
+`request-preview.pdf`, `KK1000.pdf`, `KK1000.docx` и PNG прегледи. Използва
+изрично маркиран QA отдел и петте артикула от заданието. Artifact
+`requests01-docx-layout` съдържа DOCX, конвертирани PDF и изображенията за
+многостраничната проверка на трите езика. Това са временни изолирани тестови
+бази и QA примери, а не бизнес записи в committed/Production база.
+
+## Ограничения и последващо внедряване
+
+Няма операции върху Production и няма merge/deploy. Не е инспектирана реалната
+Production база; проверката за исторически KK конфликт е задължителна част от
+самата миграция и спира безопасно при конфликт. Преди последващо внедряване
+са нужни потвърден backup/restore, контролирано изпълнение на миграцията и
+обичайните проверки на наличните одобрени езикови шаблони. Липсващ шаблон
+оставя номера/одобрението запазени и показва FAILED до безопасен retry.
+
+За първоначалната версия Windows runtime нямаше LibreOffice и проверката
+мина през Docker CI. Старите snapshots използват ReportLab за PDF и отделен
+DOCX renderer. За новите snapshots това е заменено с един DOCX печатен източник,
+описан в раздела за финалните корекции; каноничният render вече е изпълнен
+в изолиран QA контейнер.
+
+След издаване на номер rollback на feature миграцията е забранен. Възстановяване
+се планира чрез контролирана следваща миграция или проверен backup според
+процедурите за съхраняване на последващата история.

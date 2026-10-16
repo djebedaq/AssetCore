@@ -49,8 +49,18 @@ def _run_with_connection(connection) -> None:
         compare_type=True,
         render_as_batch=connection.dialect.name == "sqlite",
     )
-    with context.begin_transaction():
-        context.run_migrations()
+    # Current metadata is used by the published bootstrap revisions. Delay new
+    # cross-table guards until their own revision has completed old schema edits.
+    previous = connection.info.get("assetcore_schema_migration")
+    connection.info["assetcore_schema_migration"] = True
+    try:
+        with context.begin_transaction():
+            context.run_migrations()
+    finally:
+        if previous is None:
+            connection.info.pop("assetcore_schema_migration", None)
+        else:
+            connection.info["assetcore_schema_migration"] = previous
 
 
 if context.is_offline_mode():

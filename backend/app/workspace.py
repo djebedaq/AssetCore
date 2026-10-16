@@ -25,6 +25,7 @@ from .models import (
     PartRequestLine,
     Repair,
     RepairEvent,
+    RequestApprovalSnapshot,
     TransferBatch,
     TransferProtocol,
     User,
@@ -261,6 +262,7 @@ def requests(
     f: Filters = Depends(filters),
     user: User = Depends(require_permission(Permission.REQUESTS_VIEW)),
     db: Session = Depends(get_db),
+    request_kind: Literal["FREE_FORM", "CATALOG", "UNKNOWN_PART", "REPAIR_KIT"] | None = None,
 ):
     # Preserve requests linked via a repair and general requests without a machine.
     statement = (
@@ -283,10 +285,20 @@ def requests(
                 PartRequest.lines.any(
                     search(f, PartRequestLine.part_number, PartRequestLine.description)
                 ),
+                PartRequest.approval_snapshot.has(search(f, RequestApprovalSnapshot.official_number)),
             )
         )
     if f.status:
         statement = statement.where(PartRequest.status == f.status)
+    if request_kind == "FREE_FORM":
+        statement = statement.where(PartRequest.request_kind == "FREE_FORM")
+    elif request_kind == "REPAIR_KIT":
+        statement = statement.where(PartRequest.repair_kit_id.is_not(None))
+    elif request_kind == "UNKNOWN_PART":
+        statement = statement.where(PartRequest.lines.any(PartRequestLine.is_unknown_part.is_(True)))
+    elif request_kind == "CATALOG":
+        statement = statement.where(PartRequest.request_kind != "FREE_FORM", PartRequest.repair_kit_id.is_(None),
+                                    ~PartRequest.lines.any(PartRequestLine.is_unknown_part.is_(True)))
     if f.record_id:
         statement = statement.where(PartRequest.id == f.record_id)
     if f.machine_id:
@@ -634,6 +646,12 @@ def recent_activity(db: Session, user: User, limit: int = 8) -> list[dict]:
                 )
             )
     if has_permission(user, Permission.REQUESTS_VIEW):
+        request_reference = func.coalesce(
+            select(RequestApprovalSnapshot.official_number)
+            .where(RequestApprovalSnapshot.request_id == PartRequest.id)
+            .scalar_subquery(),
+            PartRequest.request_reference,
+        )
         sources.append(
             event(
                 select(PartRequest).outerjoin(Repair, PartRequest.repair_id == Repair.id),
@@ -642,7 +660,7 @@ def recent_activity(db: Session, user: User, limit: int = 8) -> list[dict]:
                 PartRequest.id,
                 PartRequest.created_at,
                 func.coalesce(PartRequest.machine_id, Repair.machine_id),
-                PartRequest.request_reference,
+                request_reference,
                 literal(None),
             )
         )
@@ -670,7 +688,7 @@ def recent_activity(db: Session, user: User, limit: int = 8) -> list[dict]:
                             PartRequest.id,
                             PartRequestApproval.decided_at,
                             func.coalesce(PartRequest.machine_id, Repair.machine_id),
-                            PartRequest.request_reference,
+                            request_reference,
                             PartRequestApproval.decision,
                             PartRequestApproval.id,
                         )
@@ -686,7 +704,7 @@ def recent_activity(db: Session, user: User, limit: int = 8) -> list[dict]:
                         PartRequest.id,
                         column,
                         func.coalesce(PartRequest.machine_id, Repair.machine_id),
-                        PartRequest.request_reference,
+                        request_reference,
                         literal(status),
                     )
                 )

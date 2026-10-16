@@ -1,3 +1,6 @@
+import { RequestActionHistory } from './RequestActionHistory'
+import { FreeFormRequestModal, RequestPreviewButton } from './FreeFormRequestModal'
+import { RequestCancelModal, RequestDeliveryModal, RequestDeliveryHistory } from './RequestExecutionModals'
 import { type FormEvent, useEffect, useState } from 'react'
 import {
   CheckCircle2,
@@ -19,11 +22,12 @@ import {
   friendlyError,
 } from '../../industrialUi'
 import { statusText, useI18n, type TranslationKey } from '../../i18n'
-import { hasPermission } from '../../permissions'
+import { canEditRequestDraft, hasPermission } from '../../permissions'
 import type { CatalogPartEnhanced, MultiPartRequest } from '../../types'
 import { notifyPartRequestsChanged } from './partRequestEvents'
 import {
   formatTransactionalPartQuantity,
+  formatExactPartQuantity,
   isDeliveredPartQuantity,
 } from './partRequestQuantities'
 
@@ -75,8 +79,7 @@ function UnknownPartLinkModal({
 
 function PartRequestFulfillmentModal({ request, onClose, onSaved }: { request: MultiPartRequest; onClose: () => void; onSaved: () => void }) {
   const { t } = useI18n()
-  const legacyFractional = request.quantity_compatibility.status === 'LEGACY_FRACTIONAL'
-  const statuses = legacyFractional ? ['CANCELLED'] : request.status === 'APPROVED' ? ['ORDERED', 'CANCELLED'] : ['PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED']
+  const statuses = request.status === 'APPROVED' ? ['ORDERED'] : ['PARTIALLY_DELIVERED', 'DELIVERED']
   const [nextStatus, setNextStatus] = useState(statuses[0])
   const [supplier, setSupplier] = useState(request.supplier || '')
   const [note, setNote] = useState(request.delivery_note || '')
@@ -94,7 +97,7 @@ function PartRequestFulfillmentModal({ request, onClose, onSaved }: { request: M
       return
     }
     try {
-      await api(`/part-requests/${request.id}/fulfillment`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, supplier: supplier || null, note: note || null, lines }) })
+      await api(`/part-requests/${request.id}/fulfillment`, { method: 'PATCH', body: JSON.stringify({ status: nextStatus, confirmed: nextStatus === 'CANCELLED', supplier: supplier || null, note: note || null, lines }) })
       notifyPartRequestsChanged()
       onSaved()
     } catch (caught) {
@@ -123,12 +126,16 @@ function nextActionKey(request: MultiPartRequest): TranslationKey {
 }
 
 export function PartRequestsTracking({ initialRecordId }: { initialRecordId?: number } = {}) {
-  const { date, t } = useI18n()
+  const { date, t, locale } = useI18n()
   const [refresh, setRefresh] = useState(0)
   const [recordId, setRecordId] = useState(initialRecordId)
   const filter = useWorkspaceFilters()
+  const [requestKind, setRequestKind] = useState('')
+  const [editing, setEditing] = useState<MultiPartRequest | null>(null)
+  const [delivery, setDelivery] = useState<MultiPartRequest | null>(null)
+  const [cancelling, setCancelling] = useState<MultiPartRequest | null>(null)
   const { categories, error: categoryError } = useCategories('requests', refresh)
-  const { data, loading, error: listError } = usePage<MultiPartRequest>(`/workspace/requests?${queryParams({ ...filter.params, record_id: recordId })}`, refresh)
+  const { data, loading, error: listError } = usePage<MultiPartRequest>(`/workspace/requests?${queryParams({ ...filter.params, record_id: recordId, request_kind: requestKind })}`, refresh)
   const items = data?.items || []
   const [catalog, setCatalog] = useState<CatalogPartEnhanced[]>([])
   const [fulfillment, setFulfillment] = useState<MultiPartRequest | null>(null)
@@ -153,8 +160,8 @@ export function PartRequestsTracking({ initialRecordId }: { initialRecordId?: nu
       setError(friendlyError(caught, t('requests.submitError')))
     }
   }
-  async function decide(id: number, decision: 'APPROVED' | 'REJECTED') {
-    if (!window.confirm(t(decision === 'APPROVED' ? 'requests.approveConfirm' : 'requests.rejectConfirm'))) return
+  async function decide(id: number, decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_CHANGES') {
+    if (!window.confirm(t(decision === 'APPROVED' ? 'requests.approveConfirm' : decision === 'RETURNED_FOR_CHANGES' ? 'requests01.return' : 'requests.rejectConfirm'))) return
     try {
       await api(`/part-requests/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision }) })
       notifyPartRequestsChanged()
@@ -184,10 +191,11 @@ export function PartRequestsTracking({ initialRecordId }: { initialRecordId?: nu
 
   return <>
     <div className="toolbar"><div><h3>{t('parts.title')}</h3><p className="muted">{t('requests.subtitle')}</p></div></div>
-    <FilterToolbar query={filter.values.q} onQuery={value => { setRecordId(undefined); filter.change('q', value) }} onReset={() => { setRecordId(undefined); filter.reset() }}>
+    <FilterToolbar query={filter.values.q} onQuery={value => { setRecordId(undefined); filter.change('q', value) }} onReset={() => { setRecordId(undefined); filter.reset(); setRequestKind('') }}>
       <CategorySelect categories={categories} value={filter.values.category} onChange={value => { setRecordId(undefined); filter.change('category', value) }} legacy />
       <label className="ac-filter"><span>{t('common.status')}</span><Select label={t('common.status')} value={filter.values.status} onChange={value => { setRecordId(undefined); filter.change('status', value) }}
         options={[{ value: '', label: t('ux.allStatuses') }, ...['DRAFT', 'SUBMITTED', 'WAITING_APPROVAL', 'APPROVED', 'REJECTED', 'ORDERED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED'].map(value => ({ value, label: statusText(t, value, 'part') }))]} /></label>
+      <label className="ac-filter">{t('requests01.type')}<Select label={t('requests01.type')} value={requestKind} onChange={value => { setRequestKind(value); filter.setPage(1) }} options={[{ value: '', label: t('requests01.allTypes') }, ...['FREE_FORM', 'CATALOG', 'UNKNOWN_PART', 'REPAIR_KIT'].map(value => ({ value, label: t(`requests01.${value}` as TranslationKey) }))]} /></label>
       <DateFilters from={filter.values.from} to={filter.values.to} onFrom={value => filter.change('from', value)} onTo={value => filter.change('to', value)} />
       <SortSelect value={filter.values.sort} onChange={value => filter.change('sort', value)} />
     </FilterToolbar>
@@ -195,21 +203,34 @@ export function PartRequestsTracking({ initialRecordId }: { initialRecordId?: nu
     {loading && <div className="loading" role="status">{t('common.loading')}</div>}
     {error && <div className="error" role="alert">{error}</div>}
     <div className="cards-list">{items.map((request) => <article className="panel request-card" key={request.id}>
-      <div className="request-card-head"><div><StatusBadge status={request.status} domain="part" /><h3>{request.request_reference}</h3><small>{date(request.created_at)} · {request.machine_number ? t('passport.title', { number: request.machine_number }) : t('parts.general')}</small>{request.requested_by_name && <small>{t('requests.requester')}: {request.requested_by_name}</small>}{request.repair_reference && <small>{t('requests.linkedRepair')}: {request.repair_reference}</small>}{request.department && <small>{t('requests.department')}: {request.department}</small>}{request.supplier && <small>{t('catalog.supplier')}: {request.supplier}</small>}</div><b>{statusText(t, request.priority, 'part')}</b></div>
+      <div className="request-card-head"><div><StatusBadge status={request.status} domain="part" /><h3>{request.official_number || (['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED', 'DELIVERED', 'CANCELLED'].includes(request.status) ? request.request_reference : t('requests01.noNumber'))}</h3><small>{t(`requests01.${request.request_kind || 'CATALOG'}` as TranslationKey)}</small>{request.approved_at && <small>{t('requests01.approvedAt')}: {date(request.approved_at)} · {t('requests01.approvedBy')}: {request.decided_by_name}</small>}<small>{date(request.created_at)} · {request.machine_number ? t('passport.title', { number: request.machine_number }) : t('parts.general')}</small>{request.requested_by_name && <small>{t('requests.requester')}: {request.requested_by_name}</small>}{request.repair_reference && <small>{t('requests.linkedRepair')}: {request.repair_reference}</small>}{request.department && <small>{t('requests.department')}: {request.department}</small>}{request.supplier && <small>{t('catalog.supplier')}: {request.supplier}</small>}</div><b>{statusText(t, request.priority, 'part')}</b></div>
+      {request.generation_status && <p role="status">{t(`requests01.${request.generation_status}` as TranslationKey)}</p>}
+      {request.cancellation_reason && <p>{t('requests01.cancelReason')}: {request.cancellation_reason} · {request.cancelled_at && date(request.cancelled_at)}</p>}
       {request.quantity_compatibility.status === 'LEGACY_FRACTIONAL' && <div className="conflict-notice" role="alert"><b>{t('requests.legacyQuantityWarning')}</b><p>{t(`requests.legacyRecovery.${request.quantity_compatibility.recovery_action}` as TranslationKey)}</p><small>{t('requests.legacyQuantityAffectedLines', { lines: request.quantity_compatibility.affected_line_ids.join(', ') })}</small></div>}
       <div className="request-next-action"><b>{t('requests.nextAction')}</b><span>{t(nextActionKey(request))}</span></div>
-      <div className="request-line-list">{request.lines.map((line) => <div className={line.is_unknown_part ? 'unknown-part-request-line' : ''} key={line.id}><span><b>{line.is_unknown_part ? t('unknownPart.label') : line.part_number || t('common.noValue')}</b><small>{line.is_unknown_part && line.assembly ? `${t('unknownPart.assembly')}: ${line.assembly} · ` : ''}{line.description}</small>{line.linked_part_number && <small className="verified">{t('unknownPart.linkedTo')}: {line.linked_part_number} · {line.linked_part_description}</small>}</span><span className="request-line-side"><em>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${formatTransactionalPartQuantity(line.delivered_quantity)} / ` : ''}{formatTransactionalPartQuantity(line.quantity)} {line.unit}</em>{line.is_unknown_part && !line.linked_catalog_part_id && hasPermission('parts.manage') && <button className="secondary compact" onClick={() => setUnknownLink({ request, line })}><ShieldCheck size={14} />{t('unknownPart.linkAction')}</button>}</span></div>)}</div>
+      <div className="request-line-list">{request.lines.map((line) => <div className={line.is_unknown_part ? 'unknown-part-request-line' : ''} key={line.id}><span><b>{line.is_unknown_part ? t('unknownPart.label') : line.part_number || (request.request_kind === 'FREE_FORM' ? line.position : t('common.noValue'))}</b><small>{line.is_unknown_part && line.assembly ? `${t('unknownPart.assembly')}: ${line.assembly} · ` : ''}{line.description}</small>{line.linked_part_number && <small className="verified">{t('unknownPart.linkedTo')}: {line.linked_part_number} · {line.linked_part_description}</small>}</span><span className="request-line-side"><em>{line.exact_quantity && request.official_number ? `${t('requests01.received')}: ${formatExactPartQuantity(line.received_quantity || '0', locale)} / ${formatExactPartQuantity(line.exact_quantity, locale)} ${request.request_kind === 'FREE_FORM' ? t(`requests01.${line.unit}` as TranslationKey) : line.unit} · ${t('requests01.remaining')}: ${formatExactPartQuantity(line.remaining_quantity || '0', locale)}` : <>{line.delivered_quantity > 0 ? `${t('requests.deliveredQuantity')}: ${formatTransactionalPartQuantity(line.delivered_quantity)} / ` : ''}{line.exact_quantity ? formatExactPartQuantity(line.exact_quantity, locale) : formatTransactionalPartQuantity(line.quantity)} {request.request_kind === 'FREE_FORM' ? t(`requests01.${line.unit}` as TranslationKey) : line.unit}</>}</em>{!request.official_number && ['DRAFT', 'SUBMITTED', 'WAITING_APPROVAL', 'REJECTED'].includes(request.status) && line.is_unknown_part && !line.linked_catalog_part_id && hasPermission('parts.manage') && <button className="secondary compact" onClick={() => setUnknownLink({ request, line })}><ShieldCheck size={14} />{t('unknownPart.linkAction')}</button>}</span></div>)}</div>
+      {request.reason && <p>{t('parts.reason')}: {request.reason}</p>}
+      <RequestActionHistory requestId={request.id} status={request.status} />
+      <RequestDeliveryHistory request={request} onSaved={() => void load()} />
       {request.approvals.length > 0 && <details><summary>{t('requests.approvalHistory')} ({request.approvals.length})</summary><div className="request-approval-history">{request.approvals.map((approval) => <div key={approval.id}><b>{statusText(t, approval.decision, 'part')}</b><span>{approval.decided_by_name || t('common.noValue')} · {date(approval.decided_at)}</span>{approval.note && <small>{approval.note}</small>}</div>)}</div></details>}
       {request.attachments.length > 0 && <details><summary>{t('requests.attachments')} ({request.attachments.length})</summary><AttachmentList items={request.attachments} /></details>}
       <div className="request-actions">
-        {request.status === 'DRAFT' && request.quantity_compatibility.status !== 'LEGACY_FRACTIONAL' && hasPermission('requests.create') && <button className="primary" onClick={() => void submitDraft(request.id)}>{t('requests.submitDraft')}</button>}
-        {request.status === 'WAITING_APPROVAL' && hasPermission('requests.approve') && <>{request.quantity_compatibility.status !== 'LEGACY_FRACTIONAL' && <button className="primary" onClick={() => void decide(request.id, 'APPROVED')}><CheckCircle2 size={16} />{t('requests.approve')}</button>}<button className="secondary" onClick={() => void decide(request.id, 'REJECTED')}>{t('requests.reject')}</button></>}
-        {['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.create') && <button className="secondary" onClick={() => setFulfillment(request)}><PackageCheck size={16} />{request.quantity_compatibility.status === 'LEGACY_FRACTIONAL' ? t('requests.legacyCancelAction') : t('requests.updateFulfillment')}</button>}
-        {hasPermission('requests.create') && <label className="secondary compact file-button"><Upload size={15} />{t('requests.addAttachment')}<input hidden type="file" accept="application/pdf,.docx,.xlsx,image/png,image/jpeg,image/webp" onChange={(event) => { void attach(request, event.target.files?.[0]); event.currentTarget.value = '' }} /></label>}
-        {DOCUMENT_STATUSES.has(request.status) && request.documents.length === 0 && hasPermission('documents.generate') && <button className="secondary" onClick={() => void generate(request)}><FilePlus2 size={16} />{t('requests.generate')} ({t(`language.${request.language}` as TranslationKey)})</button>}
+        {!request.official_number && ['DRAFT', 'WAITING_APPROVAL', 'REJECTED', 'SUBMITTED'].includes(request.status) && <RequestPreviewButton requestId={request.id} />}
+        {request.request_kind === 'FREE_FORM' && request.status === 'DRAFT' && canEditRequestDraft(request.requested_by_id) && <button className="secondary" onClick={() => setEditing(request)}>{t('requests01.edit')}</button>}
+        {request.official_number && ['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.create') && <button className="secondary" onClick={() => setDelivery(request)}>{t('requests01.delivery')}</button>}
+        {['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status) && hasPermission('requests.approve') && <button className="secondary" onClick={() => setCancelling(request)}>{t('requests01.cancel')}</button>}
+
+        {request.status === 'DRAFT' && request.quantity_compatibility.status !== 'LEGACY_FRACTIONAL' && hasPermission('requests.create') && (request.request_kind !== 'FREE_FORM' || canEditRequestDraft(request.requested_by_id)) && <button className="primary" onClick={() => void submitDraft(request.id)}>{t('requests.submitDraft')}</button>}
+        {request.status === 'WAITING_APPROVAL' && hasPermission('requests.approve') && <>{request.quantity_compatibility.status !== 'LEGACY_FRACTIONAL' && <button className="primary" onClick={() => void decide(request.id, 'APPROVED')}><CheckCircle2 size={16} />{t('requests.approve')}</button>}<button className="secondary" onClick={() => void decide(request.id, 'REJECTED')}>{t('requests.reject')}</button><button className="secondary" onClick={() => void decide(request.id, 'RETURNED_FOR_CHANGES')}>{t('requests01.return')}</button></>}
+        {(request.official_number ? request.status === 'APPROVED' : request.quantity_compatibility.status !== 'LEGACY_FRACTIONAL' && ['APPROVED', 'ORDERED', 'PARTIALLY_DELIVERED'].includes(request.status)) && hasPermission('requests.create') && <button className="secondary" onClick={() => setFulfillment(request)}><PackageCheck size={16} />{request.quantity_compatibility.status === 'LEGACY_FRACTIONAL' ? t('requests.legacyCancelAction') : t('requests.updateFulfillment')}</button>}
+        {!request.official_number && ['DRAFT', 'SUBMITTED', 'WAITING_APPROVAL', 'REJECTED'].includes(request.status) && hasPermission('requests.create') && (request.request_kind !== 'FREE_FORM' || canEditRequestDraft(request.requested_by_id)) && <label className="secondary compact file-button"><Upload size={15} />{t('requests.addAttachment')}<input hidden type="file" accept="application/pdf,.docx,.xlsx,image/png,image/jpeg,image/webp" onChange={(event) => { void attach(request, event.target.files?.[0]); event.currentTarget.value = '' }} /></label>}
+        {(DOCUMENT_STATUSES.has(request.status) || (request.official_number && request.status === 'CANCELLED')) && request.documents.length === 0 && hasPermission('documents.generate') && <button className="secondary" onClick={() => void generate(request)}><FilePlus2 size={16} />{t('requests.generate')} ({t(`language.${request.language}` as TranslationKey)})</button>}
         {request.documents.map((document) => <DocumentButtons key={document.id} path={document.download_endpoint} filename={document.filename} format={document.format} />)}
       </div>
     </article>)}{data && !loading && !items.length && <div className="empty-state">{t('parts.empty')}</div>}</div>
+    {editing && <FreeFormRequestModal request={editing} onClose={() => setEditing(null)} onSaved={() => void load()} />}
+    {delivery && <RequestDeliveryModal request={delivery} onClose={() => setDelivery(null)} onSaved={() => { setDelivery(null); void load() }} />}
+    {cancelling && <RequestCancelModal request={cancelling} onClose={() => setCancelling(null)} onSaved={() => { setCancelling(null); void load() }} />}
     {unknownLink && <UnknownPartLinkModal request={unknownLink.request} line={unknownLink.line} catalog={catalog} onClose={() => setUnknownLink(null)} onSaved={() => { setUnknownLink(null); void load() }} />}
     <Pagination data={data} onPage={filter.setPage} />
     {fulfillment && <PartRequestFulfillmentModal request={fulfillment} onClose={() => setFulfillment(null)} onSaved={() => { setFulfillment(null); void load() }} />}

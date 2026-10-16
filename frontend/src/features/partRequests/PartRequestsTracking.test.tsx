@@ -54,6 +54,24 @@ describe('Заявени части tracking', () => {
     vi.unstubAllGlobals()
   })
 
+  it.each([
+    { role: 'mechanic', id: 4, allowed: true },
+    { role: 'mechanic', id: 9, allowed: false },
+    { role: 'director', id: 9, allowed: false },
+    { role: 'administrator', id: 9, allowed: true },
+  ])('limits all free-form draft controls for $role ($id)', async ({ role, id, allowed }) => {
+    setSessionUser({ id, role, permissions: ['requests.view', 'requests.create'] } as UserSession)
+    vi.stubGlobal('fetch', vi.fn(async () => response([
+      { ...request, request_kind: 'FREE_FORM', status: 'DRAFT', documents: [] },
+    ])))
+    withWorkspaceRoutes(vi.mocked(fetch))
+    const view = render(<I18nProvider initialLocale="bg"><PartRequestsTracking /></I18nProvider>)
+    await screen.findByText('Verified source description')
+    expect(!!screen.queryByRole('button', { name: 'Редактиране на свободна заявка' })).toBe(allowed)
+    expect(!!screen.queryByRole('button', { name: 'Подай за одобрение' })).toBe(allowed)
+    expect(view.container.querySelectorAll('input[type="file"]')).toHaveLength(allowed ? 1 : 0)
+  })
+
   it('is history-first, shows required data, and hides approval from a mechanic', async () => {
     setSessionUser({ role: 'mechanic', permissions: ['requests.view', 'requests.create', 'parts.view', 'documents.view', 'documents.generate'] } as UserSession)
     vi.stubGlobal('fetch', vi.fn(async () => response([
@@ -200,8 +218,8 @@ describe('Заявени части tracking', () => {
     expect(screen.getByRole('button', { name: 'Отхвърли' })).toBeInTheDocument()
   })
 
-  it('offers GET-listed legacy active requests only cancellation without line mutation', async () => {
-    setSessionUser({ role: 'mechanic', permissions: ['requests.view', 'requests.create', 'parts.view'] } as UserSession)
+  it('allows an approver to cancel legacy active requests without line mutation', async () => {
+    setSessionUser({ role: 'director', permissions: ['requests.view', 'requests.create', 'requests.approve', 'parts.view'] } as UserSession)
     const legacyOrdered: MultiPartRequest = {
       ...request,
       status: 'ORDERED',
@@ -215,7 +233,7 @@ describe('Заявени части tracking', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
       if (path.endsWith('/api/part-requests/multi')) return response([legacyOrdered])
-      if (path.endsWith('/api/part-requests/12/fulfillment') && init?.method === 'PATCH') {
+      if (path.endsWith('/api/part-requests/12/cancel') && init?.method === 'POST') {
         return response({ ...legacyOrdered, status: 'CANCELLED' })
       }
       throw new Error(`Unexpected request: ${path}`)
@@ -225,15 +243,13 @@ describe('Заявени части tracking', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     render(<I18nProvider initialLocale="bg"><PartRequestsTracking /></I18nProvider>)
-    await userEvent.click(await screen.findByRole('button', { name: 'Отмени и създай отново' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Отмени заявката' }))
 
-    const status = within(screen.getByRole('dialog')).getByRole('combobox', { name: 'Статус' })
-    expect(status).toHaveValue('CANCELLED')
-    expect(screen.getAllByRole('option')).toHaveLength(1)
-    expect(screen.getByRole('spinbutton', { name: 'Доставено количество SOURCE-PART' })).toBeDisabled()
-    await userEvent.click(screen.getByRole('button', { name: 'Запиши изпълнението' }))
-    await waitFor(() => expect(fetchMock.mock.calls.some(([inputValue, init]) => String(inputValue).endsWith('/api/part-requests/12/fulfillment') && init?.method === 'PATCH')).toBe(true))
-    const mutation = fetchMock.mock.calls.find(([inputValue, init]) => String(inputValue).endsWith('/api/part-requests/12/fulfillment') && init?.method === 'PATCH')
-    expect(JSON.parse(String(mutation?.[1]?.body))).toEqual(expect.objectContaining({ status: 'CANCELLED', lines: [] }))
+    await userEvent.type(screen.getByLabelText('Причина за отмяна'), 'QA причина за отмяна')
+    await userEvent.click(screen.getByRole('checkbox'))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Отмени заявката' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([inputValue, init]) => String(inputValue).endsWith('/api/part-requests/12/cancel') && init?.method === 'POST')).toBe(true))
+    const mutation = fetchMock.mock.calls.find(([inputValue, init]) => String(inputValue).endsWith('/api/part-requests/12/cancel') && init?.method === 'POST')
+    expect(JSON.parse(String(mutation?.[1]?.body))).toEqual(expect.objectContaining({ confirmed: true, reason: 'QA причина за отмяна', replacement_request_id: null }))
   })
 })

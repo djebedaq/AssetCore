@@ -447,7 +447,7 @@ def test_legacy_fractional_cancellation_preserves_exact_lines_and_audit_history(
     cancelled = client.patch(
         f"/api/part-requests/{request_id}/fulfillment",
         headers=auth_headers,
-        json={"status": "CANCELLED", "lines": []},
+        json={"status": "CANCELLED", "lines": [], "confirmed": True, "note": "QA legacy cancellation"},
     )
     assert cancelled.status_code == 200, cancelled.text
     body = cancelled.json()
@@ -465,7 +465,7 @@ def test_legacy_fractional_cancellation_preserves_exact_lines_and_audit_history(
             .where(
                 AuditLog.entity_type == "part_request",
                 AuditLog.entity_id == request_id,
-                AuditLog.action == "Обновено изпълнение на заявка за части",
+                AuditLog.action == "REQUEST_CANCELLED",
             )
             .order_by(AuditLog.id.desc())
         )
@@ -495,7 +495,7 @@ def test_part_request_documents_render_integer_quantity_and_retries_preserve_int
             (document.id, document.sha256, document.document_number, document.snapshot)
             for document in documents
         ]
-        assert all(document.snapshot["lines"][0]["quantity"] == 4 for document in documents)
+        assert all(document.snapshot["lines"][0]["quantity"] == "4" for document in documents)
         docx = next(document.content for document in documents if document.format == "docx")
         pdf = next(document.content for document in documents if document.format == "pdf")
 
@@ -516,8 +516,8 @@ def test_part_request_documents_render_integer_quantity_and_retries_preserve_int
         f"/api/part-requests/{created['id']}/documents?language=bg",
         headers=auth_headers,
     )
-    assert repeated.status_code == 409, repeated.text
-    assert repeated.json()["detail"]["code"] == "part_request_protocol_already_generated"
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json()["generation_status"] == "READY"
 
     with session_factory() as session:
         documents = session.scalars(

@@ -108,6 +108,17 @@ def is_observer(user: User) -> bool:
     return user.role == UserRole.OBSERVER.value
 
 
+def can_edit_request_draft(user: User, requested_by_id: int | None) -> bool:
+    return has_permission(user, Permission.REQUESTS_CREATE) and (
+        user.id == requested_by_id or user.role == UserRole.ADMINISTRATOR.value
+    )
+
+
+def ensure_request_draft_editor(user: User, requested_by_id: int | None) -> None:
+    if not can_edit_request_draft(user, requested_by_id):
+        raise HTTPException(403, detail={"code": "request_draft_edit_forbidden"})
+
+
 def ensure_permission(user: User, permission: Permission) -> None:
     if not has_permission(user, permission):
         raise HTTPException(

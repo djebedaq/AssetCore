@@ -365,6 +365,7 @@ def machine_passport(machine_id: int, user: User, db: Session) -> dict:
             {
                 "id": item.id,
                 "request_reference": item.request_reference,
+                "official_number": item.approval_snapshot.official_number if item.approval_snapshot else None,
                 "status": item.status,
                 "priority": item.priority,
                 "created_at": item.created_at,

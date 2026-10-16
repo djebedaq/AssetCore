@@ -366,7 +366,8 @@ def test_conflicting_part_request_decisions_have_one_canonical_outcome(pg_factor
         logs = audit(db, "Решение по заявка за части")
         assert len(logs) == 1 and json.loads(logs[0].details)["new_status"] == item.status
         assert item.decided_at and item.decided_by_id == approval.decided_by_id
-        assert count(db, OfficialDocument) == count(db, GeneratedDocument) == 0
+        assert count(db, OfficialDocument) == (1 if item.status == "APPROVED" else 0)
+        assert count(db, GeneratedDocument) == (2 if item.status == "APPROVED" else 0)
 
 
 def test_two_parts_protocol_generations_create_one_canonical_document(pg_factory):
@@ -375,11 +376,8 @@ def test_two_parts_protocol_generations_create_one_canonical_document(pg_factory
     def operation(db, actor):
         return generate_part_request_documents(identifier, language="bg", user=actor, db=db)
 
-    outcomes = race(pg_factory, PartRequest, identifier, [operation] * 2)
-    assert (
-        next(item for item in outcomes if item.status == 409).code
-        == "part_request_protocol_already_generated"
-    )
+    outcomes = race(pg_factory, PartRequest, identifier, [operation] * 2, expected_statuses=[201, 201])
+    assert [item.status for item in outcomes] == [201, 201]
     with pg_factory() as db:
         assert count(db, OfficialDocument) == count(db, OfficialDocumentVersion) == 1
         assert (
@@ -389,7 +387,7 @@ def test_two_parts_protocol_generations_create_one_canonical_document(pg_factory
             == 1
         )
         canonical = db.scalar(select(OfficialDocument))
-        assert canonical.document_number == db.get(PartRequest, identifier).request_reference
+        assert canonical.document_number == db.get(PartRequest, identifier).approval_snapshot.official_number
         documents = db.scalars(select(GeneratedDocument)).all()
         assert len(documents) == 2 and {item.format for item in documents} == {"docx", "pdf"}
         assert all(
@@ -407,9 +405,7 @@ def test_two_parts_protocol_generations_create_one_canonical_document(pg_factory
         assert version.docx_content.startswith(b"PK") and version.pdf_content.startswith(b"%PDF")
         assert_document_ownership(db)
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
-        with pytest.raises(HTTPException) as rejected:
-            operation(db, actor)
-        assert rejected.value.status_code == 409
+        assert operation(db, actor)["generation_status"] == "READY"
         db.rollback()
         db.refresh(version)
         assert (
@@ -419,7 +415,7 @@ def test_two_parts_protocol_generations_create_one_canonical_document(pg_factory
             version.pdf_sha256,
         ) == before
         assert count(db, OfficialDocument) == count(db, OfficialDocumentVersion) == 1
-        assert len(audit(db, "Генериран документ за заявка за части")) == 1
+        assert len(audit(db, "REQUEST_DOCUMENTS_ARCHIVED")) == 1
 
 
 def test_two_emergency_starts_keep_one_owner_and_one_active_session(pg_factory):
