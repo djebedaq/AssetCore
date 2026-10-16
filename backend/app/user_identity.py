@@ -8,4 +8,4 @@ def clean_identity(value: str | None) -> str | None:
 
 
 def full_name(first: str, middle: str | None, last: str) -> str:
-    return " ".join(value for value in (first, middle, last) if value)
+    return " ".join(value for part in (first, middle, last) if (value := clean_identity(part)))

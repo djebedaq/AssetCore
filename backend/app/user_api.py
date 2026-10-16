@@ -38,6 +38,7 @@ from .security import (
     verify_password,
 )
 from .settings import settings
+from .user_identity import full_name
 
 router = APIRouter(prefix="/api", tags=["users"])
 
@@ -352,9 +353,7 @@ def update_user(
     identity_fields = {"first_name", "middle_name", "last_name", "job_title"}
     if identity_fields.intersection(changes):
         if target.first_name and target.last_name:
-            target.full_name = " ".join(
-                filter(None, [target.first_name, target.middle_name, target.last_name])
-            )
+            target.full_name = full_name(target.first_name, target.middle_name, target.last_name)
         target.profile_status = (
             ProfileStatus.COMPLETE.value
             if _profile_complete(target)

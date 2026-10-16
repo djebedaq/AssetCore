@@ -122,6 +122,22 @@ def test_self_profile_completion_without_legal_exception(client, session_factory
     assert client.get("/api/transfers/availability", headers=headers).status_code == 200
 
 
+def test_editing_a_legacy_identity_does_not_reintroduce_double_spaces(
+    client, auth_headers, session_factory
+):
+    created = client.post("/api/users", headers=auth_headers,
+                          json=_create_payload("legacy-space@example.invalid", "mechanic"))
+    assert created.status_code == 201
+    with session_factory() as db:
+        user = db.get(User, created.json()["id"])
+        user.first_name, user.middle_name, user.last_name = " QA  Compound ", "  Middle  Name ", " Legacy "
+        db.commit()
+    edited = client.patch(f"/api/users/{created.json()['id']}", headers=auth_headers,
+                          json={"job_title": "QA revised job"})
+    assert edited.status_code == 200
+    assert edited.json()["full_name"] == "QA Compound Middle Name Legacy"
+
+
 def test_two_name_preparer_approval_documents_signing_and_immutable_archive(
     client, auth_headers, session_factory, issue_payload, machine_ids
 ):
