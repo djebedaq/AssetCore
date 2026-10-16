@@ -4,6 +4,7 @@ import { Download, ExternalLink, Search, X } from 'lucide-react'
 import { ApiError, createApiObjectUrl, downloadApiFile } from './api'
 import { useI18n, type TranslationKey } from './i18n'
 import type { StoredAttachment } from './types'
+import { useModalFocus } from './ui/useModalFocus'
 
 const EVENT_KEYS: Record<string, TranslationKey> = {
   LOCATION_CHANGED: 'event.locationChanged', MACHINE_LOCATION_CHANGED: 'event.locationChanged',
@@ -64,12 +65,13 @@ export function Modal({ title, onClose, children, wide = false }: {
   title: string; onClose: () => void; children: ReactNode; wide?: boolean
 }) {
   const { t } = useI18n()
+  const dialog = useModalFocus(onClose)
   return (
     <div className="modal-bg">
-      <div className={`modal industrial-modal ${wide ? 'industrial-modal-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
-        <div className="modal-head"><h3>{title}</h3><button onClick={onClose} aria-label={t('common.close')}><X /></button></div>
+      <section ref={dialog} tabIndex={-1} className={`modal industrial-modal ${wide ? 'industrial-modal-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+        <div className="modal-head"><h3>{title}</h3><button type="button" onClick={onClose} aria-label={t('common.close')}><X /></button></div>
         {children}
-      </div>
+      </section>
     </div>
   )
 }
@@ -101,7 +103,7 @@ export function DownloadButton({ path, filename, label }: { path: string; filena
   )
 }
 
-export function DocumentButtons({ path, filename, format, label }: { path: string; filename: string; format: string; label?: string }) {
+export function DocumentButtons({ path, filename, format, label, previewFirst = false }: { path: string; filename: string; format: string; label?: string; previewFirst?: boolean }) {
   const { t } = useI18n()
   const [previewUrl, setPreviewUrl] = useState('')
   const [failed, setFailed] = useState(false)
@@ -123,7 +125,8 @@ export function DocumentButtons({ path, filename, format, label }: { path: strin
     URL.revokeObjectURL(previewUrl)
     setPreviewUrl('')
   }
-  return <span className="document-actions-inline"><DownloadButton path={path} filename={filename} label={label || format.toUpperCase()} />{format.toLowerCase() === 'pdf' && <button className="secondary compact" disabled={loading} onClick={() => void preview()}><Search size={15} />{t('common.preview')}</button>}{failed && <small className="inline-error">{t('catalog.documentPreviewError')}</small>}{previewUrl && <Modal title={filename} onClose={closePreview} wide><object className="generated-document-preview" data={previewUrl} type="application/pdf"><p>{t('document.previewFallback')}</p></object><div className="generated-document-preview-recovery" role="note"><p>{t('document.previewFallback')}</p><div><a className="secondary compact button-link" href={previewUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={15} />{t('document.openPdf')}</a><DownloadButton path={path} filename={filename} /></div></div></Modal>}</span>
+  const previewControl = format.toLowerCase() === 'pdf' && <button className="secondary compact" disabled={loading} onClick={() => void preview()}><Search size={15} />{t('common.preview')}</button>
+  return <span className="document-actions-inline">{previewFirst && previewControl}<DownloadButton path={path} filename={filename} label={label || format.toUpperCase()} />{!previewFirst && previewControl}{failed && <small className="inline-error">{t('catalog.documentPreviewError')}</small>}{previewUrl && <Modal title={filename} onClose={closePreview} wide><object className="generated-document-preview" data={previewUrl} type="application/pdf"><p>{t('document.previewFallback')}</p></object><div className="generated-document-preview-recovery" role="note"><p>{t('document.previewFallback')}</p><div><a className="secondary compact button-link" href={previewUrl} target="_blank" rel="noopener noreferrer"><ExternalLink size={15} />{t('document.openPdf')}</a><DownloadButton path={path} filename={filename} /></div></div></Modal>}</span>
 }
 
 export function AttachmentList({ items }: { items: StoredAttachment[] }) {

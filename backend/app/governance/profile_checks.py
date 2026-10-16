@@ -8,13 +8,7 @@ from ..models import ProfileStatus, User
 
 
 def _profile_complete(user: User) -> bool:
-    has_middle = bool(user.middle_name) or (
-        user.legal_name_exception
-        and bool(user.legal_name_exception_reason)
-        and bool(user.legal_name_exception_approved_by_id)
-        and bool(user.legal_name_exception_approved_at)
-    )
-    return bool(user.first_name and has_middle and user.last_name and user.job_title)
+    return all(str(value or "").strip() for value in (user.first_name, user.last_name, user.job_title))
 
 
 def _require_complete_profile(user: User) -> None:
@@ -23,6 +17,6 @@ def _require_complete_profile(user: User) -> None:
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "code": "profile_incomplete",
-                "message": "Профилът трябва да съдържа потвърдени три имена и длъжност.",
+                "message": "Профилът трябва да съдържа потвърдени име, фамилия и длъжност.",
             },
         )

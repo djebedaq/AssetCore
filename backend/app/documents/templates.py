@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from ..governance.profile_checks import _profile_complete
 from ..models import (
     DocumentTemplate,
     DocumentTemplateVersion,
@@ -52,24 +53,10 @@ def _preparer_values(db: Session, created_by_id: int) -> dict[str, str]:
     user = db.get(User, created_by_id)
     if user is None:
         raise TemplateValidationError("Съставителят на документа не е намерен.")
-    complete = bool(
-        user.first_name
-        and (
-            user.middle_name
-            or (
-                user.legal_name_exception
-                and user.legal_name_exception_reason
-                and user.legal_name_exception_approved_by_id
-                and user.legal_name_exception_approved_at
-            )
-        )
-        and user.last_name
-        and user.job_title
-        and user.profile_status == "PROFILE_COMPLETE"
-    )
+    complete = _profile_complete(user) and user.profile_status == "PROFILE_COMPLETE"
     if not complete:
         raise TemplateValidationError(
-            "Профилът на съставителя трябва да съдържа потвърдени три имена и длъжност."
+            "Профилът на съставителя трябва да съдържа потвърдени име, фамилия и длъжност."
         )
     return {"PREPARER_NAME": user.full_name, "PREPARER_JOB_TITLE": user.job_title}
 

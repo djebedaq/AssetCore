@@ -9,7 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 
-def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_script=None):
+def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_script=None, prepare=None):
     root = Path(__file__).resolve().parents[2]
     qa = root / ".tmp" / (f"catalog03-{scenario}-browser-" + uuid4().hex)
     qa.mkdir(parents=True)
@@ -19,7 +19,7 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
     base_url = f"http://127.0.0.1:{port}"
-    password = secrets.token_urlsafe(32)
+    password = secrets.token_urlsafe(32) + "aA9!"
     env = os.environ.copy()
     env.update(DATABASE_URL="sqlite:///" + (qa / "qa.db").as_posix(),
         TMPDIR=str(runtime_temp), TMP=str(runtime_temp), TEMP=str(runtime_temp),
@@ -86,12 +86,33 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
                 db.add(CatalogRevision(catalog_id=pending.id, revision_code="QA-DRAFT", created_by_id=owner.id))
                 target = db.scalar(select(Machine).where(Machine.inventory_number == "QA_UX04_6"))
                 legacy_binding(db, owner, pending.id, target.id)
+    if prepare:
+        prepare(SessionLocal, qa, password)
     env["QA_BROWSER_CHANNEL"] = "msedge" if os.name == "nt" else ""
     server = None
+    container_name = None
     try:
         with (qa / "server.log").open("w", encoding="utf-8") as log:
-            server = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--app-dir", "backend",
-                "--host", "127.0.0.1", "--port", str(port), "--no-access-log"], cwd=root, env=env,
+            command = [sys.executable, "-m", "uvicorn", "app.main:app", "--app-dir", "backend",
+                       "--host", "127.0.0.1", "--port", str(port), "--no-access-log"]
+            server_env = env.copy()
+            if image := os.environ.get("ASSETCORE_QA_CONTAINER_IMAGE"):
+                container_name = "assetcore-browser-qa-" + uuid4().hex
+                server_env.update(DATABASE_URL="sqlite:////qa/" + (qa / "qa.db").relative_to(root).as_posix(),
+                                  TMPDIR="/tmp", TMP="/tmp", TEMP="/tmp")
+                names = ["DATABASE_URL", "SECRET_KEY", "SIGNATURE_ENCRYPTION_KEY", "ADMIN_EMAIL",
+                         "ASSETCORE_OWNER_EMAIL", "OWNER_EMAIL", "ADMIN_PASSWORD", "OWNER_INITIAL_PASSWORD",
+                         "OWNER_FIRST_NAME", "OWNER_MIDDLE_NAME", "OWNER_LAST_NAME", "OWNER_JOB_TITLE",
+                         "PRODUCTION_MODE", "DEPLOYMENT_ENVIRONMENT", "LICENSE_ENFORCEMENT_ENABLED",
+                         "BEARER_COMPATIBILITY_ENABLED", "PUBLIC_BASE_URL", "FRONTEND_ORIGIN", "TMPDIR", "TMP", "TEMP"]
+                command = ["docker", "run", "--rm", "--name", container_name,
+                           "--publish", f"127.0.0.1:{port}:10000", "--workdir", "/qa",
+                           "--mount", f"type=bind,source={root},target=/qa", "--env", "PYTHONPATH=/qa/backend"]
+                for name in names:
+                    command.extend(["--env", name])
+                command.extend(["--entrypoint", "python", image, "-m", "uvicorn", "app.main:app",
+                                "--app-dir", "backend", "--host", "0.0.0.0", "--port", "10000", "--no-access-log"])
+            server = subprocess.Popen(command, cwd=root, env=server_env,
                 stdout=log, stderr=subprocess.STDOUT, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             import httpx
             for _ in range(90):
@@ -115,6 +136,9 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
         print("Catalog browser QA exit code:", result.returncode)
         return result.returncode
     finally:
+        if container_name:
+            subprocess.run(["docker", "stop", container_name], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=30)
         if server:
             server.terminate()
             try:

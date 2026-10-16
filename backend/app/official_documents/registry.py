@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, case, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import (
@@ -182,9 +182,14 @@ def _official_records(
     machine_id: int | None = None,
     include_signatures: bool = True,
     include_files: bool = True,
+    version_overrides: dict[int, int] | None = None,
 ) -> list[_DocumentRecord]:
     if not document_types or document_ids is not None and not document_ids:
         return []
+    selected_version = (
+        case(version_overrides, value=OfficialDocument.id, else_=OfficialDocument.current_version_id)
+        if version_overrides else OfficialDocument.current_version_id
+    )
     statement = (
         select(
             OfficialDocument.id,
@@ -204,7 +209,8 @@ def _official_records(
         )
         .join(
             OfficialDocumentVersion,
-            OfficialDocumentVersion.id == OfficialDocument.current_version_id,
+            and_(OfficialDocumentVersion.id == selected_version,
+                 OfficialDocumentVersion.document_id == OfficialDocument.id),
         )
         .where(OfficialDocument.document_type.in_(document_types))
     )
@@ -1331,6 +1337,57 @@ def query_official_document_registry_items(
         "has_next": page < total_pages,
         "items": items,
     }
+
+
+def transfer_document_records(db: Session, transfer: TransferProtocol) -> list[dict[str, Any]]:
+    """Reuse the archive projection, scoped by the cycle FK before any hydration.
+
+    Dedupe before excluding unsigned versions so a draft/cancelled official
+    document cannot reappear as an apparently final legacy file.
+    """
+    official_ids = list(db.scalars(select(OfficialDocument.id).where(
+        OfficialDocument.transfer_id == transfer.id,
+        OfficialDocument.document_type.in_(_TRANSFER_DOCUMENT_TYPES),
+    )))
+    protocol_ids = list(db.scalars(select(ProtocolDocument.id).where(
+        ProtocolDocument.transfer_id == transfer.id,
+    )))
+    generated_ids = list(db.scalars(select(GeneratedDocument.id).where(
+        GeneratedDocument.transfer_id == transfer.id,
+        GeneratedDocument.document_type.in_(_TRANSFER_DOCUMENT_TYPES),
+    )))
+    # The signing projection records the exact operation FK in the immutable
+    # participant identity. Its manifest pins the per-machine document version.
+    # Never follow a later correcting draft instead of the signed cycle archive.
+    batch_ids = {transfer.batch_id} if transfer.batch_id else set()
+    for identity in db.scalars(select(DocumentParticipant.identity_snapshot).join(
+        OfficialDocumentVersion, OfficialDocumentVersion.id == DocumentParticipant.document_version_id
+    ).where(OfficialDocumentVersion.document_id.in_(official_ids))):
+        act = identity.get("batch_signing_act") if isinstance(identity, dict) else None
+        if isinstance(act, dict) and type(act.get("batch_id")) is int:
+            batch_ids.add(act["batch_id"])
+    pinned_versions = {}
+    for batch in db.scalars(select(TransferBatch).where(TransferBatch.id.in_(batch_ids))):
+        for manifest, state in ((batch.issue_manifest, batch.issue_signing_status),
+                                (batch.return_manifest, batch.return_signing_status)):
+            if state != "COMPLETED" or not isinstance(manifest, dict):
+                continue
+            for item in manifest.get("machines", []):
+                if (isinstance(item, dict) and item.get("transfer_id") == transfer.id
+                        and item.get("official_document_id") in official_ids
+                        and type(item.get("official_document_version_id")) is int):
+                    pinned_versions[item["official_document_id"]] = item["official_document_version_id"]
+    records = _deduplicate_records(
+        _official_records(db, document_ids=official_ids, document_types=_TRANSFER_DOCUMENT_TYPES,
+                          version_overrides=pinned_versions),
+        _legacy_issue_records(db, row_ids=protocol_ids)
+        + _legacy_generated_records(db, row_ids=generated_ids, document_types=_TRANSFER_DOCUMENT_TYPES),
+    )
+    return [record.output() | {"created_at": record.created_at, "finalized_at": record.finalized_at}
+            for record in records
+            if (record.version_status is None or record.version_status in {"SIGNED", "SUPERSEDED"})
+            and (transfer.issue_status == "COMPLETED" if record.document_type == "TRANSFER_ISSUE"
+                 else transfer.return_status == "COMPLETED")]
 
 
 def count_official_document_registry_items(db: Session) -> dict[str, int]:

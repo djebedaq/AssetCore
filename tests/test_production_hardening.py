@@ -174,7 +174,7 @@ def test_incomplete_profile_requires_full_identity_or_documented_exception(
     invalid = client.put(
         "/api/users/me/profile",
         headers=headers,
-        json={"first_name": "QA", "last_name": "Profile", "job_title": "Test observer"},
+        json={"first_name": " ", "last_name": "Profile", "job_title": "Test observer"},
     )
     assert invalid.status_code == 422
 

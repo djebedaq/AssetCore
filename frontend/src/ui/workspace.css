@@ -116,3 +116,18 @@ select.ac-native-select { min-width: 0; max-width: 100%; cursor: pointer; }
 .shared-references article { border-bottom: 1px solid #d7e0e8; padding-block: 10px; overflow-wrap: anywhere; }
 @media (max-width: 760px) { .reference-previews { grid-template-columns: 1fr; } }
 @media print { .qr-screen-grid { display: none !important; } }
+
+.ac-context-tabs button[aria-selected=true] { background: #173e63; color: #fff; border-color: #173e63; }
+.transfer-batch-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+.transfer-batch-summary p { flex-basis: 100%; margin: 0; }
+.transfer-cycle-details .detail-grid { margin: 16px 0; }
+.transfer-cycle-details dd { margin: 4px 0; overflow-wrap: anywhere; }
+.transfer-cycle-protocols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.transfer-cycle-protocols section { border: 1px solid var(--ac-line); border-radius: 10px; padding: 14px; }
+.transfer-cycle-protocols h4 { margin: 0 0 12px; }
+.transfer-cycle-protocols article { display: grid; gap: 8px; margin-bottom: 8px; overflow-wrap: anywhere; }
+.transfer-cycle-protocols small { color: #657486; }
+.transfer-history-table table { min-width: 880px; }
+@media (max-width: 760px) { .transfer-cycle-protocols { grid-template-columns: 1fr; } .bulk-modal-wide { max-height: 92dvh; } }
+
+.batch-card > div:first-child > small { display: block; overflow-wrap: anywhere; margin-top: 4px; }

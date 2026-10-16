@@ -63,7 +63,7 @@ export default function ProfileCompletion({
         <form onSubmit={submit}>
           <div className="form-grid three-columns">
             <label>{t('profile.firstName')}<input value={firstName} onChange={(event) => setFirstName(event.target.value)} autoComplete="given-name" required /></label>
-            <label>{t('profile.middleName')}<input value={middleName} onChange={(event) => setMiddleName(event.target.value)} autoComplete="additional-name" required={!exception} disabled={exception} /></label>
+            <label>{t('profile.middleNameOptional')}<input value={middleName} onChange={(event) => setMiddleName(event.target.value)} autoComplete="additional-name" disabled={exception} /></label>
             <label>{t('profile.lastName')}<input value={lastName} onChange={(event) => setLastName(event.target.value)} autoComplete="family-name" required /></label>
           </div>
           <div className="form-grid">

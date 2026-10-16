@@ -12,7 +12,7 @@ import { ReturnModal } from './ReturnFlow'
 import { CancelBatchModal } from './CancelBatchModal'
 import type { TransferEntryIntent } from '../passport/machineEntryIntent'
 
-type BulkTransfersProps = { onChanged: () => void; entryIntent?: TransferEntryIntent; onEntryConsumed?: () => void; hideBatchPanel?: boolean }
+type BulkTransfersProps = { onChanged: () => void; entryIntent?: TransferEntryIntent; onEntryConsumed?: () => void; hideBatchPanel?: boolean; refreshKey?: number }
 
 function canOperateTransfers(): boolean {
   return hasPermission('transfers.create', 'transfers.return')
@@ -22,7 +22,7 @@ function canCancelTransfers(): boolean {
   return hasPermission('transfers.create')
 }
 
-export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed, hideBatchPanel = false }: BulkTransfersProps) {
+export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed, hideBatchPanel = false, refreshKey }: BulkTransfersProps) {
   const { t } = useI18n()
   const allowCancel = canCancelTransfers()
   const [availabilityItems, setAvailability] = useState<TransferAvailability[]>([])
@@ -36,7 +36,9 @@ export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed,
   const [initialMachineId, setInitialMachineId] = useState<number>()
   const consumed = useRef<TransferEntryIntent | null>(null)
 
+  const requestGeneration = useRef(0)
   const load = async () => {
+    const generation = ++requestGeneration.current
     setLoading(true)
     try {
       const [available, locationItems, batchItems] = await Promise.all([
@@ -44,18 +46,19 @@ export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed,
         transferApi.locations(),
         hideBatchPanel ? Promise.resolve([]) : transferApi.batches(),
       ])
+      if (generation !== requestGeneration.current) return
       setAvailability(available)
       setLocations(locationItems)
       setBatches(batchItems)
       setError(null)
     } catch (caught) {
-      setError(caught instanceof Error ? caught : new Error('request_failed'))
+      if (generation === requestGeneration.current) setError(caught instanceof Error ? caught : new Error('request_failed'))
     } finally {
-      setLoading(false)
+      if (generation === requestGeneration.current) setLoading(false)
     }
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => { void load(); return () => { requestGeneration.current++ } }, [refreshKey])
   // App mounts a fresh workspace for each deliberate passport handoff. Wait for
   // the normal availability read; never select from the old passport snapshot.
   useEffect(() => {
@@ -73,7 +76,7 @@ export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed,
   const openMode = (next: 'issue' | 'return') => { setInitialMachineId(undefined); setMode(next) }
   const completed = () => {
     setDetails({})
-    void load()
+    if (refreshKey === undefined) void load()
     onChanged()
   }
   const openBatch = async (batch: BatchProgress) => {
@@ -104,7 +107,7 @@ export default function BulkTransfers({ onChanged, entryIntent, onEntryConsumed,
   }
   const cancelled = () => {
     setDetails({})
-    void load()
+    if (refreshKey === undefined) void load()
     onChanged()
   }
 

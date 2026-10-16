@@ -17,6 +17,7 @@ from .auth_throttle import (
     throttled_error,
 )
 from .database import get_db
+from .governance.profile_checks import _profile_complete
 from .licensing import active_license
 from .models import Department, ProfileStatus, User, UserRole, utcnow
 from .permissions import Permission, has_permission, permissions_for, require_permission
@@ -37,6 +38,7 @@ from .security import (
     verify_password,
 )
 from .settings import settings
+from .user_identity import full_name
 
 router = APIRouter(prefix="/api", tags=["users"])
 
@@ -238,7 +240,7 @@ def create_user(
         )
     user = User(
         email=data.email,
-        full_name=" ".join([data.first_name, data.middle_name, data.last_name]),
+        full_name=data.full_name,
         first_name=data.first_name,
         middle_name=data.middle_name,
         last_name=data.last_name,
@@ -335,6 +337,8 @@ def update_user(
     # The separated identity fields are authoritative. A legacy full_name-only
     # update must never overwrite a complete structured identity.
     changes.pop("full_name", None)
+    if "middle_name" in data.model_fields_set:
+        changes["middle_name"] = data.middle_name
     if "department_id" in changes and db.get(Department, changes["department_id"]) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -349,18 +353,10 @@ def update_user(
     identity_fields = {"first_name", "middle_name", "last_name", "job_title"}
     if identity_fields.intersection(changes):
         if target.first_name and target.last_name:
-            target.full_name = " ".join(
-                filter(None, [target.first_name, target.middle_name, target.last_name])
-            )
-        has_middle = bool(target.middle_name) or (
-            target.legal_name_exception
-            and bool(target.legal_name_exception_reason)
-            and bool(target.legal_name_exception_approved_by_id)
-            and bool(target.legal_name_exception_approved_at)
-        )
+            target.full_name = full_name(target.first_name, target.middle_name, target.last_name)
         target.profile_status = (
             ProfileStatus.COMPLETE.value
-            if target.first_name and has_middle and target.last_name and target.job_title
+            if _profile_complete(target)
             else ProfileStatus.INCOMPLETE.value
         )
     if target.role != old["role"] or target.is_active != old["active"]:

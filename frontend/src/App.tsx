@@ -40,6 +40,7 @@ type Page =
   | 'settings'
 
 function landingPage(user: UserSession): Page {
+  if (window.location.pathname === '/transfers' && user.permissions.includes('transfers.view')) return 'transfers'
   return window.location.pathname === '/machines' && user.permissions.includes('assets.view')
     ? 'machines' : user.permissions.includes('repairs.view') ? 'dashboard' : 'machines'
 }
@@ -64,7 +65,7 @@ function App() {
     setOperationTarget(null)
     machineEntry.leave()
     setPage(next)
-    window.history.pushState({ ...window.history.state, assetcorePage: next }, '', next === 'machines' ? '/machines' : '/')
+    window.history.pushState({ ...window.history.state, assetcorePage: next }, '', next === 'machines' ? '/machines' : next === 'transfers' ? '/transfers' : '/')
     window.dispatchEvent(new Event('assetcore:routechange'))
   }
 
@@ -76,7 +77,7 @@ function App() {
       machineEntry.leave(); setEntryIntent(null); setOperationTarget(target); setWorkflowVisit(value => value + 1)
       const next = target.module === 'documents' ? 'official' : target.module
       setPage(next)
-      window.history.pushState({ ...window.history.state, assetcorePage: next }, '', '/')
+      window.history.pushState({ ...window.history.state, assetcorePage: next }, '', next === 'transfers' ? `/transfers?record_id=${target.recordId}` : '/')
       window.dispatchEvent(new Event('assetcore:routechange'))
     }
     window.addEventListener('assetcore:operation', openRecord)
@@ -125,7 +126,8 @@ function App() {
 
   useEffect(() => {
     const synchronize = () => {
-      if (window.location.pathname === '/machines') setPage('machines')
+      if (window.location.pathname === '/transfers' && hasPermission('transfers.view')) { setOperationTarget(null); setPage('transfers'); setWorkflowVisit(value => value + 1) }
+      else if (window.location.pathname === '/machines') setPage('machines')
       else if (window.location.pathname === '/') setPage(window.history.state?.assetcorePage || 'dashboard')
     }
     window.addEventListener('popstate', synchronize)

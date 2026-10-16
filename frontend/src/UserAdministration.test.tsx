@@ -76,7 +76,7 @@ describe('управление на потребителски акаунти', 
     await userEvent.selectOptions(roles, 'director')
     // Test fixtures supply complete structured names, as required by the API.
     await userEvent.type(dialog.getByLabelText('Собствено име'), 'QA')
-    await userEvent.type(dialog.getByLabelText('Бащино име'), 'Lifecycle')
+    await userEvent.type(dialog.getByLabelText('Презиме (незадължително)'), 'Lifecycle')
     await userEvent.type(dialog.getByLabelText('Фамилия'), 'Administrator')
     await userEvent.type(dialog.getByLabelText('Длъжност'), 'QA administrator')
     await userEvent.click(dialog.getByRole('button', { name: 'Запази' }))
@@ -156,7 +156,7 @@ describe('управление на потребителски акаунти', 
     await userEvent.click(screen.getByRole('button', { name: 'Добави потребител' }))
     const dialog = within(screen.getByRole('dialog', { name: 'Добави потребител' }))
     await userEvent.type(dialog.getByLabelText('Собствено име'), 'Temporary')
-    await userEvent.type(dialog.getByLabelText('Бащино име'), 'Automation')
+    await userEvent.type(dialog.getByLabelText('Презиме (незадължително)'), 'Automation')
     await userEvent.type(dialog.getByLabelText('Фамилия'), 'Test')
     await userEvent.type(dialog.getByLabelText('Длъжност'), 'Test mechanic')
     await userEvent.type(dialog.getByLabelText('Служебен имейл'), 'temporary@example.invalid')

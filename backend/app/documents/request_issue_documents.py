@@ -338,7 +338,6 @@ def archive(db, request, actor):
         prepared.get("first_name")
         and prepared.get("last_name")
         and prepared.get("job_title")
-        and (prepared.get("middle_name") or prepared.get("legal_name_exception_confirmed"))
     ):
         raise ValueError("approval_preparer_profile_incomplete")
     existing = list(

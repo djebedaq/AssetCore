@@ -1,0 +1,4 @@
+# Generated QA documents are delivered through CI artifacts.
+*.pdf
+*.docx
+*.zip

@@ -70,10 +70,10 @@ it('transfer contexts request separately bounded active and completed data witho
   vi.stubGlobal('fetch', fetch)
   render(<I18nProvider><Transfers /></I18nProvider>)
   expect(await screen.findByText(bg['ux.emptyActive'])).toBeVisible()
-  await userEvent.click(screen.getByRole('button', { name: bg['ux.completedBatches'] }))
-  expect(await screen.findByText(bg['ux.emptyCompleted'])).toBeVisible()
+  await userEvent.click(screen.getByRole('tab', { name: bg['transfersUX.history'] }))
+  expect(await screen.findByText(bg['transfers.emptyHistory'])).toBeVisible()
   expect(fetch.mock.calls.some(([url]) => url.includes('context=active'))).toBe(true)
-  expect(fetch.mock.calls.some(([url]) => url.includes('context=completed'))).toBe(true)
+  expect(fetch.mock.calls.some(([url]) => url.includes('status=completed'))).toBe(true)
   expect(fetch.mock.calls.some(([url]) => url.startsWith('/api/transfer-batches?'))).toBe(false)
 })
 
