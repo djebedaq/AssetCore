@@ -21,6 +21,7 @@ from .models import (
     UserRole,
 )
 from .security import validate_password_policy
+from .user_identity import clean_identity, full_name
 
 
 class LoginRequest(BaseModel):
@@ -83,7 +84,7 @@ class UserCreate(BaseModel):
     email: str
     full_name: str | None = Field(default=None, min_length=2, max_length=255)
     first_name: str = Field(min_length=1, max_length=120)
-    middle_name: str = Field(min_length=1, max_length=120)
+    middle_name: str | None = Field(default=None, max_length=120)
     last_name: str = Field(min_length=1, max_length=120)
     job_title: str = Field(min_length=2, max_length=255)
     department_id: int | None = None
@@ -92,6 +93,11 @@ class UserCreate(BaseModel):
     temporary_password: str
     confirm_password: str
     is_active: bool = True
+
+    @field_validator("first_name", "middle_name", "last_name", "job_title", mode="before")
+    @classmethod
+    def clean_names(cls, value):
+        return clean_identity(value) if isinstance(value, str) or value is None else value
 
     @field_validator("email")
     @classmethod
@@ -104,12 +110,11 @@ class UserCreate(BaseModel):
             raise ValueError("Паролите не съвпадат.")
         validate_password_policy(self.temporary_password, self.email)
         self.first_name = self.first_name.strip()
-        self.middle_name = self.middle_name.strip()
         self.last_name = self.last_name.strip()
         self.job_title = self.job_title.strip()
-        if not all((self.first_name, self.middle_name, self.last_name, self.job_title)):
-            raise ValueError("Трите имена и длъжността са задължителни.")
-        self.full_name = " ".join((self.first_name, self.middle_name, self.last_name))
+        if not all((self.first_name, self.last_name, self.job_title)):
+            raise ValueError("Името, фамилията и длъжността са задължителни.")
+        self.full_name = full_name(self.first_name, self.middle_name, self.last_name)
         return self
 
 
@@ -118,13 +123,21 @@ class UserUpdate(BaseModel):
 
     full_name: str | None = Field(default=None, min_length=2, max_length=255)
     first_name: str | None = Field(default=None, min_length=1, max_length=120)
-    middle_name: str | None = Field(default=None, min_length=1, max_length=120)
+    middle_name: str | None = Field(default=None, max_length=120)
     last_name: str | None = Field(default=None, min_length=1, max_length=120)
     job_title: str | None = Field(default=None, min_length=2, max_length=255)
     department_id: int | None = None
     role: UserRole | None = None
     preferred_language: LanguageCode | None = None
     is_active: bool | None = None
+
+    @field_validator("first_name", "middle_name", "last_name", "job_title", mode="before")
+    @classmethod
+    def clean_names(cls, value, info):
+        normalized = clean_identity(value) if isinstance(value, str) or value is None else value
+        if info.field_name != "middle_name" and normalized is None:
+            raise ValueError("Името, фамилията и длъжността са задължителни.")
+        return normalized
 
     @field_validator("full_name")
     @classmethod

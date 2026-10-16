@@ -61,7 +61,7 @@ describe('production hardening workflows', () => {
 
     expect(screen.queryByRole('button', { name: 'Отказ' })).not.toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('Собствено име'), 'Test')
-    await userEvent.type(screen.getByLabelText('Бащино име'), 'Middle')
+    await userEvent.type(screen.getByLabelText('Презиме (незадължително)'), 'Middle')
     await userEvent.type(screen.getByLabelText('Фамилия'), 'Profile')
     await userEvent.type(screen.getByLabelText('Длъжност'), 'QA mechanic')
     await userEvent.click(screen.getByRole('button', { name: 'Потвърди профила' }))

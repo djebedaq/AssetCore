@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .models import LanguageCode, LicenseType, OfficialDocumentStatus, UserRole
+from .user_identity import clean_identity
 
 
 def _clean(value: str | None) -> str | None:
@@ -23,15 +24,16 @@ class ProfileUpdate(BaseModel):
     legal_name_exception: bool = False
     legal_name_exception_reason: str | None = Field(default=None, max_length=1000)
 
+    @field_validator("first_name", "middle_name", "last_name", "job_title", mode="before")
+    @classmethod
+    def clean_names(cls, value):
+        return clean_identity(value) if isinstance(value, str) or value is None else value
+
     @model_validator(mode="after")
     def validate_identity(self):
         for field in ("first_name", "middle_name", "last_name", "job_title"):
             setattr(self, field, _clean(getattr(self, field)))
         self.legal_name_exception_reason = _clean(self.legal_name_exception_reason)
-        if not self.middle_name and not self.legal_name_exception:
-            raise ValueError(
-                "Бащиното име е задължително. При законово изключение посочете причина."
-            )
         if self.legal_name_exception and not self.legal_name_exception_reason:
             raise ValueError("Посочете основание за законовото изключение.")
         return self

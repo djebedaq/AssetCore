@@ -119,7 +119,7 @@ def test_administrator_can_create_each_standard_role(
 
 def test_new_user_requires_structured_identity(client, auth_headers):
     payload = _create_payload("missing-middle@example.invalid", "observer")
-    payload.pop("middle_name")
+    payload.pop("first_name")
     response = client.post("/api/users", headers=auth_headers, json=payload)
     assert response.status_code == 422
 
