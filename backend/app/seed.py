@@ -23,6 +23,7 @@ from .models import (
 from .catalog.importer import import_authoritative_catalog
 from .security import hash_password
 from .settings import settings
+from .user_identity import clean_identity, full_name
 
 LOCATIONS = [
     "Цех",
@@ -90,18 +91,21 @@ def _seed_verified_registry(db: Session) -> None:
             raise RuntimeError(
                 "OWNER_INITIAL_PASSWORD е задължителна при създаване на първия собственик."
             )
-        owner_names = [settings.owner_first_name, settings.owner_middle_name, settings.owner_last_name]
-        display_name = " ".join(value.strip() for value in owner_names if value and value.strip())
+        first_name = clean_identity(settings.owner_first_name)
+        middle_name = clean_identity(settings.owner_middle_name)
+        last_name = clean_identity(settings.owner_last_name)
+        job_title = clean_identity(settings.owner_job_title)
+        display_name = full_name(first_name or "", middle_name, last_name or "")
         owner = User(
             email=owner_email,
             full_name=display_name or "Администратор",
-            first_name=settings.owner_first_name,
-            middle_name=settings.owner_middle_name,
-            last_name=settings.owner_last_name,
-            job_title=settings.owner_job_title,
+            first_name=first_name,
+            middle_name=middle_name,
+            last_name=last_name,
+            job_title=job_title,
             profile_status=(
                 ProfileStatus.COMPLETE.value
-                if all(owner_names) and settings.owner_job_title
+                if first_name and last_name and job_title
                 else ProfileStatus.INCOMPLETE.value
             ),
             password_hash=hash_password(initial_password),

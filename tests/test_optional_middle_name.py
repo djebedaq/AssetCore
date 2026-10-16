@@ -15,6 +15,50 @@ from test_requests01 import approve, create
 from test_user_accounts import _create_payload, _login
 
 
+@pytest.mark.parametrize("middle", [None, "", "   ", "  Middle  "])
+def test_initial_protected_owner_accepts_optional_middle_without_rewriting_existing_data(
+    tmp_path, monkeypatch, middle
+):
+    from app.database import Base
+    from app.documents.templates import _preparer_values
+    from app.models import Machine
+    from app.seed import _seed_verified_registry
+    from app.settings import settings
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    monkeypatch.setattr(settings, "owner_first_name", " QA ")
+    monkeypatch.setattr(settings, "owner_middle_name", middle)
+    monkeypatch.setattr(settings, "owner_last_name", " Bootstrap ")
+    monkeypatch.setattr(settings, "owner_job_title", " QA operator ")
+    engine = create_engine(f"sqlite:///{tmp_path / 'fresh-owner.db'}")
+    try:
+        with engine.begin() as connection:
+            connection.exec_driver_sql("BEGIN")
+            Base.metadata.create_all(connection)
+        with Session(engine) as db:
+            _seed_verified_registry(db)
+            db.commit()
+            owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            expected = "QA Middle Bootstrap" if middle == "  Middle  " else "QA Bootstrap"
+            assert owner.full_name == expected
+            assert owner.profile_status == "PROFILE_COMPLETE"
+            assert owner.role == "administrator" and owner.is_active
+            assert not owner.legal_name_exception
+            assert _preparer_values(db, owner.id) == {
+                "PREPARER_NAME": expected, "PREPARER_JOB_TITLE": "QA operator"}
+            inventory = db.execute(select(Machine.__table__).order_by(Machine.id)).all()
+            assert len(inventory) == 19
+            monkeypatch.setattr(settings, "owner_first_name", "Later configuration")
+            monkeypatch.setattr(settings, "owner_middle_name", "Later middle")
+            _seed_verified_registry(db)
+            db.commit()
+            assert owner.full_name == expected  # Never ordinarily edit the designated owner.
+            assert db.execute(select(Machine.__table__).order_by(Machine.id)).all() == inventory
+    finally:
+        engine.dispose()
+
+
 @pytest.mark.parametrize("middle", [None, "", "   ", "  Automation  ", "omitted"])
 @pytest.mark.parametrize("role", ["administrator", "director", "mechanic", "observer"])
 def test_create_login_and_edit_optional_middle(client, auth_headers, middle, role):
