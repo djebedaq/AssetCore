@@ -28,7 +28,7 @@ def reports_fixture(db, now=None):
         name_bg="REPORTS-01 QA",
         name_en="REPORTS-01 QA",
         name_ru="REPORTS-01 QA",
-        capabilities=["CAN_TRANSFER", "CAN_REPAIR", "HAS_PARTS_CATALOG"],
+        capabilities=["HAS_TRANSFER_WORKFLOW", "HAS_REPAIR_WORKFLOW", "HAS_PARTS_CATALOG"],
     )
     db.add(category)
     db.flush()

@@ -47,7 +47,7 @@ export function useWorkspaceFilters() {
   return { values, change, reset, page, setPage, params: { ...categoryParams(values.category), q, status: values.status, date_from: values.from, date_to: values.to, sort: values.sort, machine_id: values.machine, page } }
 }
 
-export function MachineSelect({ module, category = '', value, onChange, disabled = false, status = '', label }: { module: WorkspaceModule; category?: string; value: string; onChange: (value: string) => void; disabled?: boolean; status?: string; label?: string }) {
+export function MachineSelect({ module, category = '', value, onChange, disabled = false, status = '', label, onSelected }: { module: WorkspaceModule; category?: string; value: string; onChange: (value: string) => void; disabled?: boolean; status?: string; label?: string; onSelected?: (machine: Machine | null) => void }) {
   const { t } = useI18n()
   const [query, setQuery] = useState('')
   const q = useDebounced(query)
@@ -61,7 +61,7 @@ export function MachineSelect({ module, category = '', value, onChange, disabled
   }, [value])
   const machines = data?.items || []
   const options = selected && !machines.some(item => item.id === selected.id) ? [selected, ...machines] : machines
-  return <label className="ac-filter"><span>{label || t('common.machine')}</span><Select label={label || t('common.machine')} value={value} onChange={onChange} disabled={disabled} onSearch={setQuery} loading={loading} invalid={error}
+  return <label className="ac-filter"><span>{label || t('common.machine')}</span><Select label={label || t('common.machine')} value={value} onChange={id => { onChange(id); onSelected?.(options.find(machine => String(machine.id) === id) || null) }} disabled={disabled} onSearch={setQuery} loading={loading} invalid={error}
     placeholder={t(disabled ? 'ux.categoryFirst' : 'catalog.chooseMachinePlaceholder')}
     options={[{ value: '', label: t('catalog.chooseMachinePlaceholder') }, ...options.map(machine => ({ value: String(machine.id), label: `№${machine.inventory_number} · ${machine.name} · ${machine.brand}` }))]} />
     {error && <small role="alert">{t('errors.generic')}</small>}

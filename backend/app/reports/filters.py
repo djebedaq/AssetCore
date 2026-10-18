@@ -25,6 +25,7 @@ class ReportFilters:
     uncategorized: bool = False
     machine_ids: tuple[int, ...] = ()
     q: str = ""
+    cutoff: datetime | None = None
 
     @property
     def start(self):
@@ -49,7 +50,11 @@ class ReportFilters:
         )
 
     def includes(self, value):
-        return value is not None and self.start <= naive(value) < self.end
+        return (
+            value is not None
+            and self.start <= naive(value) < self.end
+            and (self.cutoff is None or naive(value) <= self.cutoff)
+        )
 
     def public(self):
         return {

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useI18n } from '../../i18n'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Pagination, SortSelect, openOperation, queryParams, usePage, type PageData } from '../../ui/workspace'
-import { useReportText, type Asset, type Kind, type MachineStats, type Metric, type RecordRow } from './reportData'
+import { useReportDate, useReportText, type Asset, type Kind, type MachineStats, type Metric, type RecordRow } from './reportData'
 
 export function MetricCards({ metrics, onDrill, comparison = false }: { metrics: Metric[]; onDrill: (metric: Metric) => void; comparison?: boolean }) {
   const text = useReportText(), { number } = useI18n()
@@ -13,7 +13,7 @@ export function MetricCards({ metrics, onDrill, comparison = false }: { metrics:
   </button>)}</div>
 }
 export function Records({ kind, metric, params, initial, onPassport, delayed = false }: { kind: Kind; metric: string; params: Record<string, string | number | undefined>; initial?: PageData<RecordRow> | null; onPassport: (id: number) => void; delayed?: boolean }) {
-  const text = useReportText(), { t, date, number } = useI18n()
+  const text = useReportText(), date = useReportDate(), { t, number } = useI18n()
   const [page, setPage] = useState(1), [sort, setSort] = useState('newest')
   const path = initial && page === 1 && sort === 'newest' ? null : `/reports/records?${queryParams({ ...params, kind, metric, page, sort })}`
   const remote = usePage<RecordRow>(path), data = path ? remote.data : initial

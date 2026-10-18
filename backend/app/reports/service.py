@@ -5,6 +5,7 @@ Bounded column reads keep memory predictable; pagination itself happens in SQL.
 """
 
 from collections import Counter, defaultdict
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -79,7 +80,14 @@ def machine_scope(f):
 
 def machine_search(q):
     return select(Machine.id).where(
-        text_match(q, Machine.inventory_number, Machine.name, Machine.model, Machine.brand)
+        text_match(
+            q,
+            Machine.inventory_number,
+            Machine.serial_number,
+            Machine.name,
+            Machine.model,
+            Machine.brand,
+        )
     )
 
 
@@ -434,11 +442,13 @@ class Reports:
         ensure_permission(user, Permission.ASSETS_VIEW)
         self.db, self.user, self.f = db, user, f
         self.now = naive(now or datetime.now(UTC))
+        f = self.f = replace(f, cutoff=self.now)
         self.allowed = {
             kind: has_permission(user, permission) for kind, permission in MODULES.items()
         }
         self.queries = statements(f, has_permission(user, Permission.DOCUMENTS_VIEW))
         self.sources = {}
+        self._attention = None
         active = exists(
             select(TransferProtocol.id).where(
                 TransferProtocol.machine_id == Machine.id,
@@ -642,12 +652,36 @@ class Reports:
         return list(buckets.values())
 
     def attention(self):
+        if self._attention is not None:
+            return self._attention
         if not self.allowed["repairs"]:
             return []
         repairs = self.load("repairs")
         transfers = self.load("usage") if self.allowed["usage"] else []
         recent_start = self.now - timedelta(days=ATTENTION_WINDOW_DAYS)
         previous_start = recent_start - timedelta(days=ATTENTION_WINDOW_DAYS)
+        if self.f.q:
+            # Search selects machines; objective attention criteria use their complete
+            # relevant history, not only problem descriptions matching the search.
+            queries = statements(replace(self.f, q=""))
+            repairs = bounded(
+                self.db,
+                queries["repairs"].where(
+                    Repair.machine_id.in_(self.machine_map),
+                    Repair.opened_at <= self.now,
+                    or_(Repair.opened_at >= previous_start, Repair.status != "COMPLETED"),
+                ),
+            )
+            if self.allowed["usage"]:
+                transfers = bounded(
+                    self.db,
+                    queries["usage"].where(
+                        TransferProtocol.machine_id.in_(self.machine_map),
+                        TransferProtocol.issued_at <= self.now,
+                        TransferProtocol.returned_at >= recent_start,
+                        TransferProtocol.returned_at <= self.now,
+                    ),
+                )
         grouped, returned = defaultdict(list), defaultdict(list)
         for r in repairs:
             grouped[r["machine_id"]].append(r)
@@ -701,7 +735,7 @@ class Reports:
                         "open_count": sum(r["status"] != "COMPLETED" for r in records),
                     }
                 )
-        return sorted(
+        self._attention = sorted(
             result,
             key=lambda r: (
                 -len(r["reasons"]),
@@ -709,13 +743,14 @@ class Reports:
                 r["machine"]["id"],
             ),
         )
+        return self._attention
 
     def matches(self, kind, name):
         """SQL predicates shared by paginated and exported detail rows."""
         f, now = self.f, self.now
 
         def within(column):
-            return and_(column >= f.start, column < f.end)
+            return and_(column >= f.start, column < f.end, column <= now)
 
         if kind == "machines":
             ids = [
@@ -812,6 +847,30 @@ class Reports:
                 rows[(page - 1) * page_size : page * page_size], len(rows), page, page_size
             )
         self.load(kind)
+        if (kind, name) in {("repairs", "attention"), ("usage", "attention_returns")}:
+            model = Repair if kind == "repairs" else TransferProtocol
+            timestamp = model.opened_at if kind == "repairs" else model.returned_at
+            query = statements(replace(self.f, q=""))[kind].where(
+                model.machine_id.in_(self.machine_map),
+                self.matches(kind, name),
+                timestamp <= self.now,
+            )
+            total = self.db.scalar(select(func.count()).select_from(query.subquery()))
+            order = (
+                (timestamp.asc(), model.id.asc())
+                if sort == "oldest"
+                else (timestamp.desc(), model.id.desc())
+            )
+            records = (
+                self.db.execute(
+                    query.order_by(*order).offset((page - 1) * page_size).limit(page_size)
+                )
+                .mappings()
+                .all()
+            )
+            return self.page(
+                [self.record(kind, dict(row)) for row in records], total, page, page_size
+            )
         if kind == "requests" and name == "receipts":
             corrected = aliased(RequestDeliveryEvent)
             query = select(RequestDeliveryEvent.id, RequestDeliveryEvent.request_id).where(
@@ -819,6 +878,7 @@ class Reports:
                     self.queries[kind].with_only_columns(PartRequest.id)
                 ),
                 RequestDeliveryEvent.kind == "RECEIPT",
+                RequestDeliveryEvent.occurred_at <= self.now,
                 RequestDeliveryEvent.occurred_at >= self.f.start,
                 RequestDeliveryEvent.occurred_at < self.f.end,
                 ~exists(
@@ -941,7 +1001,9 @@ class Reports:
             )
         return result
 
-    def build(self, section):
+    def build(self, section, *, exporting=False):
+        if section == "machine" and len(self.f.machine_ids) != 1:
+            raise HTTPException(422, detail={"code": "reports_machine_required"})
         if section == "compare" and len(self.machines) != len(self.f.machine_ids):
             raise HTTPException(422, detail={"code": "reports_machine_scope_mismatch"})
         if section in MODULES:
@@ -1014,6 +1076,13 @@ class Reports:
                     },
                 }
             )
+        for item in machine_stats:
+            category = categories[item["machine"]["category_id"]]
+            totals = category.setdefault("metrics", Counter())
+            for category_metrics in item["metrics"].values():
+                for m in category_metrics:
+                    if m["key"] in {"issues", "completed_cycles", "opened", "closed", "created"}:
+                        totals[m["key"]] += m["value"] or 0
         ranking_kind = (
             "repairs"
             if section in {"overview", "repairs"}
@@ -1054,11 +1123,12 @@ class Reports:
                     Repair.id.in_(self.queries["repairs"].with_only_columns(Repair.id)),
                     RepairPart.created_at >= self.f.start,
                     RepairPart.created_at < self.f.end,
+                    RepairPart.created_at <= self.now,
                 )
                 .order_by(RepairPart.created_at.desc(), RepairPart.id.desc()),
                 1000,
             )
-            parts = part_rows[:100]
+            parts = part_rows if exporting else part_rows[:100]
         if section == "requests":
             counts = {}
             for r in self.load("requests"):
@@ -1117,6 +1187,11 @@ class Reports:
         }[kind]
         return {
             "section": section,
+            "filter_machines": [
+                {"id": m["id"], "inventory_number": m["inventory_number"], "name": m["name"]}
+                for m in self.machines
+                if m["id"] in self.f.machine_ids
+            ],
             "filters": self.f.public(),
             "previous_filters": self.f.previous().public(),
             "generated_at": self.now.isoformat() + "Z",
@@ -1128,11 +1203,15 @@ class Reports:
             "rankings": rankings,
             "ranking_kind": ranking_kind,
             "ranking_key": ranking_key,
-            "attention": self.attention()[:50],
+            "attention": self.attention() if exporting else self.attention()[:50],
             "attention_total": len(self.attention()),
             "machines": machine_stats if section in {"compare", "machine"} else [],
             "parts": parts,
-            "articles": articles[:20],
+            "parts_total": len(part_rows)
+            if section in {"machine", "repairs"} and self.allowed["repairs"]
+            else 0,
+            "articles": articles if exporting else articles[:20],
+            "articles_total": len(articles),
             "records": self.details(kind, name),
             "delayed": self.details("requests", "delayed") if section == "requests" else None,
             "thresholds": {

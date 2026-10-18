@@ -1,0 +1,665 @@
+{
+  "section": "requests",
+  "filter_machines": [
+    {
+      "id": 20,
+      "inventory_number": "REPORTS-QA-1",
+      "name": "Synthetic reports QA 1"
+    }
+  ],
+  "filters": {
+    "date_from": "2026-09-19",
+    "date_to": "2026-10-18",
+    "category_id": 2,
+    "uncategorized": false,
+    "machine_ids": [
+      20
+    ],
+    "q": "",
+    "timezone": "Europe/Sofia",
+    "start_utc": "2026-09-18T21:00:00Z",
+    "end_utc_exclusive": "2026-10-18T21:00:00Z"
+  },
+  "previous_filters": {
+    "date_from": "2026-08-20",
+    "date_to": "2026-09-18",
+    "category_id": 2,
+    "uncategorized": false,
+    "machine_ids": [
+      20
+    ],
+    "q": "",
+    "timezone": "Europe/Sofia",
+    "start_utc": "2026-08-19T21:00:00Z",
+    "end_utc_exclusive": "2026-09-18T21:00:00Z"
+  },
+  "generated_at": "2026-10-18T12:11:42.821602Z",
+  "capabilities": {
+    "usage": true,
+    "repairs": true,
+    "requests": true
+  },
+  "current": [
+    {
+      "key": "total_machines",
+      "value": 1,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "total_machines",
+      "current": true
+    },
+    {
+      "key": "READY",
+      "value": 0,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "READY",
+      "current": true
+    },
+    {
+      "key": "ISSUED",
+      "value": 0,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "ISSUED",
+      "current": true
+    },
+    {
+      "key": "REPAIR",
+      "value": 1,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "REPAIR",
+      "current": true
+    },
+    {
+      "key": "current_repairs",
+      "value": 1,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "current_repairs",
+      "current": true
+    },
+    {
+      "key": "pending_requests",
+      "value": 1,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "pending_requests",
+      "current": true
+    }
+  ],
+  "metrics": [
+    {
+      "key": "receipts",
+      "value": 1,
+      "previous": 0,
+      "change": 1,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "receipts",
+      "current": false
+    },
+    {
+      "key": "created",
+      "value": 1,
+      "previous": 0,
+      "change": 1,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "created",
+      "current": false
+    },
+    {
+      "key": "submitted",
+      "value": 1,
+      "previous": 0,
+      "change": 1,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "submitted",
+      "current": false
+    },
+    {
+      "key": "ordered",
+      "value": 1,
+      "previous": 0,
+      "change": 1,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "ordered",
+      "current": false
+    },
+    {
+      "key": "approved",
+      "value": 1,
+      "previous": 0,
+      "change": 1,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "approved",
+      "current": false
+    },
+    {
+      "key": "rejected",
+      "value": 0,
+      "previous": 0,
+      "change": 0,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "rejected",
+      "current": false
+    },
+    {
+      "key": "cancelled",
+      "value": 0,
+      "previous": 0,
+      "change": 0,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "cancelled",
+      "current": false
+    },
+    {
+      "key": "delivered",
+      "value": 0,
+      "previous": 0,
+      "change": 0,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "delivered",
+      "current": false
+    },
+    {
+      "key": "partial",
+      "value": 1,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "partial",
+      "current": false
+    },
+    {
+      "key": "pending_requests",
+      "value": 1,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "pending_requests",
+      "current": true
+    },
+    {
+      "key": "outstanding",
+      "value": 1,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "outstanding",
+      "current": true
+    },
+    {
+      "key": "waiting_order",
+      "value": 0,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "waiting_order",
+      "current": true
+    },
+    {
+      "key": "delayed",
+      "value": 1,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "count",
+      "sample": null,
+      "drill": "delayed",
+      "current": true
+    },
+    {
+      "key": "delivery_hours",
+      "value": null,
+      "previous": null,
+      "change": null,
+      "percent": null,
+      "unit": "hours",
+      "sample": 0,
+      "drill": "delivered",
+      "current": false
+    }
+  ],
+  "categories": [
+    {
+      "id": 2,
+      "name_bg": "REPORTS-01 QA",
+      "name_en": "REPORTS-01 QA",
+      "name_ru": "REPORTS-01 QA",
+      "total": 1,
+      "statuses": {
+        "REPAIR": 1
+      },
+      "metrics": {
+        "created": 1
+      }
+    }
+  ],
+  "trends": [
+    {
+      "period": "2026-09-14",
+      "created": 0,
+      "receipts": 0
+    },
+    {
+      "period": "2026-09-21",
+      "created": 0,
+      "receipts": 0
+    },
+    {
+      "period": "2026-09-28",
+      "created": 1,
+      "receipts": 1
+    },
+    {
+      "period": "2026-10-05",
+      "created": 0,
+      "receipts": 0
+    },
+    {
+      "period": "2026-10-12",
+      "created": 0,
+      "receipts": 0
+    }
+  ],
+  "rankings": [
+    {
+      "machine": {
+        "id": 20,
+        "inventory_number": "REPORTS-QA-1",
+        "name": "Synthetic reports QA 1",
+        "brand": "QA",
+        "model": "Synthetic",
+        "category_id": 2,
+        "category": "REPORTS01_QA",
+        "location": null,
+        "status": "REPAIR",
+        "name_bg": "REPORTS-01 QA",
+        "name_en": "REPORTS-01 QA",
+        "name_ru": "REPORTS-01 QA"
+      },
+      "metrics": {
+        "requests": [
+          {
+            "key": "receipts",
+            "value": 1,
+            "previous": 0,
+            "change": 1,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "receipts",
+            "current": false
+          },
+          {
+            "key": "created",
+            "value": 1,
+            "previous": 0,
+            "change": 1,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "created",
+            "current": false
+          },
+          {
+            "key": "submitted",
+            "value": 1,
+            "previous": 0,
+            "change": 1,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "submitted",
+            "current": false
+          },
+          {
+            "key": "ordered",
+            "value": 1,
+            "previous": 0,
+            "change": 1,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "ordered",
+            "current": false
+          },
+          {
+            "key": "approved",
+            "value": 1,
+            "previous": 0,
+            "change": 1,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "approved",
+            "current": false
+          },
+          {
+            "key": "rejected",
+            "value": 0,
+            "previous": 0,
+            "change": 0,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "rejected",
+            "current": false
+          },
+          {
+            "key": "cancelled",
+            "value": 0,
+            "previous": 0,
+            "change": 0,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "cancelled",
+            "current": false
+          },
+          {
+            "key": "delivered",
+            "value": 0,
+            "previous": 0,
+            "change": 0,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "delivered",
+            "current": false
+          },
+          {
+            "key": "partial",
+            "value": 1,
+            "previous": null,
+            "change": null,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "partial",
+            "current": false
+          },
+          {
+            "key": "pending_requests",
+            "value": 1,
+            "previous": null,
+            "change": null,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "pending_requests",
+            "current": true
+          },
+          {
+            "key": "outstanding",
+            "value": 1,
+            "previous": null,
+            "change": null,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "outstanding",
+            "current": true
+          },
+          {
+            "key": "waiting_order",
+            "value": 0,
+            "previous": null,
+            "change": null,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "waiting_order",
+            "current": true
+          },
+          {
+            "key": "delayed",
+            "value": 1,
+            "previous": null,
+            "change": null,
+            "percent": null,
+            "unit": "count",
+            "sample": null,
+            "drill": "delayed",
+            "current": true
+          },
+          {
+            "key": "delivery_hours",
+            "value": null,
+            "previous": null,
+            "change": null,
+            "percent": null,
+            "unit": "hours",
+            "sample": 0,
+            "drill": "delivered",
+            "current": false
+          }
+        ]
+      }
+    }
+  ],
+  "ranking_kind": "requests",
+  "ranking_key": "created",
+  "attention": [
+    {
+      "machine": {
+        "id": 20,
+        "inventory_number": "REPORTS-QA-1",
+        "name": "Synthetic reports QA 1",
+        "brand": "QA",
+        "model": "Synthetic",
+        "category_id": 2,
+        "category": "REPORTS01_QA",
+        "location": null,
+        "status": "REPAIR",
+        "name_bg": "REPORTS-01 QA",
+        "name_en": "REPORTS-01 QA",
+        "name_ru": "REPORTS-01 QA"
+      },
+      "reasons": [
+        {
+          "code": "frequent",
+          "count": 5,
+          "days": 90
+        },
+        {
+          "code": "long",
+          "count": 1,
+          "days": 7
+        },
+        {
+          "code": "return",
+          "count": 1,
+          "days": 90
+        }
+      ],
+      "open_count": 1
+    }
+  ],
+  "attention_total": 1,
+  "machines": [],
+  "parts": [],
+  "parts_total": 0,
+  "articles": [
+    {
+      "catalog_part_id": null,
+      "line_id": 1,
+      "description": "Synthetic QA item",
+      "part_number": null,
+      "unit": "pcs",
+      "requests": 1,
+      "quantity": "5",
+      "request_id": 1
+    },
+    {
+      "catalog_part_id": null,
+      "line_id": 2,
+      "description": "Synthetic QA liquid",
+      "part_number": null,
+      "unit": "l",
+      "requests": 1,
+      "quantity": "5.5",
+      "request_id": 1
+    }
+  ],
+  "articles_total": 2,
+  "records": {
+    "items": [
+      {
+        "id": 1,
+        "machine_id": 20,
+        "machine": {
+          "id": 20,
+          "inventory_number": "REPORTS-QA-1",
+          "name": "Synthetic reports QA 1",
+          "brand": "QA",
+          "model": "Synthetic",
+          "category_id": 2,
+          "category": "REPORTS01_QA",
+          "location": null,
+          "status": "REPAIR",
+          "name_bg": "REPORTS-01 QA",
+          "name_en": "REPORTS-01 QA",
+          "name_ru": "REPORTS-01 QA"
+        },
+        "module": "parts",
+        "request_reference": "REPORTS-QA-REQUEST",
+        "official_number": "KK9000",
+        "part_name": "Synthetic QA request",
+        "status": "PARTIALLY_DELIVERED",
+        "created_at": "2026-09-28T12:11:22",
+        "ordered_at": "2026-09-28T12:11:22",
+        "delivered_at": null,
+        "elapsed_days": 20,
+        "remaining_lines": 2,
+        "remaining": [
+          {
+            "id": 1,
+            "part_number": null,
+            "description": "Synthetic QA item",
+            "unit": "pcs",
+            "quantity": "4"
+          },
+          {
+            "id": 2,
+            "part_number": null,
+            "description": "Synthetic QA liquid",
+            "unit": "l",
+            "quantity": "5.5"
+          }
+        ],
+        "request_kind": "FREE_FORM"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "page_size": 20,
+    "total_pages": 1,
+    "has_previous": false,
+    "has_next": false
+  },
+  "delayed": {
+    "items": [
+      {
+        "id": 1,
+        "machine_id": 20,
+        "machine": {
+          "id": 20,
+          "inventory_number": "REPORTS-QA-1",
+          "name": "Synthetic reports QA 1",
+          "brand": "QA",
+          "model": "Synthetic",
+          "category_id": 2,
+          "category": "REPORTS01_QA",
+          "location": null,
+          "status": "REPAIR",
+          "name_bg": "REPORTS-01 QA",
+          "name_en": "REPORTS-01 QA",
+          "name_ru": "REPORTS-01 QA"
+        },
+        "module": "parts",
+        "request_reference": "REPORTS-QA-REQUEST",
+        "official_number": "KK9000",
+        "part_name": "Synthetic QA request",
+        "status": "PARTIALLY_DELIVERED",
+        "created_at": "2026-09-28T12:11:22",
+        "ordered_at": "2026-09-28T12:11:22",
+        "delivered_at": null,
+        "elapsed_days": 20,
+        "remaining_lines": 2,
+        "remaining": [
+          {
+            "id": 1,
+            "part_number": null,
+            "description": "Synthetic QA item",
+            "unit": "pcs",
+            "quantity": "4"
+          },
+          {
+            "id": 2,
+            "part_number": null,
+            "description": "Synthetic QA liquid",
+            "unit": "l",
+            "quantity": "5.5"
+          }
+        ],
+        "request_kind": "FREE_FORM"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "page_size": 20,
+    "total_pages": 1,
+    "has_previous": false,
+    "has_next": false
+  },
+  "thresholds": {
+    "window_days": 90,
+    "repair_count": 3,
+    "open_days": 7,
+    "delivery_days": 14
+  }
+}

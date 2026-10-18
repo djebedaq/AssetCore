@@ -237,11 +237,13 @@ def test_reports_export_content_matches_statistics(session_factory, report_qa, l
     with db:
         data = reports.build("usage")
         details = {"usage": reports.details("usage", "issues")["items"]}
+        details["usage"][0]["return_damage"] = "=1+1"
         xlsx = export_xlsx(data, details, language)
         with zipfile.ZipFile(io.BytesIO(xlsx)) as z:
             for name in z.namelist():
                 ET.fromstring(z.read(name))
             root = ET.fromstring(z.read("xl/worksheets/sheet1.xml"))
+            assert "=1+1" in z.read("xl/worksheets/sheet2.xml").decode()
             ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
             numeric = [float(n.text) for n in root.findall(".//s:v", ns)]
             assert 5 in numeric and 56 in numeric
@@ -250,6 +252,7 @@ def test_reports_export_content_matches_statistics(session_factory, report_qa, l
         reader = PdfReader(io.BytesIO(pdf))
         text = "\n".join(page.extract_text() for page in reader.pages)
         assert "REPORTS-QA-T" in text and "56" in text
+        assert "{{" not in text
         assert len(reader.pages) >= 2
         assert sheets(data, details, language)[0][1][6][1] == data["current"][0]["value"]
 
@@ -296,6 +299,134 @@ def test_reports_translation_parity():
         (root / "frontend/src/features/reports/labels.json").read_text(encoding="utf-8")
     )
     assert all(len(v) == 3 and all(v) for v in labels.values())
+
+
+def test_reports_search_does_not_weaken_objective_attention_history(session_factory, report_qa):
+    db, reports = service(session_factory, report_qa, q="KK9000")
+    with db:
+        assert len(reports.machines) == 1
+        assert reports.attention()[0]["reasons"][0]["count"] == 5
+        assert reports.details("repairs", "attention")["total"] == 5
+        data = reports.build("requests")
+        assert data["records"]["items"][0]["official_number"] == "KK9000"
+
+
+@pytest.mark.parametrize("days,expected", [(14, 0), (15, 1)])
+def test_reports_delay_is_strictly_more_than_fourteen_calendar_days(
+    session_factory, report_qa, days, expected
+):
+    db, reports = service(session_factory, report_qa)
+    with db:
+        request = db.get(PartRequest, report_qa["request_id"])
+        request.ordered_at = report_qa["now"] - timedelta(days=days)
+        db.commit()
+        assert values(reports.build("requests"))["delayed"] == expected
+
+
+def test_reports_zero_baseline_and_incomplete_history_are_explicit(session_factory, report_qa):
+    db, reports = service(session_factory, report_qa)
+    with db:
+        data = reports.build("usage")
+        issued = next(m for m in data["metrics"] if m["key"] == "issues")
+        assert issued["previous"] == 0 and issued["percent"] is None and issued["change"] == 5
+        request = PartRequest(
+            machine_id=report_qa["machine_ids"][0],
+            part_name="Synthetic incomplete history",
+            quantity=3,
+            status="DELIVERED",
+            created_at=report_qa["now"] - timedelta(days=1),
+            delivered_at=report_qa["now"],
+        )
+        db.add(request)
+        db.commit()
+    db, reports = service(session_factory, report_qa)
+    with db:
+        data = reports.build("requests")
+        assert values(data)["delivered"] == 0
+        assert values(data)["delivery_hours"] is None
+
+
+def test_reports_receipt_drill_is_paginated_by_actual_events(session_factory, report_qa):
+    db, reports = service(session_factory, report_qa)
+    with db:
+        data = reports.build("requests")
+        assert values(data)["receipts"] == 1
+        records = reports.details("requests", "receipts", page_size=1)
+        assert records["total"] == 1
+        assert records["items"][0]["original_id"] == report_qa["request_id"]
+
+
+def test_reports_signed_workflow_reissues_before_original_batch_finishes(
+    client, auth_headers, session_factory, issue_payload
+):
+    from app.models import AssetCategory, ProtocolDocument
+    from test_bulk_transfers import complete_signing, return_payload
+
+    with session_factory() as db:
+        category = db.scalar(select(AssetCategory).where(AssetCategory.code == "HPWJ"))
+        machines = [
+            Machine(
+                inventory_number=f"REPORTS-SIGNED-QA-{i}",
+                name=f"Synthetic signed QA {i}",
+                category="HPWJ",
+                category_id=category.id,
+                brand="QA",
+                model="Synthetic",
+                status="READY",
+            )
+            for i in range(3)
+        ]
+        db.add_all(machines)
+        db.commit()
+        ids = [m.id for m in machines]
+    query = "/api/reports/usage?q=REPORTS-SIGNED-QA"
+
+    def metrics():
+        response = client.get(query, headers=auth_headers)
+        assert response.status_code == 200
+        return values(response.json())
+
+    issued = client.post(
+        "/api/transfers/bulk-issue", headers=auth_headers, json=issue_payload(*ids)
+    )
+    assert issued.status_code == 201
+    assert metrics()["issues"] == 0
+    complete_signing(client, issued)
+    assert metrics()["issues"] == 3
+    transfers = issued.json()["transfers"]
+    returned = client.post(
+        "/api/transfers/bulk-return",
+        headers=auth_headers,
+        json=return_payload(transfers[0], transfers[2]),
+    )
+    assert returned.status_code == 200
+    assert metrics()["completed_cycles"] == 0
+    complete_signing(client, returned)
+    assert metrics()["completed_cycles"] == 2
+    with session_factory() as db:
+        protected = dict(db.execute(select(ProtocolDocument.id, ProtocolDocument.sha256)).all())
+    reissued = client.post(
+        "/api/transfers/bulk-issue", headers=auth_headers, json=issue_payload(ids[0], ids[2])
+    )
+    assert reissued.status_code == 201
+    complete_signing(client, reissued)
+    result = metrics()
+    assert (
+        result["issues"] == 5 and result["completed_cycles"] == 2 and result["active_issues"] == 3
+    )
+    returned_again = client.post(
+        "/api/transfers/bulk-return",
+        headers=auth_headers,
+        json=return_payload(*reissued.json()["transfers"]),
+    )
+    assert returned_again.status_code == 200
+    complete_signing(client, returned_again)
+    result = metrics()
+    assert result["completed_cycles"] == 4 and result["active_issues"] == 1
+    with session_factory() as db:
+        assert db.get(TransferBatch, issued.json()["batch_id"]).status == "PARTIALLY_RETURNED"
+        after = dict(db.execute(select(ProtocolDocument.id, ProtocolDocument.sha256)).all())
+        assert all(after[identifier] == digest for identifier, digest in protected.items())
 
 
 def test_reports_export_review_examples(session_factory, report_qa, tmp_path):

@@ -15,7 +15,7 @@
   "comparison": ["Сравни с предходния период", "Compare with previous period", "Сравнить с предыдущим периодом"],
   "noBase": ["Процентът не е определен при нулева база", "Percentage is undefined with a zero baseline", "Процент не определён при нулевой базе"],
   "attention": ["Машини, изискващи внимание", "Machines requiring attention", "Машины, требующие внимания"],
-  "attentionNote": ["Обективни сигнали от наличната история; не са прогноза за бъдеща повреда. Прозорецът е последните 90 дни към момента.", "Evidence from recorded history, not a prediction of failure. The window is the last 90 days as of now.", "Объективные признаки из истории, без прогноза поломок. Окно — последние 90 дней на текущий момент."],
+  "attentionNote": ["Обективни сигнали от наличната история; не са прогноза за бъдеща повреда. Прозорецът е последните {{days}} дни към момента.", "Evidence from recorded history, not a prediction of failure. The window is the last {{days}} days as of now.", "Объективные признаки из истории, без прогноза поломок. Окно — последние {{days}} дней на текущий момент."],
   "frequent": ["{{count}} регистрирани ремонта за последните {{days}} дни.", "{{count}} repairs opened in the last {{days}} days.", "{{count}} ремонтов открыто за последние {{days}} дней."],
   "long": ["{{count}} текущи ремонта над {{days}} дни.", "{{count}} open repairs older than {{days}} days.", "{{count}} текущих ремонтов дольше {{days}} дней."],
   "growth": ["{{count}} ремонта спрямо {{previous}} за предходните {{days}} дни (поне двоен ръст).", "{{count}} repairs versus {{previous}} in the preceding {{days}} days (at least twice as many).", "{{count}} ремонтов против {{previous}} за предыдущие {{days}} дней (рост минимум вдвое)."],
@@ -24,7 +24,7 @@
   "reasons": ["Виж причините", "View reasons", "Посмотреть причины"],
   "emptyAttention": ["Няма машини, отговарящи на критериите за внимание.", "No machines meet the attention criteria.", "Нет машин, соответствующих критериям внимания."],
   "delayedTitle": ["Забавени заявки за части", "Overdue parts requests", "Просроченные заявки на запчасти"],
-  "delayedNote": ["Поръчани, с оставащи позиции и над 14 календарни дни от поръчването. Показва текущото състояние независимо от периода.", "Ordered requests with outstanding lines, more than 14 calendar days after ordering. Current state, independent of the selected period.", "Заказанные заявки с остатком позиций спустя более 14 календарных дней. Текущее состояние независимо от периода."],
+  "delayedNote": ["Поръчани, с оставащи позиции и над {{days}} календарни дни от поръчването. Показва текущото състояние независимо от периода.", "Ordered requests with outstanding lines, more than {{days}} calendar days after ordering. Current state, independent of the selected period.", "Заказанные заявки с остатком позиций спустя более {{days}} календарных дней. Текущее состояние независимо от периода."],
   "total_machines": ["Общо машини", "Total machines", "Всего машин"],
   "READY": ["Готови за работа", "Ready for use", "Готовы к работе"],
   "ISSUED": ["Издадени", "Issued", "Выданы"],
@@ -122,5 +122,8 @@
   "empty": ["Няма записи за избраните филтри.", "No records match the selected filters.", "Нет записей по выбранным фильтрам."],
   "unavailable": ["Направлението не е достъпно с Вашите права.", "This analysis is unavailable with your permissions.", "Раздел недоступен с Вашими правами."],
   "limited": ["Показани са до {{count}} резултата. Стеснете филтрите за останалите.", "Up to {{count}} results are shown. Narrow filters for the remaining results.", "Показано до {{count}} результатов. Сузьте фильтры для остальных."],
-  "categoryStats": ["Разбивка по категории", "Category breakdown", "Разбивка по категориям"]
+  "categoryStats": ["Разбивка по категории", "Category breakdown", "Разбивка по категориям"],
+  "sampleHeading": ["Включени записи", "Included records", "Учтено записей"],
+  "openHeading": ["Неприключени ремонти", "Open repairs", "Незавершённые ремонты"],
+  "reasonsHeading": ["Основания", "Reasons", "Основания"]
 }

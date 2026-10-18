@@ -5,8 +5,12 @@ from pathlib import Path
 
 from run_catalog_durable_review_qa import main
 
+QA_DIRECTORY = None
+
 
 def prepare(factory, qa, password):
+    global QA_DIRECTORY
+    QA_DIRECTORY = qa
     from app.models import User
     from app.security import hash_password
     from reports01_fixtures import reports_fixture
@@ -34,10 +38,13 @@ def prepare(factory, qa, password):
 
 
 if __name__ == "__main__":
-    raise SystemExit(
-        main(
-            scenario="reports01",
-            browser_script=Path(__file__).with_name("reports01.mjs"),
-            prepare=prepare,
-        )
+    status = main(
+        scenario="reports01",
+        browser_script=Path(__file__).with_name("reports01.mjs"),
+        prepare=prepare,
     )
+    if status == 0:
+        from validate_reports01_exports import validate
+
+        validate(QA_DIRECTORY)
+    raise SystemExit(status)

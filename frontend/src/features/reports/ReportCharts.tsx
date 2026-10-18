@@ -3,7 +3,10 @@ import { useI18n } from '../../i18n'
 import { useReportText, type Kind, type MachineStats, type Report, type Section } from './reportData'
 export function Trends({ data, drill }: { data: Report; drill: (kind: Kind, metric: string, from: string, to: string) => void }) {
   const text = useReportText()
-  const keys = ['issues', 'completed_cycles', 'opened', 'closed', 'created', 'receipts'].filter(key => data.capabilities[key === 'issues' || key === 'completed_cycles' ? 'usage' : key === 'opened' || key === 'closed' ? 'repairs' : 'requests'])
+  const keys = ['issues', 'completed_cycles', 'opened', 'closed', 'created', 'receipts'].filter(key => {
+    const kind = key === 'issues' || key === 'completed_cycles' ? 'usage' : key === 'opened' || key === 'closed' ? 'repairs' : 'requests'
+    return data.capabilities[kind] && (!['usage', 'repairs', 'requests'].includes(data.section) || data.section === kind)
+  })
   const colors = ['#0e7490', '#15803d', '#ea580c', '#7c3aed', '#2563eb', '#be185d']
   function choose(label: string, key: string) {
     const monthly = label.length === 7, start = `${label}${monthly ? '-01' : ''}`, end = new Date(`${label}${monthly ? '-01' : ''}T12:00:00Z`)
@@ -12,8 +15,11 @@ export function Trends({ data, drill }: { data: Report; drill: (kind: Kind, metr
   }
   return <section className="panel reports-chart"><h3>{text('trends')}</h3><div className="reports-chart-canvas" role="img" aria-label={text('trends')}><ResponsiveContainer width="100%" height={270}><LineChart data={data.trends} margin={{ top: 12, right: 12, left: -22, bottom: 4 }} accessibilityLayer>
     <CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="period" tick={{ fontSize: 11 }} minTickGap={28} /><YAxis allowDecimals={false} tick={{ fontSize: 11 }} /><Tooltip /><Legend wrapperStyle={{ fontSize: 12 }} />
-    {keys.map((key, index) => <Line key={key} dataKey={key} name={text(key)} stroke={colors[index]} strokeWidth={2} connectNulls isAnimationActive={false} activeDot={{ r: 6 }} />)}
-  </LineChart></ResponsiveContainer></div><details><summary>{text('chartTable')}</summary><div className="reports-table"><table><thead><tr><th>{text('period')}</th>{keys.map(key => <th key={key}>{text(key)}</th>)}</tr></thead><tbody>{data.trends.map(row => <tr key={row.period}><th>{row.period}</th>{keys.map(key => <td key={key}>{key === 'receipts' ? row[key] || 0 : <button type="button" className="link" onClick={() => choose(row.period, key)}>{row[key] || 0}</button>}</td>)}</tr>)}</tbody></table></div></details></section>
+    {keys.map((key, index) => <Line key={key} dataKey={key} name={text(key)} stroke={colors[index]} strokeWidth={2} connectNulls isAnimationActive={false} activeDot={(props: unknown) => {
+      const point = props as { cx: number; cy: number; payload: { period: string } }
+      return <circle cx={point.cx} cy={point.cy} r={6} fill={colors[index]} tabIndex={0} role="button" aria-label={`${text(key)} · ${point.payload.period}`} onClick={() => choose(point.payload.period, key)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(point.payload.period, key) } }} />
+    }} />)}
+  </LineChart></ResponsiveContainer></div><details><summary>{text('chartTable')}</summary><div className="reports-table"><table><thead><tr><th>{text('period')}</th>{keys.map(key => <th key={key}>{text(key)}</th>)}</tr></thead><tbody>{data.trends.map(row => <tr key={row.period}><th>{row.period}</th>{keys.map(key => <td key={key}><button type="button" className="link" onClick={() => choose(row.period, key)}>{row[key] || 0}</button></td>)}</tr>)}</tbody></table></div></details></section>
 }
 export function Ranking({ data, drill }: { data: Report; drill: (item: MachineStats) => void }) {
   const text = useReportText(), { number } = useI18n()

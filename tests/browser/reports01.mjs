@@ -17,7 +17,7 @@ async function choose(name, option, index = 0) {
   await page.getByRole('combobox', { name, exact: true }).nth(index).click()
   await page.getByRole('option', { name: option, exact: typeof option === 'string' }).click()
 }
-async function ready() { await expect(page.locator('.reports-loading')).toHaveCount(0); await expect(page.locator('.reports-page .error')).toHaveCount(0); await expect(page.locator('.reports-chart .recharts-surface')).toHaveCount(2) }
+async function ready() { await expect(page.locator('.reports-loading')).toHaveCount(0); await expect(page.locator('.reports-page .error')).toHaveCount(0); await expect(page.locator('.reports-chart .recharts-wrapper > svg.recharts-surface')).toHaveCount(2) }
 async function get(path) { const response = await page.request.get(base + '/api' + path); expect(response.status()).toBe(200); return response.json() }
 try {
   await page.goto(base)
@@ -39,6 +39,13 @@ try {
   await shot('04-attention-detail')
   await page.keyboard.press('Escape')
   await expect(button('Виж причините')).toBeFocused()
+  await button('Виж причините').click()
+  await page.getByRole('button', { name: 'Отвори оригиналния запис: REPORTS-QA-R5', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('Synthetic QA problem 5')
+  await page.keyboard.press('Escape')
+  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Отчети и анализи', exact: true }).click()
+  await ready()
+  await expect(page.getByRole('combobox', { name: 'Категория', exact: true })).toContainText('REPORTS-01 QA')
   checks.push('A: one machine, five distinct repairs, original references, Escape/focus')
   await page.locator('.reports-tabs').getByRole('button', { name: 'Използване на техниката' }).click()
   await ready(); await shot('05-usage')
@@ -61,6 +68,7 @@ try {
   await choose('Машина', /REPORTS-QA-1/, 0)
   await ready(); await shot('11-machine-analysis')
   const originalCategory = await get(`/reports/requests?category_id=${fixture.category_id}&machine_id=${fixture.machine_ids[0]}`)
+  await writeFile(`${out}/expected-export.json`, JSON.stringify(originalCategory, null, 2))
   const exported = []
   for (const [name, extension] of [['Изтегли PDF', 'pdf'], ['Изтегли Excel', 'xlsx']]) {
     const promise = page.waitForEvent('download'); await button(name).click(); const download = await promise
@@ -74,6 +82,7 @@ try {
   await ready(); await shot('12-comparison')
   checks.push('D: two-machine comparison with original-record drill-down and explicit sample sizes')
   await page.locator('.reports-tabs').getByRole('button', { name: 'Общ преглед' }).click()
+  await choose('Категория', 'REPORTS-01 QA')
   await ready(); await shot('13-period-comparison')
   for (const locale of ['en', 'ru', 'bg']) {
     await page.locator('.language-switch').first().getByRole('combobox').click()

@@ -12,7 +12,7 @@ export type RecordRow = { id: number; original_id?: number; is_active?: boolean;
 export type Reason = { code: string; count: number; days: number; previous?: number }
 export type Attention = { machine: Asset; reasons: Reason[]; open_count: number }
 export type MachineStats = { machine: Asset; metrics: Partial<Record<Section, Metric[]>> }
-export type Report = { section: string; generated_at: string; filters: { date_from: string; date_to: string }; previous_filters: { date_from: string; date_to: string }; capabilities: Record<Exclude<Kind, 'machines'>, boolean>; current: Metric[]; metrics: Metric[]; categories: { id: number | null; name_bg: string | null; name_en: string | null; name_ru: string | null; total: number; statuses: Record<string, number> }[]; trends: ({ period: string } & Record<string, number | string>)[]; rankings: MachineStats[]; ranking_kind: Kind; ranking_key: string; attention: Attention[]; attention_total: number; machines: MachineStats[]; records: PageData<RecordRow>; delayed: PageData<RecordRow> | null; parts: { id: number; repair_id: number; description: string; part_number: string | null; quantity: number; unit: string | null }[]; articles: { line_id: number; request_id: number; description: string; part_number: string | null; quantity: string; unit: string | null; requests: number }[] }
+export type Report = { section: string; thresholds?: { window_days: number; delivery_days: number }; generated_at: string; filters: { date_from: string; date_to: string }; previous_filters: { date_from: string; date_to: string }; capabilities: Record<Exclude<Kind, 'machines'>, boolean>; current: Metric[]; metrics: Metric[]; categories: { id: number | null; name_bg: string | null; name_en: string | null; name_ru: string | null; total: number; statuses: Record<string, number>; metrics?: Record<string, number> }[]; trends: ({ period: string } & Record<string, number | string>)[]; rankings: MachineStats[]; ranking_kind: Kind; ranking_key: string; attention: Attention[]; attention_total: number; machines: MachineStats[]; records: PageData<RecordRow>; delayed: PageData<RecordRow> | null; parts_total?: number; articles_total?: number; parts: { id: number; repair_id: number; description: string; part_number: string | null; quantity: number; unit: string | null }[]; articles: { line_id: number; request_id: number; description: string; part_number: string | null; quantity: string; unit: string | null; requests: number }[] }
 export type Filters = { preset: string; from: string; to: string; category: string; machine: string; q: string }
 export type Drill = { kind: Kind; metric: string; machine?: Asset; attention?: Attention; from?: string; to?: string }
 
@@ -22,6 +22,13 @@ export function useReportText() {
     let value = (labels as Record<string, string[]>)[key]?.[['bg', 'en', 'ru'].indexOf(locale)] || key
     Object.entries(values).forEach(([name, content]) => { value = value.replaceAll(`{{${name}}}`, String(content ?? '')) })
     return value
+  }
+}
+export function useReportDate() {
+  const { locale } = useI18n()
+  return (value: string) => {
+    const instant = value.includes('T') && !/(Z|[+-]\d{2}:\d{2})$/.test(value) ? value + 'Z' : value
+    return new Intl.DateTimeFormat(locale, { timeZone: 'Europe/Sofia', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(instant))
   }
 }
 export function period(preset: string) {

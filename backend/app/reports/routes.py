@@ -49,7 +49,11 @@ def export_report(
 ):
     from .exports import export_pdf, export_xlsx
 
-    data = reports.build(section)
+    data = reports.build(section, exporting=True)
+    if max(data["attention_total"], data["parts_total"], data["articles_total"]) > MAX_EXPORT_ROWS:
+        raise HTTPException(
+            422, detail={"code": "reports_export_too_large", "limit": MAX_EXPORT_ROWS}
+        )
     if section == "compare" and not 2 <= len(reports.f.machine_ids) <= 4:
         raise HTTPException(422, detail={"code": "reports_compare_requires_machines"})
     kinds = (

@@ -36,6 +36,17 @@ def reference(row):
     )
 
 
+def timestamp(value):
+    if not value:
+        return "—"
+    instant = (
+        datetime.fromisoformat(value.replace("Z", "+00:00")) if isinstance(value, str) else value
+    )
+    if instant.tzinfo is None:
+        instant = instant.replace(tzinfo=UTC)
+    return instant.astimezone(SOFIA).strftime("%d.%m.%Y %H:%M %Z")
+
+
 def details_rows(details, language):
     result = []
     for kind, records in details.items():
@@ -73,12 +84,26 @@ def details_rows(details, language):
 
 def filter_text(data, language):
     f = data["filters"]
-    return f"{f['date_from']} - {f['date_to']} · Europe/Sofia · {label('category', language)}: {f['category_id'] or (label('uncategorized', language) if f['uncategorized'] else '*')} · {label('machineLabel', language)}: {', '.join(map(str, f['machine_ids'])) or '*'} · {f['q']}"
+    category = (
+        next(
+            (
+                c.get("name_" + language) or c["name_bg"]
+                for c in data["categories"]
+                if c["id"] == f["category_id"]
+            ),
+            None,
+        )
+        if f["category_id"]
+        else None
+    )
+    machines = ", ".join("№" + m["inventory_number"] for m in data.get("filter_machines", []))
+    return f"{f['date_from']} - {f['date_to']} · Europe/Sofia · {label('category', language)}: {category or (label('uncategorized', language) if f['uncategorized'] else '*')} · {label('machineLabel', language)}: {machines or '*'} · {f['q']}"
 
 
 def sheets(data, details, language):
     def tr(key):
-        return label(key, language)
+        days = data["thresholds"]["window_days" if key == "attentionNote" else "delivery_days"]
+        return label(key, language).replace("{{days}}", str(days))
 
     summary = [
         [tr("title"), tr(data["section"])],
@@ -93,7 +118,7 @@ def sheets(data, details, language):
             tr("previous"),
             "Δ",
             "%",
-            tr("sample"),
+            tr("sampleHeading"),
             tr("current"),
         ],
     ]
@@ -171,7 +196,7 @@ def sheets(data, details, language):
         [tr("compareNote")],
         [json.dumps(data["thresholds"], ensure_ascii=False)],
     ]
-    attention = [[tr("machineLabel"), tr("reasons"), tr("openCount")]]
+    attention = [[tr("machineLabel"), tr("reasonsHeading"), tr("openHeading")]]
     for item in data["attention"]:
         reasons = []
         for reason in item["reasons"]:
@@ -182,13 +207,72 @@ def sheets(data, details, language):
         attention.append(
             [item["machine"]["inventory_number"], " ".join(reasons), item["open_count"]]
         )
-    return [
+    result = [
         (tr("summary"), summary),
         (tr("records"), records),
         (tr("trends"), trends),
         (tr("attention"), attention),
-        (tr("methodology"), methodology),
     ]
+    result.append(
+        (
+            tr("categoryStats"),
+            [
+                [
+                    tr("category"),
+                    tr("total_machines"),
+                    tr("READY"),
+                    tr("ISSUED"),
+                    tr("REPAIR"),
+                    tr("issues"),
+                    tr("opened"),
+                    tr("closed"),
+                    tr("created"),
+                ]
+            ]
+            + [
+                [
+                    c.get("name_" + language) or c["name_bg"] or tr("uncategorized"),
+                    c["total"],
+                    *[c["statuses"].get(k, 0) for k in ("READY", "ISSUED", "REPAIR")],
+                    *[
+                        c.get("metrics", {}).get(k, 0)
+                        for k in ("issues", "opened", "closed", "created")
+                    ],
+                ]
+                for c in data["categories"]
+            ],
+        )
+    )
+    if data["parts"]:
+        result.append(
+            (
+                tr("parts"),
+                [[tr("reference"), tr("description"), tr("quantity"), tr("unit")]]
+                + [
+                    [r["repair_id"], r["description"], r["quantity"], r["unit"]]
+                    for r in data["parts"]
+                ],
+            )
+        )
+    if data["articles"]:
+        result.append(
+            (
+                tr("articles"),
+                [[tr("reference"), tr("description"), tr("quantity"), tr("unit"), tr("created")]]
+                + [
+                    [
+                        r["part_number"],
+                        r["description"],
+                        float(r["quantity"]),
+                        r["unit"],
+                        r["requests"],
+                    ]
+                    for r in data["articles"]
+                ],
+            )
+        )
+    result.append((tr("methodology"), methodology))
+    return result
 
 
 def export_xlsx(data, details, language):
@@ -222,7 +306,19 @@ def export_xlsx(data, details, language):
             columns = max(len(row) for row in rows)
             for rn, row in enumerate(rows, 1):
                 cells = []
+                height = 22
                 for cn, value in enumerate(row, 1):
+                    width = 55 if cn in (1, 4, 8, 12) else 25
+                    if index == 1 and rn <= 4:
+                        width = 200
+                    height = min(
+                        409,
+                        max(
+                            height,
+                            15
+                            * (len(str(value or "")) // width + str(value or "").count("\n") + 1),
+                        ),
+                    )
                     letters, n = "", cn
                     while n:
                         n, rem = divmod(n - 1, 26)
@@ -231,16 +327,6 @@ def export_xlsx(data, details, language):
                     if value is None:
                         continue
                     style = 1 if rn == 1 or (index == 1 and rn == 6) else 0
-                    if (
-                        isinstance(value, str)
-                        and len(value) >= 19
-                        and value[4:5] == "-"
-                        and value[10:11] == "T"
-                    ):
-                        try:
-                            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
-                        except ValueError:
-                            pass
                     if isinstance(value, datetime):
                         local = value.replace(tzinfo=UTC) if value.tzinfo is None else value
                         serial = (
@@ -256,15 +342,22 @@ def export_xlsx(data, details, language):
                         cells.append(
                             f'<c r="{address}" s="{style}" t="inlineStr"><is><t xml:space="preserve">{escape(safe)}</t></is></c>'
                         )
-                xml_rows.append(f'<row r="{rn}">' + "".join(cells) + "</row>")
+                xml_rows.append(
+                    f'<row r="{rn}" ht="{height}" customHeight="1">' + "".join(cells) + "</row>"
+                )
             cols = "".join(
                 f'<col min="{i}" max="{i}" width="{55 if i in (1, 4, 8, 12) else 25}" customWidth="1"/>'
                 for i in range(1, columns + 1)
             )
             filter_xml = f'<autoFilter ref="A1:N{len(rows)}"/>' if index == 2 else ""
+            merge_xml = (
+                '<mergeCells count="4"><mergeCell ref="B1:H1"/><mergeCell ref="B2:H2"/><mergeCell ref="B3:H3"/><mergeCell ref="A4:H4"/></mergeCells>'
+                if index == 1
+                else ""
+            )
             z.writestr(
                 f"xl/worksheets/sheet{index}.xml",
-                f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="{ns}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" state="frozen"/></sheetView></sheetViews><cols>{cols}</cols><sheetData>{"".join(xml_rows)}</sheetData>{filter_xml}</worksheet>',
+                f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="{ns}"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" state="frozen"/></sheetView></sheetViews><cols>{cols}</cols><sheetData>{"".join(xml_rows)}</sheetData>{filter_xml}{merge_xml}</worksheet>',
             )
         relationships.append(f'<Relationship Id="styles" Type="{rel}/styles" Target="styles.xml"/>')
         z.writestr(
@@ -310,7 +403,8 @@ def export_pdf(data, details, language):
     title = ParagraphStyle("ReportTitle", parent=heading, fontSize=22, leading=28)
 
     def tr(key):
-        return label(key, language)
+        days = data["thresholds"]["window_days" if key == "attentionNote" else "delivery_days"]
+        return label(key, language).replace("{{days}}", str(days))
 
     def p(text):
         return Paragraph(escape(str(text if text is not None else tr("insufficient"))), body)
@@ -329,7 +423,7 @@ def export_pdf(data, details, language):
     story = [
         Paragraph("AssetCore · " + tr("title"), title),
         Paragraph(tr(data["section"]), heading),
-        p(tr("generated") + ": " + data["generated_at"]),
+        p(tr("generated") + ": " + timestamp(data["generated_at"])),
         p(filter_text(data, language)),
         p(tr("analytical")),
         Spacer(1, 8 * mm),
@@ -368,9 +462,15 @@ def export_pdf(data, details, language):
             continue
         story.append(Paragraph(tr(name), heading))
         table(
-            [[tr("description"), tr("quantity"), tr("unit"), tr("previous"), tr("sample")]]
+            [[tr("description"), tr("quantity"), tr("unit"), tr("previous"), tr("sampleHeading")]]
             + [
-                [tr(m["key"]), m["value"], tr(m["unit"]), m["previous"], m["sample"]]
+                [
+                    tr(m["key"]),
+                    m["value"],
+                    tr(m["unit"]),
+                    m["previous"] if m["previous"] is not None else "—",
+                    m["sample"] if m["sample"] is not None else "—",
+                ]
                 for m in metrics
             ],
             [125 * mm, 34 * mm, 25 * mm, 45 * mm, 36 * mm],
@@ -409,7 +509,7 @@ def export_pdf(data, details, language):
             )
         )
         table(
-            [[tr("description"), tr("quantity"), tr("unit"), tr("sample")]]
+            [[tr("description"), tr("quantity"), tr("unit"), tr("sampleHeading")]]
             + [
                 [tr(k) + " · " + tr(m["key"]), m["value"], tr(m["unit"]), m["sample"]]
                 for k, ms in item["metrics"].items()
@@ -436,8 +536,8 @@ def export_pdf(data, details, language):
                     [
                         r[2],
                         r[3],
-                        str(r[4] or ""),
-                        str(r[5] or ""),
+                        timestamp(r[4]),
+                        timestamp(r[5]),
                         r[7] + (" · " + r[11] if r[11] else ""),
                         r[6],
                     ]
@@ -447,6 +547,26 @@ def export_pdf(data, details, language):
             )
         else:
             story.append(p(tr("empty")))
+    if data["attention"]:
+        story.append(Paragraph(tr("attention"), heading))
+        attention_rows = sheets(data, details, language)[3][1]
+        table(attention_rows, [55 * mm, 180 * mm, 30 * mm])
+    for key, rows in (("parts", data["parts"]), ("articles", data["articles"])):
+        if rows:
+            story.append(Paragraph(tr(key), heading))
+            table(
+                [[tr("reference"), tr("description"), tr("quantity"), tr("unit")]]
+                + [
+                    [
+                        r.get("part_number") or r.get("repair_id"),
+                        r["description"],
+                        r["quantity"],
+                        r["unit"] or "—",
+                    ]
+                    for r in rows
+                ],
+                [45 * mm, 155 * mm, 40 * mm, 25 * mm],
+            )
     story += [
         Paragraph(tr("methodology"), heading),
         p(tr("methodText")),
