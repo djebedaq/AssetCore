@@ -36,6 +36,7 @@ from ..models import (
 from ..part_requests.official import quantity, received
 from ..part_requests.request_schemas import decimal_text
 from ..permissions import Permission, ensure_permission, has_permission
+from .detail_dates import DETAIL_DATE_FIELDS
 from .filters import (
     ATTENTION_GROWTH_FACTOR,
     ATTENTION_GROWTH_MIN,
@@ -257,7 +258,7 @@ def period_metrics(kind, rows, f, now):
                 "unique_issued",
                 len({r["machine_id"] for r in rows if f.includes(r["issued_at"])}),
                 previous=len({r["machine_id"] for r in rows if p.includes(r["issued_at"])}),
-                drill="issues",
+                drill="unique_issued",
             )
         )
         count("completed_cycles", is_returned, "returned_at")
@@ -852,38 +853,7 @@ class Reports:
     def details(self, kind, name, page=1, page_size=20, sort="newest"):
         if kind in MODULES:
             ensure_permission(self.user, MODULES[kind])
-        valid_metrics = {
-            "machines": {"total_machines", "READY", "ISSUED", "REPAIR"},
-            "usage": {
-                "issues",
-                "unique_issued",
-                "completed_cycles",
-                "still_issued",
-                "active_issues",
-                "issue_hours",
-                "returned_ready",
-                "returned_repair",
-                "returned_damage",
-                "returned_missing",
-                "attention_returns",
-            },
-            "repairs": {"opened", "closed", "current_repairs", "attention"},
-            "requests": {
-                "created",
-                "submitted",
-                "ordered",
-                "approved",
-                "rejected",
-                "cancelled",
-                "delivered",
-                "partial",
-                "pending_requests",
-                "outstanding",
-                "waiting_order",
-                "delayed",
-                "receipts",
-            },
-        }
+        valid_metrics = DETAIL_DATE_FIELDS
         if name and name not in valid_metrics[kind]:
             raise HTTPException(422, detail={"code": "reports_invalid_metric"})
         if not name:
@@ -894,15 +864,30 @@ class Reports:
                 "requests": "created",
             }[kind]
         if kind == "machines":
-            # Machines are a bounded projection already loaded for current status and category counts.
-            rows = [m for m in self.machines if name == "total_machines" or m["status"] == name]
-            return self.page(
-                rows[(page - 1) * page_size : page * page_size], len(rows), page, page_size
+            query = select(Machine.id).where(self.matches(kind, name))
+            total = self.db.scalar(select(func.count()).select_from(query.subquery()))
+            ids = self.db.scalars(
+                query.order_by(Machine.id.asc() if sort == "oldest" else Machine.id.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+            return self.detail_page(
+                [
+                    dict(self.machine_map[mid], metric_date=self.now, date_basis="as_of")
+                    for mid in ids
+                ],
+                total,
+                page,
+                page_size,
+                kind,
+                name,
             )
         self.load(kind)
+        if kind == "usage" and name == "unique_issued":
+            return self.unique_issued(page, page_size, sort)
         if (kind, name) in {("repairs", "attention"), ("usage", "attention_returns")}:
             model = Repair if kind == "repairs" else TransferProtocol
-            timestamp = model.opened_at if kind == "repairs" else model.returned_at
+            timestamp = getattr(model, DETAIL_DATE_FIELDS[kind][name])
             query = statements(replace(self.f, q=""))[kind].where(
                 model.machine_id.in_(self.machine_map),
                 self.matches(kind, name),
@@ -921,8 +906,13 @@ class Reports:
                 .mappings()
                 .all()
             )
-            return self.page(
-                [self.record(kind, dict(row)) for row in records], total, page, page_size
+            return self.detail_page(
+                [self.dated_record(kind, dict(row), name, row[timestamp.key]) for row in records],
+                total,
+                page,
+                page_size,
+                kind,
+                name,
             )
         if kind == "requests" and name == "receipts":
             corrected = aliased(RequestDeliveryEvent)
@@ -954,34 +944,104 @@ class Reports:
             for event_id, request_id in events:
                 record = self.record(kind, by_id[request_id])
                 event = next(e for e in by_id[request_id]["events"] if e.id == event_id)
-                record.update(id=event_id, original_id=request_id, created_at=event.occurred_at)
+                record.update(
+                    id=event_id,
+                    original_id=request_id,
+                    created_at=event.occurred_at,
+                    metric_date=event.occurred_at,
+                    date_basis="occurred_at",
+                )
                 items.append(record)
-            return self.page(items, total, page, page_size)
-        model, timestamp = {
-            "usage": (TransferProtocol, TransferProtocol.issued_at),
-            "repairs": (Repair, Repair.opened_at),
-            "requests": (PartRequest, PartRequest.created_at),
-        }[kind]
+            return self.detail_page(items, total, page, page_size, kind, name)
+        model = {"usage": TransferProtocol, "repairs": Repair, "requests": PartRequest}[kind]
+        basis = DETAIL_DATE_FIELDS[kind][name]
+        timestamp = None if basis == "as_of" else getattr(model, basis, None)
+        if kind == "requests" and name in {"approved", "rejected"}:
+            timestamp = (
+                select(func.max(PartRequestApproval.decided_at))
+                .where(
+                    PartRequestApproval.request_id == PartRequest.id,
+                    PartRequestApproval.decision == name.upper(),
+                    PartRequestApproval.decided_at >= self.f.start,
+                    PartRequestApproval.decided_at < self.f.end,
+                    PartRequestApproval.decided_at <= self.now,
+                )
+                .correlate(PartRequest)
+                .scalar_subquery()
+            )
         query = self.queries[kind].where(self.matches(kind, name))
         total = self.db.scalar(select(func.count()).select_from(query.subquery()))
-        order = (
-            (timestamp.asc(), model.id.asc())
-            if sort == "oldest"
-            else (timestamp.desc(), model.id.desc())
-        )
-        ids = (
+        # All current-state rows share one actual snapshot; only the ID breaks ties.
+        order = [model.id.asc() if sort == "oldest" else model.id.desc()]
+        columns = [model.id]
+        if timestamp is not None:
+            order.insert(0, timestamp.asc() if sort == "oldest" else timestamp.desc())
+            columns.append(timestamp.label("metric_date"))
+        selected = (
             self.db.execute(
-                query.with_only_columns(model.id)
+                query.with_only_columns(*columns)
                 .order_by(*order)
                 .offset((page - 1) * page_size)
                 .limit(page_size)
             )
-            .scalars()
+            .mappings()
             .all()
         )
         by_id = {r["id"]: r for r in self.load(kind)}
-        items = [self.record(kind, by_id[identifier]) for identifier in ids if identifier in by_id]
-        return self.page(items, total, page, page_size)
+        items = [
+            self.dated_record(kind, by_id[row["id"]], name, row.get("metric_date", self.now))
+            for row in selected
+            if row["id"] in by_id
+        ]
+        return self.detail_page(items, total, page, page_size, kind, name)
+
+    def detail_page(self, items, total, page, page_size, kind, name):
+        return self.page(items, total, page, page_size) | {
+            "date_basis": DETAIL_DATE_FIELDS[kind][name],
+            "as_of": self.now,
+        }
+
+    def dated_record(self, kind, row, name, when):
+        return self.record(kind, row) | {
+            # PostgreSQL timestamptz (e.g. cancelled_at) and legacy timestamp
+            # columns follow the same UTC convention as the loaded source rows.
+            "metric_date": naive(when) if isinstance(when, datetime) else when,
+            "date_basis": DETAIL_DATE_FIELDS[kind][name],
+        }
+
+    def unique_issued(self, page, page_size, sort):
+        source = self.queries["usage"].where(self.matches("usage", "unique_issued")).subquery()
+        grouped = (
+            select(
+                source.c.machine_id,
+                func.count().label("issue_count"),
+                func.min(source.c.issued_at).label("first_issued_at"),
+                func.max(source.c.issued_at).label("last_issued_at"),
+            )
+            .group_by(source.c.machine_id)
+            .subquery()
+        )
+        total = self.db.scalar(select(func.count()).select_from(grouped))
+        order = (
+            (grouped.c.last_issued_at.asc(), grouped.c.machine_id.asc())
+            if sort == "oldest"
+            else (grouped.c.last_issued_at.desc(), grouped.c.machine_id.desc())
+        )
+        rows = self.db.execute(
+            select(grouped).order_by(*order).offset((page - 1) * page_size).limit(page_size)
+        ).mappings()
+        items = [
+            dict(
+                row,
+                id=row["machine_id"],
+                machine=self.machine_map.get(row["machine_id"]),
+                status=self.machine_map.get(row["machine_id"], {}).get("status"),
+                metric_date=row["last_issued_at"],
+                date_basis="last_issued_at",
+            )
+            for row in rows
+        ]
+        return self.detail_page(items, total, page, page_size, "usage", "unique_issued")
 
     @staticmethod
     def page(items, total, page, page_size):

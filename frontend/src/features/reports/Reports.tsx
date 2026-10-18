@@ -7,7 +7,7 @@ import { hasPermission } from '../../permissions'
 import { Select } from '../../ui/Select'
 import { CategorySelect, DateFilters, FilterToolbar, MachineSelect, openOperation, queryParams, useCategories, useDebounced } from '../../ui/workspace'
 import { LazyMachinePassportModal } from '../passport/LazyMachinePassportModal'
-import { Comparison, MetricCards, Records } from './ReportViews'
+import { Comparison, MetricCards, Records, ReportTabs } from './ReportViews'
 import { period, useReport, useReportDate, useReportText, type Asset, type Drill, type Filters, type Kind, type Metric, type Section } from './reportData'
 import './reports.css'
 
@@ -60,7 +60,7 @@ export default function Reports() {
       <MachineSelect module="machines" category={filters.category} value={filters.machine} onChange={value => change('machine', value)} />
     </FilterToolbar>
     {!valid && <p className="error" role="alert">{text('invalidPeriod')}</p>}{downloadError && <p className="error" role="alert">{text(downloadError)}{downloadError === 'changedData' && <button type="button" className="secondary compact" onClick={() => { setRetry(value => value + 1); setDownloadError('') }}>{text('retry')}</button>}</p>}
-    <nav className="reports-tabs" aria-label={text('title')}>{tabs.filter(item => item === 'overview' || hasPermission(item === 'usage' ? 'transfers.view' : item === 'repairs' ? 'repairs.view' : 'requests.view')).map(item => <button type="button" aria-current={tab === item ? 'page' : undefined} key={item} onClick={() => { setTab(item); setShowCompare(false) }}>{text(item)}</button>)}</nav>
+    <ReportTabs tabs={tabs.filter(item => item === 'overview' || hasPermission(item === 'usage' ? 'transfers.view' : item === 'repairs' ? 'repairs.view' : 'requests.view'))} active={tab} onSelect={item => { setTab(item); setShowCompare(false) }} />
     {loading && <div className="reports-loading" role="status">{t('common.loading')}</div>}{error && <div className="error" role="alert">{t('errors.generic')} <button type="button" className="secondary compact" onClick={() => setRetry(value => value + 1)}>{text('retry')}</button></div>}
     {data && <>
       <section aria-labelledby="reports-current"><div className="reports-section-title"><h3 id="reports-current">{text('current')}</h3><small>{date(data.generated_at)} · Europe/Sofia</small></div><MetricCards metrics={data.current} onDrill={metric => metricDrill(metric)} /></section>

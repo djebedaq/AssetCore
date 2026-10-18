@@ -2,12 +2,21 @@ import io
 import json
 import os
 import zipfile
-from datetime import date, timedelta
+from datetime import date, timedelta, timezone
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pytest
-from app.models import Machine, PartRequest, TransferBatch, TransferProtocol, User
+from app.models import (
+    Machine,
+    PartRequest,
+    PartRequestApproval,
+    PartRequestLine,
+    Repair,
+    TransferBatch,
+    TransferProtocol,
+    User,
+)
 from app.permissions import ROLE_PERMISSIONS, Permission, has_permission
 from app.reports.exports import export_pdf, export_xlsx, label, sheets
 from app.reports.filters import ReportFilters
@@ -36,6 +45,180 @@ def service(session_factory, qa, **changes):
 
 def values(result, field="metrics"):
     return {m["key"]: m["value"] for m in result[field]}
+
+
+def test_reports_detail_dates_normalize_aware_utc_and_preserve_missing(session_factory, report_qa):
+    db, reports = service(session_factory, report_qa)
+    with db:
+        row = next(row for row in reports.load("requests") if row["id"] == report_qa["request_id"])
+        aware = (reports.now + timedelta(hours=3)).replace(tzinfo=timezone(timedelta(hours=3)))
+        record = reports.dated_record("requests", row, "cancelled", aware)
+        assert record["metric_date"] == reports.now and record["metric_date"].tzinfo is None
+        assert record["created_at"] == row["created_at"]
+        assert reports.dated_record("requests", row, "cancelled", None)["metric_date"] is None
+
+
+@pytest.mark.parametrize(
+    "kind,name,field",
+    [
+        ("usage", "issues", "issued_at"),
+        ("usage", "completed_cycles", "returned_at"),
+        ("repairs", "opened", "opened_at"),
+        ("repairs", "closed", "closed_at"),
+        ("requests", "created", "created_at"),
+        ("requests", "submitted", "submitted_at"),
+        ("requests", "ordered", "ordered_at"),
+        ("requests", "delivered", "delivered_at"),
+        ("requests", "approved", "approved_at"),
+        ("requests", "rejected", "rejected_at"),
+        ("requests", "cancelled", "cancelled_at"),
+    ],
+)
+def test_reports_details_order_by_the_metric_event(session_factory, report_qa, kind, name, field):
+    now, mid = report_qa["now"], report_qa["machine_ids"][0]
+    dates = [now - timedelta(days=days) for days in (2, 4, 2)]
+    identifiers = []
+    with session_factory() as db:
+        for index, when in enumerate(dates):
+            # Start dates deliberately disagree with end-date order and precede the period.
+            start = now - timedelta(days=(40, 35, 50)[index])
+            reference = f"REPORTS-DATE-QA-{index}"
+            if kind == "usage":
+                row = TransferProtocol(
+                    machine_id=mid,
+                    protocol_number=reference,
+                    issued_at=start,
+                    returned_at=when,
+                    issue_status="COMPLETED",
+                    return_status="COMPLETED",
+                    is_active=False,
+                )
+            elif kind == "repairs":
+                row = Repair(
+                    machine_id=mid,
+                    repair_reference=reference,
+                    reported_problem="Synthetic date QA",
+                    opened_at=start,
+                    closed_at=when,
+                    status="COMPLETED",
+                )
+            else:
+                row = PartRequest(
+                    machine_id=mid,
+                    request_reference=reference,
+                    part_name="Synthetic date QA",
+                    quantity=1,
+                    created_at=start,
+                    status={
+                        "delivered": "DELIVERED",
+                        "rejected": "REJECTED",
+                        "cancelled": "CANCELLED",
+                    }.get(name, "APPROVED"),
+                )
+            if name not in {"approved", "rejected"}:
+                setattr(row, field, when)
+            db.add(row)
+            db.flush()
+            identifiers.append(row.id)
+            if name in {"approved", "rejected"}:
+                for decided_at in (now - timedelta(days=20), when):
+                    db.add(
+                        PartRequestApproval(
+                            request_id=row.id,
+                            decision=name.upper(),
+                            decided_at=decided_at,
+                            decided_by_id=report_qa["owner_id"],
+                        )
+                    )
+            if name == "delivered":
+                db.add(
+                    PartRequestLine(
+                        request_id=row.id,
+                        description="Synthetic delivered QA",
+                        quantity=1,
+                        delivered_quantity=1,
+                    )
+                )
+        db.commit()
+    db, reports = service(session_factory, report_qa, q="REPORTS-DATE-QA")
+    with db:
+        for sort, expected in (("newest", [2, 0, 1]), ("oldest", [1, 0, 2])):
+            pages = [reports.details(kind, name, page, 1, sort) for page in (1, 2, 3)]
+            assert all(page["total"] == 3 and page["date_basis"] == field for page in pages)
+            rows = [page["items"][0] for page in pages]
+            assert [row["id"] for row in rows] == [identifiers[i] for i in expected]
+            assert [row["metric_date"] for row in rows] == [dates[i] for i in expected]
+            assert all(row["date_basis"] == field for row in rows)
+        if kind == "repairs" and name == "closed":
+            assert values(reports.build("repairs"))["opened"] == 0
+            assert values(reports.build("repairs"))["closed"] == 3
+            assert all(row["opened_at"] < reports.f.start for row in rows)
+
+
+@pytest.mark.parametrize(
+    "kind,name",
+    [
+        ("machines", "total_machines"),
+        ("usage", "active_issues"),
+        ("repairs", "current_repairs"),
+        ("requests", "pending_requests"),
+    ],
+)
+def test_reports_current_details_identify_the_read_snapshot(session_factory, report_qa, kind, name):
+    db, reports = service(session_factory, report_qa)
+    with db:
+        for sort in ("oldest", "newest"):
+            data = reports.details(kind, name, sort=sort)
+            assert data["date_basis"] == "as_of" and data["as_of"] == reports.now
+            assert data["items"]
+            assert all(
+                row["metric_date"] == reports.now and row["date_basis"] == "as_of"
+                for row in data["items"]
+            )
+            ids = [row["id"] for row in data["items"]]
+            assert ids == sorted(ids, reverse=sort == "newest")
+
+
+def test_reports_unique_issued_details_are_paginated_machines(session_factory, report_qa):
+    db, reports = service(session_factory, report_qa)
+    with db:
+        data = reports.build("usage")
+        assert (
+            next(m for m in data["metrics"] if m["key"] == "unique_issued")["drill"]
+            == "unique_issued"
+        )
+        for sort in ("oldest", "newest"):
+            pages = [reports.details("usage", "unique_issued", page, 1, sort) for page in (1, 2, 3)]
+            rows = [page["items"][0] for page in pages]
+            assert all(page["total"] == 3 and page["total_pages"] == 3 for page in pages)
+            assert len({row["machine_id"] for row in rows}) == 3
+            assert sum(row["issue_count"] for row in rows) == 5
+            assert all(
+                row["id"] == row["machine"]["id"] and row["metric_date"] == row["last_issued_at"]
+                for row in rows
+            )
+            order = [(row["metric_date"], row["id"]) for row in rows]
+            assert order == sorted(order, reverse=sort == "newest")
+    db, reports = service(session_factory, report_qa, machine_ids=(report_qa["machine_ids"][0],))
+    with db:
+        assert values(reports.build("usage"))["unique_issued"] == 1
+        unique = reports.details("usage", "unique_issued")
+        assert unique["total"] == 1 and unique["items"][0]["issue_count"] == 2
+        assert reports.details("usage", "issues")["total"] == 2
+        assert values(reports.build("usage"))["completed_cycles"] == 2
+
+
+def test_reports_detail_dates_and_unique_contract_over_http(client, auth_headers, report_qa):
+    params = {"kind": "usage", "metric": "unique_issued", "machine_id": report_qa["machine_ids"][0]}
+    response = client.get("/api/reports/records", params=params, headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1 and data["items"][0]["issue_count"] == 2
+    assert data["date_basis"] == "last_issued_at" and data["items"][0]["metric_date"]
+    params["metric"] = "completed_cycles"
+    cycles = client.get("/api/reports/records", params=params, headers=auth_headers).json()
+    assert cycles["total"] == 2 and cycles["date_basis"] == "returned_at"
+    assert all(row["metric_date"] == row["returned_at"] for row in cycles["items"])
 
 
 def test_reports_current_categories_and_active_relationship(session_factory, report_qa):
