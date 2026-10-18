@@ -28,6 +28,7 @@ function fixture(permissions: PermissionCode[]) {
       : path.includes('/search?') ? { query: 'Falch', machines: [machine], parts: [], documents: [], repairs: [], part_requests: [], transfers: [], generated_documents: [] }
       : path.endsWith('/audit') ? [{ id: 1, entity_type: 'machine', entity_id: 3, action: 'TEST_ONLY', created_at: '2026-08-27T10:00:00Z', details: JSON.stringify({ nested_value: { valid: true, list: [7] } }) }]
       : path.endsWith('/admin/reference-data') ? { locations: [], departments: [] }
+      : path.includes('/reports/') ? { section: 'overview', generated_at: '2026-10-18T12:00:00Z', filters: { date_from: '2026-09-19', date_to: '2026-10-18' }, previous_filters: { date_from: '2026-08-20', date_to: '2026-09-18' }, capabilities: {}, current: [], metrics: [], attention: [], categories: [], rankings: [], ranking_kind: 'repairs', trends: [], parts: [], articles: [], machines: [], records: { items: [], total: 0, page: 1, page_size: 20, total_pages: 0 } }
       : []
     return new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } })
   })
@@ -41,12 +42,12 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-it('retains report and audit downloads, nested audit display and filtering through lazy pages', async () => {
-  fixture(['assets.view', 'audit.view_operational'])
+it('keeps analytical exports separate from audit access and preserves audit filtering', async () => {
+  fixture(['assets.view', 'reports.view', 'audit.view_operational'])
   renderApp()
   await userEvent.click(await screen.findByRole('button', { name: bg['nav.reports'] }))
-  await userEvent.click(await screen.findByRole('button', { name: bg['reports.downloadDaily'] }))
-  expect(downloadApiFile).toHaveBeenCalledWith('/reports/daily.pdf', 'assetcore-daily-report.pdf')
+  await userEvent.click(await screen.findByRole('button', { name: 'Изтегли PDF' }))
+  expect(downloadApiFile).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/export\/pdf\?.*section=overview/), 'assetcore-overview.pdf')
   await userEvent.click(screen.getByRole('button', { name: bg['nav.audit'] }))
   expect(await screen.findByText('nested value')).toBeVisible()
   expect(screen.getByText(bg['common.yes'])).toBeVisible()

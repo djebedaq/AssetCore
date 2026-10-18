@@ -1,18 +1,83 @@
-import { useState } from 'react'
-import { FileText } from 'lucide-react'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { BarChart3, Download, Info, X } from 'lucide-react'
 import { downloadApiFile } from '../../api'
 import { useI18n } from '../../i18n'
+import { Modal } from '../../industrialUi'
+import { hasPermission } from '../../permissions'
+import { Select } from '../../ui/Select'
+import { CategorySelect, DateFilters, FilterToolbar, MachineSelect, openOperation, queryParams, useCategories, useDebounced } from '../../ui/workspace'
+import { LazyMachinePassportModal } from '../passport/LazyMachinePassportModal'
+import { Comparison, MetricCards, Records } from './ReportViews'
+import { period, useReport, useReportText, type Asset, type Drill, type Filters, type Kind, type Metric, type Section } from './reportData'
+import './reports.css'
+
+const Trends = lazy(() => import('./ReportCharts').then(module => ({ default: module.Trends })))
+const Ranking = lazy(() => import('./ReportCharts').then(module => ({ default: module.Ranking })))
+
+let context: { filters: Filters; tab: Section; compare: string[]; scroll: number } | null = null
 
 export default function Reports() {
-  const { t } = useI18n()
-  const [error, setError] = useState('')
-  const download = () => downloadApiFile('/reports/daily.pdf', 'assetcore-daily-report.pdf')
-    .catch(() => setError(t('reports.downloadError')))
-  return (
-    <div className="panel">
-      <div className="panel-title"><div><h3>{t('reports.title')}</h3><p className="muted">{t('reports.subtitle')}</p></div><FileText /></div>
-      {error && <div className="error" role="alert">{error}</div>}
-      <div className="report-options"><button className="primary" onClick={download}>{t('reports.downloadDaily')}</button><div className="report-description">{t('reports.description')}</div></div>
-    </div>
-  )
+  const { t, locale, date } = useI18n(), text = useReportText()
+  const [filters, setFilters] = useState<Filters>(() => context?.filters || { preset: '30', ...period('30'), category: '', machine: '', q: '' })
+  const [tab, setTab] = useState<Section>(context?.tab || 'overview'), [comparison, setComparison] = useState(true)
+  const [compare, setCompare] = useState<string[]>(context?.compare || []), [showCompare, setShowCompare] = useState(false), [candidate, setCandidate] = useState('')
+  const [drill, setDrill] = useState<Drill | null>(null), [passport, setPassport] = useState<number | null>(null)
+  const [download, setDownload] = useState(''), [downloadError, setDownloadError] = useState(false), [retry, setRetry] = useState(0)
+  const q = useDebounced(filters.q), { categories } = useCategories('machines')
+  const valid = !!filters.from && !!filters.to && filters.from <= filters.to && (Date.parse(filters.to) - Date.parse(filters.from)) / 86400000 <= 1095
+  const params = { date_from: filters.from, date_to: filters.to, category_id: filters.category === 'legacy' ? '' : filters.category, uncategorized: filters.category === 'legacy' ? 'true' : '', machine_id: filters.machine, q }
+  const section = showCompare && compare.length >= 2 ? 'compare' : filters.machine ? 'machine' : tab
+  const mainParams = showCompare && compare.length >= 2 ? { ...params, machine_id: '', machine_ids: compare.join(',') } : params
+  const { data, error, loading } = useReport(valid ? `/reports/${section}?${queryParams({ ...mainParams, refresh: retry })}` : null)
+  useEffect(() => { context = { filters, tab, compare, scroll: context?.scroll || 0 } }, [filters, tab, compare])
+  useEffect(() => { if (data && context?.scroll) window.scrollTo(0, context.scroll) }, [data])
+  useEffect(() => { const save = () => { if (context) context.scroll = window.scrollY }; window.addEventListener('scroll', save); return () => window.removeEventListener('scroll', save) }, [])
+  function change(key: keyof Filters, value: string) { setDrill(null); setShowCompare(false); setFilters(current => ({ ...current, [key]: value, ...(key === 'category' ? { machine: '' } : {}) })) }
+  function metricDrill(metric: Metric, kind?: Kind, machine?: Asset) {
+    if (!metric.drill) return
+    const inferred: Kind = ['total_machines', 'READY', 'ISSUED', 'REPAIR'].includes(metric.key) ? 'machines' : metric.key === 'current_repairs' ? 'repairs' : metric.key === 'pending_requests' ? 'requests' : tab === 'overview' ? ['issues', 'completed_cycles'].includes(metric.key) ? 'usage' : ['opened', 'closed'].includes(metric.key) ? 'repairs' : 'requests' : tab
+    const selectedKind = Object.entries(data?.machines[0]?.metrics || {}).find(([, metrics]) => metrics?.some(item => item.key === metric.key))?.[0] as Kind | undefined
+    setDrill({ kind: kind || selectedKind || inferred, metric: metric.drill, machine })
+  }
+  async function exportFile(format: 'pdf' | 'xlsx') {
+    setDownload(format); setDownloadError(false)
+    const exportSection = showCompare ? 'compare' : filters.machine && tab === 'overview' ? 'machine' : tab
+    try { await downloadApiFile(`/reports/export/${format}?${queryParams({ ...mainParams, section: exportSection, language: locale, as_of: data?.generated_at })}`, `assetcore-${exportSection}.${format}`) }
+    catch { setDownloadError(true) } finally { setDownload('') }
+  }
+  const tabs: Section[] = ['overview', 'usage', 'repairs', 'requests']
+  const activeMetrics = filters.machine && data ? data.machines[0]?.metrics[tab] || (tab === 'overview' ? Object.values(data.machines[0]?.metrics || {}).flat() : []) : data?.metrics || []
+  const recordKind: Kind = tab === 'overview' ? data?.capabilities.usage ? 'usage' : data?.capabilities.repairs ? 'repairs' : data?.capabilities.requests ? 'requests' : 'machines' : tab
+  const defaultMetric = recordKind === 'usage' ? 'issues' : recordKind === 'repairs' ? 'opened' : recordKind === 'machines' ? 'total_machines' : 'created'
+  return <div className="reports-page">
+    <header className="reports-heading"><div><h2><BarChart3 size={24} aria-hidden="true" />{text('title')}</h2><p className="muted">{text('subtitle')}</p></div><div className="reports-export">{(['pdf', 'xlsx'] as const).map(format => <button type="button" className="secondary compact" key={format} disabled={!!download || loading || !data || !valid} onClick={() => void exportFile(format)}><Download size={16} aria-hidden="true" />{download === format ? t('common.loading') : text(format)}</button>)}</div></header>
+    <FilterToolbar query={filters.q} onQuery={value => change('q', value)} onReset={() => { setFilters({ preset: '30', ...period('30'), category: '', machine: '', q: '' }); setCompare([]); setShowCompare(false); setDrill(null) }}>
+      <label className="ac-filter"><span>{text('period')}</span><Select label={text('period')} searchable={false} value={filters.preset} onChange={value => { setShowCompare(false); setFilters(current => ({ ...current, preset: value, ...(value !== 'custom' ? period(value) : {}) })) }} options={['7', '30', '90', '365', 'custom'].map(value => ({ value, label: text(value === 'custom' ? value : `period${value}`) }))} /></label>
+      <DateFilters from={filters.from} to={filters.to} onFrom={value => { change('from', value); setFilters(current => ({ ...current, preset: 'custom' })) }} onTo={value => { change('to', value); setFilters(current => ({ ...current, preset: 'custom' })) }} />
+      <CategorySelect categories={categories} value={filters.category} onChange={value => change('category', value)} legacy />
+      <MachineSelect module="machines" category={filters.category} value={filters.machine} onChange={value => change('machine', value)} />
+    </FilterToolbar>
+    {!valid && <p className="error" role="alert">{text('invalidPeriod')}</p>}{downloadError && <p className="error" role="alert">{text('downloadError')}</p>}
+    <nav className="reports-tabs" aria-label={text('title')}>{tabs.filter(item => item === 'overview' || hasPermission(item === 'usage' ? 'transfers.view' : item === 'repairs' ? 'repairs.view' : 'requests.view')).map(item => <button type="button" aria-current={tab === item ? 'page' : undefined} key={item} onClick={() => { setTab(item); setShowCompare(false) }}>{text(item)}</button>)}</nav>
+    {loading && <div className="reports-loading" role="status">{t('common.loading')}</div>}{error && <div className="error" role="alert">{t('errors.generic')} <button type="button" className="secondary compact" onClick={() => setRetry(value => value + 1)}>{text('retry')}</button></div>}
+    {data && <>
+      <section aria-labelledby="reports-current"><div className="reports-section-title"><h3 id="reports-current">{text('current')}</h3><small>{date(data.generated_at)} · Europe/Sofia</small></div><MetricCards metrics={data.current} onDrill={metric => metricDrill(metric)} /></section>
+      {data.capabilities.repairs && <section className="panel reports-attention"><h3>{text('attention')}</h3><p className="muted">{text('attentionNote')}</p><div className="reports-attention-grid">{data.attention.map(item => <article key={item.machine.id}><strong>№{item.machine.inventory_number} · {item.machine.name}</strong>{item.reasons.map(reason => <p key={reason.code}>{text(reason.code, reason)}</p>)}<small>{text('openCount', { count: item.open_count })}</small><button type="button" className="secondary compact" onClick={() => setDrill({ kind: 'repairs', metric: 'attention', machine: item.machine, attention: item })}>{text('reasons')}</button></article>)}</div>{!data.attention.length && <p>{text('emptyAttention')}</p>}{data.attention_total > 50 && <p>{text('limited', { count: 50 })}</p>}</section>}
+      <section className="panel"><div className="reports-section-title"><h3>{showCompare ? text('compare') : filters.machine ? text('machine') : text('period')}</h3><label className="reports-check"><input type="checkbox" checked={comparison} onChange={event => setComparison(event.target.checked)} />{text('comparison')}</label></div><p className="reports-period">{data.filters.date_from} — {data.filters.date_to} · Europe/Sofia{comparison && <> · {text('previous')}: {data.previous_filters.date_from} — {data.previous_filters.date_to}</>}</p>
+        {filters.machine && data.machines[0] && <div className="reports-identity"><strong>№{data.machines[0].machine.inventory_number} · {data.machines[0].machine.brand} {data.machines[0].machine.model}</strong><span>{text('location')}: {data.machines[0].machine.location || text('insufficient')}</span><button type="button" className="secondary compact" onClick={() => setPassport(data.machines[0].machine.id)}>{text('passport')}</button></div>}
+        {showCompare && data.section === 'compare' ? <Comparison items={data.machines} drill={(machine, metric, kind) => metricDrill(metric, kind, machine)} /> : <MetricCards metrics={activeMetrics} comparison={comparison} onDrill={metric => metricDrill(metric)} />}
+      </section>
+      <Suspense fallback={<div className="reports-loading" role="status">{t('common.loading')}</div>}><div className="reports-chart-grid"><Trends data={data} drill={(kind, metric, from, to) => setDrill({ kind, metric, from, to })} />{data.capabilities[data.ranking_kind as Exclude<Kind, 'machines'>] && <Ranking data={data} drill={item => setDrill({ kind: data.ranking_kind, metric: data.ranking_key, machine: item.machine })} />}</div></Suspense>
+      {tab === 'overview' && <section className="panel"><h3>{text('categoryStats')}</h3><div className="reports-category-grid">{data.categories.map(category => <button type="button" key={category.id ?? 'legacy'} onClick={() => change('category', String(category.id || 'legacy'))}><span>{category[`name_${locale}`] || category.name_bg || text('uncategorized')}</span><strong>{category.total}</strong><small>{Object.entries(category.statuses).map(([key, value]) => `${text(key)}: ${value}`).join(' · ')}</small></button>)}</div></section>}
+      <section className="panel"><h3>{text('compare')}</h3><p className="muted">{text('compareNote')}</p><div className="reports-compare-controls"><MachineSelect module="machines" value={candidate} onChange={setCandidate} /><button type="button" className="secondary compact" disabled={!candidate || compare.includes(candidate) || compare.length >= 4} onClick={() => { setCompare(current => [...current, candidate]); setCandidate('') }}>{text('addCompare')}</button><button type="button" className="primary compact" disabled={compare.length < 2} onClick={() => { setFilters(current => ({ ...current, category: '', machine: '' })); setShowCompare(true) }}>{text('compare')} ({compare.length}/4)</button></div><div className="reports-chips">{compare.map(id => <button type="button" key={id} className="secondary compact" onClick={() => { setCompare(current => current.filter(value => value !== id)); setShowCompare(false) }} aria-label={`${text('removeCompare')}: #${id}`}>#{id}<X size={12} /></button>)}</div></section>
+      {tab === 'requests' && data.delayed && <section className="panel"><h3>{text('delayedTitle')}</h3><p className="muted">{text('delayedNote')}</p><Records key={`late-${queryParams(params)}`} kind="requests" metric="delayed" params={params} initial={data.delayed} onPassport={setPassport} delayed /></section>}
+      {tab === 'requests' && <section className="panel"><h3>{text('articles')}</h3><p className="muted">{text('articlesNote')}</p><div className="reports-ranking-list">{data.articles.map(item => <button type="button" key={item.line_id} onClick={() => openOperation({ module: 'parts', recordId: item.request_id })}><span>{item.part_number} · {item.description}<small>{item.quantity} {item.unit || '—'}</small></span><strong>{item.requests}</strong></button>)}{!data.articles.length && <p>{text('empty')}</p>}</div></section>}
+      {data.parts.length > 0 && <section className="panel"><h3>{text('parts')}</h3><div className="reports-ranking-list">{data.parts.map(part => <button type="button" key={part.id} onClick={() => openOperation({ module: 'repairs', recordId: part.repair_id })}><span>{part.part_number} · {part.description}</span><strong>{part.quantity} {part.unit || '—'}</strong></button>)}</div></section>}
+      <section className="panel"><h3>{text('records')} · {text(recordKind)}</h3><Records key={`${recordKind}-${queryParams(mainParams)}`} kind={recordKind} metric={defaultMetric} params={mainParams} initial={data.section === tab ? data.records : undefined} onPassport={setPassport} /></section>
+      <details className="panel reports-methodology"><summary><Info size={16} aria-hidden="true" />{text('methodology')}</summary><p>{text('methodText')}</p></details>
+    </>}
+    {drill && <Modal title={`${text(drill.metric)}${drill.machine ? ` · №${drill.machine.inventory_number}` : ''}`} onClose={() => setDrill(null)} wide>{drill.attention && <><p>{text('attentionNote')}</p>{drill.attention.reasons.map(reason => <p key={reason.code}>{text(reason.code, reason)}</p>)}{drill.attention.reasons.some(reason => reason.code === 'return') && <button type="button" className="secondary compact" onClick={() => setDrill({ ...drill, kind: 'usage', metric: 'attention_returns', attention: undefined })}>{text('returned_repair')}</button>}</>}
+      <Records key={`${drill.kind}-${drill.metric}-${drill.machine?.id || ''}`} kind={drill.kind} metric={drill.metric} params={{ ...params, as_of: data?.generated_at, ...(drill.machine ? { machine_id: drill.machine.id } : {}), ...(drill.from ? { date_from: drill.from, date_to: drill.to } : {}) }} onPassport={setPassport} delayed={drill.metric === 'delayed' || drill.metric === 'outstanding'} />
+    </Modal>}{passport && <LazyMachinePassportModal machineId={passport} onClose={() => setPassport(null)} />}
+  </div>
 }
