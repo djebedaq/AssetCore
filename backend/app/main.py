@@ -90,6 +90,7 @@ from .repairs import (
     apply_repair_transition,
     generate_completion_documents_or_rollback,
 )
+from .reports.routes import router as reports_router
 from .runtime import initialize_runtime, readiness_report, runtime_state
 from .schemas import (
     AuditLogOut,
@@ -1294,6 +1295,8 @@ def daily_report(
         },
     )
 
+
+app.include_router(reports_router)
 
 frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if frontend_dist.exists():

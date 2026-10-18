@@ -39,6 +39,7 @@ class Permission(str, Enum):
     TEMPLATES_MANAGE = "templates.manage"
     AUDIT_VIEW_OPERATIONAL = "audit.view_operational"
     AUDIT_VIEW_FULL = "audit.view_full"
+    REPORTS_VIEW = "reports.view"
     SETTINGS_MANAGE = "settings.manage"
 
 
@@ -69,10 +70,12 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.DOCUMENTS_VIEW,
             Permission.DOCUMENTS_GENERATE,
             Permission.AUDIT_VIEW_OPERATIONAL,
+            Permission.REPORTS_VIEW,
         }
     ),
     UserRole.MECHANIC.value: frozenset(
         {
+            Permission.REPORTS_VIEW,
             Permission.ASSETS_VIEW,
             Permission.TRANSFERS_VIEW,
             Permission.TRANSFERS_CREATE,
