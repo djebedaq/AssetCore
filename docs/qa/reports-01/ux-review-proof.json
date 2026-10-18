@@ -1,0 +1,23 @@
+{
+  "checks": [
+    "UX: mobile overflow arrows, keyboard access to the last direction, no page overflow",
+    "A: one machine, five distinct repairs, original references, Escape/focus",
+    "UX: 3 unique machine rows despite 5 issues; selected machine expands to its 2 individual cycles",
+    "B: 5 individual issues, 3 completed cycles, 2 active despite partial original batch",
+    "C: 20-day ordered request; correction applied; separate 4 pcs and 5.5 l outstanding",
+    "F: server PDF/XLSX exported with selected requests tab, period, category and machine",
+    "D: two-machine comparison with original-record drill-down and explicit sample sizes",
+    "E: mechanic reports=200; operational audit=403; no audit permission"
+  ],
+  "errors": [],
+  "exports": [
+    "pdf",
+    "xlsx"
+  ],
+  "viewportWidths": [
+    390,
+    768,
+    1280,
+    1440
+  ]
+}

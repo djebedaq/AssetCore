@@ -184,7 +184,7 @@ function App() {
     ['parts', 'nav.parts', PackageSearch, 'requests.view'],
     ['documents', 'nav.documents', FileText, 'documents.view'],
     ['official', 'nav.officialDocuments', FileCheck2, 'documents.view'],
-    ['reports', 'nav.reports', BarChart3, 'audit.view_operational'],
+    ['reports', 'nav.reports', BarChart3, 'reports.view'],
     ['audit', 'nav.audit', History, 'audit.view_operational'],
     ['qr', 'nav.qr', QrCode, 'documents.generate'],
     ['users', 'nav.users', UserRoundCog, 'users.view'],
