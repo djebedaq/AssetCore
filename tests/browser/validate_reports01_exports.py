@@ -99,7 +99,7 @@ def validate(qa: Path):
                 "valid_ooxml": True,
                 "typed_dates": True,
                 "formulas": 0,
-                "matching_metrics": len(expected["current"] + expected["metrics"]),
+                "matching_metrics": len({metric["key"] for metric in expected["current"] + expected["metrics"]}),
                 "official_number": "KK9000",
             },
             indent=2,

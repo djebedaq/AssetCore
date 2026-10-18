@@ -2,6 +2,7 @@
 
 import io
 import json
+import math
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +21,15 @@ from ..localization import status_label
 from .filters import SOFIA
 
 LABELS = json.loads(Path(__file__).with_name("labels.json").read_text(encoding="utf-8"))
+
+
+def metric_groups(data):
+    current = data["current"] + [
+        m
+        for m in data["metrics"]
+        if m["current"] and m["key"] not in {row["key"] for row in data["current"]}
+    ]
+    return [("current", current), ("period", [m for m in data["metrics"] if not m["current"]])]
 
 
 def label(key, language):
@@ -102,8 +112,11 @@ def filter_text(data, language):
 
 def sheets(data, details, language):
     def tr(key):
-        days = data["thresholds"]["window_days" if key == "attentionNote" else "delivery_days"]
-        return label(key, language).replace("{{days}}", str(days))
+        text = label(key, language)
+        if key in {"attentionNote", "delayedNote"}:
+            days = data["thresholds"]["window_days" if key == "attentionNote" else "delivery_days"]
+            text = text.replace("{{days}}", str(days))
+        return text
 
     summary = [
         [tr("title"), tr(data["section"])],
@@ -122,7 +135,7 @@ def sheets(data, details, language):
             tr("current"),
         ],
     ]
-    for m in data["current"] + data["metrics"]:
+    for m in [m for _, metrics in metric_groups(data) for m in metrics]:
         summary.append(
             [
                 tr(m["key"]),
@@ -403,8 +416,11 @@ def export_pdf(data, details, language):
     title = ParagraphStyle("ReportTitle", parent=heading, fontSize=22, leading=28)
 
     def tr(key):
-        days = data["thresholds"]["window_days" if key == "attentionNote" else "delivery_days"]
-        return label(key, language).replace("{{days}}", str(days))
+        text = label(key, language)
+        if key in {"attentionNote", "delayedNote"}:
+            days = data["thresholds"]["window_days" if key == "attentionNote" else "delivery_days"]
+            text = text.replace("{{days}}", str(days))
+        return text
 
     def p(text):
         return Paragraph(escape(str(text if text is not None else tr("insufficient"))), body)
@@ -457,7 +473,7 @@ def export_pdf(data, details, language):
         )
         story.append(t)
 
-    for name, metrics in [("current", data["current"]), ("period", data["metrics"])]:
+    for name, metrics in metric_groups(data):
         if not metrics:
             continue
         story.append(Paragraph(tr(name), heading))
@@ -492,6 +508,11 @@ def export_pdf(data, details, language):
             chart.categoryAxis.labels.fontName, chart.categoryAxis.labels.fontSize = normal, 7
             chart.valueAxis.labels.fontName = normal
             chart.valueAxis.valueMin = 0
+            largest = max(1, *(value for series in chart.data for value in series))
+            chart.valueAxis.valueStep = max(1, math.ceil(largest / 5))
+            chart.valueAxis.valueMax = chart.valueAxis.valueStep * math.ceil(
+                largest / chart.valueAxis.valueStep
+            )
             palette = ["#0e7490", "#16a34a", "#ea580c", "#7c3aed", "#2563eb", "#be185d"]
             for i, color in enumerate(palette[: len(keys)]):
                 chart.bars[i].fillColor = colors.HexColor(color)

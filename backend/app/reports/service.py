@@ -4,6 +4,8 @@ Column projections deliberately avoid ORM document relationships and binary evid
 Bounded column reads keep memory predictable; pagination itself happens in SQL.
 """
 
+import hashlib
+import json
 from collections import Counter, defaultdict
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -41,6 +43,7 @@ from .filters import (
     ATTENTION_REPAIRS,
     ATTENTION_WINDOW_DAYS,
     DELAYED_ORDER_DAYS,
+    MAX_DETAIL_IDENTIFIERS,
     MAX_SOURCE_ROWS,
     SOFIA,
     ReportFilters,
@@ -570,9 +573,11 @@ class Reports:
             for r in rows:
                 r["machine_id"] = r["effective_machine_id"]
                 r["lines"], r["events"], r["decisions"] = (
-                    by_line[r["id"]],
-                    by_event[r["id"]],
-                    by_decision[r["id"]],
+                    sorted(by_line[r["id"]], key=lambda line: line.id),
+                    sorted(by_event[r["id"]], key=lambda event: event.id),
+                    sorted(
+                        by_decision[r["id"]], key=lambda decision: (decision[0], naive(decision[1]))
+                    ),
                 )
                 totals = received(SimpleNamespace(lines=r["lines"], delivery_events=r["events"]))
                 r["remaining"] = [
@@ -837,9 +842,57 @@ class Reports:
             }.get(name, "created_at")
             return f.includes(r[field]) and (name != "cancelled" or r["status"] == "CANCELLED")
 
-        return PartRequest.id.in_([r["id"] for r in rows if selected(r)])
+        identifiers = [r["id"] for r in rows if selected(r)]
+        if len(identifiers) > MAX_DETAIL_IDENTIFIERS:
+            raise HTTPException(
+                422, detail={"code": "reports_scope_too_large", "limit": MAX_DETAIL_IDENTIFIERS}
+            )
+        return PartRequest.id.in_(identifiers)
 
     def details(self, kind, name, page=1, page_size=20, sort="newest"):
+        if kind in MODULES:
+            ensure_permission(self.user, MODULES[kind])
+        valid_metrics = {
+            "machines": {"total_machines", "READY", "ISSUED", "REPAIR"},
+            "usage": {
+                "issues",
+                "unique_issued",
+                "completed_cycles",
+                "still_issued",
+                "active_issues",
+                "issue_hours",
+                "returned_ready",
+                "returned_repair",
+                "returned_damage",
+                "returned_missing",
+                "attention_returns",
+            },
+            "repairs": {"opened", "closed", "current_repairs", "attention"},
+            "requests": {
+                "created",
+                "submitted",
+                "ordered",
+                "approved",
+                "rejected",
+                "cancelled",
+                "delivered",
+                "partial",
+                "pending_requests",
+                "outstanding",
+                "waiting_order",
+                "delayed",
+                "receipts",
+            },
+        }
+        if name and name not in valid_metrics[kind]:
+            raise HTTPException(422, detail={"code": "reports_invalid_metric"})
+        if not name:
+            name = {
+                "machines": "total_machines",
+                "usage": "issues",
+                "repairs": "opened",
+                "requests": "created",
+            }[kind]
         if kind == "machines":
             # Machines are a bounded projection already loaded for current status and category counts.
             rows = [m for m in self.machines if name == "total_machines" or m["status"] == name]
@@ -1001,6 +1054,45 @@ class Reports:
             )
         return result
 
+    def counts_by_machine(self, kind):
+        """SQL counts for category breakdowns and rankings, independent of fleet size."""
+        self.load(kind)
+        source = self.queries[kind].subquery()
+        mid = source.c.effective_machine_id if kind == "requests" else source.c.machine_id
+
+        def inside(column):
+            return and_(column >= self.f.start, column < self.f.end, column <= self.now)
+
+        if kind == "usage":
+            predicates = {
+                "issues": inside(source.c.issued_at),
+                "completed_cycles": and_(
+                    source.c.return_status == "COMPLETED", inside(source.c.returned_at)
+                ),
+            }
+        elif kind == "repairs":
+            predicates = {
+                "opened": inside(source.c.opened_at),
+                "closed": and_(source.c.status == "COMPLETED", inside(source.c.closed_at)),
+            }
+        else:
+            predicates = {"created": inside(source.c.created_at)}
+        statement = (
+            select(
+                mid.label("machine_id"),
+                *[
+                    func.sum(case((condition, 1), else_=0)).label(key)
+                    for key, condition in predicates.items()
+                ],
+            )
+            .where(mid.in_(machine_scope(self.f)))
+            .group_by(mid)
+        )
+        return {
+            row["machine_id"]: {key: row[key] or 0 for key in predicates}
+            for row in self.db.execute(statement).mappings()
+        }
+
     def build(self, section, *, exporting=False):
         if section == "machine" and len(self.f.machine_ids) != 1:
             raise HTTPException(422, detail={"code": "reports_machine_required"})
@@ -1062,16 +1154,28 @@ class Reports:
             item["total"] += 1
             item["statuses"][machine["status"]] += 1
         machine_stats = []
+        detailed = section in {"machine", "compare"}
         grouped = {kind: defaultdict(list) for kind in kinds}
-        for kind in kinds:
-            for row in self.load(kind):
-                grouped[kind][row["machine_id"]].append(row)
+        counts = {kind: self.counts_by_machine(kind) for kind in kinds} if not detailed else {}
+        if detailed:
+            for kind in kinds:
+                for row in self.load(kind):
+                    grouped[kind][row["machine_id"]].append(row)
         for machine in self.machines:
             machine_stats.append(
                 {
                     "machine": machine,
                     "metrics": {
                         kind: period_metrics(kind, grouped[kind][machine["id"]], self.f, self.now)
+                        if detailed
+                        else [
+                            metric(key, counts[kind].get(machine["id"], {}).get(key, 0), drill=key)
+                            for key in {
+                                "usage": ("issues", "completed_cycles"),
+                                "repairs": ("opened", "closed"),
+                                "requests": ("created",),
+                            }[kind]
+                        ]
                         for kind in kinds
                     },
                 }
@@ -1129,7 +1233,7 @@ class Reports:
                 1000,
             )
             parts = part_rows if exporting else part_rows[:100]
-        if section == "requests":
+        if section in {"requests", "machine"} and self.allowed["requests"]:
             counts = {}
             for r in self.load("requests"):
                 if not self.f.includes(r["created_at"]) or r["status"] == "CANCELLED":
@@ -1185,7 +1289,7 @@ class Reports:
             "requests": "created",
             "machines": "total_machines",
         }[kind]
-        return {
+        data = {
             "section": section,
             "filter_machines": [
                 {"id": m["id"], "inventory_number": m["inventory_number"], "name": m["name"]}
@@ -1221,3 +1325,38 @@ class Reports:
                 "delivery_days": DELAYED_ORDER_DAYS,
             },
         }
+
+        for source_kind, permitted in self.allowed.items():
+            if permitted:
+                self.load(source_kind)
+        encoder = json.JSONEncoder(
+            sort_keys=True,
+            ensure_ascii=False,
+            default=lambda value: vars(value) if isinstance(value, SimpleNamespace) else str(value),
+            separators=(",", ":"),
+        )
+        checksum = hashlib.sha256()
+        payload = {
+            "filters": self.f.public(),
+            "as_of": self.now.isoformat(),
+            "thresholds": data["thresholds"],
+            "machines": sorted(self.machines, key=lambda row: row["id"]),
+            "sources": {
+                key: sorted(rows, key=lambda row: row["id"]) for key, rows in self.sources.items()
+            },
+        }
+        # Stream encoding into the checksum instead of duplicating the full history in memory.
+        for chunk in encoder.iterencode(payload):
+            checksum.update(chunk.encode())
+        data["digests"] = {}
+        for key in set(all_metrics) | {section}:
+            stamp = checksum.copy()
+            if (
+                key in {"repairs", "machine"}
+                and section in {"repairs", "machine"}
+                and self.allowed["repairs"]
+            ):
+                for chunk in encoder.iterencode(sorted(part_rows, key=lambda row: row["id"])):
+                    stamp.update(chunk.encode())
+            data["digests"][key] = stamp.hexdigest()
+        return data

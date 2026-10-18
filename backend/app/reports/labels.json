@@ -125,5 +125,8 @@
   "categoryStats": ["Разбивка по категории", "Category breakdown", "Разбивка по категориям"],
   "sampleHeading": ["Включени записи", "Included records", "Учтено записей"],
   "openHeading": ["Неприключени ремонти", "Open repairs", "Незавершённые ремонты"],
-  "reasonsHeading": ["Основания", "Reasons", "Основания"]
+  "reasonsHeading": ["Основания", "Reasons", "Основания"],
+  "attention_returns": ["Връщания за ремонт в прозореца за внимание", "Returns for repair in the attention window", "Возвраты в ремонт в окне внимания"],
+  "changedData": ["Данните са променени. Обновете отчета и изтеглете файла отново.", "Data has changed. Refresh the report and download again.", "Данные изменились. Обновите отчёт и скачайте файл снова."],
+  "chooseComparison": ["Избери машини за сравнение", "Choose machines to compare", "Выбрать машины для сравнения"]
 }

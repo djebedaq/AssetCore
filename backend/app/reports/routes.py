@@ -25,7 +25,22 @@ def service(
         seconds=5
     ):
         raise HTTPException(422, detail={"code": "reports_refresh_required"})
-    return Reports(db, user, f, min(naive(as_of), current) if as_of else current)
+    clock = min(naive(as_of), current) if as_of else current
+    if db.get_bind().dialect.name == "postgresql":
+        # Authentication has already used its own transaction. A separate read-only
+        # repeatable snapshot keeps every chart/table/export query mutually consistent.
+        engine = db.get_bind().execution_options(
+            isolation_level="REPEATABLE READ", postgresql_readonly=True
+        )
+        with Session(engine, autoflush=False) as snapshot:
+            yield Reports(snapshot, user, f, clock)
+    else:
+        if db.get_bind().dialect.name == "sqlite":
+            connection = db.connection()
+            # sqlite3 legacy mode does not begin physical transactions for SELECT.
+            if not connection.connection.driver_connection.in_transaction:
+                connection.exec_driver_sql("BEGIN")
+        yield Reports(db, user, f, clock)
 
 
 @router.get("/records")
@@ -46,10 +61,15 @@ def export_report(
     section: Section = "overview",
     language: Literal["bg", "en", "ru"] = "bg",
     reports: Reports = Depends(service),
+    expected_digest: str | None = Query(
+        None, min_length=64, max_length=64, pattern="^[a-f0-9]{64}$"
+    ),
 ):
     from .exports import export_pdf, export_xlsx
 
     data = reports.build(section, exporting=True)
+    if expected_digest is not None and data["digests"].get(section) != expected_digest:
+        raise HTTPException(409, detail={"code": "reports_changed_refresh"})
     if max(data["attention_total"], data["parts_total"], data["articles_total"]) > MAX_EXPORT_ROWS:
         raise HTTPException(
             422, detail={"code": "reports_export_too_large", "limit": MAX_EXPORT_ROWS}
@@ -89,6 +109,13 @@ def export_report(
             for row in page["items"]:
                 records[row["id"]] = row
         details[kind] = list(records.values())
+        if kind == "requests":
+            events = reports.details("requests", "receipts", 1, MAX_EXPORT_ROWS + 1)
+            if events["total"] > MAX_EXPORT_ROWS:
+                raise HTTPException(
+                    422, detail={"code": "reports_export_too_large", "limit": MAX_EXPORT_ROWS}
+                )
+            details["receipts"] = events["items"]
     if sum(len(rows) for rows in details.values()) > MAX_EXPORT_ROWS:
         raise HTTPException(
             422, detail={"code": "reports_export_too_large", "limit": MAX_EXPORT_ROWS}

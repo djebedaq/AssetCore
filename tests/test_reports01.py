@@ -9,7 +9,7 @@ from xml.etree import ElementTree as ET
 import pytest
 from app.models import Machine, PartRequest, TransferBatch, TransferProtocol, User
 from app.permissions import ROLE_PERMISSIONS, Permission, has_permission
-from app.reports.exports import export_pdf, export_xlsx, sheets
+from app.reports.exports import export_pdf, export_xlsx, label, sheets
 from app.reports.filters import ReportFilters
 from app.reports.service import Reports, hours
 from fastapi import HTTPException
@@ -64,7 +64,19 @@ def test_reports_current_categories_and_active_relationship(session_factory, rep
 def test_reports_partial_return_reissue_cycles_are_individual(session_factory, report_qa):
     db, reports = service(session_factory, report_qa)
     with db:
-        metrics = values(reports.build("usage"))
+        data = reports.build("usage")
+        metrics = values(data)
+        assert data["categories"][0]["metrics"]["issues"] == 5
+        assert data["categories"][0]["metrics"]["completed_cycles"] == 3
+        assert (
+            max(
+                m["value"]
+                for row in data["rankings"]
+                for m in row["metrics"]["usage"]
+                if m["key"] == "issues"
+            )
+            == 2
+        )
         assert metrics["issues"] == 5 and metrics["unique_issued"] == 3
         assert metrics["completed_cycles"] == 3 and metrics["active_issues"] == 2
         assert metrics["avg_cycle_hours"] == 56
@@ -253,6 +265,14 @@ def test_reports_export_content_matches_statistics(session_factory, report_qa, l
         text = "\n".join(page.extract_text() for page in reader.pages)
         assert "REPORTS-QA-T" in text and "56" in text
         assert "{{" not in text
+        normalized = " ".join(text.split())
+        for reason, count, days in (("frequent", 5, 90), ("long", 1, 7)):
+            expected_reason = (
+                label(reason, language)
+                .replace("{{count}}", str(count))
+                .replace("{{days}}", str(days))
+            )
+            assert expected_reason in normalized
         assert len(reader.pages) >= 2
         assert sheets(data, details, language)[0][1][6][1] == data["current"][0]["value"]
 
@@ -354,6 +374,9 @@ def test_reports_receipt_drill_is_paginated_by_actual_events(session_factory, re
         records = reports.details("requests", "receipts", page_size=1)
         assert records["total"] == 1
         assert records["items"][0]["original_id"] == report_qa["request_id"]
+        with pytest.raises(HTTPException) as invalid:
+            reports.details("requests", "nonexistent_metric")
+        assert invalid.value.status_code == 422
 
 
 def test_reports_signed_workflow_reissues_before_original_batch_finishes(
@@ -427,6 +450,58 @@ def test_reports_signed_workflow_reissues_before_original_batch_finishes(
         assert db.get(TransferBatch, issued.json()["batch_id"]).status == "PARTIALLY_RETURNED"
         after = dict(db.execute(select(ProtocolDocument.id, ProtocolDocument.sha256)).all())
         assert all(after[identifier] == digest for identifier, digest in protected.items())
+
+
+def test_reports_export_rejects_changed_data_and_accepts_matching_snapshot(
+    client, auth_headers, session_factory, report_qa
+):
+    query = {"category_id": report_qa["category_id"]}
+    original = client.get("/api/reports/usage", params=query, headers=auth_headers)
+    assert original.status_code == 200
+    data = original.json()
+    params = {
+        **query,
+        "section": "usage",
+        "as_of": data["generated_at"],
+        "expected_digest": data["digests"]["usage"],
+    }
+    assert (
+        client.get("/api/reports/export/xlsx", params=params, headers=auth_headers).status_code
+        == 200
+    )
+    with session_factory() as db:
+        db.add(
+            Machine(
+                inventory_number="REPORTS-CHANGED-QA",
+                name="Synthetic changed snapshot QA",
+                category="REPORTS01_QA",
+                category_id=report_qa["category_id"],
+                brand="QA",
+                status="READY",
+            )
+        )
+        db.commit()
+    stale = client.get("/api/reports/export/xlsx", params=params, headers=auth_headers)
+    assert stale.status_code == 409 and stale.json()["detail"]["code"] == "reports_changed_refresh"
+    refreshed = client.get("/api/reports/usage", params=query, headers=auth_headers).json()
+    assert values(refreshed, "current")["total_machines"] == 4
+    params.update(as_of=refreshed["generated_at"], expected_digest=refreshed["digests"]["usage"])
+    assert (
+        client.get("/api/reports/export/xlsx", params=params, headers=auth_headers).status_code
+        == 200
+    )
+
+
+def test_reports_machine_snapshot_matches_each_direction_export(session_factory, report_qa):
+    db, reports = service(session_factory, report_qa, machine_ids=(report_qa["machine_ids"][0],))
+    with db:
+        machine = reports.build("machine")
+        assert len(machine["articles"]) == 2
+        for section in ("usage", "repairs", "requests"):
+            exported = Reports(db, reports.user, reports.f, reports.now).build(
+                section, exporting=True
+            )
+            assert machine["digests"][section] == exported["digests"][section]
 
 
 def test_reports_export_review_examples(session_factory, report_qa, tmp_path):

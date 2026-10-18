@@ -11,7 +11,7 @@ const button = name => page.getByRole('button', { name, exact: true })
 async function shot(name, width = 1440) {
   await page.setViewportSize({ width, height: 1000 })
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
-  await page.screenshot({ path: `${out}/${name}.png`, fullPage: true })
+  await page.screenshot({ path: `${out}/${name}.png`, fullPage: (await page.getByRole('dialog').count()) === 0 })
 }
 async function choose(name, option, index = 0) {
   await page.getByRole('combobox', { name, exact: true }).nth(index).click()
@@ -76,6 +76,7 @@ try {
   }
   expect(originalCategory.metrics.find(m => m.key === 'created').value).toBe(1)
   checks.push('F: server PDF/XLSX exported with selected requests tab, period, category and machine')
+  await button('Избери машини за сравнение').click()
   await choose('Машина', /REPORTS-QA-1/, 1); await button('Добави за сравнение').click()
   await choose('Машина', /REPORTS-QA-2/, 1); await button('Добави за сравнение').click()
   await page.getByRole('button', { name: /^Сравнение между машини \(2\/4\)$/ }).click()

@@ -9,6 +9,7 @@ SOFIA = ZoneInfo("Europe/Sofia")
 Section = Literal["overview", "usage", "repairs", "requests", "compare", "machine"]
 MAX_SOURCE_ROWS = 100_000
 MAX_EXPORT_ROWS = 5_000
+MAX_DETAIL_IDENTIFIERS = 25_000
 ATTENTION_WINDOW_DAYS = 90
 ATTENTION_REPAIRS = 3
 ATTENTION_OPEN_DAYS = 7
