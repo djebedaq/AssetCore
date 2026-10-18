@@ -135,6 +135,19 @@ jobs:
         run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_catalog_ux06_qa.py
       - name: REQUESTS-01 free-form approval, preview, delivery and BG/EN/RU responsive forms
         run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_requests01_qa.py
+      - name: REPORTS-01 canonical analytics, mechanic permissions, exports and four viewport widths
+        run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_reports01_qa.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: reports01-browser-and-exports
+          path: |
+            .tmp/catalog03-reports01-browser-*/browser-proof.json
+            .tmp/catalog03-reports01-browser-*/*.png
+            .tmp/catalog03-reports01-browser-*/*.pdf
+            .tmp/catalog03-reports01-browser-*/*.xlsx
+          include-hidden-files: true
+          if-no-files-found: error
       - name: TRANSFERS-UX-01 and USER-PROFILE-01 signed cycles, two names and responsive modals
         run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_transfers_profile01_qa.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

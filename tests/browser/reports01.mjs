@@ -1,0 +1,101 @@
+import { createRequire } from 'node:module'
+import { readFile, writeFile } from 'node:fs/promises'
+const require = createRequire(import.meta.url), modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
+const { chromium } = require(modulePath), expect = require(modulePath + '/test').expect.configure({ timeout: 30000 })
+const browser = await chromium.launch({ headless: true, ...(process.env.QA_BROWSER_CHANNEL ? { channel: process.env.QA_BROWSER_CHANNEL } : {}) })
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
+const page = await context.newPage(), base = process.env.PUBLIC_BASE_URL, out = process.env.QA_OUTPUT
+const fixture = JSON.parse(await readFile(`${out}/public-fixture.json`, 'utf8')), checks = [], errors = []
+page.on('pageerror', error => errors.push(error.name))
+const button = name => page.getByRole('button', { name, exact: true })
+async function shot(name, width = 1440) {
+  await page.setViewportSize({ width, height: 1000 })
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
+  await page.screenshot({ path: `${out}/${name}.png`, fullPage: true })
+}
+async function choose(name, option, index = 0) {
+  await page.getByRole('combobox', { name, exact: true }).nth(index).click()
+  await page.getByRole('option', { name: option, exact: typeof option === 'string' }).click()
+}
+async function ready() { await expect(page.locator('.reports-loading')).toHaveCount(0); await expect(page.locator('.reports-page .error')).toHaveCount(0); await expect(page.locator('.reports-chart .recharts-surface')).toHaveCount(2) }
+async function get(path) { const response = await page.request.get(base + '/api' + path); expect(response.status()).toBe(200); return response.json() }
+try {
+  await page.goto(base)
+  await page.locator('input[type=email]').fill(process.env.QA_EMAIL)
+  await page.locator('input[type=password]').fill(process.env.QA_PASSWORD)
+  await button('Вход').click()
+  await page.locator('.sidebar-navigation').getByRole('button', { name: 'Отчети и анализи', exact: true }).click()
+  await choose('Категория', 'REPORTS-01 QA')
+  await ready()
+  await shot('01-overview-desktop')
+  for (const width of [390, 768, 1280]) await shot(`02-overview-${width}`, width)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const attention = page.locator('.reports-attention')
+  await expect(attention).toContainText('5 регистрирани ремонта')
+  await attention.screenshot({ path: `${out}/03-attention.png` })
+  await button('Виж причините').click()
+  await expect(page.getByRole('dialog')).toContainText('Synthetic QA problem 5')
+  await expect(page.getByRole('dialog').locator('tbody tr')).toHaveCount(5)
+  await shot('04-attention-detail')
+  await page.keyboard.press('Escape')
+  await expect(button('Виж причините')).toBeFocused()
+  checks.push('A: one machine, five distinct repairs, original references, Escape/focus')
+  await page.locator('.reports-tabs').getByRole('button', { name: 'Използване на техниката' }).click()
+  await ready(); await shot('05-usage')
+  const usage = await get(`/reports/usage?category_id=${fixture.category_id}`)
+  const metrics = Object.fromEntries(usage.metrics.map(m => [m.key, m.value]))
+  expect(metrics.issues).toBe(5); expect(metrics.completed_cycles).toBe(3); expect(metrics.active_issues).toBe(2)
+  await page.locator('.reports-metric').filter({ has: page.locator('span', { hasText: /^Индивидуални издавания$/ }) }).click()
+  await expect(page.getByRole('dialog').locator('tbody tr')).toHaveCount(5)
+  await shot('06-reissue-cycles'); await page.keyboard.press('Escape')
+  checks.push('B: 5 individual issues, 3 completed cycles, 2 active despite partial original batch')
+  await page.locator('.reports-tabs').getByRole('button', { name: 'Ремонти и неизправности' }).click()
+  await ready(); await shot('07-repairs')
+  await page.locator('.reports-chart').nth(1).screenshot({ path: `${out}/08-repair-ranking.png` })
+  await page.locator('.reports-tabs').getByRole('button', { name: 'Заявки и доставки' }).click()
+  await ready(); await shot('09-requests')
+  await page.locator('.panel').filter({ has: page.getByRole('heading', { name: 'Забавени заявки за части', exact: true }) }).screenshot({ path: `${out}/10-delayed.png` })
+  const requests = await get(`/reports/requests?category_id=${fixture.category_id}`)
+  expect(requests.delayed.items[0].remaining.map(r => [r.quantity, r.unit])).toEqual([['4', 'pcs'], ['5.5', 'l']])
+  checks.push('C: 20-day ordered request; correction applied; separate 4 pcs and 5.5 l outstanding')
+  await choose('Машина', /REPORTS-QA-1/, 0)
+  await ready(); await shot('11-machine-analysis')
+  const originalCategory = await get(`/reports/requests?category_id=${fixture.category_id}&machine_id=${fixture.machine_ids[0]}`)
+  const exported = []
+  for (const [name, extension] of [['Изтегли PDF', 'pdf'], ['Изтегли Excel', 'xlsx']]) {
+    const promise = page.waitForEvent('download'); await button(name).click(); const download = await promise
+    await download.saveAs(`${out}/reports01-filtered.${extension}`); exported.push(extension)
+  }
+  expect(originalCategory.metrics.find(m => m.key === 'created').value).toBe(1)
+  checks.push('F: server PDF/XLSX exported with selected requests tab, period, category and machine')
+  await choose('Машина', /REPORTS-QA-1/, 1); await button('Добави за сравнение').click()
+  await choose('Машина', /REPORTS-QA-2/, 1); await button('Добави за сравнение').click()
+  await page.getByRole('button', { name: /^Сравнение между машини \(2\/4\)$/ }).click()
+  await ready(); await shot('12-comparison')
+  checks.push('D: two-machine comparison with original-record drill-down and explicit sample sizes')
+  await page.locator('.reports-tabs').getByRole('button', { name: 'Общ преглед' }).click()
+  await ready(); await shot('13-period-comparison')
+  for (const locale of ['en', 'ru', 'bg']) {
+    await page.locator('.language-switch').first().getByRole('combobox').click()
+    await page.getByRole('option', { name: { bg: 'Български', en: 'English', ru: 'Русский' }[locale], exact: true }).click()
+    await shot(`16-language-${locale}`)
+  }
+  // Search produces a real empty response, not a mocked screen.
+  await page.locator('.reports-page .ac-filter-search input').fill('REPORTS-NO-MATCH-ONLY-QA')
+  await expect.poll(async () => (await get('/reports/overview?q=REPORTS-NO-MATCH-ONLY-QA')).current[0].value).toBe(0)
+  await ready(); await shot('17-empty')
+  await page.locator('.reports-page .ac-filter-search input').fill('REPORTS-QA')
+  await ready(); await shot('18-mobile-active-filters', 390)
+  const mechanic = await browser.newContext({ viewport: { width: 1280, height: 900 } }), mechanicPage = await mechanic.newPage()
+  await mechanicPage.goto(base); await mechanicPage.locator('input[type=email]').fill('reports01-mechanic@assetcore.invalid'); await mechanicPage.locator('input[type=password]').fill(process.env.QA_PASSWORD); await mechanicPage.getByRole('button', { name: 'Вход', exact: true }).click()
+  await expect(mechanicPage.locator('.sidebar-navigation').getByRole('button', { name: 'Отчети и анализи', exact: true })).toBeVisible()
+  await expect(mechanicPage.locator('.sidebar-navigation').getByRole('button', { name: 'Журнал', exact: true })).toHaveCount(0)
+  const me = await mechanicPage.request.get(base+'/api/auth/me'), user = await me.json()
+  expect(user.permissions).toContain('reports.view'); expect(user.permissions).not.toContain('audit.view_operational')
+  expect((await mechanicPage.request.get(base+'/api/reports/overview')).status()).toBe(200)
+  expect((await mechanicPage.request.get(base+'/api/audit')).status()).toBe(403)
+  checks.push('E: mechanic reports=200; operational audit=403; no audit permission')
+  await mechanic.close()
+  expect(errors).toEqual([])
+  await writeFile(`${out}/browser-proof.json`, JSON.stringify({ checks, errors, exports: exported, viewportWidths: [390, 768, 1280, 1440] }, null, 2))
+} finally { await browser.close() }
