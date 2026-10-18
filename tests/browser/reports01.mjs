@@ -91,10 +91,15 @@ try {
     await shot(`16-language-${locale}`)
   }
   // Search produces a real empty response, not a mocked screen.
+  const emptyResponse = page.waitForResponse(response => response.url().includes('/api/reports/overview?') && new URL(response.url()).searchParams.get('q') === 'REPORTS-NO-MATCH-ONLY-QA' && response.status() === 200)
   await page.locator('.reports-page .ac-filter-search input').fill('REPORTS-NO-MATCH-ONLY-QA')
-  await expect.poll(async () => (await get('/reports/overview?q=REPORTS-NO-MATCH-ONLY-QA')).current[0].value).toBe(0)
+  expect((await (await emptyResponse).json()).current[0].value).toBe(0)
+  await expect(page.locator('.reports-attention article')).toHaveCount(0)
   await ready(); await shot('17-empty')
+  const filteredResponse = page.waitForResponse(response => response.url().includes('/api/reports/overview?') && new URL(response.url()).searchParams.get('q') === 'REPORTS-QA' && response.status() === 200)
   await page.locator('.reports-page .ac-filter-search input').fill('REPORTS-QA')
+  await filteredResponse
+  await expect(page.locator('.reports-attention article')).toHaveCount(1)
   await ready(); await shot('18-mobile-active-filters', 390)
   const mechanic = await browser.newContext({ viewport: { width: 1280, height: 900 } }), mechanicPage = await mechanic.newPage()
   await mechanicPage.goto(base); await mechanicPage.locator('input[type=email]').fill('reports01-mechanic@assetcore.invalid'); await mechanicPage.locator('input[type=password]').fill(process.env.QA_PASSWORD); await mechanicPage.getByRole('button', { name: 'Вход', exact: true }).click()
