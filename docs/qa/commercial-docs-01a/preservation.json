@@ -1,0 +1,10 @@
+{
+  "baseline_commit": "8e1bb0169066beb53ad07eb8d3958af0ee0d6504",
+  "protected_tracked_files": 117,
+  "protected_tree_listing_sha256": "23b3c15721a7324c48f7cc83fcae59fa378471ad0d4f6bc64850d31e1f21a750",
+  "changed_protected_paths": [],
+  "existing_migrations_changed": [],
+  "production_deployment_performed": false,
+  "qa_databases": "New disposable SQLite files and named isolated PostgreSQL QA container only",
+  "signed_archive_preservation_test": "test_company_and_drafts_preserve_signed_document_archive"
+}

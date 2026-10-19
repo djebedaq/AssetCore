@@ -12,7 +12,7 @@ export type PermissionCode =
   | 'repairs.view' | 'repairs.create' | 'repairs.edit' | 'repairs.complete'
   | 'requests.view' | 'requests.create' | 'requests.approve'
   | 'parts.view' | 'parts.manage' | 'documents.view' | 'documents.generate'
-  | 'templates.manage' | 'audit.view_operational' | 'audit.view_full' | 'reports.view' | 'settings.manage'
+  | 'templates.manage' | 'studio.view' | 'company.manage' | 'audit.view_operational' | 'audit.view_full' | 'reports.view' | 'settings.manage'
 export type UserSession = {
   id: number; email: string; full_name: string; role: UserRole; preferred_language: 'bg' | 'en' | 'ru';
   is_active: boolean; is_system_owner: boolean; must_change_password: boolean;

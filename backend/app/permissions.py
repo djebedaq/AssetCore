@@ -37,6 +37,8 @@ class Permission(str, Enum):
     DOCUMENTS_VIEW = "documents.view"
     DOCUMENTS_GENERATE = "documents.generate"
     TEMPLATES_MANAGE = "templates.manage"
+    STUDIO_VIEW = "studio.view"
+    COMPANY_MANAGE = "company.manage"
     AUDIT_VIEW_OPERATIONAL = "audit.view_operational"
     AUDIT_VIEW_FULL = "audit.view_full"
     REPORTS_VIEW = "reports.view"
@@ -50,6 +52,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
     UserRole.DIRECTOR.value: frozenset(
         {
             Permission.USERS_VIEW,
+            Permission.STUDIO_VIEW,
             Permission.USERS_CREATE,
             Permission.USERS_EDIT,
             Permission.USERS_ACTIVATE,

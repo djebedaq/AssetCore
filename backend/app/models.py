@@ -1565,6 +1565,51 @@ class DocumentTemplateVersion(Base):
     published_by: Mapped[User | None] = relationship(foreign_keys=[published_by_id])
 
 
+class CompanyProfile(Base):
+    __tablename__ = "company_profiles"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_company_profile_singleton"),
+                      CheckConstraint("revision > 0", name="ck_company_profile_revision"))
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    identity: Mapped[dict] = mapped_column(JSON, nullable=False)
+    updated_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class CompanyBrandImage(Base):
+    __tablename__ = "company_brand_images"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    purpose: Mapped[str] = mapped_column(String(20))
+    filename: Mapped[str] = mapped_column(String(120))
+    content: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    sha256: Mapped[str] = mapped_column(String(64))
+    width: Mapped[int] = mapped_column(Integer)
+    height: Mapped[int] = mapped_column(Integer)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class DocumentEditorDraft(Base):
+    """Mutable authoring workspace; never a renderer-selectable template version."""
+    __tablename__ = "document_editor_drafts"
+    __table_args__ = (CheckConstraint("revision > 0", name="ck_editor_draft_revision"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    template_id: Mapped[int] = mapped_column(ForeignKey("document_templates.id"), index=True)
+    base_version_id: Mapped[int | None] = mapped_column(ForeignKey("document_template_versions.id"))
+    title: Mapped[str] = mapped_column(String(255))
+    language: Mapped[str] = mapped_column(String(2))
+    schema_version: Mapped[int] = mapped_column(Integer, default=1)
+    layout: Mapped[dict] = mapped_column(JSON)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    updated_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class GeneratedDocument(Base):
     __tablename__ = "generated_documents"
     __table_args__ = (

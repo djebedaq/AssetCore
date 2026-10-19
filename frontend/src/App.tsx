@@ -189,7 +189,7 @@ function App() {
     ['qr', 'nav.qr', QrCode, 'documents.generate'],
     ['users', 'nav.users', UserRoundCog, 'users.view'],
     ['settings', 'nav.settings', Settings, 'settings.manage'],
-  ] as Array<[Exclude<Page, 'password'>, TranslationKey, typeof Gauge, PermissionCode]>).filter(([, , , permission]) => session.permissions.includes(permission))
+  ] as Array<[Exclude<Page, 'password'>, TranslationKey, typeof Gauge, PermissionCode]>).filter(([key, , , permission]) => session.permissions.includes(permission) || key === 'settings' && session.permissions.includes('studio.view'))
 
   return (
     <div className="app-shell">

@@ -127,6 +127,17 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/assetcore-browser" playwright@1.62.1
           npm audit --prefix "$RUNNER_TEMP/assetcore-browser" --audit-level=high
           node "$RUNNER_TEMP/assetcore-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: COMMERCIAL-DOCS-01A company, library, draft settings and director access in BG/EN/RU
+        run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_document_studio_qa.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: commercial-docs-01a-browser
+          path: |
+            .tmp/catalog03-studio01a-browser-*/browser-proof.json
+            .tmp/catalog03-studio01a-browser-*/*.png
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Catalog UX04 real browser acceptance at 390, 768 and 1440 pixels
         run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_catalog_ux04_qa.py
       - name: Catalog UX05 optional publication warnings and runtime requests

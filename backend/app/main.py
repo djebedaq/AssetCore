@@ -54,6 +54,7 @@ from .document_generation import (
     build_protocol_pdf,
     safe_filename,
 )
+from .document_studio.routes import router as document_studio_router
 from .hardening_api import router as hardening_router
 from .industrial_api import (
     router as industrial_router,
@@ -187,6 +188,7 @@ app.add_middleware(
 )
 app.add_middleware(CatalogUploadGuard)
 app.include_router(industrial_router)
+app.include_router(document_studio_router)
 app.include_router(user_router)
 app.include_router(hardening_router)
 app.include_router(catalog_router)
