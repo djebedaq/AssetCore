@@ -1,6 +1,8 @@
 {
   "passed": true,
   "stage": "COMMERCIAL-DOCS-01B",
+  "platform": "linux",
+  "browser": "151.0.7922.34",
   "checks": [
     "Real logo dimensions, field picker, native drag reorder, text styling, static table rows/columns and undo/redo persist",
     "Autosave confirms server revision and recovers from a real aborted network request without losing edits",

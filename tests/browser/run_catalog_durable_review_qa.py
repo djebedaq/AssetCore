@@ -88,7 +88,9 @@ def main(*, scenario="durable", pdf_path=None, expected_path=None, browser_scrip
                 legacy_binding(db, owner, pending.id, target.id)
     if prepare:
         prepare(SessionLocal, qa, password)
-    env["QA_BROWSER_CHANNEL"] = "msedge" if os.name == "nt" else ""
+    env["QA_BROWSER_CHANNEL"] = os.environ.get("ASSETCORE_QA_BROWSER_CHANNEL", "msedge" if os.name == "nt" else "")
+    if env["QA_BROWSER_CHANNEL"] == "bundled":
+        env["QA_BROWSER_CHANNEL"] = ""
     server = None
     container_name = None
     try:

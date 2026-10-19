@@ -65,9 +65,18 @@ try {
   await manualSave()
   await shot('logo-inspector-bg')
   // Native HTML drag-and-drop must change persisted order.
+  await page.evaluate(() => {
+    window.qaStudioDragEvents = []
+    for (const type of ['dragstart', 'dragenter', 'dragover', 'drop', 'dragend']) document.addEventListener(type, event => {
+      if (window.qaStudioDragEvents.length < 30) window.qaStudioDragEvents.push({ type, block: event.target.closest?.('[data-block-id]')?.dataset.blockId, x: event.clientX, y: event.clientY })
+    })
+  })
   const beforeDrag = await api(`/studio/drafts/${id}`)
   const source = canvas.locator('[data-block-id]').first(), target = canvas.locator('[data-block-id]').nth(1)
   await source.scrollIntoViewIfNeeded()
+  // Linux fonts can wrap the toolbar and put the second row just below the
+  // viewport. Scroll the target too before measuring either mouse endpoint.
+  await target.scrollIntoViewIfNeeded()
   const start = await source.boundingBox(), end = await target.boundingBox()
   await page.mouse.move(start.x + 20, start.y + start.height / 2)
   await page.mouse.down()
@@ -107,7 +116,22 @@ try {
   await manualSave()
   checks.push('Real logo dimensions, field picker, native drag reorder, text styling, static table rows/columns and undo/redo persist')
   // Exercise each remaining block with real persistence and DOCX rendering.
-  for (const name of ['Заглавие', 'Линия', 'Рамка', 'QR код на документа', 'Условен текст', 'Номер на страница']) await button(name, palette).click()
+  for (const name of ['Заглавие', 'Линия', 'Рамка', 'QR код на документа', 'Условен текст', 'Номер на страница']) {
+    await button(name, palette).click()
+    if (name === 'Заглавие') {
+      await inspector.getByLabel('Получер', { exact: true }).uncheck()
+      await inspector.getByLabel('Размер (pt)', { exact: true }).fill('14')
+      await expect.poll(() => canvas.locator('.editor-heading-text').evaluate(el => getComputedStyle(el).fontWeight)).toBe('400')
+      const size = await canvas.locator('.editor-heading-text').evaluate(el => parseFloat(getComputedStyle(el).fontSize))
+      expect(size).toBeCloseTo(14 * 96 / 72, 1)
+      await inspector.getByLabel('Получер', { exact: true }).check()
+      await inspector.getByLabel('Размер (pt)', { exact: true }).fill('16')
+    }
+    if (name === 'Рамка') {
+      const width = await canvas.locator('[data-block-id][aria-pressed=true]').evaluate(el => el.getBoundingClientRect().width)
+      expect(width).toBeCloseTo(40 * 96 / 25.4 * .65, 0)
+    }
+  }
   await inspector.getByLabel('Област', { exact: true }).selectOption('footer')
   await inspector.getByLabel('Размер (pt)', { exact: true }).fill('8')
   await inspector.getByLabel('Разстояние след (mm)', { exact: true }).fill('0')
@@ -223,11 +247,13 @@ try {
   checks.push('BG/EN/RU editor is usable at 1440, 768 and 390 with compact mobile panels and no document-level overflow')
   checks.push('Touch-enabled 390px context adds text, edits properties, reorders with touch buttons and confirms autosave')
   if (errors.length) throw new Error('Browser runtime errors')
-  await writeFile(`${out}/browser-proof.json`, JSON.stringify({ passed: true, stage: 'COMMERCIAL-DOCS-01B', checks, screenshots, errors }, null, 2))
+  await writeFile(`${out}/browser-proof.json`, JSON.stringify({ passed: true, stage: 'COMMERCIAL-DOCS-01B', platform: process.platform, browser: await browser.version(), checks, screenshots, errors }, null, 2))
   console.log(JSON.stringify({ passed: true, checks: checks.length, screenshots: screenshots.length }))
 } catch (error) {
-  await page.screenshot({ path: `${out}/failure.png`, fullPage: true })
+  console.error(error.message)
+  await writeFile(`${out}/drag-events.json`, JSON.stringify(await page.evaluate(() => window.qaStudioDragEvents || []), null, 2))
+  await page.screenshot({ path: `${out}/failure.png`, fullPage: true, timeout: 15000 }).catch(() => {})
   await writeFile(`${out}/failure-ui.txt`, await page.locator('.document-studio').innerText().catch(() => 'unavailable'))
   await writeFile(`${out}/browser-proof.json`, JSON.stringify({ passed: false, checks, screenshots, errors, failure: error.message }, null, 2))
-  console.error(error.message); process.exitCode = 1
+  process.exitCode = 1
 } finally { await browser.close() }

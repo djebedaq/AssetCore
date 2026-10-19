@@ -189,6 +189,11 @@ export function VisualEditor({ draft, documentType, saved, onDirty, close, publi
   function draw(block: Block) {
     const s = { ...defaultStyle, ...block.style }, selectedBlock = block.id === selected
     const css: CSSProperties = { fontFamily: s.font, fontSize: `${s.size_pt}pt`, color: s.color, textAlign: s.align, fontWeight: s.bold ? 700 : 400, fontStyle: s.italic ? 'italic' : 'normal', background: s.background, border: `${s.border_pt}pt solid ${s.color}`, marginBottom: `${s.spacing_mm}mm`, width: `${s.width_percent}%`, marginLeft: s.align === 'right' ? 'auto' : s.align === 'center' ? 'auto' : 0, marginRight: s.align === 'center' ? 'auto' : undefined }
+    const physical: CSSProperties = { width: `${block.width_mm}mm`, height: `${block.height_mm}mm`, marginLeft: s.align === 'right' || s.align === 'center' ? 'auto' : 0, marginRight: s.align === 'center' ? 'auto' : 0 }
+    const cell: CSSProperties = { border: `${s.border_pt}pt solid ${s.color}` }
+    if (block.type === 'frame' || block.type === 'line') css.width = `${block.width_mm}mm`
+    if (block.type === 'frame') css.minHeight = `${block.height_mm}mm`
+    if (['table', 'dynamic_table', 'line'].includes(block.type)) css.border = 0
     return <div key={block.id} className={`editor-block ${selectedBlock ? 'selected' : ''} ${drop === block.id ? 'drop-target' : ''}`} style={css} tabIndex={0} role="button" aria-label={t(labelKey(block.type))} aria-pressed={selectedBlock} data-block-id={block.id}
       draggable={editable && !busy} onDragStart={e => { setDrag(block.id); e.dataTransfer.setData('text/plain', block.id); e.dataTransfer.effectAllowed = 'move' }} onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDrop(block.id) }} onDragEnd={() => { setDrag(null); setDrop(null) }} onDrop={e => { e.preventDefault(); const source = e.dataTransfer.getData('text/plain') || drag; if (source) edit({ title, layout: moveBlock(layout, source, block.id) }); setDrag(null); setDrop(null) }}
       onClick={() => { setSelected(block.id); setPanel('inspector') }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(block.id); setPanel('inspector') } }}>
@@ -196,12 +201,12 @@ export function VisualEditor({ draft, documentType, saved, onDirty, close, publi
       {['text', 'heading', 'conditional'].includes(block.type) && <div className={block.type === 'heading' ? 'editor-heading-text' : ''}>{block.text || '\u00a0'}</div>}
       {block.type === 'field' && <span className="editor-field-token">{'{ '}{t(labelKey(`field.${block.field}`))}{' }'}</span>}
       {block.type === 'signature' && <div className="editor-signature">{t(`studio.field.${block.slot}` as TranslationKey)}<div>________________________</div></div>}
-      {(block.type === 'image' || block.type === 'logo') && <div className="editor-image" style={{ width: `${block.width_mm}mm`, height: `${block.height_mm}mm` }}><ImageView image={images.find(i => i.id === block.image_id)} /></div>}
-      {block.type === 'table' && <table><tbody>{block.rows?.map((row, i) => <tr key={i}>{row.map((value, j) => <td style={{ width: `${block.widths?.[j] || 100 / row.length}%` }} key={j}>{value || '\u00a0'}</td>)}</tr>)}</tbody></table>}
-      {block.type === 'dynamic_table' && <table><thead><tr>{block.columns?.map(c => <th key={c.key} style={{ width: `${c.width_percent}%` }}>{c.label}</th>)}</tr></thead><tbody>{[1, 2, 3].map(n => <tr key={n}>{block.columns?.map(c => <td key={c.key}>{t(labelKey(`column.${c.key}`))} · {n}</td>)}</tr>)}</tbody></table>}
-      {block.type === 'line' && <hr style={{ width: `${block.width_mm || 40}mm`, borderColor: s.color }} />}
-      {block.type === 'frame' && <div style={{ width: `${block.width_mm}mm`, minHeight: `${block.height_mm}mm`, border: `1px solid ${s.color}` }}>{block.text}</div>}
-      {block.type === 'qr' && <div className="editor-qr" style={{ width: `${block.width_mm}mm`, height: `${block.width_mm}mm` }}>QR</div>}
+      {(block.type === 'image' || block.type === 'logo') && <div className="editor-image" style={physical}><ImageView image={images.find(i => i.id === block.image_id)} /></div>}
+      {block.type === 'table' && <table><tbody>{block.rows?.map((row, i) => <tr key={i}>{row.map((value, j) => <td style={{ ...cell, width: `${block.widths?.[j] || 100 / row.length}%`, fontWeight: i === 0 && block.repeat_header ? 700 : undefined }} key={j}>{value || '\u00a0'}</td>)}</tr>)}</tbody></table>}
+      {block.type === 'dynamic_table' && <table><thead><tr>{block.columns?.map(c => <th key={c.key} style={{ ...cell, width: `${c.width_percent}%` }}>{c.label}</th>)}</tr></thead><tbody>{[1, 2, 3].map(n => <tr key={n}>{block.columns?.map(c => <td key={c.key} style={cell}>{t(labelKey(`column.${c.key}`))} · {n}</td>)}</tr>)}</tbody></table>}
+      {block.type === 'line' && <hr style={{ width: '100%', margin: 0, border: 0, borderTop: `${Math.max(.5, s.border_pt)}pt solid ${s.color}` }} />}
+      {block.type === 'frame' && <div>{block.text}</div>}
+      {block.type === 'qr' && <div className="editor-qr" style={{ ...physical, height: `${block.width_mm}mm` }}>QR</div>}
       {block.type === 'page_number' && <span>{t('editor.page')} 1 / {pages.length}</span>}
       {block.type === 'page_break' && <div className="editor-page-break">{t('editor.page_break')}</div>}
       {editable && !busy && selectedBlock && ['image', 'logo', 'frame'].includes(block.type) && <button className="editor-resize" aria-label={t('editor.resize')} onPointerDown={e => resize(e, block)} />}
@@ -248,7 +253,7 @@ export function VisualEditor({ draft, documentType, saved, onDirty, close, publi
           <div className="editor-checks"><label><input type="checkbox" checked={style.bold} onChange={e => changeStyle({ bold: e.target.checked })} />{t('editor.bold')}</label><label><input type="checkbox" checked={style.italic} onChange={e => changeStyle({ italic: e.target.checked })} />{t('editor.italic')}</label></div></>}
           <label>{t('editor.align')}<select aria-label={t('editor.align')} value={style.align} onChange={e => changeStyle({ align: e.target.value as Style['align'] })}>{(['left', 'center', 'right'] as const).map(a => <option key={a} value={a}>{t(labelKey(a))}</option>)}</select></label>
           <label>{t('editor.color')}<input type="color" value={style.color} onChange={e => changeStyle({ color: e.target.value })} /></label><label>{t('editor.background')}<input type="color" value={style.background} onChange={e => changeStyle({ background: e.target.value })} /></label>
-          <label>{t('editor.spacing')}<input type="number" min={0} max={30} step={.5} value={style.spacing_mm} onChange={e => changeStyle({ spacing_mm: Number(e.target.value) })} /></label><label>{t('editor.border')}<input type="number" min={0} max={3} step={.25} value={style.border_pt} onChange={e => changeStyle({ border_pt: Number(e.target.value) })} /></label><label>{t('editor.widthPercent')}<input type="number" min={10} max={100} value={style.width_percent} onChange={e => changeStyle({ width_percent: Number(e.target.value) })} /></label>
+          <label>{t('editor.spacing')}<input type="number" min={0} max={30} step={.5} value={style.spacing_mm} onChange={e => changeStyle({ spacing_mm: Number(e.target.value) })} /></label><label>{t('editor.border')}<input type="number" min={0} max={3} step={.25} value={style.border_pt} onChange={e => changeStyle({ border_pt: Number(e.target.value) })} /></label>{!['frame', 'line'].includes(current.type) && <label>{t('editor.widthPercent')}<input type="number" min={10} max={100} value={style.width_percent} onChange={e => changeStyle({ width_percent: Number(e.target.value) })} /></label>}
         </fieldset> : <p className="muted">{t('editor.selectBlock')}</p>}</aside>
       </div>
     </>}
