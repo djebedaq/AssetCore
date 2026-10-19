@@ -1565,6 +1565,21 @@ class DocumentTemplateVersion(Base):
     published_by: Mapped[User | None] = relationship(foreign_keys=[published_by_id])
 
 
+class StudioActivation(Base):
+    """Append-only explicit selection, independent of template publication."""
+    __tablename__ = "studio_activations"
+    __table_args__ = (UniqueConstraint("document_type", "language", "revision", name="uq_studio_activation_revision"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_type: Mapped[str] = mapped_column(String(80), index=True)
+    language: Mapped[str] = mapped_column(String(2))
+    revision: Mapped[int] = mapped_column(Integer)
+    version_id: Mapped[int] = mapped_column(ForeignKey("document_template_versions.id"))
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    reason: Mapped[str] = mapped_column(Text)
+
+
 class CompanyProfile(Base):
     __tablename__ = "company_profiles"
     __table_args__ = (CheckConstraint("id = 1", name="ck_company_profile_singleton"),
@@ -2435,3 +2450,7 @@ class DocumentSignature(Base):
 from .request_schema_guards import install as install_request_guards  # noqa: E402
 
 install_request_guards(Base.metadata)
+
+from .document_studio.guards import install as install_studio_guards  # noqa: E402
+
+install_studio_guards(Base.metadata)

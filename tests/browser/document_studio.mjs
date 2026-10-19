@@ -58,12 +58,13 @@ try {
   for (const width of [390, 768, 1440]) await shot('library-bg', width)
   await page.getByLabel('Име на черновата', { exact: true }).fill('Synthetic QA authoring draft')
   await button('Създай').click()
-  const draftForm = page.locator('.studio-template-details form').filter({ has: page.locator('option[value="landscape"]') })
+  const draftForm = page.locator('.visual-editor')
+  await draftForm.getByLabel('Автозапис', { exact: true }).uncheck()
   await draftForm.getByRole('combobox', { name: /Ориентация/ }).selectOption('landscape')
   await draftForm.getByRole('button', { name: 'Запази промените', exact: true }).click()
-  await expect(draftForm.getByRole('status')).toHaveText('Потвърдено от сървъра')
+  await expect(draftForm.getByRole('status')).toContainText('Потвърдено от сървъра')
   for (const width of [390, 768, 1440]) await shot('draft-settings-bg', width)
-  checks.push('Authoring draft created, reopened and saved through revision CAS; no renderer or publication controls')
+  checks.push('Authoring draft created and saved through revision CAS in the visual editor')
   for (const language of [
     { code: 'en', settings: 'Settings', title: 'Document Studio — Company documents', company: 'Company legal name', library: 'Template library' },
     { code: 'ru', settings: 'Настройки', title: 'Document Studio — Документы компании', company: 'Наименование компании', library: 'Библиотека шаблонов' },

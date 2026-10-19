@@ -23,6 +23,14 @@ from .common import (
 def _template_version(
     db: Session, document_type: str, language: str
 ) -> DocumentTemplateVersion:
+    from ..document_studio.publication import active_selection
+    selected = active_selection(db, document_type, _language(language))
+    if selected:
+        version = db.get(DocumentTemplateVersion, selected.version_id)
+        if (version is None or not version.is_published or version.validation_status != "PASSED"
+                or not version.layout_contract.get("studio") or not version.template.is_active):
+            raise ConfirmedTemplateUnavailableError(document_type, language)
+        return version
     now = datetime.now(UTC).replace(tzinfo=None)
     version = db.scalar(
         select(DocumentTemplateVersion)
@@ -33,6 +41,7 @@ def _template_version(
             DocumentTemplateVersion.language == _language(language),
             DocumentTemplateVersion.is_published.is_(True),
             DocumentTemplateVersion.validation_status == "PASSED",
+            DocumentTemplateVersion.layout_contract["studio"].as_integer().is_(None),
             or_(
                 DocumentTemplateVersion.effective_from.is_(None),
                 DocumentTemplateVersion.effective_from <= now,

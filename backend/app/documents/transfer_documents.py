@@ -539,6 +539,7 @@ def _protocol_template_values(
         "DOCUMENT_NUMBER": f"{transfer.protocol_number}-R" if operation == "return" else transfer.protocol_number,
         "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
         "EQUIPMENT_TYPE": transfer.machine.category or "",
+        "MACHINE_LOCATION": transfer.machine.location.name if transfer.machine.location else "",
         "MACHINE_NAME": transfer.machine.name,
         "MACHINE_NUMBER": transfer.machine.inventory_number,
         "BRAND": transfer.machine.brand,
@@ -588,7 +589,8 @@ def make_protocol_documents(
             db, transfer, batch.batch_reference, "issue", language, created_by_id
         ),
     )
-    pdf = convert_docx_to_pdf(docx) or build_protocol_pdf(
+    from ..document_studio.renderer import pdf_required
+    pdf = pdf_required(docx) if template.layout_contract.get("studio") else convert_docx_to_pdf(docx) or build_protocol_pdf(
         transfer, batch.batch_reference, language
     )
     _register_official_version(
@@ -646,7 +648,8 @@ def make_return_documents(
     )
     values["DOCUMENT_NUMBER"] = number
     docx = render_docx(template, values)
-    pdf = convert_docx_to_pdf(docx) or build_return_protocol_pdf(
+    from ..document_studio.renderer import pdf_required
+    pdf = pdf_required(docx) if template.layout_contract.get("studio") else convert_docx_to_pdf(docx) or build_return_protocol_pdf(
         transfer, batch_reference, language
     )
     snapshot = _protocol_snapshot(transfer, batch_reference, "return", _language(language))

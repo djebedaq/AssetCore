@@ -138,6 +138,8 @@ def finalize_signed_files_from_rows(
     if not rows:
         return
     final_docx = version.docx_content
+    from .document_studio.renderer import manifest_from_source, pdf_required
+    studio = bool(final_docx and manifest_from_source(final_docx))
     signatures_embedded = False
     if final_docx:
         document = Document(io.BytesIO(final_docx))
@@ -166,7 +168,7 @@ def finalize_signed_files_from_rows(
         version.docx_content = final_docx
         version.docx_sha256 = _sha(final_docx)
 
-    converted = convert_docx_to_pdf(final_docx) if final_docx else None
+    converted = (pdf_required(final_docx) if studio else convert_docx_to_pdf(final_docx)) if final_docx else None
     if converted:
         version.pdf_content = converted
         version.pdf_sha256 = _sha(converted)

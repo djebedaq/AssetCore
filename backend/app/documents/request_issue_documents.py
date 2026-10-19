@@ -142,6 +142,13 @@ def _meta(data):
 
 
 def build_docx(data, template_content, appendix=None, *, header_content=None, resources=None):
+    from ..document_studio.renderer import manifest_from_source, render_source
+    manifest = manifest_from_source(template_content) if template_content else None
+    if manifest:
+        if manifest["document_type"] != "PART_REQUEST" or manifest["language"] != data["language"]:
+            raise ValueError("studio_source_invalid")
+        rendered = render_source(template_content, _studio_values(data), {"REQUEST_LINES": _studio_rows(data)})
+        return append_docx(rendered, appendix, data["language"]) if appendix else rendered
     if data.get("document_layout_version") not in (None, 1, 2, 3):
         raise ValueError("unsupported_request_document_layout_version")
     if data.get("document_layout_version") in (2, 3):
@@ -222,6 +229,11 @@ def _legacy_build_docx(data, template_content, appendix=None, *, header_content=
 def build_pdf(
     data, appendix=None, *, preview=False, header_content=None, resources=None, docx=None
 ):
+    if data.get("studio_source"):
+        from ..document_studio.renderer import pdf_required
+        if docx is None:
+            raise ValueError("studio_source_invalid")
+        return pdf_required(docx)
     if data.get("document_layout_version") not in (None, 1, 2, 3):
         raise ValueError("unsupported_request_document_layout_version")
     if data.get("document_layout_version") in (2, 3):
@@ -390,8 +402,9 @@ def archive(db, request, actor):
     docx = build_docx(
         snapshot.data, content, appendix, header_content=header.content, resources=resources
     )
+    from ..document_studio.renderer import manifest_from_source
     pdf = build_pdf(
-        snapshot.data, appendix, header_content=header.content, resources=resources, docx=docx
+        {**snapshot.data, "studio_source": manifest_from_source(content) is not None}, appendix, header_content=header.content, resources=resources, docx=docx
     )
     _register_official_version(
         db,
@@ -432,6 +445,36 @@ def archive(db, request, actor):
         },
     )
     return documents
+
+
+def _studio_values(data):
+    from ..localization import status_label
+    from .templates import _signature_status
+    machine = data.get("machine") or {}
+    prepared = data.get("prepared_by") or {}
+    return {"DOCUMENT_NUMBER": data.get("official_number") or "", "CREATION_DATE": _date(data),
+        "MACHINE_NAME": machine.get("name") or "", "MACHINE_NUMBER": machine.get("inventory_number") or "",
+        "BRAND": machine.get("brand") or "", "MODEL": machine.get("model") or "",
+        "SERIAL_NUMBER": machine.get("serial_number") or "", "PRESSURE_BAR": machine.get("pressure_bar") if machine.get("pressure_bar") is not None else "",
+        "EQUIPMENT_TYPE": (data.get("studio_machine_context") or {}).get("category") or "",
+        "MACHINE_LOCATION": (data.get("studio_machine_context") or {}).get("location") or "",
+        "BATCH_REFERENCE": "", "CONDITION_TEXT": "", "USAGE_TEXT": "",
+        "PREPARER_NAME": prepared.get("display_name") or "", "PREPARER_JOB_TITLE": prepared.get("job_title") or "",
+        "SIGNATURE_STATUS": _signature_status(data["language"]), "LEFT_SIGNATURE": "[[ASSETCORE_LEFT_SIGNATURE]]",
+        "RIGHT_SIGNATURE": "[[ASSETCORE_RIGHT_SIGNATURE]]",
+        "LEFT_SIGNER_NAME": data.get("requested_by_name") or "", "LEFT_SIGNER_JOB_TITLE": data.get("requested_by_job_title") or "",
+        "RIGHT_SIGNER_NAME": data.get("approved_by_name") or "", "RIGHT_SIGNER_JOB_TITLE": data.get("approved_by_job_title") or "",
+        "REQUESTER_NAME": data.get("requested_by_name") or "", "APPROVER_NAME": data.get("approved_by_name") or "",
+        "DEPARTMENT": data.get("department") or "", "APPROVAL_DATE": _date(data),
+        "REMARKS": data.get("reason") or "", "DECISION": data.get("decision_note") or status_label(data.get("status") or "APPROVED", data["language"])}
+
+
+def _studio_rows(data):
+    localized = _rows(data)[1:]
+    return [{"position": row[0], "part_number": "" if data["request_kind"] == "FREE_FORM" else row[1],
+             "description": row[-2], "quantity": row[-1].partition(" ")[0],
+             "unit": UNIT_LABELS[data["language"]].get(line["unit"], line["unit"] or ""),
+             "note": line.get("note") or ""} for row, line in zip(localized, data["lines"], strict=True)]
 
 
 def generate_safely(db, request, actor):

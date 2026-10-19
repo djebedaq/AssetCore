@@ -6,6 +6,7 @@ import { setSessionUser } from '../../permissions'
 import type { UserSession } from '../../types'
 import DocumentStudio from './DocumentStudio'
 import { studioBg, studioEn, studioRu } from './translations'
+import { defaultStyle } from './editorModel'
 
 const identity = { legal_name: 'Synthetic QA', short_name: '', registration_number: '', vat_number: '', address: '', city: '', country: '', phone: '', email: '', website: '', primary_color: '#183153', secondary_color: '#64748b', default_language: 'bg', timezone: 'UTC', primary_logo_id: null, secondary_logo_id: null, identity_image_ids: [] }
 const user: UserSession = { id: 1, email: 'qa@example.invalid', full_name: 'QA', role: 'administrator', preferred_language: 'bg', is_active: true, is_system_owner: false, must_change_password: false, permissions: ['studio.view', 'templates.manage', 'company.manage'], created_at: '', updated_at: '' }
@@ -85,6 +86,7 @@ it('creates and reopens a real draft and preserves edits on revision conflicts',
     requests.push(path)
     if (path.endsWith('/company')) return json({ revision: 0, identity })
     if (path.endsWith('/templates')) return json([template])
+    if (path.endsWith('/schema')) return json({ fields: [{ code: 'DOCUMENT_NUMBER', group: 'operation' }] })
     if (path.endsWith('/drafts')) return json(init?.method === 'POST' ? draft : [])
     if (init?.method === 'PUT') return json({ detail: { code: 'studio_conflict' } }, 409)
     return json([])
@@ -94,13 +96,39 @@ it('creates and reopens a real draft and preserves edits on revision conflicts',
   await userEvent.click(screen.getByRole('button', { name: 'Библиотека с шаблони' }))
   await userEvent.type(await screen.findByLabelText('Име на черновата'), 'QA draft')
   await userEvent.click(screen.getByRole('button', { name: 'Създай' }))
-  const settings = await screen.findByRole('heading', { name: 'Редакторски чернови · Ревизия 1' })
-  const form = settings.closest('form')!
-  expect(within(form).getByText('Номер на документа')).toBeVisible()
+  const form = await screen.findByRole('region', { name: 'Визуален редактор' })
+  await userEvent.click(within(form).getByLabelText('Автозапис'))
+  expect(form.querySelector('.editor-paper .editor-field-token')).toHaveTextContent('Номер на документа')
   await userEvent.selectOptions(within(form).getByLabelText('Ориентация'), 'landscape')
   await userEvent.click(within(form).getByRole('button', { name: 'Запази промените' }))
   expect(await within(form).findByRole('alert')).toHaveTextContent('Има по-нова версия')
   expect(within(form).getByLabelText('Ориентация')).toHaveValue('landscape')
   expect(requests.some(path => path.includes('publish'))).toBe(false)
   expect(screen.queryByRole('textbox', { name: /JSON/ })).not.toBeInTheDocument()
+})
+
+it('adopts normalized server block defaults after a successful save and becomes clean', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.endsWith('/company')) return json({ revision: 0, identity })
+    if (path.endsWith('/templates')) return json([template])
+    if (path.endsWith('/schema')) return json({ fields: [{ code: 'DOCUMENT_NUMBER', group: 'operation' }] })
+    if (path.endsWith('/drafts')) return json(init?.method === 'POST' ? draft : [])
+    if (init?.method === 'PUT') {
+      const payload = JSON.parse(String(init.body))
+      return json({ ...draft, title: payload.title, revision: 2, layout: { ...payload.layout,
+        blocks: payload.layout.blocks.map((block: Record<string, unknown>) => ({ region: 'body', style: defaultStyle, ...block })) } })
+    }
+    return json([])
+  }))
+  mount(); await screen.findByLabelText('Фирмено наименование')
+  await userEvent.click(screen.getByRole('button', { name: 'Библиотека с шаблони' }))
+  await userEvent.type(await screen.findByLabelText('Име на черновата'), 'QA draft')
+  await userEvent.click(screen.getByRole('button', { name: 'Създай' }))
+  const editor = await screen.findByRole('region', { name: 'Визуален редактор' })
+  await userEvent.click(within(editor).getByLabelText('Автозапис'))
+  await userEvent.click(within(editor).getByRole('button', { name: 'Текст' }))
+  await userEvent.click(within(editor).getByRole('button', { name: 'Запази промените' }))
+  await waitFor(() => expect(within(editor).getByRole('status')).toHaveTextContent('Потвърдено от сървъра'))
+  expect(within(editor).getByRole('button', { name: 'Запази промените' })).toBeDisabled()
+  expect(within(editor).getByRole('button', { name: 'Провери и виж PDF' })).toBeEnabled()
 })

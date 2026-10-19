@@ -21,8 +21,44 @@ FIELD_CATALOG = {
     "COMPANY_NAME": "company", "COMPANY_ADDRESS": "company",
     "COMPANY_REGISTRATION": "company", "COMPANY_CONTACTS": "company",
 }
+FIELD_CATALOG.update({code: group for group, codes in {
+    "machine": "EQUIPMENT_TYPE MACHINE_LOCATION PRESSURE_BAR",
+    "operation": "PREPARER_JOB_TITLE LEFT_SIGNER_NAME LEFT_SIGNER_JOB_TITLE RIGHT_SIGNER_NAME RIGHT_SIGNER_JOB_TITLE BATCH_REFERENCE",
+    "transfer": "CONDITION_TEXT USAGE_TEXT",
+    "repair": "CONDITION_BEFORE CONDITION_AFTER REQUIRED_WORK REQUIRED_PARTS REMOVED_PARTS FINAL_RESULT REPAIRER_NAMES ACCEPTED_BY_NAME APPROVED_BY_NAME DIAGNOSTIC_CLEANING DIAGNOSIS_DURATION REPAIR_DURATION TESTING_DURATION TOTAL_WORK_DURATION PARTICIPANT_TOTAL_DURATION",
+    "request": "REQUESTER_NAME DEPARTMENT APPROVAL_DATE APPROVER_NAME",
+}.items() for code in codes.split()})
 TABLE_CATALOG = {"PARTS_USED": "REPAIR_PROTOCOL", "REPAIR_EVENTS": "REPAIR_PROTOCOL",
                  "REQUEST_LINES": "PART_REQUEST"}
+TABLE_COLUMNS = {
+    "REQUEST_LINES": {"position", "part_number", "description", "quantity", "unit", "note"},
+    "PARTS_USED": {"position", "part_number", "description", "quantity", "unit"},
+    "REPAIR_EVENTS": {"date", "event_type", "description"},
+}
+PUBLICATION_FIELDS = {
+    "TRANSFER_ISSUE": "CREATION_DATE MACHINE_NUMBER SERIAL_NUMBER CONDITION_TEXT REMARKS",
+    "TRANSFER_RETURN": "CREATION_DATE MACHINE_NUMBER SERIAL_NUMBER CONDITION_TEXT REMARKS",
+    "REPAIR_PROTOCOL": "CREATION_DATE MACHINE_NUMBER REPAIR_REFERENCE REPORTED_PROBLEM CONDITION_BEFORE DIAGNOSTIC_CLEANING REQUIRED_WORK DIAGNOSIS DIAGNOSIS_DURATION WORK_PERFORMED REPAIR_DURATION TESTING_DURATION TEST_RESULT FINAL_RESULT TOTAL_WORK_DURATION PARTICIPANT_TOTAL_DURATION",
+    "PART_REQUEST": "CREATION_DATE REMARKS DECISION REQUESTER_NAME APPROVER_NAME APPROVAL_DATE",
+}
+
+
+def publication_fields(document_type: str):
+    return PUBLICATION_FIELDS[document_type].split()
+
+
+def validate_publication_fields(layout, document_type):
+    actual = {b.field for b in layout.blocks if b.type == "field" and b.region == "body"}
+    if not set(publication_fields(document_type)) <= actual:
+        raise ValueError("studio_required_block")
+    for source, workflow in TABLE_CATALOG.items():
+        if workflow == document_type and sum(b.type == "dynamic_table" and b.source == source for b in layout.blocks) != 1:
+            raise ValueError("studio_required_block")
+    for block in layout.blocks:
+        if block.type == "dynamic_table":
+            required = {"description"} if block.source == "REPAIR_EVENTS" else {"description", "quantity"}
+            if not required <= {c.key for c in block.columns}:
+                raise ValueError("studio_required_block")
 
 
 class StrictModel(BaseModel):
@@ -114,6 +150,11 @@ class Style(StrictModel):
     color: str = Field(default="#183153", pattern=r"^#[0-9a-fA-F]{6}$")
     align: Literal["left", "center", "right"] = "left"
     spacing_mm: float = Field(default=2, ge=0, le=30, allow_inf_nan=False)
+    bold: bool = False
+    italic: bool = False
+    background: str = Field(default="#ffffff", pattern=r"^#[0-9a-fA-F]{6}$")
+    border_pt: float = Field(default=0, ge=0, le=3, allow_inf_nan=False)
+    width_percent: float = Field(default=100, ge=10, le=100, allow_inf_nan=False)
 
 
 class BlockBase(StrictModel):
@@ -147,7 +188,7 @@ class ImageBlock(BlockBase):
 
 
 class TableColumn(StrictModel):
-    key: Literal["position", "description", "quantity", "unit", "part_number", "note"]
+    key: Literal["position", "description", "quantity", "unit", "part_number", "note", "date", "event_type"]
     label: str = Field(min_length=1, max_length=100)
     width_percent: float = Field(gt=0, le=100, allow_inf_nan=False)
 
@@ -171,6 +212,14 @@ class DynamicTable(BlockBase):
 class StaticTable(BlockBase):
     type: Literal["table"]
     rows: list[list[Annotated[str, Field(max_length=2000)]]] = Field(min_length=1, max_length=50)
+    widths: list[Annotated[float, Field(gt=0, le=100, allow_inf_nan=False)]] | None = Field(default=None, max_length=8)
+    repeat_header: bool = True
+
+    @model_validator(mode="after")
+    def widths_match(self):
+        if self.widths is not None and (len(self.widths) != len(self.rows[0]) or any(w < 5 for w in self.widths) or abs(sum(self.widths) - 100) > 0.01):
+            raise ValueError("studio_table_width")
+        return self
 
     @field_validator("rows")
     @classmethod
@@ -188,6 +237,9 @@ class SignatureBlock(BlockBase):
 
 class SystemBlock(BlockBase):
     type: Literal["line", "frame", "page_number", "page_break", "qr"]
+    text: str = Field(default="", max_length=2000)
+    width_mm: float = Field(default=40, ge=5, le=180, allow_inf_nan=False)
+    height_mm: float = Field(default=20, ge=5, le=100, allow_inf_nan=False)
 
 
 class ConditionalBlock(BlockBase):
@@ -206,7 +258,7 @@ Block = Annotated[TextBlock | FieldBlock | ImageBlock | DynamicTable | StaticTab
 
 
 class Layout(StrictModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     page: Page = Field(default_factory=Page)
     # Flow is authoritative in v1. Fixed placement is intentionally not yet
     # supported: long text/tables cannot overlap signature areas.
@@ -220,6 +272,8 @@ class Layout(StrictModel):
         if any(b.region != "body" and b.type in {"dynamic_table", "signature", "page_break"}
                for b in self.blocks):
             raise ValueError("studio_invalid_region")
+        if sum(len(str(b.model_dump())) for b in self.blocks) > 160_000:
+            raise ValueError("studio_layout_size")
         return self
 
 
@@ -233,6 +287,21 @@ class DraftUpdate(StrictModel):
     expected_revision: int = Field(ge=1)
     title: str = Field(min_length=1, max_length=255)
     layout: Layout
+
+
+class PreviewInput(StrictModel):
+    expected_revision: int = Field(ge=1)
+    rows: Literal[1, 5, 30] = 5
+
+
+class PublishInput(PreviewInput):
+    change_note: str = Field(min_length=3, max_length=2000)
+    receipt: str = Field(min_length=40, max_length=2000)
+
+
+class ActivationInput(StrictModel):
+    expected_version_id: int | None = Field(default=None, gt=0)
+    reason: str = Field(min_length=3, max_length=2000)
 
 
 class TemplateCreate(StrictModel):
@@ -264,9 +333,13 @@ def validate_workflow(layout: Layout, document_type: str) -> None:
     for block in layout.blocks:
         if isinstance(block, DynamicTable) and TABLE_CATALOG[block.source] != document_type:
             raise ValueError("studio_incompatible_table")
+        if isinstance(block, DynamicTable) and any(c.key not in TABLE_COLUMNS[block.source] for c in block.columns):
+            raise ValueError("studio_incompatible_column")
         field = block.field if isinstance(block, FieldBlock) else block.when_field if isinstance(block, ConditionalBlock) else None
         if field:
             group = FIELD_CATALOG[field]
             if ((group == "repair" and document_type != "REPAIR_PROTOCOL")
-                    or (group == "request" and document_type != "PART_REQUEST")):
+                    or (group == "transfer" and document_type not in {"TRANSFER_ISSUE", "TRANSFER_RETURN"})
+                    or (group == "request" and document_type != "PART_REQUEST")
+                    or (field == "REMARKS" and document_type == "REPAIR_PROTOCOL")):
                 raise ValueError("studio_incompatible_field")

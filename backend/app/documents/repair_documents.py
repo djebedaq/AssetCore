@@ -193,6 +193,8 @@ def make_repair_documents(
         "DOCUMENT_NUMBER": number,
         "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
         "MACHINE_NAME": machine.name,
+        "EQUIPMENT_TYPE": machine.category or "",
+        "MACHINE_LOCATION": machine.location.name if machine.location else "",
         "MACHINE_NUMBER": machine.inventory_number,
         "BRAND": machine.brand,
         "MODEL": machine.model or "",
@@ -289,7 +291,8 @@ def make_repair_documents(
             "REPAIR_ATTACHMENTS": attachment_rows,
         },
     )
-    pdf = convert_docx_to_pdf(docx) or build_repair_protocol_pdf(
+    from ..document_studio.renderer import pdf_required
+    pdf = pdf_required(docx) if template.layout_contract.get("studio") else convert_docx_to_pdf(docx) or build_repair_protocol_pdf(
         repair, language, source_reference
     )
     _register_official_version(

@@ -107,6 +107,7 @@ REFERENCE_LABELS = {
     "company_profiles": "companyProfiles",
     "company_brand_images": "companyImages",
     "document_editor_drafts": "editorDrafts",
+    "studio_activations": "studioActivations",
     "generated_documents": "generatedDocuments",
     "part_request_lines": "partRequests",
     "part_request_approvals": "partRequests",
