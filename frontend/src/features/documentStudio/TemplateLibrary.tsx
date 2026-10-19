@@ -99,7 +99,7 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
     <p className="muted">{t('studio.numberingHint')}</p>
     <h4>{t('studio.drafts')}</h4>
     {!drafts.length && <p className="muted">{t('studio.noDrafts')}</p>}
-    {drafts.map(draft => <div className="studio-draft-row" key={draft.id}><b>{draft.title}</b><span>{t(`language.${draft.language}` as TranslationKey)} · {t('studio.revision', { number: draft.revision })}</span><button disabled={busy} className="secondary compact" onClick={() => { if (!draftDirty || window.confirm(t('studio.leave'))) setOpened(draft) }}>{t('studio.open')}</button></div>)}
+    {drafts.map(draft => <div className="studio-draft-row" key={draft.id}><b>{draft.title}</b><span>{t(`language.${draft.language}` as TranslationKey)} · {t('studio.revision', { number: draft.revision })}</span><button disabled={busy || opened?.id === draft.id} className="secondary compact" onClick={() => { if (!draftDirty || window.confirm(t('studio.leave'))) setOpened(draft) }}>{t('studio.open')}</button></div>)}
     {opened && <DraftSettings key={opened.id} draft={opened} saved={next => { setOpened(next); setDrafts(rows => rows.map(row => row.id === next.id ? next : row)) }} onDirty={setDraftDirty} close={() => setOpened(null)} />}
     {editable && <>
       <form className="studio-inline-form" onSubmit={create}><h4>{t('studio.newDraft')}</h4>
