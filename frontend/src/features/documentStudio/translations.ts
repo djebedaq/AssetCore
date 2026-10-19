@@ -1,4 +1,7 @@
 export const studioBg = {
+  'ownerDeletion.references.companyProfiles': 'Фирмен профил',
+  'ownerDeletion.references.companyImages': 'Фирмени изображения',
+  'ownerDeletion.references.editorDrafts': 'Редакторски чернови',
   'studio.title': 'Document Studio — Фирмени документи',
   'studio.subtitle': 'Фирмена идентичност, шаблони и контролирани версии',
   'studio.company': 'Фирмен профил', 'studio.library': 'Библиотека с шаблони',
@@ -51,6 +54,9 @@ export const studioBg = {
 } as const
 
 export const studioEn: Record<keyof typeof studioBg, string> = {
+  'ownerDeletion.references.companyProfiles': 'Company profile',
+  'ownerDeletion.references.companyImages': 'Company images',
+  'ownerDeletion.references.editorDrafts': 'Authoring drafts',
   'studio.title': 'Document Studio — Company documents',
   'studio.subtitle': 'Company identity, templates and controlled versions',
   'studio.company': 'Company profile', 'studio.library': 'Template library',
@@ -103,6 +109,9 @@ export const studioEn: Record<keyof typeof studioBg, string> = {
 }
 
 export const studioRu: Record<keyof typeof studioBg, string> = {
+  'ownerDeletion.references.companyProfiles': 'Профиль компании',
+  'ownerDeletion.references.companyImages': 'Изображения компании',
+  'ownerDeletion.references.editorDrafts': 'Черновики редактора',
   'studio.title': 'Document Studio — Документы компании',
   'studio.subtitle': 'Фирменный стиль, шаблоны и контролируемые версии',
   'studio.company': 'Профиль компании', 'studio.library': 'Библиотека шаблонов',
