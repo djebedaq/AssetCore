@@ -1,0 +1,13 @@
+{
+  "baseline_commit": "8e1bb0169066beb53ad07eb8d3958af0ee0d6504",
+  "protected_tracked_files": 116,
+  "protected_tree_listing_sha256": "ea4e059a4bce096d1ed62979f95230780b9d492b5f49d1467776d2e8961d65f1",
+  "changed_protected_paths": [],
+  "existing_migrations_changed": [],
+  "reviewed_protection_updates": {
+    "backend/app/governance/owner_data_deletion.py": "Only reference labels for three new Studio FK tables; fail-closed deletion policy retained and tested"
+  },
+  "production_deployment_performed": false,
+  "qa_databases": "New disposable SQLite files and named isolated PostgreSQL QA container only",
+  "signed_archive_preservation_test": "test_company_and_drafts_preserve_signed_document_archive"
+}
