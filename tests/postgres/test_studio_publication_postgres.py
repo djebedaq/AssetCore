@@ -1,19 +1,22 @@
 """PostgreSQL activation contention and database immutability; real rendering is
 covered separately by test_document_studio_publication on the converter host."""
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 import pytest
-from app.document_studio import renderer, routes
+from app.document_studio import publication, renderer, routes
 from app.document_studio.schemas import ActivationInput
 from app.models import DocumentTemplate, DocumentTemplateVersion, StudioActivation, User, utcnow
+from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 from test_concurrency import pg_factory as pg_factory  # noqa: F811
-from test_concurrency import race
 from test_document_studio_publication import manifest
 
 pytestmark = pytest.mark.postgres
 
 
-def test_postgres_immutable_studio_evidence_and_activation_cas(pg_factory):
+def test_postgres_immutable_studio_evidence_and_activation_cas(pg_factory, monkeypatch):
     with pg_factory() as db:
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
         template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.document_type == 'PART_REQUEST'))
@@ -28,12 +31,28 @@ def test_postgres_immutable_studio_evidence_and_activation_cas(pg_factory):
             db.flush()
             ids.append(version.id)
         db.commit()
-    # Real concurrent transactions compete for the first selection revision.
+    # Both transactions read the same absent selection before either writes.
+    # The unique revision constraint, rather than unrelated row locks, decides
+    # which activation wins. The losing transaction must roll back its audit.
+    barrier = Barrier(2)
+    original_selection = publication.active_selection
+    def overlapping_selection(*args):
+        selected = original_selection(*args)
+        barrier.wait(timeout=30)
+        return selected
+    monkeypatch.setattr(publication, 'active_selection', overlapping_selection)
     payload = ActivationInput(reason='Synthetic PostgreSQL QA')
-    outcomes = race(pg_factory, DocumentTemplateVersion, ids[0],
-        [lambda db, actor: routes.activate_version(ids[0], payload, actor, db),
-         lambda db, actor: routes.activate_version(ids[1], payload, actor, db)], success_status=201)
-    assert sorted(row.status for row in outcomes) == [201, 409]
+    def activate(version_id):
+        with pg_factory() as db:
+            actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            try:
+                routes.activate_version(version_id, payload, actor, db)
+                return 201
+            except HTTPException as exc:
+                return exc.status_code
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        outcomes = list(workers.map(activate, ids))
+    assert sorted(outcomes) == [201, 409]
     with pg_factory() as db:
         assert len(list(db.scalars(select(StudioActivation)))) == 1
     for sql in ('UPDATE document_template_versions SET change_note = :value WHERE id = :id',

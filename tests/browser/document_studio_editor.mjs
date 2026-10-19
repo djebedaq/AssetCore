@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises'
 const require = createRequire(import.meta.url), modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
 const { chromium } = require(modulePath), expect = require(modulePath + '/test').expect.configure({ timeout: 45000 })
 const browser = await chromium.launch({ headless: true, ...(process.env.QA_BROWSER_CHANNEL ? { channel: process.env.QA_BROWSER_CHANNEL } : {}) })
-const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), page = await context.newPage()
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, hasTouch: true }), page = await context.newPage()
 const base = process.env.PUBLIC_BASE_URL, out = process.env.QA_OUTPUT, screenshots = [], checks = [], errors = []
 page.on('pageerror', error => errors.push(error.name))
 page.on('dialog', dialog => void dialog.accept())
@@ -66,7 +66,16 @@ try {
   await shot('logo-inspector-bg')
   // Native HTML drag-and-drop must change persisted order.
   const beforeDrag = await api(`/studio/drafts/${id}`)
-  await canvas.locator('[data-block-id]').first().dragTo(canvas.locator('[data-block-id]').nth(1))
+  const source = canvas.locator('[data-block-id]').first(), target = canvas.locator('[data-block-id]').nth(1)
+  await source.scrollIntoViewIfNeeded()
+  const start = await source.boundingBox(), end = await target.boundingBox()
+  await page.mouse.move(start.x + 20, start.y + start.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(start.x + 40, start.y + start.height / 2, { steps: 5 })
+  await page.mouse.move(end.x + 30, end.y + end.height / 2, { steps: 10 })
+  await page.mouse.move(end.x + 35, end.y + end.height / 2)
+  await page.mouse.up()
+  await expect.poll(() => canvas.locator('[data-block-id]').first().getAttribute('data-block-id')).toBe(beforeDrag.layout.blocks[1].id)
   await manualSave()
   const afterDrag = await api(`/studio/drafts/${id}`)
   if (afterDrag.layout.blocks[1].id !== beforeDrag.layout.blocks[0].id || afterDrag.layout.blocks[0].id !== beforeDrag.layout.blocks[1].id) throw new Error('Drag order did not persist')
@@ -190,6 +199,7 @@ try {
     { code: 'en', settings: 'Settings', title: 'Document Studio — Company documents', library: 'Template library', open: 'Open', canvas: 'Canvas' },
     { code: 'ru', settings: 'Настройки', title: 'Document Studio — Документы компании', library: 'Библиотека шаблонов', open: 'Открыть', canvas: 'Лист' },
   ]) {
+    await page.setViewportSize({ width: 1440, height: 1000 })
     await api('/users/me/preferences', { preferred_language: lang.code }, 'PATCH')
     await page.reload(); await openStudio(lang.settings, lang.title, lang.library)
     await page.locator('.studio-template-list').getByRole('button', { name: /Synthetic QA Studio B/ }).click()
@@ -198,9 +208,20 @@ try {
       await page.setViewportSize({ width, height: 1000 })
       if (width === 390) await editor.locator('.editor-mobile-tabs').getByRole('button', { name: lang.canvas, exact: true }).click()
       await shot(`editor-${lang.code}`, width)
+      if (lang.code === 'en' && width === 390) {
+        await editor.locator('.editor-mobile-tabs').getByRole('button', { name: 'Blocks', exact: true }).tap()
+        await shot('touch-blocks-en', width)
+        await button('Text', palette).tap()
+        await inspector.getByLabel('Text', { exact: true }).fill('Synthetic QA touch editing')
+        await inspector.getByRole('button', { name: 'Move up', exact: true }).tap()
+        await inspector.getByRole('button', { name: 'Move down', exact: true }).tap()
+        await expect(editor.getByRole('status')).toContainText('Confirmed by server')
+        await shot('touch-inspector-en', width)
+      }
     }
   }
   checks.push('BG/EN/RU editor is usable at 1440, 768 and 390 with compact mobile panels and no document-level overflow')
+  checks.push('Touch-enabled 390px context adds text, edits properties, reorders with touch buttons and confirms autosave')
   if (errors.length) throw new Error('Browser runtime errors')
   await writeFile(`${out}/browser-proof.json`, JSON.stringify({ passed: true, stage: 'COMMERCIAL-DOCS-01B', checks, screenshots, errors }, null, 2))
   console.log(JSON.stringify({ passed: true, checks: checks.length, screenshots: screenshots.length }))

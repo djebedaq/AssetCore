@@ -295,6 +295,10 @@ def convert_docx_to_pdf(docx: bytes, *, bounded: bool = False) -> bytes | None:
                 "XDG_DATA_HOME": str(profile / "data"),
             }
         )
+        if bounded:
+            # Keep LO's worker pool within the converter's memory budget even
+            # on hosts exposing many logical CPUs. Do not inherit host tuning.
+            environment["MAX_CONCURRENCY"] = "2"
         command = [
             executable,
             "--headless",

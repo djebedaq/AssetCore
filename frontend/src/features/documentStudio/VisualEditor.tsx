@@ -49,7 +49,7 @@ export function VisualEditor({ draft, documentType, saved, onDirty, close, publi
   useEffect(() => {
     if (typeof matchMedia === 'undefined') return
     const media = matchMedia('(max-width: 650px)')
-    const readable = () => { if (media.matches) setZoom(1) }
+    const readable = () => setZoom(media.matches ? 1 : .65)
     readable(); media.addEventListener('change', readable)
     return () => media.removeEventListener('change', readable)
   }, [])

@@ -539,7 +539,7 @@ def _protocol_template_values(
         "DOCUMENT_NUMBER": f"{transfer.protocol_number}-R" if operation == "return" else transfer.protocol_number,
         "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
         "EQUIPMENT_TYPE": transfer.machine.category or "",
-        "MACHINE_LOCATION": transfer.machine.location.name if transfer.machine.location else "",
+        "MACHINE_LOCATION": location.name if (location := getattr(transfer.machine, "location", None)) else "",
         "MACHINE_NAME": transfer.machine.name,
         "MACHINE_NUMBER": transfer.machine.inventory_number,
         "BRAND": transfer.machine.brand,

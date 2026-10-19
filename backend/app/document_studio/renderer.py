@@ -201,7 +201,9 @@ def _table(container, rows, widths, style, width, repeat):
         for cell, value, percent in zip(row.cells, values, widths, strict=True):
             cell.width = Mm(actual_width * percent / 100)
             paragraph = cell.paragraphs[0]
-            _paragraph_style(paragraph, style, actual_width * percent / 100)
+            # The table owns the grid. Paragraph borders would draw a second
+            # box inside every cell and distort the requested cell spacing.
+            _paragraph_style(paragraph, style.model_copy(update={"border_pt": 0}), actual_width * percent / 100)
             paragraph.paragraph_format.left_indent = paragraph.paragraph_format.right_indent = Mm(0)
             _text(paragraph, value, style)
             if index == 0 and repeat:
@@ -287,7 +289,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
         if block.type == "conditional" and bindings.get(block.when_field) in (None, "") and not source:
             continue
         paragraph = container.add_paragraph()
-        _paragraph_style(paragraph, style, width)
+        _paragraph_style(paragraph, style.model_copy(update={"border_pt": 0}) if block.type == "line" else style, width)
         if block.type in {"text", "heading", "conditional"}:
             if block.type == "heading":
                 paragraph.style = "Heading 2"
@@ -305,7 +307,12 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
             paragraph.paragraph_format.space_before = Mm(6)
             marker = container.add_paragraph()
             _paragraph_style(marker, style, width)
-            _text(marker, bindings.get(block.slot, ""), style)
+            value = bindings.get(block.slot, "")
+            if value in {"[[ASSETCORE_LEFT_SIGNATURE]]", "[[ASSETCORE_RIGHT_SIGNATURE]]"}:
+                _text(marker, "________________________", style)
+                _text(marker, value, style).font.hidden = True
+            else:
+                _text(marker, value, style)
             marker.paragraph_format.keep_together = True
             if block_index + 1 < len(layout.blocks) and layout.blocks[block_index + 1].type == "signature":
                 marker.paragraph_format.keep_with_next = True
@@ -326,6 +333,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
             qr.save(stream, format="PNG")
             paragraph.add_run().add_picture(io.BytesIO(stream.getvalue()), width=Mm(block.width_mm), height=Mm(block.width_mm))
         elif block.type == "frame":
+            paragraph._p.getparent().remove(paragraph._p)
             table = document.add_table(rows=1, cols=1)
             table.autofit = False
             table.columns[0].width = Mm(block.width_mm)
@@ -342,6 +350,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
             for border in list(cell.paragraphs[0]._p.get_or_add_pPr().findall(qn("w:pBdr"))):
                 cell.paragraphs[0]._p.pPr.remove(border)
             _text(cell.paragraphs[0], block.text, style)
+            document.add_paragraph().paragraph_format.space_after = Mm(style.spacing_mm)
         elif block.type == "line":
             _text(paragraph, block.text, style)
             unused = width - block.width_mm

@@ -86,6 +86,7 @@ def test_real_editable_docx_to_pdf_language_tables(converter, language, count):
     parsed = Document(io.BytesIO(docx))
     assert any('Проверка' in p.text for p in parsed.paragraphs)
     assert len(parsed.tables[0].rows) == count + 1
+    assert not parsed.tables[0]._tbl.xpath('.//w:pBdr')
     assert renderer.manifest_from_source(docx) == renderer.manifest_from_source(source)
     # A normal DOCX edit/appendix/signature save retains the frozen manifest.
     edited = io.BytesIO()
@@ -244,6 +245,15 @@ def test_real_canonical_issue_return_sign_repair_and_kk_use_selected_studio_sour
     versions = {}
     for workflow in ('TRANSFER_ISSUE', 'TRANSFER_RETURN', 'REPAIR_PROTOCOL', 'PART_REQUEST'):
         draft = make_draft(client, auth_headers, workflow)
+        layout = copy.deepcopy(draft['layout'])
+        layout['blocks'][:0] = [
+            {'id': 'qa_only', 'type': 'heading', 'text': 'SYNTHETIC QA ONLY / СИНТЕТИЧНА ПРОВЕРКА', 'style': {'size_pt': 14, 'bold': True}},
+            {'id': 'frozen_company', 'type': 'field', 'field': 'COMPANY_NAME'},
+        ]
+        saved = client.put(f"/api/studio/drafts/{draft['id']}", headers=auth_headers,
+            json={'expected_revision': draft['revision'], 'title': draft['title'], 'layout': layout})
+        assert saved.status_code == 200, saved.text
+        draft = saved.json()
         version, _ = publish(client, auth_headers, draft)
         activate(client, auth_headers, version['id'])
         versions[workflow] = version['id']
@@ -277,6 +287,8 @@ def test_real_canonical_issue_return_sign_repair_and_kk_use_selected_studio_sour
         assert all(renderer.manifest_from_source(v.docx_content) for v in official)
         for v in official:
             renderer.inspect_pdf(v.pdf_content)
+            with fitz.open(stream=v.pdf_content, filetype='pdf') as pdf:
+                assert '[[ASSETCORE_' not in '\n'.join(p.get_text() for p in pdf)
         archived = {v.id: (v.docx_content, v.pdf_content, v.signing_sha256) for v in official}
         transfer_docs = list(db.scalars(select(ProtocolDocument)))
         assert transfer_docs

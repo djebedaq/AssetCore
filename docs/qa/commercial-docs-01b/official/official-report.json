@@ -1,0 +1,30 @@
+[
+  {
+    "type": "TRANSFER_ISSUE",
+    "pages": 1,
+    "docx_sha256": "b64c39f4ff68b463ea4bba06a200111691f150054fecbdb9cba6d3358de16946",
+    "pdf_sha256": "a5678a82663c4c498c934e019eb21de99de70c47acc62fc1ef6ed2ab7bdb1c84",
+    "manifest_sha256": "cac55486eb548d0e79eee7a0f51fafe8e26a9db3fd1f36afc321f4d7876680bd"
+  },
+  {
+    "type": "TRANSFER_RETURN",
+    "pages": 1,
+    "docx_sha256": "f762c78ee8bde999e9718b1454648177253ec72dce4c3d716499aee863bc5999",
+    "pdf_sha256": "5aa19339b7a8cfdf3b7dd11261e05bbf87aaee3c36ca13a05b10cf955b3b3759",
+    "manifest_sha256": "fd512a5078ae98c309c44c60f3f9a9ec30fcd96a51a1fdb2f0938bc727e01286"
+  },
+  {
+    "type": "REPAIR_PROTOCOL",
+    "pages": 1,
+    "docx_sha256": "19b117b9d82a9ee87d801286bd3458b45c21e5ffb0810d6bc0835c2f85e6e951",
+    "pdf_sha256": "9395a94a359c07e8a3c8534685ece737b2f101bae191b3164eb3653270b59806",
+    "manifest_sha256": "a572f87ae5b0b156f3fd769d67156b399a9787a6a335bcfa46dbab3ef0a7a90e"
+  },
+  {
+    "type": "PART_REQUEST",
+    "pages": 3,
+    "docx_sha256": "39c30a5b3d7c15761be0b05ecbf329e5735b4e17088694fe795515ec20025422",
+    "pdf_sha256": "9f01c0e3006da7241a8e27ca530860df16f16223558e035e6e2eec8870fd1e6d",
+    "manifest_sha256": "311c055eb335f5b942ca4808ca07af472e8ec385595dc8a7f550031c31fbf128"
+  }
+]
