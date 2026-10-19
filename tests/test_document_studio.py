@@ -39,7 +39,7 @@ def create_template(client, headers):
 
 def create_draft(client, headers, template_id):
     response = client.post(f'/api/studio/templates/{template_id}/drafts', headers=headers,
-                           json={'title': 'QA draft', 'language': 'bg'})
+                           json={'title': 'QA draft', 'language': 'bg', 'design': 'blank'})
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -201,6 +201,8 @@ def test_typed_flow_table_and_unknown_versions():
     layout['schema_version'] = 2
     assert Layout.model_validate(layout).schema_version == 2
     layout['schema_version'] = 3
+    assert Layout.model_validate(layout).schema_version == 3
+    layout['schema_version'] = 4
     with pytest.raises(ValidationError):
         Layout.model_validate(layout)
 

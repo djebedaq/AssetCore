@@ -1575,6 +1575,7 @@ class StudioActivation(Base):
     language: Mapped[str] = mapped_column(String(2))
     revision: Mapped[int] = mapped_column(Integer)
     version_id: Mapped[int] = mapped_column(ForeignKey("document_template_versions.id"))
+    selection_kind: Mapped[str] = mapped_column(String(12), default="STUDIO", server_default="STUDIO")
     created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     reason: Mapped[str] = mapped_column(Text)

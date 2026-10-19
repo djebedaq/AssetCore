@@ -9,7 +9,7 @@ export function studioError(error: unknown): TranslationKey {
   if (error.code === 'studio_docx_unsafe') return 'studio.invalidDocx'
   if (error.code === 'studio_required_block') return 'studio.requiredBlock'
   if (error.code === 'studio_renderer_busy') return 'editor.rendererBusy'
-  if (error.code && ['studio_converter_unavailable', 'studio_image_not_allowed', 'studio_preview_required', 'studio_region_overflow', 'studio_bounds', 'studio_blank_page', 'studio_pdf_overflow', 'studio_page_limit', 'studio_binding_missing'].includes(error.code)) return `editor.error.${error.code}` as TranslationKey
+  if (error.code && ['studio_converter_unavailable', 'studio_image_not_allowed', 'studio_preview_required', 'studio_region_overflow', 'studio_bounds', 'studio_blank_page', 'studio_pdf_overflow', 'studio_page_limit', 'studio_binding_missing', 'studio_reserved_marker'].includes(error.code)) return `editor.error.${error.code}` as TranslationKey
   return error.status === 422 ? 'studio.invalid' : 'studio.error'
 }
 
@@ -26,7 +26,7 @@ export type StudioVersion = {
   validation_status: 'NOT_VALIDATED' | 'PASSED' | 'FAILED'; source_sha256: string | null;
   change_note: string | null; created_at: string; published_at: string | null; numbering_rule: string | null;
   source_filename: string | null; download_endpoint: string;
-  studio: boolean; active: boolean; active_version_id: number | null;
+  studio: boolean; active: boolean; active_version_id: number | null; selection_revision?: number; selection_kind?: 'STUDIO' | 'LEGACY';
 }
 export type StudioTemplate = {
   id: number; code: string; document_type: string; name_bg: string; name_en: string | null; name_ru: string | null;

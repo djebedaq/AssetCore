@@ -16,6 +16,8 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
   const [language, setLanguage] = useState<Locale>(locale)
   const [title, setTitle] = useState('')
   const [base, setBase] = useState('')
+  const [design, setDesign] = useState('professional')
+  const [selections, setSelections] = useState<{ revision: number; selection_kind: string; version_id: number; created_at: string; reason: string }[]>([])
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [opened, setOpened] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
@@ -31,10 +33,11 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
     void api<Draft[]>(`/studio/templates/${template.id}/drafts`).then(rows => { if (live) setDrafts(rows) }).catch(e => { if (live) setError(studioError(e)) })
     return () => { live = false }
   }, [template.id])
+  useEffect(() => { void api<typeof selections>(`/studio/selections/${template.document_type}/${language}`).then(setSelections).catch(e => setError(studioError(e))) }, [template.document_type, template.versions, language])
   async function create(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(null)
     try {
-      const item = await api<Draft>(`/studio/templates/${template.id}/drafts`, { method: 'POST', body: JSON.stringify({ title, language, base_version_id: base ? Number(base) : null }) })
+      const item = await api<Draft>(`/studio/templates/${template.id}/drafts`, { method: 'POST', body: JSON.stringify({ title, language, design, base_version_id: base ? Number(base) : null }) })
       setDrafts(current => [item, ...current]); setOpened(item); setTitle('')
     } catch (e) { setError(studioError(e)) } finally { setBusy(false) }
   }
@@ -62,21 +65,28 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
       <div className="studio-version-heading"><b>{t('studio.version', { number: version.version })} · {t(`language.${version.language}`)}</b><span className={`studio-status ${version.status}`}>{t(`studio.${version.status}`)}</span><span className="studio-status">{t(`studio.${version.validation_status}`)}</span></div>
       {version.change_note && <p>{version.change_note}</p>}
       <dl><dt>{t('studio.created')}</dt><dd>{date(version.created_at)}</dd>{version.published_at && <><dt>{t('studio.published')}</dt><dd>{date(version.published_at)}</dd></>}{version.numbering_rule && <><dt>{t('studio.numbering')}</dt><dd>{version.numbering_rule}</dd></>}<dt>SHA-256</dt><dd><code>{version.source_sha256 || t('common.noValue')}</code></dd></dl>
-      {version.active && <p className="studio-status PUBLISHED">{t('editor.active')}</p>}
+      {version.active && <p className="studio-status PUBLISHED">{t(version.studio ? 'editor.active' : 'editor.legacyActive')}</p>}
+      {editable && version.active && version.studio && <button className="secondary" disabled={busy || activationNote.trim().length < 3} onClick={async () => {
+        if (!window.confirm(t('editor.legacyConfirm'))) return
+        setBusy(true); setError(null)
+        try { await api(`/studio/selections/${template.document_type}/${version.language}/restore-legacy`, { method: 'POST', body: JSON.stringify({ expected_version_id: version.id, expected_revision: version.selection_revision, reason: activationNote, confirmed: true }) }); setActivationNote(''); await reload() }
+        catch (e) { setError(studioError(e)) } finally { setBusy(false) }
+      }}>{t('editor.legacyRestore')}</button>}
       {editable && version.studio && !version.active && <div><p className="muted">{t('editor.activationHint')}</p><button className="secondary" disabled={busy || activationNote.trim().length < 3} onClick={async () => {
         setBusy(true); setError(null)
-        try { await api(`/studio/versions/${version.id}/activate`, { method: 'POST', body: JSON.stringify({ expected_version_id: version.active_version_id, reason: activationNote }) }); setActivationNote(''); await reload() }
+        try { await api(`/studio/versions/${version.id}/activate`, { method: 'POST', body: JSON.stringify({ expected_version_id: version.active_version_id, expected_revision: version.selection_revision, reason: activationNote }) }); setActivationNote(''); await reload() }
         catch (e) { setError(studioError(e)) } finally { setBusy(false) }
       }}>{t('editor.activate')}</button></div>}
       <DownloadButton path={version.download_endpoint} filename={version.source_filename || `${template.code}.docx`} label={t('studio.source')} />
     </article>)}
+    <details><summary>{t('editor.selectionHistory')} · {t(`language.${language}`)}</summary>{selections.map(s => <article key={s.revision}><strong>{t('studio.revision', { number: s.revision })} · {t(s.selection_kind === 'STUDIO' ? 'editor.active' : 'editor.legacyActive')}</strong><p>{date(s.created_at)} · {s.reason}</p></article>)}</details>
     <p className="muted">{t('studio.numberingHint')}</p>
     <h4>{t('studio.drafts')}</h4>
     {!drafts.length && <p className="muted">{t('studio.noDrafts')}</p>}
     {drafts.map(draft => <div className="studio-draft-row" key={draft.id}><b>{draft.title}</b><span>{t(`language.${draft.language}` as TranslationKey)} · {t('studio.revision', { number: draft.revision })}</span><button disabled={busy} className="secondary compact" onClick={() => { if (!draftDirty || window.confirm(t('studio.leave'))) setOpened(draft) }}>{t('studio.open')}</button></div>)}
     {editable && <>
       <form className="studio-inline-form" onSubmit={create}><h4>{t('studio.newDraft')}</h4>
-        {template.authoring_supported ? <><fieldset className="studio-fields" disabled={busy}><label>{t('studio.draftTitle')}<input required maxLength={255} value={title} onChange={e => setTitle(e.target.value)} /></label><label>{t('admin.templateLanguage')}<select value={language} onChange={e => { setLanguage(e.target.value as Locale); setBase('') }}>{(['bg', 'en', 'ru'] as const).map(lang => <option key={lang} value={lang}>{t(`language.${lang}`)}</option>)}</select></label><label>{t('studio.base')}<select value={base} onChange={e => setBase(e.target.value)}><option value="">{t('studio.blank')}</option>{template.versions.filter(v => v.language === language).map(v => <option key={v.id} value={v.id}>{t('studio.version', { number: v.version })}</option>)}</select></label></fieldset><p className="muted">{t('studio.baseHint')}</p><button className="secondary" disabled={busy || !title.trim()}>{t('studio.create')}</button></> : <p className="muted">{t('studio.unsupported')}</p>}
+        {template.authoring_supported ? <><fieldset className="studio-fields" disabled={busy}><label>{t('studio.draftTitle')}<input required maxLength={255} value={title} onChange={e => setTitle(e.target.value)} /></label><label>{t('admin.templateLanguage')}<select value={language} onChange={e => { setLanguage(e.target.value as Locale); setBase('') }}>{(['bg', 'en', 'ru'] as const).map(lang => <option key={lang} value={lang}>{t(`language.${lang}`)}</option>)}</select></label><label>{t('editor.starter')}<select aria-label={t('editor.starter')} value={design} onChange={e => setDesign(e.target.value)}><option value="professional">{t('editor.professional')}</option><option value="blank">{t('editor.blank')}</option></select></label><label>{t('studio.base')}<select value={base} onChange={e => setBase(e.target.value)}><option value="">{t('studio.blank')}</option>{template.versions.filter(v => v.language === language).map(v => <option key={v.id} value={v.id}>{t('studio.version', { number: v.version })}</option>)}</select></label></fieldset><p className="muted">{t('studio.baseHint')}</p><button className="secondary" disabled={busy || !title.trim()}>{t('studio.create')}</button></> : <p className="muted">{t('studio.unsupported')}</p>}
       </form>
       <details><summary>{t('studio.import')}</summary><p className="muted">{t('studio.importHint')}</p><form className="studio-inline-form" onSubmit={importFile}><fieldset className="studio-fields" disabled={busy}><label>{t('studio.file')}<input type="file" required accept=".docx" onChange={e => setFile(e.target.files?.[0] || null)} /></label><label>{t('admin.templateLanguage')}<select value={language} onChange={e => { setLanguage(e.target.value as Locale); setBase('') }}>{(['bg', 'en', 'ru'] as const).map(lang => <option key={lang} value={lang}>{t(`language.${lang}`)}</option>)}</select></label><label>{t('studio.note')}<textarea required maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label></fieldset><button className="secondary" disabled={busy || !file || !note.trim()}>{t('studio.import')}</button></form></details>
     </>}
@@ -104,6 +114,7 @@ export function TemplateLibrary({ onDirty }: { onDirty: (d: boolean) => void }) 
     } catch (e) { setError(studioError(e)) } finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [])
+
   async function create(event: FormEvent) {
     event.preventDefault(); setBusy(true)
     try {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { change, duplicateBlock, moveBlock, patchBlock, redo, removeBlock, undo, type Layout } from './editorModel'
+import { allBlocks, change, duplicateBlock, emptyGrid, insertInCell, moveBlock, patchBlock, redo, relocateToCell, removeBlock, undo, type Layout } from './editorModel'
 import { editorBg, editorEn, editorRu } from './editorTranslations'
 
 const layout = (): Layout => ({ schema_version: 1, positioning: 'flow', page: { format: 'A4', orientation: 'portrait', margin_mm: 15 }, blocks: [
@@ -7,6 +7,22 @@ const layout = (): Layout => ({ schema_version: 1, positioning: 'flow', page: { 
   { id: 'left', type: 'signature', slot: 'LEFT_SIGNATURE' }, { id: 'last', type: 'text', text: 'Конец' },
 ] })
 describe('Studio editing commands', () => {
+  it('edits nested fields and moves protected signatures into cells without losing protection or undo history', () => {
+    const before = layout()
+    before.blocks.push({ id: 'grid', type: 'grid', ...emptyGrid() })
+    const target = { grid: 'grid', row: 0, cell: 1 }
+    const moved = relocateToCell(before, target, 'left')
+    expect(moved.schema_version).toBe(3)
+    expect(moved.blocks.some(b => b.id === 'left')).toBe(false)
+    expect(allBlocks(moved.blocks).filter(b => b.slot === 'LEFT_SIGNATURE')).toHaveLength(1)
+    expect(removeBlock(moved, 'grid')).toBe(moved)
+    expect(duplicateBlock(moved, 'grid')).toBe(moved)
+    const inserted = insertInCell(moved, target, { id: 'cell_field', type: 'field', field: 'SERIAL_NUMBER' })
+    const edited = patchBlock(inserted, 'cell_field', { style: { align: 'right', bold: true } })
+    expect(allBlocks(edited.blocks).find(b => b.id === 'cell_field')?.style?.align).toBe('right')
+    expect(undo(change({ present: { title: 'QA', layout: moved }, past: [], future: [] }, { title: 'QA', layout: edited })).present.layout).toEqual(moved)
+    expect(relocateToCell(edited, target, 'grid')).toBe(edited)
+  })
   it('reorders the selected block in both directions without mutating the prior layout', () => {
     const before = layout(), next = moveBlock(before, 'text', 'last')
     expect(next.blocks.map(b => b.id)).toEqual(['number', 'left', 'last', 'text'])

@@ -50,8 +50,17 @@ try {
   await button('Библиотека с шаблони').click()
   await page.locator('.studio-template-list').getByRole('button', { name: /Synthetic QA Studio B/ }).click()
   await page.getByLabel('Име на черновата', { exact: true }).fill('Synthetic QA visual editor')
+  await page.getByLabel('Начално оформление', { exact: true }).selectOption('blank')
   await button('Създай').click()
   await expect(editor).toBeVisible()
+  // Preserve the original v2 authoring regression as an explicit older draft.
+  // The dedicated final-fidelity scenario exercises the new v3 starter UI.
+  const legacyDraft = (await api(`/studio/templates/${template.id}/drafts`))[0]
+  const v2 = structuredClone(legacyDraft.layout)
+  v2.schema_version = 2
+  v2.blocks.splice(3, 0, ...['CREATION_DATE', 'REMARKS', 'DECISION', 'REQUESTER_NAME', 'APPROVER_NAME', 'APPROVAL_DATE'].map(field => ({ id: field.toLowerCase(), type: 'field', field })), { id: 'request_rows', type: 'dynamic_table', source: 'REQUEST_LINES', columns: [{ key: 'description', label: 'Описание', width_percent: 70 }, { key: 'quantity', label: 'Количество', width_percent: 30 }], style: { border_pt: .5 } })
+  await api(`/studio/drafts/${legacyDraft.id}`, { expected_revision: legacyDraft.revision, title: legacyDraft.title, layout: v2 }, 'PUT')
+  await button('Зареди от сървъра', editor).click()
   await editor.getByLabel('Автозапис', { exact: true }).uncheck()
   await editor.getByLabel('Мащаб', { exact: true }).selectOption('0.65')
   await expect.poll(() => canvas.locator('.editor-paper').first().evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(516)

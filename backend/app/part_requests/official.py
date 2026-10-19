@@ -200,6 +200,7 @@ def issue_number(db, request):
         content = source_bytes(template)
         if template.layout_contract.get("studio"):
             data["studio_machine_context"] = {
+                "manufacturer": (getattr(request.machine, "manufacturer", None) or request.machine.brand) if request.machine else "",
                 "category": request.machine.category if request.machine else "",
                 "location": request.machine.location.name if request.machine and request.machine.location else "",
             }

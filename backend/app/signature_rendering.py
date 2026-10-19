@@ -46,14 +46,20 @@ def _fernet() -> Fernet:
 
 
 def _all_paragraphs(document: Document):
-    yield from document.paragraphs
-    for table in document.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                yield from cell.paragraphs
+    def paragraphs(container):
+        yield from container.paragraphs
+        seen = set()
+        for table in container.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    if cell._tc in seen:
+                        continue
+                    seen.add(cell._tc)
+                    yield from paragraphs(cell)
+    yield from paragraphs(document)
     for section in document.sections:
-        yield from section.header.paragraphs
-        yield from section.footer.paragraphs
+        yield from paragraphs(section.header)
+        yield from paragraphs(section.footer)
 
 
 def _replace_signed_status(document: Document, language: str) -> None:

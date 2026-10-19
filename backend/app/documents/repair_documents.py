@@ -73,6 +73,9 @@ def make_repair_documents(
         "leaks_detected": repair.leaks_detected,
         "electrical_test_result": repair.electrical_test_result,
         "functional_test_result": repair.functional_test_result,
+        "test_details": repair.test_details,
+        "machine_identity": {key: getattr(repair.machine, key, None) for key in (
+            "inventory_number", "name", "category", "brand", "model", "serial_number", "manufacturer", "pressure_bar", "ownership")},
         "diagnosis_minutes": repair.diagnosis_minutes,
         "repair_minutes": repair.repair_minutes,
         "testing_minutes": repair.testing_minutes,
@@ -201,6 +204,10 @@ def make_repair_documents(
         "SERIAL_NUMBER": machine.serial_number or "",
         "PRESSURE_BAR": machine.pressure_bar if machine.pressure_bar is not None else "",
         "BATCH_REFERENCE": "",
+        "MODEL_DISPLAY": " ".join(v for v in (machine.brand, machine.model) if v),
+        "MANUFACTURER": getattr(machine, "manufacturer", None) or machine.brand or "",
+        "LEFT_SIGNER_ROLE": "", "RIGHT_SIGNER_ROLE": "",
+        "LEFT_SIGNER_ORGANIZATION": "", "RIGHT_SIGNER_ORGANIZATION": "",
         "REPAIR_REFERENCE": repair.repair_reference or base,
         "SOURCE_RETURN_REFERENCE": source_reference,
         "ACCEPTANCE_DATE": repair.opened_at.strftime("%d.%m.%Y"),
@@ -213,13 +220,15 @@ def make_repair_documents(
         "REMOVED_PARTS": repair.removed_parts_text or "",
         "DIAGNOSTIC_CLEANING": repair.diagnostic_cleaning or "",
         "DIAGNOSIS": repair.diagnosis or "",
+        "SYMPTOMS": repair.symptoms or "",
+        "TEST_DETAILS": repair.test_details or "",
         "DIAGNOSIS_DURATION": _repair_duration(repair.diagnosis_minutes, language),
         "WORK_PERFORMED": repair.work_performed or "",
         "REPAIR_DURATION": _repair_duration(repair.repair_minutes, language),
         "TESTING_DURATION": _repair_duration(repair.testing_minutes, language),
-        "TOTAL_WORK_DURATION": _repair_duration(total_work_minutes, language),
+        "TOTAL_WORK_DURATION": _repair_duration(total_work_minutes if any(v is not None for v in (repair.diagnosis_minutes, repair.repair_minutes, repair.testing_minutes)) or not template.layout_contract.get("studio") else None, language),
         "PARTICIPANT_TOTAL_DURATION": _repair_duration(
-            participant_total_minutes, language
+            participant_total_minutes if any(p.minutes_worked is not None for p in repair.participants) or not template.layout_contract.get("studio") else None, language
         ),
         "TEST_RESULT": _repair_test_summary(repair, language),
         "CONDITION_AFTER": repair.condition_after or repair.result or "",
@@ -287,8 +296,8 @@ def make_repair_documents(
         {
             "REPAIR_EVENTS": event_rows,
             "PARTS_USED": part_rows,
-            "REPAIR_PARTICIPANTS": participant_rows,
-            "REPAIR_ATTACHMENTS": attachment_rows,
+            "REPAIR_PARTICIPANTS": ([{"name": p.full_name_snapshot, "job_title": p.job_title_snapshot or "", "contribution": p.contribution or "", "duration": _repair_duration(p.minutes_worked, language)} for p in repair.participants] if template.layout_contract.get("studio") else participant_rows),
+            "REPAIR_ATTACHMENTS": ([{"filename": a.filename, "stage": a.stage, "description": a.caption or ""} for a in repair.attachments] if template.layout_contract.get("studio") else attachment_rows),
         },
     )
     from ..document_studio.renderer import pdf_required

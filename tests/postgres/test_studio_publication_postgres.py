@@ -5,7 +5,7 @@ from threading import Barrier
 
 import pytest
 from app.document_studio import publication, renderer, routes
-from app.document_studio.schemas import ActivationInput
+from app.document_studio.schemas import ActivationInput, RestoreInput
 from app.models import DocumentTemplate, DocumentTemplateVersion, StudioActivation, User, utcnow
 from fastapi import HTTPException
 from sqlalchemy import select, text
@@ -61,3 +61,49 @@ def test_postgres_immutable_studio_evidence_and_activation_cas(pg_factory, monke
             db.execute(text(sql), {'id': ids[0], 'value': 'must fail'})
     with pg_factory() as db, pytest.raises(DBAPIError, match='immutable_studio_evidence'):
         db.execute(text('UPDATE studio_activations SET reason = :value'), {'value': 'must fail'})
+
+
+def test_postgres_overlapping_activation_and_legacy_restore_preserve_history(pg_factory, monkeypatch):
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        template = db.scalar(select(DocumentTemplate).where(DocumentTemplate.document_type == 'PART_REQUEST'))
+        source = renderer.build_source(manifest())
+        ids = []
+        for number in (400, 401):
+            version = DocumentTemplateVersion(template_id=template.id, version=number, language='bg', source_content=source,
+                source_sha256=renderer.digest(source), source_filename='synthetic.docx', layout_contract={'studio': 1},
+                created_by_id=actor.id, validation_status='PASSED', validation_report={'valid': True}, is_published=True)
+            db.add(version)
+            db.flush()
+            ids.append(version.id)
+        db.commit()
+        routes.activate_version(ids[0], ActivationInput(expected_revision=0, reason='Synthetic initial selection'), actor, db)
+    original = publication.active_selection
+    barrier = Barrier(2)
+    def overlap(*args):
+        selected = original(*args)
+        barrier.wait(timeout=30)
+        return selected
+    monkeypatch.setattr(publication, 'active_selection', overlap)
+    def transition(kind):
+        with pg_factory() as db:
+            actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            try:
+                if kind == 'restore':
+                    routes.restore_legacy('PART_REQUEST', 'bg', RestoreInput(expected_version_id=ids[0], expected_revision=1,
+                        confirmed=True, reason='Synthetic concurrent restore'), actor, db)
+                else:
+                    routes.activate_version(ids[1], ActivationInput(expected_version_id=ids[0], expected_revision=1,
+                        reason='Synthetic concurrent activation'), actor, db)
+                return 201
+            except HTTPException as exc:
+                return exc.status_code
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(transition, ['restore', 'activate'])) == [201, 409]
+    with pg_factory() as db:
+        history = list(db.scalars(select(StudioActivation).order_by(StudioActivation.revision)))
+        assert [s.revision for s in history] == [1, 2]
+        assert history[0].version_id == ids[0] and history[0].selection_kind == 'STUDIO'
+        assert history[1].selection_kind in {'STUDIO', 'LEGACY'}
+        for id_ in ids:
+            assert db.get(DocumentTemplateVersion, id_).source_content == source
