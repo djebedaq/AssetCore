@@ -224,6 +224,9 @@ def test_docx_reference_preserves_bytes_and_cannot_publish(client, auth_headers)
     ('word/_rels/unsafe.xml.rels', b'<Relationships><Relationship TargetMode="External" Target="https://example.invalid"/></Relationships>'),
     ('word/active.xml', b'<!DOCTYPE test [<!ENTITY x SYSTEM "file:///private">]><test>&x;</test>'),
     ('word/dde.xml', b'<instrText>DDEAUTO unsafe</instrText>'),
+    ('word/renamed-active.xml', b'<Override ContentType="application/vnd.ms-office.vbaProject" PartName="/word/code.dat"/>'),
+    ('word/renamed-ole.xml', b'<Relationship Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject" Target="code.dat"/>'),
+    ('word/unsafe-vml.xml', b'<imagedata src="https://example.invalid/image.png"/>'),
 ])
 def test_hostile_docx_blocked(client, auth_headers, name, data):
     from docx import Document
