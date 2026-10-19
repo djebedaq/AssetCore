@@ -77,14 +77,14 @@ def validate_docx(content: bytes) -> str:
                         local = node.tag.rsplit("}", 1)[-1]
                         kind = (node.attrib.get("Type", "") + " " + node.attrib.get("ContentType", "")).lower()
                         relation = node.attrib.get("Type", "").rsplit("/", 1)[-1].lower()
-                        if (any(marker in kind for marker in ("macro", "vba", "activex", "oleobject", "webextension"))
+                        if (any(marker in kind for marker in ("macro", "vba", "activex", "oleobject", "webextension", "svg"))
                                 or relation in {"attachedtemplate", "control", "package"}
                                 or any(key.rsplit("}", 1)[-1].lower() in {"src", "href"}
                                        and re.match(r"\s*(https?|file|ftp|data|javascript):", value, re.I)
                                        for key, value in node.attrib.items())):
                             raise ValueError("studio_docx_unsafe")
                         if (node.attrib.get("TargetMode", "").lower() == "external"
-                                or local in {"altChunk", "object", "fldSimple"}
+                                or local in {"altChunk", "object", "fldSimple", "script", "svg", "foreignObject"}
                                 or (local == "instrText" and not re.fullmatch(
                                     r"\s*(PAGE|NUMPAGES|SECTIONPAGES)(\s+\\\*\s+(MERGEFORMAT|ARABIC))?\s*",
                                     node.text or "", re.IGNORECASE))):
