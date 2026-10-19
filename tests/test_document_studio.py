@@ -221,7 +221,7 @@ def test_docx_reference_preserves_bytes_and_cannot_publish(client, auth_headers)
 
 @pytest.mark.parametrize('name,data', [
     ('../unsafe.xml', b'<unsafe/>'), ('word/vbaProject.bin', b'active'),
-    ('word/_rels/document.xml.rels', b'<Relationships><Relationship TargetMode="External" Target="https://example.invalid"/></Relationships>'),
+    ('word/_rels/unsafe.xml.rels', b'<Relationships><Relationship TargetMode="External" Target="https://example.invalid"/></Relationships>'),
     ('word/active.xml', b'<!DOCTYPE test [<!ENTITY x SYSTEM "file:///private">]><test>&x;</test>'),
     ('word/dde.xml', b'<instrText>DDEAUTO unsafe</instrText>'),
 ])
@@ -323,3 +323,19 @@ def test_company_and_drafts_preserve_signed_document_archive(
         json={'expected_revision': 0, 'identity': identity}).status_code == 200
     create_draft(client, auth_headers, 1)
     assert fingerprints() == before
+
+
+def test_company_timezone_on_hosts_without_system_iana_database():
+    import zoneinfo
+
+    previous = zoneinfo.TZPATH
+    try:
+        zoneinfo.reset_tzpath([])
+        zoneinfo.ZoneInfo.clear_cache()
+        identity = routes.CompanyIdentity(timezone='Europe/Sofia')
+        assert identity.timezone == 'Europe/Sofia'
+        with pytest.raises(ValidationError):
+            routes.CompanyIdentity(timezone='QA/Unknown')
+    finally:
+        zoneinfo.reset_tzpath(previous)
+        zoneinfo.ZoneInfo.clear_cache()
