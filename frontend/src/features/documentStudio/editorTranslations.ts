@@ -152,8 +152,12 @@ const text = {
   'editor.containerName': ['Име на групата', 'Group name', 'Имя группы'],
   'editor.containerNumber': ['Група {{number}}', 'Group {{number}}', 'Группа {{number}}'],
   'editor.keepRowsTogether': ['Запази редовете цели, когато се побират на страница', 'Keep rows together when they fit on a page', 'Сохранять строки целыми, если они помещаются на странице'],
+  'editor.groupByAssembly': ['Групирай по записания възел, без да пренареждаш позициите', 'Group by recorded assembly without reordering positions', 'Группировать по записанному узлу без изменения порядка позиций'],
+  'editor.column.assembly': ['Възел', 'Assembly', 'Узел'],
   'editor.field.MANUFACTURER': ['Производител', 'Manufacturer', 'Производитель'],
   'editor.error.studio_reserved_marker': ['Служебен подписен маркер е намерен извън защитената подписна позиция.', 'A reserved signature marker was found outside its protected signature slot.', 'Служебный маркер подписи найден вне защищённого места подписи.'],
+  'editor.noFill': ['Без запълване — използвай фона на клетката', 'No fill — use the cell background', 'Без заливки — использовать фон ячейки'],
+  'editor.borderColor': ['Цвят на рамката', 'Border color', 'Цвет рамки'],
 } as const
 
 type Key = keyof typeof text

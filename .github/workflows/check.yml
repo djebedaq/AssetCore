@@ -62,6 +62,11 @@ jobs:
         run: python scripts/audit_dependencies.py python --output security-reports/python-audit.json
       - run: python -m compileall -q backend/app backend/alembic backend/scripts scripts tests
       - run: python -m ruff check backend/app backend/alembic backend/scripts scripts tests
+      - name: Verify saved native DOCX business fields and real PDF fidelity artifacts
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: "sqlite:///:memory:"
+        run: python tests/verify_studio_fidelity_evidence.py --root docs/qa/commercial-docs-01b/final-fidelity
       - run: python backend/scripts/validate_migration_history.py --require-all-protected
       - run: python backend/scripts/validate_authorization_inventory.py
       - run: PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py

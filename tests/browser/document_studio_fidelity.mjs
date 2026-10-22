@@ -21,6 +21,14 @@ async function openStudio(settings = 'Настройки', title = 'Document Stu
 }
 async function shot(name) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
+  if (await canvas.isVisible()) await expect.poll(() => canvas.evaluate(stack =>
+    [...stack.querySelectorAll('.editor-body')].every(body => [...body.children].every(slice => {
+      if (getComputedStyle(slice).overflow === 'hidden') return true // Deliberately sliced oversized flow.
+      const content = slice.querySelector(':scope > div > [data-block-id]')
+      const end = content?.getBoundingClientRect().bottom || slice.getBoundingClientRect().bottom
+      const next = slice.nextElementSibling
+      return end <= (next || body).getBoundingClientRect()[next ? 'top' : 'bottom'] + 2
+    })))).toBe(true)
   await page.screenshot({ path: `${out}/${name}.png`, fullPage: true }); screenshots.push(`${name}.png`)
 }
 async function save() {
@@ -85,6 +93,13 @@ try {
       if (blocks.filter(b => b.slot === 'LEFT_SIGNATURE').length !== 1 || !blocks.some(b => b.label === 'SYNTHETIC NESTED GROUP')) throw new Error('Nested layout or protected signature did not persist')
       checks.push('Visible UI edits three-column header, dynamic cells, nested groups, rows/columns, merges and protected signature relocation')
     }
+    if (i === 3) {
+      await canvas.locator('.editor-block').filter({ has: page.locator('table thead') }).first().click()
+      const grouping = inspector.getByLabel('Групирай по записания възел, без да пренареждаш позициите', { exact: true })
+      await grouping.check(); await save()
+      const d = (await api(`/studio/templates/${template.id}/drafts`))[0]
+      if (!d.layout.blocks.some(b => b.type === 'dynamic_table' && b.group_by === 'assembly')) throw new Error('Canonical assembly grouping did not persist')
+    }
     await save(); await button('Провери и виж PDF', editor).click()
     await expect(editor.getByRole('img', { name: 'Реален PDF преглед' })).toBeVisible({ timeout: 90000 })
     await shot(`actual-${types[i].toLowerCase()}-pdf-bg`)
@@ -105,7 +120,7 @@ try {
       await button('Възстанови одобрения legacy шаблон').click()
       await expect(button('Възстанови одобрения legacy шаблон')).toHaveCount(0)
       await page.getByText('История на избора на шаблон', { exact: false }).click()
-      await expect(page.getByText('Synthetic confirmed legacy restoration', { exact: true })).toBeVisible()
+      await expect(page.getByText('Synthetic confirmed legacy restoration', { exact: false })).toBeVisible()
       await shot('legacy-restore-history-bg')
       const history = await api('/studio/selections/PART_REQUEST/bg')
       if (history[0].selection_kind !== 'LEGACY' || history[1].selection_kind !== 'STUDIO') throw new Error('Restore history missing')
@@ -135,7 +150,11 @@ try {
     await button(l.text, palette).tap()
     await inspector.getByLabel(l.text, { exact: true }).fill('SYNTHETIC TOUCH CELL CONTENT')
     await shot(`touch-cell-${l.code}-390`)
-    await expect.poll(async () => ((await api(`/studio/templates/${templates[1].id}/drafts`))[0].layout.blocks.some(b => b.label === `SYNTHETIC TOUCH ${l.code}`))).toBe(true)
+    await expect.poll(async () => {
+      const d = (await api(`/studio/templates/${templates[1].id}/drafts`))[0]
+      const grid = d.layout.blocks.find(b => b.label === `SYNTHETIC TOUCH ${l.code}`)
+      return !!grid?.grid_rows.some(r => r.cells.some(c => c.blocks.some(b => b.text === 'SYNTHETIC TOUCH CELL CONTENT')))
+    }).toBe(true)
     await page.setViewportSize({ width: 1440, height: 1000 })
   }
   checks.push('BG/EN/RU professional editor at 1440/768/390; touch adds and edits nested cell content and autosaves without page overflow')

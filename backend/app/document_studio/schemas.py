@@ -38,7 +38,7 @@ TABLE_CATALOG = {"PARTS_USED": "REPAIR_PROTOCOL", "REPAIR_EVENTS": "REPAIR_PROTO
                  "REQUEST_LINES": "PART_REQUEST", "REPAIR_PARTICIPANTS": "REPAIR_PROTOCOL",
                  "REPAIR_ATTACHMENTS": "REPAIR_PROTOCOL", "EQUIPMENT_CHECKLIST": ("TRANSFER_ISSUE", "TRANSFER_RETURN")}
 TABLE_COLUMNS = {
-    "REQUEST_LINES": {"position", "part_number", "description", "quantity", "unit", "note"},
+    "REQUEST_LINES": {"position", "part_number", "description", "quantity", "unit", "note", "assembly"},
     "PARTS_USED": {"position", "part_number", "description", "quantity", "unit"},
     "REPAIR_EVENTS": {"date", "event_type", "description"},
     "EQUIPMENT_CHECKLIST": {"position", "component", "condition", "measurement", "note"},
@@ -173,7 +173,7 @@ class Style(StrictModel):
     spacing_mm: float = Field(default=2, ge=0, le=30, allow_inf_nan=False)
     bold: bool = False
     italic: bool = False
-    background: str = Field(default="#ffffff", pattern=r"^#[0-9a-fA-F]{6}$")
+    background: str = Field(default="transparent", pattern=r"^(#[0-9a-fA-F]{6}|transparent)$")
     border_pt: float = Field(default=0, ge=0, le=3, allow_inf_nan=False)
     width_percent: float = Field(default=100, ge=10, le=100, allow_inf_nan=False)
 
@@ -210,7 +210,7 @@ class ImageBlock(BlockBase):
 
 class TableColumn(StrictModel):
     key: Literal["position", "description", "quantity", "unit", "part_number", "note", "date", "event_type",
-                 "component", "condition", "measurement", "name", "job_title", "contribution", "duration", "filename", "stage"]
+                 "component", "condition", "measurement", "name", "job_title", "contribution", "duration", "filename", "stage", "assembly"]
     label: str = Field(min_length=1, max_length=100)
     width_percent: float = Field(gt=0, le=100, allow_inf_nan=False)
 
@@ -222,9 +222,12 @@ class DynamicTable(BlockBase):
     repeat_header: Literal[True] = True
     flow: Literal[True] = True
     keep_rows_together: bool = False
+    group_by: Literal["assembly"] | None = None
 
     @model_validator(mode="after")
     def column_widths(self):
+        if self.group_by and self.source != "REQUEST_LINES":
+            raise ValueError("studio_incompatible_column")
         if abs(sum(c.width_percent for c in self.columns) - 100) > 0.01:
             raise ValueError("studio_table_width")
         if len({c.key for c in self.columns}) != len(self.columns):

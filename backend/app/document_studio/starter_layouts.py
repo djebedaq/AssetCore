@@ -20,8 +20,9 @@ COLUMNS = {
 }
 
 
-def professional_layout(document_type, language, identity=None):
+def professional_layout(document_type, language, identity=None, image_sizes=None):
     identity = identity or {}
+    image_sizes = image_sizes or {}
     lang = ("bg", "en", "ru").index(language)
     seq = 0
     def block(kind, **kwargs):
@@ -56,7 +57,14 @@ def professional_layout(document_type, language, identity=None):
     def heading(value):
         return block("heading", text=value, style={"size_pt": 11, "bold": True, "color": "#000000", "spacing_mm": 2})
     def logo(image_id, width):
-        return block("logo", image_id=image_id, width_mm=width, height_mm=20,
+        source_width, source_height = image_sizes.get(image_id, (width, 20))
+        ratio = max(1, source_width) / max(1, source_height)
+        actual_width, actual_height = min(width, 20 * ratio), min(20, width / ratio)
+        if actual_width < 5 or actual_height < 5:
+            # Extreme banner/portrait assets need a wider/taller administrator
+            # chosen cell. Never stretch a company image to fit the starter.
+            return text(("Фирмено лого", "Company logo", "Логотип компании")[lang])
+        return block("logo", image_id=image_id, width_mm=actual_width, height_mm=actual_height,
                      style={"align": "center", "spacing_mm": 0})
     left = [logo(identity["primary_logo_id"], 22)] if identity.get("primary_logo_id") else [text(("Фирмено лого", "Company logo", "Логотип компании")[lang])]
     right = [logo(identity["secondary_logo_id"], 24)] if identity.get("secondary_logo_id") else [field("COMPANY_REGISTRATION"), field("COMPANY_CONTACTS")]
@@ -71,7 +79,7 @@ def professional_layout(document_type, language, identity=None):
         blocks += [identity_table(["DOCUMENT_NUMBER", "ACCEPTANCE_DATE", "REPAIR_REFERENCE", "SOURCE_RETURN_REFERENCE", "MACHINE_NAME", "MACHINE_NUMBER", "MODEL_DISPLAY", "SERIAL_NUMBER", "OWNERSHIP"])]
         blocks += [section(code) for code in ("REPORTED_PROBLEM", "SYMPTOMS", "CONDITION_BEFORE", "REQUIRED_WORK", "REMOVED_PARTS", "DIAGNOSTIC_CLEANING", "DIAGNOSIS", "REQUIRED_PARTS", "DIAGNOSIS_DURATION")]
         blocks += [heading(LABELS["REPAIRER_NAMES"][lang]), dynamic("REPAIR_PARTICIPANTS", [("name", 28), ("job_title", 25), ("contribution", 27), ("duration", 20)]),
-            identity_table(["HANDED_OVER_NAME", "ACCEPTED_BY_NAME"]), block("page_break"), heading(("Извършен ремонт и приключване", "Repair work and completion", "Ремонтные работы и завершение")[lang])]
+            identity_table(["HANDED_OVER_NAME", "ACCEPTED_BY_NAME"]), heading(("Извършен ремонт и приключване", "Repair work and completion", "Ремонтные работы и завершение")[lang])]
         blocks += [section("WORK_PERFORMED"), paired_identity(["REPAIR_DURATION", "TESTING_DURATION"])]
         blocks += [heading(("Вложени части", "Parts used", "Использованные детали")[lang]), dynamic("PARTS_USED", [("position", 7), ("part_number", 23), ("description", 50), ("quantity", 20)])]
         blocks += [paired_identity(["REPAIR_START", "REPAIR_END", "TOTAL_WORK_DURATION", "PARTICIPANT_TOTAL_DURATION"])]
@@ -97,6 +105,8 @@ def professional_layout(document_type, language, identity=None):
             "min_height_mm": 19, "keep_together": True})
     metadata = grid([65, 35], [{"cells": [cell([text(LABELS["PREPARER_NAME"][lang], style={"size_pt": 8, "bold": True, "spacing_mm": 0, "color": "#000000"}),
         field("PREPARER_NAME"), field("PREPARER_JOB_TITLE")]), cell([field("SIGNATURE_STATUS")] + ([field("BATCH_REFERENCE")] if document_type.startswith("TRANSFER_") else []))], "keep_together": True}])
-    blocks += [grid([23, 55, 22], sign_rows, keep_together=True), metadata,
+    signatures_and_metadata = grid([100], [{"cells": [cell([grid([23, 55, 22], sign_rows, keep_together=True), metadata],
+        padding_mm=0, style={"border_pt": 0})], "keep_together": True}], keep_together=True)
+    blocks += [signatures_and_metadata,
         block("page_number", region="footer", style={"size_pt": 8, "align": "right", "color": "#000000", "spacing_mm": 0})]
     return Layout.model_validate({"schema_version": 3, "page": {"margin_mm": 11, "header_mm": 30, "footer_mm": 5}, "blocks": blocks})

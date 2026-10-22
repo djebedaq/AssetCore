@@ -33,7 +33,10 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
     void api<Draft[]>(`/studio/templates/${template.id}/drafts`).then(rows => { if (live) setDrafts(rows) }).catch(e => { if (live) setError(studioError(e)) })
     return () => { live = false }
   }, [template.id])
-  useEffect(() => { void api<typeof selections>(`/studio/selections/${template.document_type}/${language}`).then(setSelections).catch(e => setError(studioError(e))) }, [template.document_type, template.versions, language])
+  useEffect(() => {
+    if (!workflows.includes(template.document_type as typeof workflows[number])) { setSelections([]); return }
+    void api<typeof selections>(`/studio/selections/${template.document_type}/${language}`).then(setSelections).catch(e => setError(studioError(e)))
+  }, [template.document_type, template.versions, language])
   async function create(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(null)
     try {

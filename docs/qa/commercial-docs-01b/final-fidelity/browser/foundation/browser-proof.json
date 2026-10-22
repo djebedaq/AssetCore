@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "stage": "COMMERCIAL-DOCS-01A",
+  "checks": [
+    "Company profile persisted by server; universal registration and IANA zone",
+    "Authoring draft created and saved through revision CAS in the visual editor",
+    "BG/EN/RU company and library on desktop, tablet and mobile; no horizontal overflow",
+    "Director sees studio without company, template or owner management controls"
+  ],
+  "screenshots": [
+    "company-bg-390.png",
+    "company-bg-768.png",
+    "company-bg-1440.png",
+    "library-bg-390.png",
+    "library-bg-768.png",
+    "library-bg-1440.png",
+    "draft-settings-bg-390.png",
+    "draft-settings-bg-768.png",
+    "draft-settings-bg-1440.png",
+    "company-en-390.png",
+    "company-en-768.png",
+    "company-en-1440.png",
+    "library-en-390.png",
+    "library-en-768.png",
+    "library-en-1440.png",
+    "company-ru-390.png",
+    "company-ru-768.png",
+    "company-ru-1440.png",
+    "library-ru-390.png",
+    "library-ru-768.png",
+    "library-ru-1440.png",
+    "director-read-only-1440.png"
+  ],
+  "errors": []
+}

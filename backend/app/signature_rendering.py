@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import zipfile
 from pathlib import Path
 
 from cryptography.fernet import Fernet
@@ -33,7 +34,33 @@ _SIGNATURE_MARKER_BY_SLOT = {
     "RETURNED_BY": LEFT_SIGNATURE_MARKER,
     "ACCEPTANCE": RIGHT_SIGNATURE_MARKER,
     "ACCEPTED_RETURN": RIGHT_SIGNATURE_MARKER,
+    "REQUESTED_BY": LEFT_SIGNATURE_MARKER,
+    "APPROVED_BY": RIGHT_SIGNATURE_MARKER,
 }
+
+
+def validate_studio_request_signer(version, slot_code, identity, manifest=None):
+    """Canonical KK signers must match its immutable approval-time identity."""
+    data = getattr(version, "snapshot", None) or {}
+    if not data.get("approval_snapshot_sha256"):
+        return
+    from .document_studio.renderer import manifest_from_source
+    if manifest is None:
+        content = version.docx_content
+        if not content or not zipfile.is_zipfile(io.BytesIO(content)):
+            return
+        manifest = manifest_from_source(content)
+    if not manifest or manifest["document_type"] != "PART_REQUEST":
+        return
+    prefix = {"REQUESTED_BY": "requested_by", "APPROVED_BY": "approved_by"}.get(slot_code)
+    if prefix is None:
+        return
+    expected = (data.get(prefix + "_id"), data.get(prefix + "_name") or "", data.get(prefix + "_job_title") or "")
+    actual = (identity.get("user_id"), identity.get("display_name") or "", identity.get("job_title") or "")
+    if expected != actual:
+        from .localization import translate
+        from .workflow import business_conflict
+        raise business_conflict("studio_signature_identity_mismatch", translate("studio.signature_identity_mismatch", version.language))
 
 
 def _sha(value: bytes) -> str:
@@ -145,12 +172,19 @@ def finalize_signed_files_from_rows(
         return
     final_docx = version.docx_content
     from .document_studio.renderer import manifest_from_source, pdf_required
-    studio = bool(final_docx and manifest_from_source(final_docx))
+    manifest = manifest_from_source(final_docx) if final_docx else None
+    studio = bool(manifest)
+    if studio:
+        for participant, _, _image in rows:
+            validate_studio_request_signer(version, participant.slot_code, participant.identity_snapshot, manifest)
     signatures_embedded = False
     if final_docx:
         document = Document(io.BytesIO(final_docx))
         _replace_signed_status(document, version.language)
         has_protocol_markers = _marker_exists(document)
+        if studio and not has_protocol_markers:
+            from .template_engine import TemplateValidationError
+            raise TemplateValidationError("studio_signature_markers_missing")
         if has_protocol_markers:
             embedded = 0
             expected = 0

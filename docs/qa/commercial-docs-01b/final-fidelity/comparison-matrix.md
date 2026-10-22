@@ -26,3 +26,29 @@ Repair v6 различава diagnosis_minutes, repair_minutes, testing_minutes 
 ## Приемане
 
 Този документ е първоначална оценка, не твърдение за постигната еквивалентност. Окончателните резултати, разликите и ограниченията се записват след реалните DOCX/PDF сравнения и тестове в README.md на тази папка.
+
+## Окончателна матрица
+
+Първоначалната оценка по-горе е запазена. След корекциите всички изброени категории структури се конструират през същия визуален редактор и renderer v3; това не означава автоматичен импорт или автоматична активация на одобрените Word бланки.
+
+| Документ | Изисквана структура | Поддръжка след корекциите | Данни и защита | Разлики/доказателства |
+|---|---|---|---|---|
+| Предаване | Трисекторна шапка, идентификация, десет позиции, състояние/употреба/забележки, двама подписващи, страници | Рекурсивни клетки с лога/полета; динамичен checklist; native подписна таблица; повтаряща се шапка/PAGE | Само записаният issue_checklist и канонични identity snapshots; празният списък няма оценки | [Оценка](transfer-issue/assessment.md); BG дълъг 2 вместо 1 страница; официалният SIGNED е 1 страница |
+| Връщане | Същата структура плюс действителна return дата/референция/констатации/ролите при връщане | Същият универсален grid; отделен adapter за return данни | Само return_checklist, без fallback към issue/current; проверени различаващи се условия | [Оценка](transfer-return/assessment.md); BG дълъг 2 вместо 1; официалният SIGNED е 1 страница |
+| Ремонт | Пълни v6 приемане/демонтаж/диагноза/части/труд/участници/тест/резултат/история/приключване | Всички налични канонични полета; PARTS_USED, REPAIR_PARTICIPANTS/EVENTS/ATTACHMENTS; структурирани секции | Само записани времена; празните данни остават празни; съществуващо оторизирано вътрешно приключване | [Оценка](repair-protocol/assessment.md); BG 2/3/9 срещу reference 3/3/9; EN/RU пазят цял подписен блок на последна страница |
+| КК | Пълна идентификация; четириколонна спецификация; frozen одобрение/подписи; каталожни приложения | Конфигурируеми колони, assembly групи при наличен каноничен snapshot; original-cell графични подписи | Exact approval template, frozen machine/request/signers; същите appendix bytes/order; failed PDF finalization rollback | [Оценка](parts-request/assessment.md); BG 1/2/5 срещу 1/1/5; официален SIGNED 3 страници с две каталожни приложения |
+
+### Проверка на липсващите елементи
+
+| Елемент от първоначалния преглед | Реализация | Проверим източник |
+|---|---|---|
+| Сложни фирмени шапки и вложени форми | Grid/rows/cells, проценти, colspan, padding, valign, рамки/фон/минимални височини, keep groups, повторяеми редове | `schemas.py`, `renderer.py`, визуалните BG/EN/RU и браузърният editor proof |
+| Каноничен checklist | EQUIPMENT_CHECKLIST със position/component/condition/measurement/note, оригинален ред, различни категории/празни списъци | `transfer_documents.studio_checklist_rows`, fidelity unit и official workflow tests |
+| Динамична идентификация | Настройваеми label/value клетки с allowlisted scalar bindings | Четирите starter layout и native DOCX проверки |
+| Защитени подписи в клетки | Същите markers/sessions/encrypted images/finalizer; без Studio annex fallback | Подписаните issue/return/KK, long-signature proof и fail-closed тест |
+| Repair v6 данни | Съществуващите полета плюс participants/attachments източници; без синтез на труд | Native field verifier и canonical repair FINALIZED export |
+| Професионална спецификация | Четири начални колони, до шест избрани колони, многострочни описания, повторяем header, optional assembly grouping | 1/5/30 реда; frozen request adapter и browser grouping control |
+| Безопасен legacy restore | Additive migration 38, append-only LEGACY event, reason/confirmed/CAS/permission | [Restore proof](legacy-restore/restore-proof.json), SQLite и реални PostgreSQL race тестове |
+| Архивна неизменност | Няма regeneration след смяна на профил/избор; exact template и appendix evidence | [Official proof](official-workflow-proof.json), [Preservation](preservation.json) |
+
+DOCX импортът остава reference-only. Вертикално сливане, свободно абсолютно позициониране и принудителни page breaks във вложени клетки не се поддържат; допустимите структури се валидират строго. Няма липсващи задължителни бизнес полета в проверените примери, но няма твърдение за пълно визуално копие или одобрение за производствена активация.

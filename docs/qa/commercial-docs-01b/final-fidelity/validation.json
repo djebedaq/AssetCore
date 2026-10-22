@@ -1,0 +1,124 @@
+{
+  "scope": "PR #114 final-fidelity corrections; synthetic isolated QA only",
+  "local_checks": [
+    {
+      "command": "pnpm --dir frontend typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir frontend lint",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir frontend test --run --reporter=dot --maxWorkers=1",
+      "result": "77 files, 698 passed",
+      "seconds": 293.59
+    },
+    {
+      "command": "pnpm --dir frontend build",
+      "result": "passed"
+    },
+    {
+      "command": "python -m ruff check backend/app backend/alembic backend/scripts scripts tests",
+      "result": "All checks passed"
+    },
+    {
+      "command": "python backend/scripts/validate_migration_history.py --require-all-protected",
+      "result": "38 protected migrations valid; 37 pre-existing unchanged"
+    },
+    {
+      "command": "python backend/scripts/validate_authorization_inventory.py",
+      "result": "valid; 317 backend routes plus 3 built frontend routes; 164 mutating routes; zero classification errors"
+    },
+    {
+      "command": "python -m pytest -q tests/test_document_studio_fidelity.py --tb=short",
+      "platform": "Windows",
+      "result": "47 passed, 5 skipped",
+      "seconds": 21.54,
+      "skips": "Real bounded LibreOffice conversion cases run on Linux/Docker/CI"
+    },
+    {
+      "command": "python -m pytest -q tests/test_document_generation_modules.py tests/test_authorization_web_security.py tests/test_document_studio_publication.py --tb=short",
+      "platform": "Windows",
+      "result": "30 passed, 12 skipped",
+      "seconds": 61.4,
+      "skips": "Real bounded LibreOffice acceptance runs on Linux/Docker/CI"
+    },
+    {
+      "command": "python -m pytest -q tests/test_document_studio.py --tb=short",
+      "platform": "Linux/Docker",
+      "result": "49 passed"
+    },
+    {
+      "command": "python -m pytest -q tests/test_document_studio_fidelity.py tests/test_document_studio_fidelity_workflows.py tests/test_document_studio_publication.py --tb=short",
+      "platform": "Linux/Docker",
+      "result": "72 passed",
+      "seconds": 341.78,
+      "scope_note": "Earlier targeted pass before final KK cell-finalizer correction; not claimed as final-head full backend run"
+    },
+    {
+      "command": "python -m pytest -q tests/test_document_studio_fidelity.py tests/test_document_studio_fidelity_workflows.py --tb=short",
+      "platform": "Linux/Docker",
+      "result": "52 passed, 1 failed",
+      "seconds": 148.45,
+      "scope_note": "All four official workflows, real cell signatures, conversion rollback and archive checks passed; failing test removed signature slots at only one depth after new nested group"
+    },
+    {
+      "command": "python -m pytest -q tests/test_document_studio_fidelity.py -k nested_layout_validation --tb=short",
+      "platform": "Linux/Docker",
+      "result": "9 passed, 43 deselected",
+      "seconds": 0.2,
+      "scope_note": "Recursive fixture corrected; no validation requirement removed"
+    },
+    {
+      "command": "python -m pytest -q tests/postgres/test_studio_publication_postgres.py --tb=short",
+      "platform": "Isolated PostgreSQL 16 QA container",
+      "result": "2 passed",
+      "seconds": 146.38,
+      "scope_note": "Actually overlapping activate/activate and activate/restore transactions"
+    },
+    {
+      "command": "python tests/browser/run_document_studio_qa.py",
+      "platform": "Linux/Docker Chromium",
+      "result": "4 groups, 22 screenshots, passed"
+    },
+    {
+      "command": "python tests/browser/run_document_studio_editor_qa.py",
+      "platform": "Linux/Docker Chromium",
+      "result": "8 groups, 22 screenshots, passed"
+    },
+    {
+      "command": "python tests/browser/run_document_studio_fidelity_qa.py",
+      "platform": "Linux/Docker Chromium",
+      "result": "4 groups, 22 screenshots, passed",
+      "scope_note": "Visible controls, nested header/identification/signature edits, actual DOCX/PDF, explicit activate/restore, BG/EN/RU desktop/tablet/touch; final-head CI repeats fresh"
+    },
+    {
+      "command": "PYTHONPATH=backend python tests/generate_studio_fidelity_evidence.py --output docs/qa/commercial-docs-01b/final-fidelity",
+      "platform": "Linux/Docker LibreOffice",
+      "result": "20 actual native DOCX/PDF cases, 44 Studio pages, 28 approved-reference pages, 31 side-by-side PNGs"
+    },
+    {
+      "command": "PYTHONPATH=backend DATABASE_URL=sqlite:///:memory: python tests/verify_studio_fidelity_evidence.py --root docs/qa/commercial-docs-01b/final-fidelity",
+      "result": "passed; 20 saved artifact hashes, native business fields, real PDF identities/dynamic rows and page PNGs"
+    }
+  ],
+  "visual_review": "visual-review.json: 89 actual/reference/signed/restore page PNGs viewed; no editor screenshot substituted for PDF pages",
+  "ci": {
+    "required_jobs": [
+      "frontend",
+      "backend",
+      "postgres",
+      "browser",
+      "docker"
+    ],
+    "exact_head_results_location": "https://github.com/djebedaq/AssetCore/pull/114/checks",
+    "delivery_record": "PR description records final full SHA, run URL, five conclusions and suite totals after this evidence commit is tested. This file records local evidence, not a fabricated pre-run CI success.",
+    "older_run_416": "Frontend/PostgreSQL/Docker passed; browser foundation boundary assertion and backend route/golden/export-wrapper failures corrected; superseded by final-head CI, not acceptance evidence"
+  },
+  "production": {
+    "database_accessed": false,
+    "deployment_performed": false,
+    "merged": false
+  }
+}

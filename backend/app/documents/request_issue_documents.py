@@ -479,7 +479,7 @@ def _studio_rows(data):
     return [{"position": row[0], "part_number": "" if data["request_kind"] == "FREE_FORM" else row[1],
              "description": row[-2], "quantity": row[-1].partition(" ")[0],
              "unit": UNIT_LABELS[data["language"]].get(line["unit"], line["unit"] or ""),
-             "note": line.get("note") or ""} for row, line in zip(localized, data["lines"], strict=True)]
+             "note": line.get("note") or "", "assembly": line.get("assembly") or ""} for row, line in zip(localized, data["lines"], strict=True)]
 
 
 def generate_safely(db, request, actor):

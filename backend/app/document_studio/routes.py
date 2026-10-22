@@ -263,7 +263,10 @@ def create_draft(template_id: int, payload: DraftCreate, user: User = Depends(ma
         fail("studio_workflow_unsupported")
     from .starter_layouts import professional_layout
     profile = db.get(CompanyProfile, 1)
-    layout = (professional_layout(template.document_type, payload.language, profile.identity if profile else {})
+    identity = profile.identity if profile else {}
+    logo_ids = [identity[k] for k in ("primary_logo_id", "secondary_logo_id") if identity.get(k)]
+    sizes = {image.id: (image.width, image.height) for image in db.scalars(select(CompanyBrandImage).where(CompanyBrandImage.id.in_(logo_ids)))}
+    layout = (professional_layout(template.document_type, payload.language, identity, sizes)
         if payload.design == "professional" else initial_layout(template.document_type)).model_dump()
     if payload.base_version_id:
         base = db.get(DocumentTemplateVersion, payload.base_version_id)

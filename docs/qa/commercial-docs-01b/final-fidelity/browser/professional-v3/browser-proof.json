@@ -1,0 +1,36 @@
+{
+  "passed": true,
+  "platform": "linux",
+  "browser": "151.0.7922.34",
+  "checks": [
+    "Visible UI edits three-column header, dynamic cells, nested groups, rows/columns, merges and protected signature relocation",
+    "Publication, explicit Studio activation, confirmed legacy restoration and append-only history through the UI",
+    "Four professional workflow starters produce downloadable editable DOCX and real DOCX-derived PDFs",
+    "BG/EN/RU professional editor at 1440/768/390; touch adds and edits nested cell content and autosaves without page overflow"
+  ],
+  "screenshots": [
+    "nested-header-identification-signature-bg-1440.png",
+    "actual-transfer_issue-pdf-bg.png",
+    "professional-transfer_issue-editor-bg.png",
+    "actual-transfer_return-pdf-bg.png",
+    "professional-transfer_return-editor-bg.png",
+    "actual-repair_protocol-pdf-bg.png",
+    "professional-repair_protocol-editor-bg.png",
+    "actual-part_request-pdf-bg.png",
+    "professional-part_request-editor-bg.png",
+    "legacy-restore-history-bg.png",
+    "professional-bg-1440.png",
+    "professional-bg-768.png",
+    "professional-bg-390.png",
+    "touch-cell-bg-390.png",
+    "professional-en-1440.png",
+    "professional-en-768.png",
+    "professional-en-390.png",
+    "touch-cell-en-390.png",
+    "professional-ru-1440.png",
+    "professional-ru-768.png",
+    "professional-ru-390.png",
+    "touch-cell-ru-390.png"
+  ],
+  "errors": []
+}

@@ -159,6 +159,13 @@ def _stable_zip(content: bytes, manifest: dict | None = None) -> bytes:
     return output.getvalue()
 
 
+def _shade(properties, color):
+    if color != "transparent":
+        shade = OxmlElement("w:shd")
+        shade.set(qn("w:fill"), color[1:])
+        properties.append(shade)
+
+
 def _paragraph_style(paragraph, style, width):
     paragraph.alignment = {"left": WD_ALIGN_PARAGRAPH.LEFT, "center": WD_ALIGN_PARAGRAPH.CENTER,
                            "right": WD_ALIGN_PARAGRAPH.RIGHT}[style.align]
@@ -168,9 +175,7 @@ def _paragraph_style(paragraph, style, width):
     paragraph.paragraph_format.left_indent = Mm(unused if style.align == "right" else unused / 2 if style.align == "center" else 0)
     paragraph.paragraph_format.right_indent = Mm(unused if style.align == "left" else unused / 2 if style.align == "center" else 0)
     props = paragraph._p.get_or_add_pPr()
-    shade = OxmlElement("w:shd")
-    shade.set(qn("w:fill"), style.background[1:])
-    props.append(shade)
+    _shade(props, style.background)
     if style.border_pt:
         borders = OxmlElement("w:pBdr")
         for edge in ("top", "left", "bottom", "right"):
@@ -218,7 +223,7 @@ def _page_number(paragraph, style):
             run._r.append(node)
 
 
-def _table(container, rows, widths, style, width, repeat, keep_rows=False):
+def _table(container, rows, widths, style, width, repeat, keep_rows=False, group_headers=None):
     table = _new_table(container, width, 0, len(widths))
     table.autofit = False
     table.alignment = {"left": WD_TABLE_ALIGNMENT.LEFT, "center": WD_TABLE_ALIGNMENT.CENTER,
@@ -230,6 +235,16 @@ def _table(container, rows, widths, style, width, repeat, keep_rows=False):
         col.width = Mm(actual_width * percent / 100)
     for index, values in enumerate(rows):
         row = table.add_row()
+        if group_headers and index in group_headers:
+            cell = row.cells[0].merge(row.cells[-1]) if len(row.cells) > 1 else row.cells[0]
+            paragraph = cell.paragraphs[0]
+            group_style = style.model_copy(update={"bold": True, "border_pt": 0})
+            _paragraph_style(paragraph, group_style, actual_width)
+            paragraph.paragraph_format.keep_with_next = True
+            _text(paragraph, group_headers[index], group_style)
+            _shade(cell._tc.get_or_add_tcPr(), style.background)
+            row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
+            continue
         if index == 0 and repeat:
             row._tr.get_or_add_trPr().append(OxmlElement("w:tblHeader"))
         if index and keep_rows:
@@ -246,9 +261,7 @@ def _table(container, rows, widths, style, width, repeat, keep_rows=False):
             if index == 0 and repeat:
                 for run in paragraph.runs:
                     run.bold = True
-            shade = OxmlElement("w:shd")
-            shade.set(qn("w:fill"), style.background[1:])
-            cell._tc.get_or_add_tcPr().append(shade)
+            _shade(cell._tc.get_or_add_tcPr(), style.background)
     container.add_paragraph().paragraph_format.space_after = Mm(style.spacing_mm)
 
 
@@ -302,6 +315,7 @@ def _grid(container, block, width, emit):
     table.autofit = False
     table.alignment = {"left": WD_TABLE_ALIGNMENT.LEFT, "center": WD_TABLE_ALIGNMENT.CENTER, "right": WD_TABLE_ALIGNMENT.RIGHT}[block.style.align]
     _table_borders(table, block.style)
+    _shade(table._tbl.tblPr, block.style.background)
     for column, percent in zip(table.columns, block.widths, strict=True):
         column.width = Mm(width * percent / 100)
     for i, definition in enumerate(block.grid_rows):
@@ -331,9 +345,7 @@ def _grid(container, block, width, emit):
                 node.set(qn("w:type"), "dxa")
                 margin.append(node)
             properties.append(margin)
-            shade = OxmlElement("w:shd")
-            shade.set(qn("w:fill"), item.style.background[1:])
-            properties.append(shade)
+            _shade(properties, item.style.background)
             borders = OxmlElement("w:tcBorders")
             for edge in ("top", "left", "bottom", "right"):
                 node = OxmlElement("w:" + edge)
@@ -408,6 +420,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
                 _grid(container, block, width, emit)
                 continue
             if block.type in {"table", "dynamic_table"}:
+                group_headers = {}
                 if block.type == "table":
                     rows, widths = block.rows, block.widths or [100 / len(block.rows[0])] * len(block.rows[0])
                 else:
@@ -428,8 +441,16 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
                             record["quantity"], record["unit"] = amount, unit
                         if "quantity" in record and not any(c.key == "unit" for c in block.columns):
                             record["quantity"] = " ".join(str(v) for v in (record["quantity"], record.get("unit")) if v is not None and str(v) != "")
-                    rows = [[c.label for c in block.columns]] + [[r.get(c.key, "") for c in block.columns] for r in records]
-                _table(container, rows, widths, style, width, block.repeat_header, getattr(block, "keep_rows_together", False))
+                    rows = [[c.label for c in block.columns]]
+                    previous_group = None
+                    for record in records:
+                        group = str(record.get(block.group_by) or "") if block.group_by else ""
+                        if group and group != previous_group:
+                            group_headers[len(rows)] = group
+                            rows.append([group] + [""] * (len(block.columns) - 1))
+                        previous_group = group
+                        rows.append([record.get(c.key, "") for c in block.columns])
+                _table(container, rows, widths, style, width, block.repeat_header, getattr(block, "keep_rows_together", False), group_headers)
                 continue
             if block.type == "conditional" and bindings.get(block.when_field) in (None, "") and not source:
                 continue
@@ -491,9 +512,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
                 table.alignment = {"left": WD_TABLE_ALIGNMENT.LEFT, "center": WD_TABLE_ALIGNMENT.CENTER, "right": WD_TABLE_ALIGNMENT.RIGHT}[style.align]
                 cell = table.cell(0, 0)
                 cell.width = Mm(block.width_mm)
-                shade = OxmlElement("w:shd")
-                shade.set(qn("w:fill"), style.background[1:])
-                cell._tc.get_or_add_tcPr().append(shade)
+                _shade(cell._tc.get_or_add_tcPr(), style.background)
                 _paragraph_style(cell.paragraphs[0], style, block.width_mm)
                 for border in list(cell.paragraphs[0]._p.get_or_add_pPr().findall(qn("w:pBdr"))):
                     cell.paragraphs[0]._p.pPr.remove(border)

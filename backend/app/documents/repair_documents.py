@@ -8,6 +8,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..localization import status_label
 from ..models import (
     DocumentType,
     GeneratedDocument,
@@ -240,7 +241,7 @@ def make_repair_documents(
         "REPAIRER_NAMES": participant_names,
         "APPROVED_BY_NAME": repair.approved_by.full_name if repair.approved_by else "",
         "APPROVED_BY_JOB_TITLE": repair.approved_by.job_title if repair.approved_by else "",
-        "REPAIR_STATUS": repair.status,
+        "REPAIR_STATUS": status_label(repair.status, language) if template.layout_contract.get("studio") else repair.status,
         "LEFT_SIGNER_NAME": repair.responsible_user.full_name if repair.responsible_user else "",
         "LEFT_SIGNER_JOB_TITLE": repair.responsible_user.job_title if repair.responsible_user else "",
         "RIGHT_SIGNER_NAME": "",
@@ -250,15 +251,17 @@ def make_repair_documents(
         "SIGNATURE_STATUS": _signature_status(language, finalized_internal=True),
     }
     values.update(_preparer_values(db, created_by_id))
-    event_type_labels = {
-        "ACCEPTED": "Създаване",
-        "STATUS_CHANGE": "Промяна на статус",
-        "PARTS": "Използвани части",
-        "DIAGNOSIS": "Диагностика",
-        "WORK": "Извършена работа",
-        "TEST": "Тест",
-        "COMPLETED": "Приключване",
+    event_labels = {
+        "ACCEPTED": ("Създаване", "Created", "Создание"),
+        "STATUS_CHANGE": ("Промяна на статус", "Status change", "Изменение статуса"),
+        "PARTS": ("Използвани части", "Parts used", "Использованные детали"),
+        "DIAGNOSIS": ("Диагностика", "Diagnosis", "Диагностика"),
+        "WORK": ("Извършена работа", "Work performed", "Выполненные работы"),
+        "TEST": ("Тест", "Test", "Проверка"),
+        "COMPLETED": ("Приключване", "Completion", "Завершение"),
     }
+    event_language = ("bg", "en", "ru").index(_language(language)) if template.layout_contract.get("studio") else 0
+    event_type_labels = {key: labels[event_language] for key, labels in event_labels.items()}
     event_rows = [["Дата", "Тип", "Описание"]] + [
         [
             event.created_at.strftime("%d.%m.%Y %H:%M"),

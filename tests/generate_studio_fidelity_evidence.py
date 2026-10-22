@@ -17,7 +17,7 @@ from app.document_studio.starter_layouts import professional_layout
 from app.documents.transfer_documents import CHECKLIST_CODES, studio_checklist_rows
 from app.models import DocumentTemplate, DocumentTemplateVersion
 from app.template_engine import render_docx
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 CASES = {'TRANSFER_ISSUE': 'transfer-issue', 'TRANSFER_RETURN': 'transfer-return',
          'REPAIR_PROTOCOL': 'repair-protocol', 'PART_REQUEST': 'parts-request'}
@@ -29,7 +29,7 @@ def inputs(language, count, size):
     # number is copied into the generated QA business inputs.
     text = {'bg': 'Синтетично техническо описание за проверка на оформлението.',
         'en': 'Synthetic technical description for document layout verification.',
-        'ru': 'Синтетическое техническое описание для проверки макета.'}[language]
+        'ru': 'Синтетическое техническое описание для проверки макета.'}[language] + ' '
     for code in values:
         values[code] = text * size
     values.update(DOCUMENT_NUMBER='SYNTHETIC-QA-001', CREATION_DATE='19.10.2026', MACHINE_NUMBER='SYNTHETIC-INVENTORY',
@@ -50,6 +50,22 @@ def inputs(language, count, size):
         HANDED_OVER_NAME=values['LEFT_SIGNER_NAME'], ACCEPTED_BY_NAME=values['RIGHT_SIGNER_NAME'],
         APPROVED_BY_NAME=values['RIGHT_SIGNER_NAME'], APPROVED_BY_JOB_TITLE=values['RIGHT_SIGNER_JOB_TITLE'],
         REQUESTER_NAME=values['LEFT_SIGNER_NAME'], APPROVER_NAME=values['RIGHT_SIGNER_NAME'], DEPARTMENT='SYNTHETIC QA UNIT')
+    technical = {
+        'REPORTED_PROBLEM': ('Колебание на налягането при пробно натоварване.', 'Pressure fluctuation under a test load.', 'Колебания давления при испытательной нагрузке.'),
+        'SYMPTOMS': ('Периодични пулсации на изпитвателния стенд.', 'Intermittent pulsation on the test bench.', 'Периодические пульсации на испытательном стенде.'),
+        'CONDITION_BEFORE': ('Следи от теч около пробния уплътняващ възел.', 'Leak traces around the test seal assembly.', 'Следы утечки вокруг испытательного уплотнения.'),
+        'REQUIRED_WORK': ('Проверка на уплътненията и почистване на пробния корпус.', 'Inspect seals and clean the test housing.', 'Проверить уплотнения и очистить испытательный корпус.'),
+        'REMOVED_PARTS': ('Свален пробен комплект уплътнения за оглед.', 'Test seal set removed for inspection.', 'Испытательный комплект уплотнений снят для осмотра.'),
+        'DIAGNOSTIC_CLEANING': ('Измит пробен корпус преди диагностиката.', 'Test housing washed before diagnosis.', 'Испытательный корпус промыт перед диагностикой.'),
+        'DIAGNOSIS': ('Установено износване на синтетичния пробен комплект.', 'Wear recorded on the synthetic test set.', 'Зафиксирован износ синтетического испытательного комплекта.'),
+        'REQUIRED_PARTS': ('Синтетичен QA комплект за изпитвателния възел.', 'Synthetic QA set for the test assembly.', 'Синтетический QA комплект для испытательного узла.'),
+        'WORK_PERFORMED': ('Подменен QA комплект и сглобен пробен възел.', 'QA set replaced and test assembly rebuilt.', 'QA комплект заменён, испытательный узел собран.'),
+        'TEST_DETAILS': ('Проба на стенд; записаното време за тест е 15 min.', 'Bench trial; recorded testing labor is 15 min.', 'Стендовое испытание; записанный труд на тест — 15 min.'),
+        'CONDITION_AFTER': ('Стабилна работа на синтетичния изпитвателен стенд.', 'Stable operation on the synthetic test bench.', 'Устойчивая работа синтетического испытательного стенда.'),
+        'FINAL_RESULT': ('Приключена синтетична QA проверка; няма реална машина.', 'Synthetic QA verification complete; no real machine.', 'Синтетическая QA проверка завершена; реального оборудования нет.'),
+    }
+    for code, labels in technical.items():
+        values[code] = ('SYNTHETIC QA: ' + labels[('bg', 'en', 'ru').index(language)] + ' ') * size
     from types import SimpleNamespace
     issue = [{'code': code, 'condition': 'GOOD' if i % 2 else 'SATISFACTORY', 'length_m': 30 if code == 'cable' else None,
         'note': text * size if i == 4 else ''} for i, code in enumerate(CHECKLIST_CODES)]
@@ -64,14 +80,19 @@ def inputs(language, count, size):
     tables['REPAIR_PARTICIPANTS'] = [{'name': values['LEFT_SIGNER_NAME'], 'job_title': values['LEFT_SIGNER_JOB_TITLE'],
         'contribution': text, 'duration': '45 min'}]
     tables['REPAIR_ATTACHMENTS'] = []
+    for i, row in enumerate(tables['REQUEST_LINES']):
+        row['assembly'] = 'SYNTHETIC QA ASSEMBLY A' if i < count // 2 else 'SYNTHETIC QA ASSEMBLY B'
     return values, tables
 
 
 def image(text, size):
     image = Image.new('RGB', size, 'white')
     draw = ImageDraw.Draw(image)
-    draw.rectangle((1, 1, size[0]-2, size[1]-2), outline='#17314f', width=3)
-    draw.text((8, size[1] // 2 - 8), text, fill='#17314f')
+    draw.rectangle((1, 1, size[0]-2, size[1]-2), fill='#17314f', width=3)
+    large = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 64)
+    small = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 16)
+    draw.text((size[0] / 2, size[1] / 2 - 15), 'QA', font=large, fill='white', anchor='mm')
+    draw.text((size[0] / 2, size[1] / 2 + 35), 'SYNTHETIC', font=small, fill='white', anchor='mm')
     out = io.BytesIO()
     image.save(out, format='PNG')
     return out.getvalue()
@@ -111,7 +132,9 @@ def main():
             images = {str(i): {'content': base64.b64encode(raw).decode(), 'sha256': renderer.digest(raw)}
                 for i, raw in [(1, image('QA LOGO', (240, 200))), (2, image('QA IMAGE', (200, 240)))]}
             manifest = {'renderer': 1, 'document_type': workflow, 'language': language,
-                'layout': professional_layout(workflow, language, identity).model_dump(), 'company': {'revision': 1, 'identity': identity}, 'images': images}
+                'layout': professional_layout(workflow, language, identity, {1: (240, 200), 2: (200, 240)}).model_dump(), 'company': {'revision': 1, 'identity': identity}, 'images': images}
+            if workflow == 'PART_REQUEST' and label != 'short':
+                next(b for b in manifest['layout']['blocks'] if b['type'] == 'dynamic_table')['group_by'] = 'assembly'
             docx = renderer.render(manifest, values, tables)
             pdf = renderer.pdf_required(docx)
             stem = f'{language}-{label}'
@@ -156,7 +179,8 @@ def main():
             reports.append({'workflow': workflow, 'language': language, 'size': label, 'dynamic_rows': 10 if workflow.startswith('TRANSFER_') else count,
                 'reference_sha256': reference_hash, 'docx_sha256': renderer.digest(docx), 'pdf_sha256': renderer.digest(pdf),
                 'pages': len(actual_pages), 'reference_pages': len(reference_pages), 'reference_unchanged': reference_hash == renderer.digest(reference.read_bytes())})
-        (destination / 'assessment.md').write_text('Оценката се попълва след преглед на всички действителни PDF страници и сравнителни изображения.\n', encoding='utf-8')
+        if not (destination / 'assessment.md').exists():
+            (destination / 'assessment.md').write_text('Оценката се попълва след преглед на всички действителни PDF страници и сравнителни изображения.\n', encoding='utf-8')
     (output / 'render-report.json').write_text(json.dumps(reports, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(json.dumps({'cases': len(reports), 'pages': sum(r['pages'] for r in reports)}))
 

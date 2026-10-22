@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "transitions": [
+    {
+      "selection": "legacy-before",
+      "template_id": 10,
+      "approval_hash": "c350f04e0654b62d70a34cf54a7809ff3776e2c0bcbc82ddc3a173bfc00080b1",
+      "archives": {
+        "docx": "895f5048ce3352e387f41db3e5c7ef5bdcd983e9631789522dfe52927bcaddc3",
+        "pdf": "66a14957b31c01e5b070965e3100dfe17dc240d6a1ceeb1e7168f235781b67a8"
+      },
+      "unchanged": true
+    },
+    {
+      "selection": "studio",
+      "template_id": 13,
+      "approval_hash": "d4f7463837d3bd6ac132e577f09927d789444e8e8ddc3d60e98c64a422e792ad",
+      "archives": {
+        "docx": "a5766bb7169e9017bbb62e050ae4dc733d9ceccb38c0dda73636919c6b862f7e",
+        "pdf": "289aebf7d73e4c71489ab2cc624bf463b47c0210dd009f8ea701a94ef37bc691"
+      },
+      "unchanged": true
+    },
+    {
+      "selection": "legacy-restored",
+      "template_id": 10,
+      "approval_hash": "ef423b078718e4711060f38b91e50446e914f67ed3adf37ecfca3929522d5d83",
+      "archives": {
+        "docx": "baec7dd823ea7af2df048d1c01bed64d04c301b7b7a6e038322682a058f6af3f",
+        "pdf": "1252ca91759ea94723ec5a4efaff65f3350ba17130b1cf7cb422ecae46dcb0f4"
+      },
+      "unchanged": true
+    }
+  ]
+}

@@ -127,6 +127,27 @@ def collect_generation_evidence(monkeypatch, output: Path, language: str) -> dic
             )
             version = db.get(OfficialDocumentVersion, document.current_version_id)
             _check_version(document, version, records)
+            # Preserve every original snapshot field and DOCX member against
+            # the pre-extraction golden. Check the new evidence independently
+            # against the actual operation, then project ONLY those added keys
+            # out of the historical comparison. The complete current hashes
+            # and signing digest were already checked above.
+            additions = {}
+            operation = args[0]
+            if _kind in {"issue", "return"}:
+                from app.documents.transfer_documents import studio_checklist_rows
+                additions = {
+                    "equipment_checklist": studio_checklist_rows(operation, _kind, language),
+                    "checklist_snapshot": operation.return_checklist if _kind == "return" else operation.issue_checklist,
+                }
+            elif _kind == "repair":
+                additions = {"test_details": operation.test_details, "machine_identity": {
+                    key: getattr(operation.machine, key, None) for key in (
+                        "inventory_number", "name", "category", "brand", "model", "serial_number", "manufacturer", "pressure_bar", "ownership")}}
+            for snapshot in (version.snapshot, *(r.snapshot for r in records)):
+                assert {key: snapshot[key] for key in additions} == additions
+            def historical_snapshot(snapshot):
+                return {key: value for key, value in snapshot.items() if key not in additions}
             template = db.get(DocumentTemplateVersion, version.template_version_id)
             evidence[_kind] = {
                 "number": document.document_number,
@@ -136,8 +157,8 @@ def collect_generation_evidence(monkeypatch, output: Path, language: str) -> dic
                 "status": version.status,
                 "template_version": template.version,
                 "template_sha256": template.source_sha256,
-                "snapshot_sha256": version.snapshot_sha256,
-                "record_snapshot_sha256": _json_sha(records[0].snapshot),
+                "snapshot_sha256": _json_sha(historical_snapshot(version.snapshot)),
+                "record_snapshot_sha256": _json_sha(historical_snapshot(records[0].snapshot)),
                 "filenames": {record.format: record.filename for record in records},
                 "media_types": {record.format: record.media_type for record in records},
                 "docx_members": _docx_members(version.docx_content),

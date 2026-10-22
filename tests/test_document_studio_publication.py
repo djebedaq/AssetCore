@@ -257,13 +257,21 @@ def test_real_canonical_issue_return_sign_repair_and_kk_use_selected_studio_sour
         version, _ = publish(client, auth_headers, draft)
         activate(client, auth_headers, version['id'])
         versions[workflow] = version['id']
-    issued = client.post('/api/transfers/bulk-issue', headers=auth_headers, json=issue_payload(machine_ids['4']))
+    from app.documents.transfer_documents import CHECKLIST_CODES
+    issue_data = issue_payload(machine_ids['4'])
+    issue_data['checklist'] = [{'code': code, 'condition': 'GOOD',
+        'length_m': 30 if code == 'cable' else None, 'note': 'SYNTHETIC QA recorded issue' if code == 'hp_hose' else ''}
+        for code in CHECKLIST_CODES]
+    issued = client.post('/api/transfers/bulk-issue', headers=auth_headers, json=issue_data)
     assert issued.status_code == 201, issued.text
     finalize_signatures(client, issued)
     item = issued.json()['transfers'][0]
     returned = client.post('/api/transfers/bulk-return', headers=auth_headers, json={'document_language': 'bg', 'items': [{
         'transfer_id': item['transfer_id'], 'machine_id': item['machine_id'], 'condition_text': 'QA condition',
-        'result_text': 'QA inspected', 'notes': 'QA', 'next_status': 'READY'}]})
+        'result_text': 'QA inspected', 'notes': 'QA', 'next_status': 'READY',
+        'checklist': [{'code': code, 'condition': 'SATISFACTORY' if code == 'hp_hose' else 'GOOD',
+            'length_m': 30 if code == 'cable' else None, 'note': 'SYNTHETIC QA recorded return' if code == 'hp_hose' else ''}
+            for code in CHECKLIST_CODES]}]})
     assert returned.status_code == 200, returned.text
     finalize_signatures(client, returned)
     from test_repair_workflow_v14 import _advance_to_final_stage, _create_repair
@@ -287,6 +295,11 @@ def test_real_canonical_issue_return_sign_repair_and_kk_use_selected_studio_sour
         assert all(renderer.manifest_from_source(v.docx_content) for v in official)
         for v in official:
             renderer.inspect_pdf(v.pdf_content)
+            if v.snapshot.get('operation') in ('issue', 'return'):
+                assert len(v.snapshot['equipment_checklist']) == 10
+                assert [r['code'] for r in v.snapshot['checklist_snapshot']] == CHECKLIST_CODES
+                expected = 'SATISFACTORY' if v.snapshot['operation'] == 'return' else 'GOOD'
+                assert v.snapshot['checklist_snapshot'][2]['condition'] == expected
             with fitz.open(stream=v.pdf_content, filetype='pdf') as pdf:
                 assert '[[ASSETCORE_' not in '\n'.join(p.get_text() for p in pdf)
         archived = {v.id: (v.docx_content, v.pdf_content, v.signing_sha256) for v in official}

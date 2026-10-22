@@ -522,6 +522,9 @@ def _build_participants(db: Session, version: OfficialDocumentVersion, document_
             user_id = None
         if slot and slot.allowed_participant_kind not in {"ANY", kind}:
             raise HTTPException(422, detail={"code": "participant_kind_not_allowed", "message": f"Участникът не е допустим за позиция {item.slot_code}."})
+        if document_type == "PART_REQUEST":
+            from .signature_rendering import validate_studio_request_signer
+            validate_studio_request_signer(version, item.slot_code, snapshot)
         db.add(DocumentParticipant(document_version_id=version.id, slot_code=item.slot_code, participant_kind=kind, user_id=user_id, external_signer_id=external_id, operation_role=item.operation_role, identity_snapshot=snapshot, identity_snapshot_sha256=_sha(_canonical(snapshot))))
 
 
@@ -1329,6 +1332,14 @@ def _finalize_signed_files(
     if not rows:
         return
     final_docx = version.docx_content
+    if final_docx:
+        from .document_studio.renderer import manifest_from_source
+        if manifest_from_source(final_docx):
+            # Studio slots use the existing protected marker/finalizer shared
+            # with transfer documents, including bounded DOCX-derived PDF.
+            from .signature_rendering import finalize_signed_files_from_rows
+            finalize_signed_files_from_rows(version, rows)
+            return
     if final_docx:
         document = Document(io.BytesIO(final_docx))
         _replace_signed_status(document, version.language)
