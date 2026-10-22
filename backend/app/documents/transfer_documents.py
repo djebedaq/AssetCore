@@ -229,6 +229,20 @@ def _checklist_rows(transfer: TransferProtocol, operation: str, language: str) -
     return rows
 
 
+def studio_checklist_rows(transfer, operation, language):
+    """Only recorded operation items; no category-wide or current-state defaults."""
+    from types import SimpleNamespace
+    stored = transfer.return_checklist if operation == "return" else transfer.issue_checklist
+    if not stored:
+        return []
+    clean = [{**item, "length_m": None, "note": ""} for item in stored]
+    rows = _checklist_rows(SimpleNamespace(issue_checklist=clean, return_checklist=clean), operation, language)
+    return [{"position": str(i), "component": label, "condition": condition,
+             "measurement": f"{item['length_m']} m" if item.get("length_m") is not None else "",
+             "note": item.get("note") or ""}
+            for i, ((label, condition), item) in enumerate(zip(rows, stored, strict=True), 1)]
+
+
 def _identity_rows(transfer: TransferProtocol, operation: str, language: str) -> list[tuple[str, str]]:
     t = TEXT[language]
     date_value = (
@@ -250,6 +264,8 @@ def _protocol_snapshot(
 ) -> dict:
     return {
         "operation": operation,
+        "equipment_checklist": studio_checklist_rows(transfer, operation, language),
+        "checklist_snapshot": transfer.return_checklist if operation == "return" else transfer.issue_checklist,
         "language": language,
         "protocol_number": transfer.protocol_number,
         "batch_reference": batch_reference,
@@ -515,7 +531,7 @@ def _protocol_template_values(
     language = _language(language)
     t = TEXT[language]
     date_value = (
-        transfer.returned_at if operation == "return" else transfer.issued_at
+        (transfer.returned_at or transfer.return_requested_at) if operation == "return" else transfer.issued_at
     ) or transfer.created_at
     left_name = transfer.returned_by_name if operation == "return" else transfer.handed_over_by
     right_name = transfer.return_accepted_by if operation == "return" else transfer.accepted_by
@@ -539,11 +555,13 @@ def _protocol_template_values(
         "DOCUMENT_NUMBER": f"{transfer.protocol_number}-R" if operation == "return" else transfer.protocol_number,
         "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
         "EQUIPMENT_TYPE": transfer.machine.category or "",
+        "MACHINE_LOCATION": location.name if (location := getattr(transfer.machine, "location", None)) else "",
         "MACHINE_NAME": transfer.machine.name,
         "MACHINE_NUMBER": transfer.machine.inventory_number,
         "BRAND": transfer.machine.brand,
         "MODEL": transfer.machine.model or "",
         "MODEL_DISPLAY": _machine_model(transfer),
+        "MANUFACTURER": getattr(transfer.machine, "manufacturer", None) or transfer.machine.brand or "",
         "SERIAL_NUMBER": transfer.machine.serial_number or "",
         "PRESSURE_BAR": transfer.machine.pressure_bar if transfer.machine.pressure_bar is not None else "",
         "BATCH_REFERENCE": batch_reference,
@@ -554,9 +572,11 @@ def _protocol_template_values(
         "LEFT_SIGNER_NAME": left_name or "",
         "LEFT_SIGNER_JOB_TITLE": left_job or "",
         "LEFT_SIGNER_ROLE": left_role or "",
+        "LEFT_SIGNER_ORGANIZATION": (transfer.returned_by_company if operation == "return" else transfer.handed_over_department) or "",
         "RIGHT_SIGNER_NAME": right_name or "",
         "RIGHT_SIGNER_JOB_TITLE": right_job or "",
         "RIGHT_SIGNER_ROLE": right_role or "",
+        "RIGHT_SIGNER_ORGANIZATION": (transfer.return_accepted_department if operation == "return" else transfer.accepted_by_company) or "",
         "LEFT_SIGNATURE": "[[ASSETCORE_LEFT_SIGNATURE]]",
         "RIGHT_SIGNATURE": "[[ASSETCORE_RIGHT_SIGNATURE]]",
         "SIGNATURE_STATUS": _signature_status(language),
@@ -587,8 +607,10 @@ def make_protocol_documents(
         _protocol_template_values(
             db, transfer, batch.batch_reference, "issue", language, created_by_id
         ),
+        {"EQUIPMENT_CHECKLIST": studio_checklist_rows(transfer, "issue", _language(language))},
     )
-    pdf = convert_docx_to_pdf(docx) or build_protocol_pdf(
+    from ..document_studio.renderer import pdf_required
+    pdf = pdf_required(docx) if template.layout_contract.get("studio") else convert_docx_to_pdf(docx) or build_protocol_pdf(
         transfer, batch.batch_reference, language
     )
     _register_official_version(
@@ -645,8 +667,9 @@ def make_return_documents(
         db, transfer, batch_reference, "return", language, created_by_id
     )
     values["DOCUMENT_NUMBER"] = number
-    docx = render_docx(template, values)
-    pdf = convert_docx_to_pdf(docx) or build_return_protocol_pdf(
+    docx = render_docx(template, values, {"EQUIPMENT_CHECKLIST": studio_checklist_rows(transfer, "return", _language(language))})
+    from ..document_studio.renderer import pdf_required
+    pdf = pdf_required(docx) if template.layout_contract.get("studio") else convert_docx_to_pdf(docx) or build_return_protocol_pdf(
         transfer, batch_reference, language
     )
     snapshot = _protocol_snapshot(transfer, batch_reference, "return", _language(language))

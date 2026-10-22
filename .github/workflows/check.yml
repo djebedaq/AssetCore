@@ -62,6 +62,11 @@ jobs:
         run: python scripts/audit_dependencies.py python --output security-reports/python-audit.json
       - run: python -m compileall -q backend/app backend/alembic backend/scripts scripts tests
       - run: python -m ruff check backend/app backend/alembic backend/scripts scripts tests
+      - name: Verify saved native DOCX business fields and real PDF fidelity artifacts
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: "sqlite:///:memory:"
+        run: python tests/verify_studio_fidelity_evidence.py --root docs/qa/commercial-docs-01b/final-fidelity
       - run: python backend/scripts/validate_migration_history.py --require-all-protected
       - run: python backend/scripts/validate_authorization_inventory.py
       - run: PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py
@@ -85,7 +90,7 @@ jobs:
 
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -129,6 +134,32 @@ jobs:
           node "$RUNNER_TEMP/assetcore-browser/node_modules/playwright/cli.js" install --with-deps chromium
       - name: COMMERCIAL-DOCS-01A company, library, draft settings and director access in BG/EN/RU
         run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_document_studio_qa.py
+      - name: COMMERCIAL-DOCS-01B visual editor, actual PDF, publication and official KK
+        run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_document_studio_editor_qa.py
+      - name: COMMERCIAL-DOCS-01B final professional cells, signatures, real PDFs and legacy restoration
+        run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_document_studio_fidelity_qa.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: commercial-docs-01b-final-fidelity-browser
+          path: |
+            .tmp/catalog03-studio01b-final-browser-*/browser-proof.json
+            .tmp/catalog03-studio01b-final-browser-*/*.png
+            .tmp/catalog03-studio01b-final-browser-*/*.docx
+            .tmp/catalog03-studio01b-final-browser-*/*.pdf
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: commercial-docs-01b-browser
+          path: |
+            .tmp/catalog03-studio01b-browser-*/browser-proof.json
+            .tmp/catalog03-studio01b-browser-*/*.png
+            .tmp/catalog03-studio01b-browser-*/*.docx
+            .tmp/catalog03-studio01b-browser-*/*.pdf
+          include-hidden-files: true
+          if-no-files-found: error
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

@@ -2573,6 +2573,8 @@ def create_template_version(
     template = db.get(DocumentTemplate, template_id)
     if template is None:
         raise HTTPException(404, "Шаблонът не е намерен.")
+    if payload.layout_contract.get("studio"):
+        raise business_conflict("studio_managed_publication_required", "studio_managed_publication_required")
     filename, content = _decode_file(payload)
     version_number = (db.scalar(select(func.max(DocumentTemplateVersion.version)).where(DocumentTemplateVersion.template_id == template.id, DocumentTemplateVersion.language == payload.language.value)) or 0) + 1
     item = DocumentTemplateVersion(template_id=template.id, version=version_number, language=payload.language.value, source_filename=filename, source_media_type=payload.media_type, source_content=content, source_sha256=hashlib.sha256(content).hexdigest(), layout_contract=payload.layout_contract, effective_from=payload.effective_from, effective_to=payload.effective_to, required_fields=payload.required_fields, numbering_rule=payload.numbering_rule, department=payload.department, change_note=payload.change_note, created_by_id=user.id)
@@ -2611,6 +2613,9 @@ def validate_template_version(
     item = db.get(DocumentTemplateVersion, version_id)
     if item is None:
         raise HTTPException(404, "Версията на шаблона не е намерена.")
+    if item.layout_contract.get("studio"):
+        return {"id": item.id, "validation_status": item.validation_status,
+                "validation_report": item.validation_report, "validated_at": item.validated_at}
     report = validate_template(item)
     item.validation_status = "PASSED" if report["valid"] else "FAILED"
     item.validation_report = report
@@ -2637,6 +2642,8 @@ def publish_template_version(
     item = db.get(DocumentTemplateVersion, version_id)
     if item is None:
         raise HTTPException(404, "Версията на шаблона не е намерена.")
+    if item.layout_contract.get("studio"):
+        raise business_conflict("studio_immutable_version", "studio_immutable_version")
     if not item.layout_contract or not item.source_sha256 or (item.source_content is None and not item.source_path):
         raise business_conflict("template_contract_missing", "Шаблонът не може да бъде публикуван без проверен изходен файл и договор за оформление.")
     report = validate_template(item)
@@ -2657,7 +2664,7 @@ def publish_template_version(
             "template_period_expired",
             "Шаблон с изтекъл срок на валидност не може да бъде публикуван.",
         )
-    db.query(DocumentTemplateVersion).filter(DocumentTemplateVersion.template_id == item.template_id, DocumentTemplateVersion.language == item.language, DocumentTemplateVersion.is_published.is_(True)).update({"is_published": False, "published_at": None, "published_by_id": None}, synchronize_session=False)
+    db.query(DocumentTemplateVersion).filter(DocumentTemplateVersion.template_id == item.template_id, DocumentTemplateVersion.language == item.language, DocumentTemplateVersion.is_published.is_(True), DocumentTemplateVersion.layout_contract["studio"].as_integer().is_(None)).update({"is_published": False, "published_at": None, "published_by_id": None}, synchronize_session=False)
     item.is_published = True
     item.published_by_id = user.id
     item.published_at = utcnow()

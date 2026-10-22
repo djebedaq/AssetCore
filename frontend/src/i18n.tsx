@@ -1,4 +1,5 @@
 import { studioBg, studioEn, studioRu } from './features/documentStudio/translations'
+import { editorBg, editorEn, editorRu } from './features/documentStudio/editorTranslations'
 import { requests01Bg, requests01En, requests01Ru } from './features/partRequests/requestTranslations'
 import { ux06Bg, ux06En, ux06Ru } from './features/catalogBuilder/ux06Translations'
 import { catalogUxBg, catalogUxEn, catalogUxRu } from './features/catalogBuilder/catalogUxTranslations'
@@ -23,6 +24,7 @@ import {
 
 export const bg = {
   ...studioBg,
+  ...editorBg,
   ...requests01Bg,
   ...ux04Bg,
   ...ux05Bg,
@@ -1340,6 +1342,7 @@ export const en: Catalog = Object.fromEntries(
 
 Object.assign(en, {
   ...studioEn,
+  ...editorEn,
   ...requests01En,
   ...ux04En,
   ...ux05En,
@@ -2028,6 +2031,7 @@ export const ru: Catalog = Object.fromEntries(
 
 Object.assign(ru, {
   ...studioRu,
+  ...editorRu,
   ...requests01Ru,
   ...ux04Ru,
   ...ux05Ru,

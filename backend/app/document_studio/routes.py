@@ -17,6 +17,7 @@ from ..models import (
     DocumentEditorDraft,
     DocumentTemplate,
     DocumentTemplateVersion,
+    StudioActivation,
     User,
     utcnow,
 )
@@ -26,16 +27,23 @@ from .files import normalize_image, validate_docx
 from .schemas import (
     FIELD_CATALOG,
     SUPPORTED_TYPES,
+    ActivationInput,
     CompanyIdentity,
     DraftCreate,
     DraftUpdate,
     IdentityUpdate,
     ImageUpload,
     Layout,
+    PreviewInput,
+    PublishInput,
+    RestoreInput,
     StrictModel,
     TemplateCreate,
     initial_layout,
+    publication_fields,
+    validate_publication_fields,
     validate_workflow,
+    walk_blocks,
 )
 
 router = APIRouter(prefix="/api/studio", tags=["document-studio"])
@@ -81,6 +89,8 @@ def company_profile(_: User = Depends(reader), db: Session = Depends(get_db)):
 
 @router.put("/company")
 def update_company(payload: IdentityUpdate, user: User = Depends(company_manager), db: Session = Depends(get_db)):
+    from .publication import lock_company
+    lock_company(db)
     identity = payload.identity.model_dump()
     ids = set(payload.identity.identity_image_ids)
     ids.update(i for i in (payload.identity.primary_logo_id, payload.identity.secondary_logo_id) if i)
@@ -135,14 +145,17 @@ def image_content(image_id: int, _: User = Depends(reader), db: Session = Depend
 
 @router.get("/schema")
 def layout_schema(_: User = Depends(reader)):
-    return {"schema_version": 1, "schema": Layout.model_json_schema(),
+    return {"schema_version": 3, "schema": Layout.model_json_schema(),
             "fields": [{"code": code, "group": group} for code, group in FIELD_CATALOG.items()],
-            "supported_document_types": SUPPORTED_TYPES, "renderer_enabled": False}
+            "supported_document_types": SUPPORTED_TYPES, "renderer_enabled": True}
 
 
 @router.get("/templates")
 def templates(_: User = Depends(reader), db: Session = Depends(get_db)):
-    rows = db.scalars(select(DocumentTemplate).options(selectinload(DocumentTemplate.versions))
+    selected = {}
+    for item in db.scalars(select(StudioActivation).order_by(StudioActivation.revision.desc())):
+        selected.setdefault((item.document_type, item.language), item)
+    rows = db.scalars(select(DocumentTemplate).options(selectinload(DocumentTemplate.versions).defer(DocumentTemplateVersion.source_content))
                       .order_by(DocumentTemplate.document_type, DocumentTemplate.code))
     return [{"id": t.id, "code": t.code, "document_type": t.document_type,
         "name_bg": t.name_bg, "name_en": t.name_en, "name_ru": t.name_ru,
@@ -153,6 +166,12 @@ def templates(_: User = Depends(reader), db: Session = Depends(get_db)):
             "change_note": v.change_note, "created_at": v.created_at,
             "created_by_id": v.created_by_id, "published_at": v.published_at,
             "source_filename": v.source_filename, "numbering_rule": v.numbering_rule,
+            "studio": bool(v.layout_contract.get("studio")),
+            "active": bool((selection := selected.get((t.document_type, v.language))) and selection.version_id == v.id),
+            "active_version_id": selection.version_id if selection and selection.selection_kind == "STUDIO" else None,
+            "selection_revision": selection.revision if selection else 0,
+            "selection_kind": selection.selection_kind if selection else "LEGACY",
+            "validation_report": v.validation_report if v.layout_contract.get("studio") else None,
             "effective_from": v.effective_from, "effective_to": v.effective_to,
             "download_endpoint": f"/studio/versions/{v.id}/source"}
             for v in sorted(t.versions, key=lambda v: (v.language, v.version), reverse=True)]} for t in rows]
@@ -226,7 +245,7 @@ def import_docx(template_id: int, payload: DocxImport, user: User = Depends(mana
 def draft_output(d: DocumentEditorDraft):
     return {key: getattr(d, key) for key in ("id", "template_id", "base_version_id", "title",
         "language", "schema_version", "layout", "revision", "created_by_id", "updated_by_id",
-        "created_at", "updated_at")} | {"status": "DRAFT", "renderer_enabled": False}
+        "created_at", "updated_at")} | {"status": "DRAFT", "renderer_enabled": True}
 
 
 @router.get("/templates/{template_id}/drafts")
@@ -242,12 +261,23 @@ def create_draft(template_id: int, payload: DraftCreate, user: User = Depends(ma
         fail("studio_not_found", 404)
     if template.document_type not in SUPPORTED_TYPES:
         fail("studio_workflow_unsupported")
+    from .starter_layouts import professional_layout
+    profile = db.get(CompanyProfile, 1)
+    identity = profile.identity if profile else {}
+    logo_ids = [identity[k] for k in ("primary_logo_id", "secondary_logo_id") if identity.get(k)]
+    sizes = {image.id: (image.width, image.height) for image in db.scalars(select(CompanyBrandImage).where(CompanyBrandImage.id.in_(logo_ids)))}
+    layout = (professional_layout(template.document_type, payload.language, identity, sizes)
+        if payload.design == "professional" else initial_layout(template.document_type)).model_dump()
     if payload.base_version_id:
         base = db.get(DocumentTemplateVersion, payload.base_version_id)
         if base is None or base.template_id != template_id or base.language != payload.language:
             fail("studio_base_mismatch")
-    item = DocumentEditorDraft(template_id=template_id, **payload.model_dump(),
-        layout=initial_layout(template.document_type).model_dump(), created_by_id=user.id, updated_by_id=user.id)
+        if base.layout_contract.get("studio"):
+            from ..template_engine import source_bytes
+            from .renderer import manifest_from_source
+            layout = manifest_from_source(source_bytes(base))["layout"]
+    item = DocumentEditorDraft(template_id=template_id, **payload.model_dump(exclude={"design"}),
+        layout=layout, schema_version=layout["schema_version"], created_by_id=user.id, updated_by_id=user.id)
     db.add(item)
     db.flush()
     add_audit_log(db, user, "document_editor_draft", item.id, "studio_draft_created",
@@ -274,10 +304,18 @@ def update_draft(draft_id: int, payload: DraftUpdate, user: User = Depends(manag
         validate_workflow(payload.layout, template.document_type)
     except ValueError as exc:
         fail(str(exc))
-    check_images(db, {b.image_id for b in payload.layout.blocks if b.type in {"image", "logo"}})
+    check_images(db, {b.image_id for b in walk_blocks(payload.layout.blocks) if b.type in {"image", "logo"}})
+    from types import SimpleNamespace
+
+    from .publication import snapshot
+    try:
+        snapshot(db, SimpleNamespace(layout=payload.layout.model_dump(), language=item.language), template.document_type)
+    except ValueError as exc:
+        fail(str(exc))
     result = db.execute(update(DocumentEditorDraft).where(DocumentEditorDraft.id == draft_id,
         DocumentEditorDraft.revision == payload.expected_revision).values(title=payload.title,
-        layout=payload.layout.model_dump(), revision=DocumentEditorDraft.revision + 1,
+        layout=payload.layout.model_dump(), schema_version=payload.layout.schema_version,
+        revision=DocumentEditorDraft.revision + 1,
         updated_by_id=user.id, updated_at=utcnow()))
     if result.rowcount != 1:
         db.rollback()
@@ -287,3 +325,155 @@ def update_draft(draft_id: int, payload: DraftUpdate, user: User = Depends(manag
     commit(db)
     db.refresh(item)
     return draft_output(item)
+
+
+def current_draft(db, draft_id, revision):
+    draft = db.get(DocumentEditorDraft, draft_id)
+    if draft is None:
+        fail("studio_not_found", 404)
+    if draft.revision != revision:
+        fail("studio_conflict", 409)
+    return draft
+
+
+@router.post("/drafts/{draft_id}/preview")
+def preview_draft(draft_id: int, payload: PreviewInput, user: User = Depends(reader), db: Session = Depends(get_db)):
+    from .publication import receipt, snapshot, validate_render
+    draft = current_draft(db, draft_id, payload.expected_revision)
+    template = db.get(DocumentTemplate, draft.template_id)
+    try:
+        manifest = snapshot(db, draft, template.document_type)
+        docx, pdf, report = validate_render(manifest, payload.rows, raster=True)
+    except ValueError as exc:
+        fail(str(exc) if str(exc).startswith("studio_") else "studio_invalid")
+    # No ORM mutation, official number, reservation, signer or persistent file.
+    return {"report": report, "receipt": receipt(draft, manifest, user.id),
+            "docx": base64.b64encode(docx).decode(), "pdf": base64.b64encode(pdf).decode()}
+
+
+@router.post("/drafts/{draft_id}/publish", status_code=201)
+def publish_draft(draft_id: int, payload: PublishInput, user: User = Depends(manager), db: Session = Depends(get_db)):
+    from .publication import lock_company, publication_source, snapshot, verify_receipt
+    from .renderer import digest
+    draft = current_draft(db, draft_id, payload.expected_revision)
+    template = db.get(DocumentTemplate, draft.template_id)
+    try:
+        manifest = snapshot(db, draft, template.document_type)
+        verify_receipt(payload.receipt, draft, manifest, user.id)
+        source, report = publication_source(manifest)
+    except ValueError as exc:
+        fail(str(exc) if str(exc).startswith("studio_") else "studio_invalid")
+    # Serialize against saves/publications after conversion, without publishing
+    # anything if either the workspace or company snapshot changed meanwhile.
+    result = db.execute(update(DocumentEditorDraft).where(DocumentEditorDraft.id == draft.id,
+        DocumentEditorDraft.revision == payload.expected_revision).values(revision=DocumentEditorDraft.revision + 1))
+    if result.rowcount != 1:
+        db.rollback()
+        fail("studio_conflict", 409)
+    company_revision = manifest["company"]["revision"]
+    lock_company(db)
+    current_company_revision = db.scalar(select(CompanyProfile.revision).where(CompanyProfile.id == 1)) or 0
+    if current_company_revision != company_revision:
+        db.rollback()
+        fail("studio_conflict", 409)
+    if company_revision:
+        result = db.execute(update(CompanyProfile).where(CompanyProfile.id == 1,
+            CompanyProfile.revision == company_revision).values(revision=CompanyProfile.revision))
+        if result.rowcount != 1:
+            db.rollback()
+            fail("studio_conflict", 409)
+    number = (db.scalar(select(func.max(DocumentTemplateVersion.version)).where(
+        DocumentTemplateVersion.template_id == template.id, DocumentTemplateVersion.language == draft.language)) or 0) + 1
+    now = utcnow()
+    version = DocumentTemplateVersion(template_id=template.id, version=number, language=draft.language,
+        source_content=source, source_filename="studio-template.docx", source_media_type=DOCX_MEDIA_TYPE,
+        source_sha256=digest(source), layout_contract={"studio": 1, "schema_version": manifest["layout"]["schema_version"],
+        "manifest_sha256": report["manifest_sha256"], "draft_id": draft.id, "draft_revision": payload.expected_revision},
+        required_fields=["DOCUMENT_NUMBER", "PREPARER_NAME", "SIGNATURE_STATUS", *publication_fields(template.document_type)],
+        change_note=payload.change_note, created_by_id=user.id, validation_status="PASSED",
+        validation_report=report, validated_at=now, validated_by_id=user.id,
+        is_published=True, published_by_id=user.id, published_at=now)
+    db.add(version)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        fail("studio_conflict", 409)
+    add_audit_log(db, user, "document_template_version", version.id, "studio_version_published",
+        {"draft_id": draft.id, "draft_revision": payload.expected_revision, "source_sha256": version.source_sha256,
+         "company_revision": company_revision, "change_note": payload.change_note})
+    commit(db)
+    return {"id": version.id, "version": number, "source_sha256": version.source_sha256,
+            "draft_revision": payload.expected_revision + 1, "active": False, "validation_report": report}
+
+
+@router.post("/versions/{version_id}/activate", status_code=201)
+def activate_version(version_id: int, payload: ActivationInput, user: User = Depends(manager), db: Session = Depends(get_db)):
+    from ..template_engine import source_bytes
+    from .publication import active_selection
+    from .renderer import digest, manifest_from_source
+    version = db.get(DocumentTemplateVersion, version_id)
+    if version is None:
+        fail("studio_not_found", 404)
+    if not version.layout_contract.get("studio") or not version.is_published or version.validation_status != "PASSED" or not version.template.is_active:
+        fail("studio_activation_invalid")
+    try:
+        source = source_bytes(version)
+        manifest = manifest_from_source(source)
+        validate_publication_fields(Layout.model_validate(manifest["layout"]), version.template.document_type)
+        if (digest(source) != version.source_sha256 or manifest["document_type"] != version.template.document_type
+                or manifest["language"] != version.language or not version.validation_report.get("valid")):
+            raise ValueError
+    except (ValueError, KeyError, TypeError):
+        fail("studio_activation_invalid")
+    selected = active_selection(db, version.template.document_type, version.language)
+    if ((selected.version_id if selected and selected.selection_kind == "STUDIO" else None) != payload.expected_version_id
+            or (payload.expected_revision is not None and (selected.revision if selected else 0) != payload.expected_revision)):
+        fail("studio_conflict", 409)
+    activation = StudioActivation(document_type=version.template.document_type, language=version.language,
+        revision=selected.revision + 1 if selected else 1, version_id=version.id,
+        created_by_id=user.id, reason=payload.reason)
+    db.add(activation)
+    add_audit_log(db, user, "document_template_version", version.id, "studio_version_activated",
+        {"previous_version_id": selected.version_id if selected else None,
+         "previous_selection_kind": selected.selection_kind if selected else "LEGACY",
+         "previous_revision": selected.revision if selected else 0,
+         "new_revision": activation.revision, "reason": payload.reason})
+    commit(db)
+    return {"version_id": version.id, "active": True, "revision": activation.revision}
+
+
+@router.get("/selections/{document_type}/{language}")
+def selection_history(document_type: str, language: str, _: User = Depends(reader), db: Session = Depends(get_db)):
+    if document_type not in SUPPORTED_TYPES or language not in {"bg", "en", "ru"}:
+        fail("studio_not_found", 404)
+    return [{"revision": s.revision, "selection_kind": s.selection_kind, "version_id": s.version_id,
+        "created_by_id": s.created_by_id, "created_at": s.created_at, "reason": s.reason}
+        for s in db.scalars(select(StudioActivation).where(StudioActivation.document_type == document_type,
+            StudioActivation.language == language).order_by(StudioActivation.revision.desc()))]
+
+
+@router.post("/selections/{document_type}/{language}/restore-legacy", status_code=201)
+def restore_legacy(document_type: str, language: str, payload: RestoreInput,
+                   user: User = Depends(manager), db: Session = Depends(get_db)):
+    from ..documents.templates import legacy_template_version
+    from .publication import active_selection
+    if document_type not in SUPPORTED_TYPES or language not in {"bg", "en", "ru"}:
+        fail("studio_not_found", 404)
+    selected = active_selection(db, document_type, language)
+    if (selected is None or selected.selection_kind != "STUDIO" or selected.revision != payload.expected_revision
+            or selected.version_id != payload.expected_version_id):
+        fail("studio_conflict", 409)
+    from ..documents.common import ConfirmedTemplateUnavailableError
+    try:
+        legacy = legacy_template_version(db, document_type, language)
+    except ConfirmedTemplateUnavailableError:
+        fail("studio_activation_invalid")
+    entry = StudioActivation(document_type=document_type, language=language, revision=selected.revision + 1,
+        version_id=legacy.id, selection_kind="LEGACY", created_by_id=user.id, reason=payload.reason)
+    db.add(entry)
+    add_audit_log(db, user, "document_template_version", legacy.id, "studio_legacy_restored",
+        {"document_type": document_type, "language": language, "previous_version_id": selected.version_id,
+         "previous_revision": selected.revision, "legacy_version_id": legacy.id, "reason": payload.reason})
+    commit(db)
+    return {"version_id": legacy.id, "selection_kind": "LEGACY", "revision": entry.revision}

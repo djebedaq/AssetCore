@@ -259,6 +259,12 @@ def make_part_request_documents(
         "DOCUMENT_NUMBER": number,
         "CREATION_DATE": request.created_at.strftime("%d.%m.%Y"),
         "MACHINE_NAME": machine.name if machine else "",
+        "EQUIPMENT_TYPE": machine.category if machine else "",
+        "MACHINE_LOCATION": machine.location.name if machine and machine.location else "",
+        "REQUESTER_NAME": request.requested_by.full_name if request.requested_by else "",
+        "DEPARTMENT": "",
+        "APPROVAL_DATE": request.decided_at.strftime("%d.%m.%Y") if request.decided_at else "",
+        "APPROVER_NAME": request.decided_by.full_name if request.decided_by else "",
         "MACHINE_NUMBER": machine.inventory_number if machine else "",
         "BRAND": machine.brand if machine else "",
         "MODEL": machine.model or "" if machine else "",
@@ -280,11 +286,16 @@ def make_part_request_documents(
         [line.position or "", line.part_number or "", _part_request_line_description(line, language), f"{line.quantity:g} {line.unit or ''}".strip()]
         for line in request.lines
     ]
+    if template.layout_contract.get("studio"):
+        line_rows = [{"position": line.position or "", "part_number": line.part_number or "",
+            "description": _part_request_line_description(line, language), "quantity": line.quantity,
+            "unit": line.unit or "", "note": line.note or ""} for line in request.lines]
     appendix = prepare_appendix(db, request)
     docx = append_docx(
         render_docx(template, values, {"REQUEST_LINES": line_rows}), appendix, language
     )
-    pdf = convert_docx_to_pdf(docx) or build_part_request_pdf(
+    from ..document_studio.renderer import pdf_required
+    pdf = pdf_required(docx) if template.layout_contract.get("studio") else convert_docx_to_pdf(docx) or build_part_request_pdf(
         request, language, appendix=appendix
     )
     snapshot = _request_snapshot(request, appendix)

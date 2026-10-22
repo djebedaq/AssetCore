@@ -62,6 +62,11 @@ def normalize_language(value: str | None) -> str:
 
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "studio.signature_identity_mismatch": {
+        "bg": "Подписващият и длъжността трябва да съответстват на одобрителния snapshot на КК. Историческите имена не се подменят.",
+        "en": "The signer and job title must match the KK approval snapshot. Historical identities are not replaced.",
+        "ru": "Подписант и должность должны соответствовать снимку утверждения КК. Исторические имена не заменяются.",
+    },
     "auth.invalid_or_expired": {
         "bg": "Невалидна или изтекла сесия",
         "en": "Invalid or expired session",

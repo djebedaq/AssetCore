@@ -62,6 +62,8 @@ def _generated_documents(
     transfer_id: int | None = None,
     batch_id: int | None = None,
 ) -> list[GeneratedDocument]:
+    snapshot = _studio_provenance(snapshot, docx,
+        getattr(template_version, "source_sha256", None) or snapshot.get("template_sha256"))
     documents = []
     stem = safe_filename(number)
     for format_name, media_type, content in (
@@ -117,7 +119,8 @@ def _register_official_version(
         )
     preparer = db.get(User, created_by_id)
     preparer_values = _preparer_values(db, created_by_id) if prepared_by_snapshot is None else None
-    official_snapshot = dict(snapshot)
+    template = db.get(DocumentTemplateVersion, template_version_id) if template_version_id else None
+    official_snapshot = _studio_provenance(snapshot, docx, template.source_sha256 if template else None)
     official_snapshot["prepared_by"] = prepared_by_snapshot or {
         "user_id": preparer.id,
         "first_name": preparer.first_name,
@@ -189,3 +192,17 @@ def _register_official_version(
     db.flush()
     set_current_version(db, document, version)
     return document
+
+
+def _studio_provenance(snapshot, docx, source_sha256):
+    result = dict(snapshot)
+    if not docx.startswith(b"PK"):
+        return result
+    from ..document_studio.renderer import canonical, digest, manifest_from_source
+    manifest = manifest_from_source(docx)
+    if manifest:
+        result["studio"] = {"renderer": manifest["renderer"], "source_sha256": source_sha256,
+            "manifest_sha256": digest(canonical(manifest)), "schema_version": manifest["layout"]["schema_version"],
+            "company_revision": manifest["company"]["revision"],
+            "image_sha256": {key: image["sha256"] for key, image in manifest["images"].items()}}
+    return result

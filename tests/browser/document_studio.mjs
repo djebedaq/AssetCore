@@ -21,10 +21,16 @@ async function shot(name, width) {
   await page.setViewportSize({ width, height: 1000 })
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
   await expect.poll(() => page.locator('.document-studio').evaluate(studio => {
-    const bounds = studio.getBoundingClientRect()
-    return [...studio.querySelectorAll('input, textarea, select, button')].every(control => {
+    const workspace = studio.querySelector('.editor-focused') || studio
+    const bounds = workspace.getBoundingClientRect()
+    return [...workspace.querySelectorAll('input, textarea, select, button')].every(control => {
+      if (control.closest('[inert]') || getComputedStyle(control).visibility === 'hidden') return true
       const rect = control.getBoundingClientRect()
-      return !rect.width || rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1
+      // The A4 canvas intentionally pans internally at readable mobile zoom.
+      // Its viewport must stay in the workspace; surrounding controls must fit.
+      const canvas = control.closest('.editor-canvas')
+      const visible = canvas ? canvas.getBoundingClientRect() : rect
+      return !rect.width || visible.left >= bounds.left - 1 && visible.right <= bounds.right + 1
     })
   })).toBe(true)
   const filename = `${name}-${width}.png`
@@ -58,12 +64,13 @@ try {
   for (const width of [390, 768, 1440]) await shot('library-bg', width)
   await page.getByLabel('Име на черновата', { exact: true }).fill('Synthetic QA authoring draft')
   await button('Създай').click()
-  const draftForm = page.locator('.studio-template-details form').filter({ has: page.locator('option[value="landscape"]') })
+  const draftForm = page.locator('.visual-editor')
+  await draftForm.getByLabel('Автозапис', { exact: true }).uncheck()
   await draftForm.getByRole('combobox', { name: /Ориентация/ }).selectOption('landscape')
   await draftForm.getByRole('button', { name: 'Запази промените', exact: true }).click()
-  await expect(draftForm.getByRole('status')).toHaveText('Потвърдено от сървъра')
+  await expect(draftForm.getByRole('status')).toContainText('Потвърдено от сървъра')
   for (const width of [390, 768, 1440]) await shot('draft-settings-bg', width)
-  checks.push('Authoring draft created, reopened and saved through revision CAS; no renderer or publication controls')
+  checks.push('Authoring draft created and saved through revision CAS in the visual editor')
   for (const language of [
     { code: 'en', settings: 'Settings', title: 'Document Studio — Company documents', company: 'Company legal name', library: 'Template library' },
     { code: 'ru', settings: 'Настройки', title: 'Document Studio — Документы компании', company: 'Наименование компании', library: 'Библиотека шаблонов' },

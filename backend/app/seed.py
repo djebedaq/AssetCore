@@ -381,6 +381,7 @@ def _seed_document_templates(db: Session) -> None:
                 DocumentTemplateVersion.template_id == template.id,
                 DocumentTemplateVersion.language == language.value,
                 DocumentTemplateVersion.id != existing.id,
+                DocumentTemplateVersion.layout_contract["studio"].as_integer().is_(None),
             ).update(
                 {"is_published": False, "published_by_id": None, "published_at": None},
                 synchronize_session=False,

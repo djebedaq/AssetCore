@@ -7,6 +7,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 from copy import deepcopy
 from pathlib import Path
@@ -64,6 +65,18 @@ def _load_docx(content: bytes) -> DocumentObject:
 
 
 def validate_template(version: DocumentTemplateVersion) -> dict:
+    if version.layout_contract and version.layout_contract.get("studio"):
+        from .document_studio.renderer import digest, manifest_from_source
+        try:
+            content = source_bytes(version)
+            manifest = manifest_from_source(content)
+            if (digest(content) != version.source_sha256 or manifest is None
+                    or manifest["language"] != version.language
+                    or manifest["document_type"] != version.template.document_type):
+                raise ValueError
+            return {"valid": True, "errors": [], "warnings": [], "tokens": [], "source_sha256": digest(content)}
+        except (ValueError, KeyError, TypeError):
+            return {"valid": False, "errors": ["studio_source_invalid"], "warnings": [], "tokens": []}
     errors: list[str] = []
     warnings: list[str] = []
     try:
@@ -220,6 +233,14 @@ def render_docx(
     values: dict[str, object],
     tables: dict[str, list[list[object]]] | None = None,
 ) -> bytes:
+    if version.layout_contract.get("studio"):
+        from .document_studio.renderer import render_source
+        if not validate_template(version)["valid"]:
+            raise TemplateValidationError("studio_source_invalid")
+        try:
+            return render_source(source_bytes(version), values, tables)
+        except ValueError as exc:
+            raise TemplateValidationError(str(exc)) from None
     validation = validate_template(version)
     if not validation["valid"]:
         raise TemplateValidationError("; ".join(validation["errors"]))
@@ -246,10 +267,14 @@ def render_docx(
     return rendered
 
 
-def convert_docx_to_pdf(docx: bytes) -> bytes | None:
+def convert_docx_to_pdf(docx: bytes, *, bounded: bool = False) -> bytes | None:
     """Convert from the filled DOCX with an isolated, bounded LO lifecycle."""
     executable = shutil.which("soffice") or shutil.which("libreoffice")
     if executable is None:
+        return None
+    # Studio requires process memory/CPU/file limits. Local Windows users can
+    # use the Linux converter container; never silently run it unbounded.
+    if bounded and os.name == "nt":
         return None
     with _LIBREOFFICE_LOCK, tempfile.TemporaryDirectory(
         prefix="assetcore-docx-"
@@ -270,6 +295,10 @@ def convert_docx_to_pdf(docx: bytes) -> bytes | None:
                 "XDG_DATA_HOME": str(profile / "data"),
             }
         )
+        if bounded:
+            # Keep LO's worker pool within the converter's memory budget even
+            # on hosts exposing many logical CPUs. Do not inherit host tuning.
+            environment["MAX_CONCURRENCY"] = "2"
         command = [
             executable,
             "--headless",
@@ -284,6 +313,8 @@ def convert_docx_to_pdf(docx: bytes) -> bytes | None:
             str(output),
             str(source),
         ]
+        if bounded:
+            command = [sys.executable, str(Path(__file__).parent / "document_studio" / "converter_limits.py"), *command]
         process_options: dict[str, object] = {
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE,

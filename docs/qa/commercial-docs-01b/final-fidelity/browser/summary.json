@@ -1,0 +1,23 @@
+[
+  {
+    "scenario": "foundation",
+    "passed": true,
+    "checks": 4,
+    "screenshots": 22,
+    "verified_inventory_count": 19
+  },
+  {
+    "scenario": "editor-v2",
+    "passed": true,
+    "checks": 8,
+    "screenshots": 22,
+    "verified_inventory_count": 19
+  },
+  {
+    "scenario": "professional-v3",
+    "passed": true,
+    "checks": 4,
+    "screenshots": 22,
+    "verified_inventory_count": 19
+  }
+]

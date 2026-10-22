@@ -8,6 +8,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..localization import status_label
 from ..models import (
     DocumentType,
     GeneratedDocument,
@@ -73,6 +74,9 @@ def make_repair_documents(
         "leaks_detected": repair.leaks_detected,
         "electrical_test_result": repair.electrical_test_result,
         "functional_test_result": repair.functional_test_result,
+        "test_details": repair.test_details,
+        "machine_identity": {key: getattr(repair.machine, key, None) for key in (
+            "inventory_number", "name", "category", "brand", "model", "serial_number", "manufacturer", "pressure_bar", "ownership")},
         "diagnosis_minutes": repair.diagnosis_minutes,
         "repair_minutes": repair.repair_minutes,
         "testing_minutes": repair.testing_minutes,
@@ -193,12 +197,18 @@ def make_repair_documents(
         "DOCUMENT_NUMBER": number,
         "CREATION_DATE": date_value.strftime("%d.%m.%Y"),
         "MACHINE_NAME": machine.name,
+        "EQUIPMENT_TYPE": machine.category or "",
+        "MACHINE_LOCATION": machine.location.name if machine.location else "",
         "MACHINE_NUMBER": machine.inventory_number,
         "BRAND": machine.brand,
         "MODEL": machine.model or "",
         "SERIAL_NUMBER": machine.serial_number or "",
         "PRESSURE_BAR": machine.pressure_bar if machine.pressure_bar is not None else "",
         "BATCH_REFERENCE": "",
+        "MODEL_DISPLAY": " ".join(v for v in (machine.brand, machine.model) if v),
+        "MANUFACTURER": getattr(machine, "manufacturer", None) or machine.brand or "",
+        "LEFT_SIGNER_ROLE": "", "RIGHT_SIGNER_ROLE": "",
+        "LEFT_SIGNER_ORGANIZATION": "", "RIGHT_SIGNER_ORGANIZATION": "",
         "REPAIR_REFERENCE": repair.repair_reference or base,
         "SOURCE_RETURN_REFERENCE": source_reference,
         "ACCEPTANCE_DATE": repair.opened_at.strftime("%d.%m.%Y"),
@@ -211,13 +221,15 @@ def make_repair_documents(
         "REMOVED_PARTS": repair.removed_parts_text or "",
         "DIAGNOSTIC_CLEANING": repair.diagnostic_cleaning or "",
         "DIAGNOSIS": repair.diagnosis or "",
+        "SYMPTOMS": repair.symptoms or "",
+        "TEST_DETAILS": repair.test_details or "",
         "DIAGNOSIS_DURATION": _repair_duration(repair.diagnosis_minutes, language),
         "WORK_PERFORMED": repair.work_performed or "",
         "REPAIR_DURATION": _repair_duration(repair.repair_minutes, language),
         "TESTING_DURATION": _repair_duration(repair.testing_minutes, language),
-        "TOTAL_WORK_DURATION": _repair_duration(total_work_minutes, language),
+        "TOTAL_WORK_DURATION": _repair_duration(total_work_minutes if any(v is not None for v in (repair.diagnosis_minutes, repair.repair_minutes, repair.testing_minutes)) or not template.layout_contract.get("studio") else None, language),
         "PARTICIPANT_TOTAL_DURATION": _repair_duration(
-            participant_total_minutes, language
+            participant_total_minutes if any(p.minutes_worked is not None for p in repair.participants) or not template.layout_contract.get("studio") else None, language
         ),
         "TEST_RESULT": _repair_test_summary(repair, language),
         "CONDITION_AFTER": repair.condition_after or repair.result or "",
@@ -229,7 +241,7 @@ def make_repair_documents(
         "REPAIRER_NAMES": participant_names,
         "APPROVED_BY_NAME": repair.approved_by.full_name if repair.approved_by else "",
         "APPROVED_BY_JOB_TITLE": repair.approved_by.job_title if repair.approved_by else "",
-        "REPAIR_STATUS": repair.status,
+        "REPAIR_STATUS": status_label(repair.status, language) if template.layout_contract.get("studio") else repair.status,
         "LEFT_SIGNER_NAME": repair.responsible_user.full_name if repair.responsible_user else "",
         "LEFT_SIGNER_JOB_TITLE": repair.responsible_user.job_title if repair.responsible_user else "",
         "RIGHT_SIGNER_NAME": "",
@@ -239,15 +251,17 @@ def make_repair_documents(
         "SIGNATURE_STATUS": _signature_status(language, finalized_internal=True),
     }
     values.update(_preparer_values(db, created_by_id))
-    event_type_labels = {
-        "ACCEPTED": "Създаване",
-        "STATUS_CHANGE": "Промяна на статус",
-        "PARTS": "Използвани части",
-        "DIAGNOSIS": "Диагностика",
-        "WORK": "Извършена работа",
-        "TEST": "Тест",
-        "COMPLETED": "Приключване",
+    event_labels = {
+        "ACCEPTED": ("Създаване", "Created", "Создание"),
+        "STATUS_CHANGE": ("Промяна на статус", "Status change", "Изменение статуса"),
+        "PARTS": ("Използвани части", "Parts used", "Использованные детали"),
+        "DIAGNOSIS": ("Диагностика", "Diagnosis", "Диагностика"),
+        "WORK": ("Извършена работа", "Work performed", "Выполненные работы"),
+        "TEST": ("Тест", "Test", "Проверка"),
+        "COMPLETED": ("Приключване", "Completion", "Завершение"),
     }
+    event_language = ("bg", "en", "ru").index(_language(language)) if template.layout_contract.get("studio") else 0
+    event_type_labels = {key: labels[event_language] for key, labels in event_labels.items()}
     event_rows = [["Дата", "Тип", "Описание"]] + [
         [
             event.created_at.strftime("%d.%m.%Y %H:%M"),
@@ -285,11 +299,12 @@ def make_repair_documents(
         {
             "REPAIR_EVENTS": event_rows,
             "PARTS_USED": part_rows,
-            "REPAIR_PARTICIPANTS": participant_rows,
-            "REPAIR_ATTACHMENTS": attachment_rows,
+            "REPAIR_PARTICIPANTS": ([{"name": p.full_name_snapshot, "job_title": p.job_title_snapshot or "", "contribution": p.contribution or "", "duration": _repair_duration(p.minutes_worked, language)} for p in repair.participants] if template.layout_contract.get("studio") else participant_rows),
+            "REPAIR_ATTACHMENTS": ([{"filename": a.filename, "stage": a.stage, "description": a.caption or ""} for a in repair.attachments] if template.layout_contract.get("studio") else attachment_rows),
         },
     )
-    pdf = convert_docx_to_pdf(docx) or build_repair_protocol_pdf(
+    from ..document_studio.renderer import pdf_required
+    pdf = pdf_required(docx) if template.layout_contract.get("studio") else convert_docx_to_pdf(docx) or build_repair_protocol_pdf(
         repair, language, source_reference
     )
     _register_official_version(

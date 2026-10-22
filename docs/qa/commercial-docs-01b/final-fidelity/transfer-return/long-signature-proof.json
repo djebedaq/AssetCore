@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "source_manifest_unchanged": true,
+  "unsigned_had_no_signature_images": true,
+  "signed_via_existing_finalizer": true,
+  "placements": [
+    {
+      "page": 2,
+      "bounds": [
+        459.25,
+        153.75079345703125,
+        541.4500122070312,
+        179.25079345703125
+      ]
+    },
+    {
+      "page": 2,
+      "bounds": [
+        459.25,
+        273.10076904296875,
+        541.4500122070312,
+        298.60076904296875
+      ]
+    }
+  ],
+  "docx_sha256": "dbcd0b4ff15458dadaec635a3b53446ca6b083e4da6366f431269d397b5fb63a",
+  "pdf_sha256": "ca8aa64e02588624d60c2e751794f72b1ba2a401d46e2f95ec7c03780474dab0"
+}

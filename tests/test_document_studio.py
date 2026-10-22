@@ -39,7 +39,7 @@ def create_template(client, headers):
 
 def create_draft(client, headers, template_id):
     response = client.post(f'/api/studio/templates/{template_id}/drafts', headers=headers,
-                           json={'title': 'QA draft', 'language': 'bg'})
+                           json={'title': 'QA draft', 'language': 'bg', 'design': 'blank'})
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -152,7 +152,7 @@ def test_permissions_without_parallel_owner_role(client, session_factory, role, 
 def test_draft_roundtrip_and_immutable_template_separation(client, auth_headers, session_factory):
     template_id = create_template(client, auth_headers)
     draft = create_draft(client, auth_headers, template_id)
-    assert draft['status'] == 'DRAFT' and draft['renderer_enabled'] is False
+    assert draft['status'] == 'DRAFT' and draft['renderer_enabled'] is True
     layout = copy.deepcopy(draft['layout'])
     layout['page']['orientation'] = 'landscape'
     payload = {'expected_revision': 1, 'title': 'QA updated', 'layout': layout}
@@ -164,7 +164,7 @@ def test_draft_roundtrip_and_immutable_template_separation(client, auth_headers,
     assert client.get(f"/api/studio/drafts/{draft['id']}", headers=auth_headers).json()['title'] == 'QA updated'
     with session_factory() as db:
         assert db.scalar(select(func.count(DocumentTemplateVersion.id)).where(DocumentTemplateVersion.template_id == template_id)) == 0
-    assert client.post(f"/api/studio/drafts/{draft['id']}/publish", headers=auth_headers).status_code in (404, 405)
+    assert client.post(f"/api/studio/drafts/{draft['id']}/publish", headers=auth_headers).status_code == 422
 
 
 @pytest.mark.parametrize('mutation', ['signature', 'system', 'expression', 'javascript', 'absolute', 'duplicate', 'width', 'wrong_workflow'])
@@ -199,6 +199,10 @@ def test_typed_flow_table_and_unknown_versions():
     parsed = Layout.model_validate(layout)
     assert parsed.blocks[-1].repeat_header and parsed.blocks[-1].flow
     layout['schema_version'] = 2
+    assert Layout.model_validate(layout).schema_version == 2
+    layout['schema_version'] = 3
+    assert Layout.model_validate(layout).schema_version == 3
+    layout['schema_version'] = 4
     with pytest.raises(ValidationError):
         Layout.model_validate(layout)
 

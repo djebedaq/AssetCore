@@ -4,46 +4,11 @@ import { DownloadButton, filePayload } from '../../industrialUi'
 import { useI18n, type TranslationKey } from '../../i18n'
 import type { Locale } from '../../locale'
 import { hasPermission } from '../../permissions'
+import { VisualEditor } from './VisualEditor'
 import { studioError, type Draft, type StudioTemplate } from './shared'
 
 const workflows = ['TRANSFER_ISSUE', 'TRANSFER_RETURN', 'REPAIR_PROTOCOL', 'PART_REQUEST'] as const
 const typeKey = (value: string): TranslationKey => workflows.includes(value as typeof workflows[number]) ? `studio.${value}` as TranslationKey : 'studio.OTHER'
-
-function DraftSettings({ draft, saved, onDirty, close }: { draft: Draft; saved: (d: Draft) => void; onDirty: (d: boolean) => void; close: () => void }) {
-  const { t } = useI18n()
-  const [current, setCurrent] = useState(draft)
-  const [busy, setBusy] = useState(false)
-  const [confirmed, setConfirmed] = useState(false)
-  const [error, setError] = useState<TranslationKey | null>(null)
-  const editable = hasPermission('templates.manage')
-  const dirty = JSON.stringify(current) !== JSON.stringify(draft)
-  useEffect(() => { onDirty(dirty || busy); return () => onDirty(false) }, [dirty, busy, onDirty])
-  async function save(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setConfirmed(false); setError(null)
-    try {
-      const next = await api<Draft>(`/studio/drafts/${draft.id}`, { method: 'PUT', body: JSON.stringify({ expected_revision: draft.revision, title: current.title, layout: current.layout }) })
-      setCurrent(next); saved(next); setConfirmed(true)
-    } catch (e) { setError(studioError(e)) } finally { setBusy(false) }
-  }
-  async function reload() {
-    if (dirty && !window.confirm(t('studio.leave'))) return
-    setBusy(true); setConfirmed(false)
-    try { const next = await api<Draft>(`/studio/drafts/${draft.id}`); setCurrent(next); saved(next); setError(null) }
-    catch (e) { setError(studioError(e)) } finally { setBusy(false) }
-  }
-  return <form className="studio-inline-form" onSubmit={save}>
-    <h4>{t('studio.drafts')} · {t('studio.revision', { number: draft.revision })}</h4>
-    {error && <p className="error" role="alert">{t(error)}</p>}
-    <fieldset className="studio-fields" disabled={!editable || busy}>
-      <label>{t('studio.draftTitle')}<input required maxLength={255} value={current.title} onChange={e => { setCurrent({ ...current, title: e.target.value }); setConfirmed(false) }} /></label>
-      <label>{t('studio.orientation')}<select value={current.layout.page.orientation} onChange={e => { setCurrent({ ...current, layout: { ...current.layout, page: { ...current.layout.page, orientation: e.target.value as 'portrait' | 'landscape' } } }); setConfirmed(false) }}><option value="portrait">{t('studio.portrait')}</option><option value="landscape">{t('studio.landscape')}</option></select></label>
-      <label>{t('studio.margin')}<input type="number" min={5} max={40} step={0.5} required value={current.layout.page.margin_mm} onChange={e => { setCurrent({ ...current, layout: { ...current.layout, page: { ...current.layout.page, margin_mm: Number(e.target.value) } } }); setConfirmed(false) }} /></label>
-    </fieldset>
-    <b>{t('studio.protected')}</b><ul className="studio-protected">{current.layout.blocks.filter(b => b.field || b.slot).map(b => <li key={b.id}>{t(`studio.field.${b.field || b.slot}` as TranslationKey)}</li>)}</ul>
-    <p className="muted">{t('studio.foundationHint')}</p>
-    <div className="actions studio-savebar"><span role="status">{t(busy ? 'studio.saving' : dirty ? 'studio.unsaved' : confirmed ? 'studio.saved' : 'studio.DRAFT')}</span><button type="button" className="secondary" disabled={busy} onClick={() => void reload()}>{t('studio.reload')}</button><button type="button" className="secondary" disabled={busy} onClick={() => { if (!dirty || window.confirm(t('studio.leave'))) close() }}>{t('studio.close')}</button>{editable && <button className="primary" disabled={busy || !dirty}>{t('studio.save')}</button>}</div>
-  </form>
-}
 
 function TemplateDetails({ template, reload, onDirty }: { template: StudioTemplate; reload: () => Promise<void>; onDirty: (d: boolean) => void }) {
   const { t, locale } = useI18n()
@@ -51,6 +16,8 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
   const [language, setLanguage] = useState<Locale>(locale)
   const [title, setTitle] = useState('')
   const [base, setBase] = useState('')
+  const [design, setDesign] = useState('professional')
+  const [selections, setSelections] = useState<{ revision: number; selection_kind: string; version_id: number; created_at: string; reason: string }[]>([])
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [opened, setOpened] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
@@ -58,6 +25,7 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
   const [file, setFile] = useState<File | null>(null)
   const [note, setNote] = useState('')
   const [draftDirty, setDraftDirty] = useState(false)
+  const [activationNote, setActivationNote] = useState('')
   const formDirty = !!title || !!file || !!note
   useEffect(() => { onDirty(draftDirty || formDirty || busy); return () => onDirty(false) }, [draftDirty, formDirty, busy, onDirty])
   useEffect(() => {
@@ -65,10 +33,14 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
     void api<Draft[]>(`/studio/templates/${template.id}/drafts`).then(rows => { if (live) setDrafts(rows) }).catch(e => { if (live) setError(studioError(e)) })
     return () => { live = false }
   }, [template.id])
+  useEffect(() => {
+    if (!workflows.includes(template.document_type as typeof workflows[number])) { setSelections([]); return }
+    void api<typeof selections>(`/studio/selections/${template.document_type}/${language}`).then(setSelections).catch(e => setError(studioError(e)))
+  }, [template.document_type, template.versions, language])
   async function create(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(null)
     try {
-      const item = await api<Draft>(`/studio/templates/${template.id}/drafts`, { method: 'POST', body: JSON.stringify({ title, language, base_version_id: base ? Number(base) : null }) })
+      const item = await api<Draft>(`/studio/templates/${template.id}/drafts`, { method: 'POST', body: JSON.stringify({ title, language, design, base_version_id: base ? Number(base) : null }) })
       setDrafts(current => [item, ...current]); setOpened(item); setTitle('')
     } catch (e) { setError(studioError(e)) } finally { setBusy(false) }
   }
@@ -85,25 +57,39 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
     } catch (e) { setError(studioError(e)) } finally { setBusy(false) }
   }
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(/[Z+]$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`))
+  if (opened) return <VisualEditor key={opened.id} draft={opened} documentType={template.document_type} published={reload} saved={next => { setOpened(next); setDrafts(rows => rows.map(row => row.id === next.id ? next : row)) }} onDirty={setDraftDirty} close={() => setOpened(null)} />
   return <section className="panel studio-template-details">
     <div className="panel-title"><div><h3>{template[`name_${locale}`] || template.name_bg}</h3><small>{template.code} · {t(typeKey(template.document_type))}</small></div></div>
     {error && <p className="error" role="alert">{t(error)}</p>}
     <h4>{t('studio.versions')}</h4>
+    {editable && template.versions.some(v => v.studio) && <label>{t('editor.activationReason')}<textarea maxLength={2000} value={activationNote} onChange={e => setActivationNote(e.target.value)} /></label>}
     {!template.versions.length && <p className="muted">{t('studio.noVersions')}</p>}
     {template.versions.map(version => <article className="studio-version" key={version.id}>
       <div className="studio-version-heading"><b>{t('studio.version', { number: version.version })} · {t(`language.${version.language}`)}</b><span className={`studio-status ${version.status}`}>{t(`studio.${version.status}`)}</span><span className="studio-status">{t(`studio.${version.validation_status}`)}</span></div>
       {version.change_note && <p>{version.change_note}</p>}
       <dl><dt>{t('studio.created')}</dt><dd>{date(version.created_at)}</dd>{version.published_at && <><dt>{t('studio.published')}</dt><dd>{date(version.published_at)}</dd></>}{version.numbering_rule && <><dt>{t('studio.numbering')}</dt><dd>{version.numbering_rule}</dd></>}<dt>SHA-256</dt><dd><code>{version.source_sha256 || t('common.noValue')}</code></dd></dl>
+      {version.active && <p className="studio-status PUBLISHED">{t(version.studio ? 'editor.active' : 'editor.legacyActive')}</p>}
+      {editable && version.active && version.studio && <button className="secondary" disabled={busy || activationNote.trim().length < 3} onClick={async () => {
+        if (!window.confirm(t('editor.legacyConfirm'))) return
+        setBusy(true); setError(null)
+        try { await api(`/studio/selections/${template.document_type}/${version.language}/restore-legacy`, { method: 'POST', body: JSON.stringify({ expected_version_id: version.id, expected_revision: version.selection_revision, reason: activationNote, confirmed: true }) }); setActivationNote(''); await reload() }
+        catch (e) { setError(studioError(e)) } finally { setBusy(false) }
+      }}>{t('editor.legacyRestore')}</button>}
+      {editable && version.studio && !version.active && <div><p className="muted">{t('editor.activationHint')}</p><button className="secondary" disabled={busy || activationNote.trim().length < 3} onClick={async () => {
+        setBusy(true); setError(null)
+        try { await api(`/studio/versions/${version.id}/activate`, { method: 'POST', body: JSON.stringify({ expected_version_id: version.active_version_id, expected_revision: version.selection_revision, reason: activationNote }) }); setActivationNote(''); await reload() }
+        catch (e) { setError(studioError(e)) } finally { setBusy(false) }
+      }}>{t('editor.activate')}</button></div>}
       <DownloadButton path={version.download_endpoint} filename={version.source_filename || `${template.code}.docx`} label={t('studio.source')} />
     </article>)}
+    <details><summary>{t('editor.selectionHistory')} · {t(`language.${language}`)}</summary>{selections.map(s => <article key={s.revision}><strong>{t('studio.revision', { number: s.revision })} · {t(s.selection_kind === 'STUDIO' ? 'editor.active' : 'editor.legacyActive')}</strong><p>{date(s.created_at)} · {s.reason}</p></article>)}</details>
     <p className="muted">{t('studio.numberingHint')}</p>
     <h4>{t('studio.drafts')}</h4>
     {!drafts.length && <p className="muted">{t('studio.noDrafts')}</p>}
-    {drafts.map(draft => <div className="studio-draft-row" key={draft.id}><b>{draft.title}</b><span>{t(`language.${draft.language}` as TranslationKey)} · {t('studio.revision', { number: draft.revision })}</span><button disabled={busy || opened?.id === draft.id} className="secondary compact" onClick={() => { if (!draftDirty || window.confirm(t('studio.leave'))) setOpened(draft) }}>{t('studio.open')}</button></div>)}
-    {opened && <DraftSettings key={opened.id} draft={opened} saved={next => { setOpened(next); setDrafts(rows => rows.map(row => row.id === next.id ? next : row)) }} onDirty={setDraftDirty} close={() => setOpened(null)} />}
+    {drafts.map(draft => <div className="studio-draft-row" key={draft.id}><b>{draft.title}</b><span>{t(`language.${draft.language}` as TranslationKey)} · {t('studio.revision', { number: draft.revision })}</span><button disabled={busy} className="secondary compact" onClick={() => { if (!draftDirty || window.confirm(t('studio.leave'))) setOpened(draft) }}>{t('studio.open')}</button></div>)}
     {editable && <>
       <form className="studio-inline-form" onSubmit={create}><h4>{t('studio.newDraft')}</h4>
-        {template.authoring_supported ? <><fieldset className="studio-fields" disabled={busy}><label>{t('studio.draftTitle')}<input required maxLength={255} value={title} onChange={e => setTitle(e.target.value)} /></label><label>{t('admin.templateLanguage')}<select value={language} onChange={e => { setLanguage(e.target.value as Locale); setBase('') }}>{(['bg', 'en', 'ru'] as const).map(lang => <option key={lang} value={lang}>{t(`language.${lang}`)}</option>)}</select></label><label>{t('studio.base')}<select value={base} onChange={e => setBase(e.target.value)}><option value="">{t('studio.blank')}</option>{template.versions.filter(v => v.language === language).map(v => <option key={v.id} value={v.id}>{t('studio.version', { number: v.version })}</option>)}</select></label></fieldset><p className="muted">{t('studio.baseHint')}</p><button className="secondary" disabled={busy || !title.trim()}>{t('studio.create')}</button></> : <p className="muted">{t('studio.unsupported')}</p>}
+        {template.authoring_supported ? <><fieldset className="studio-fields" disabled={busy}><label>{t('studio.draftTitle')}<input required maxLength={255} value={title} onChange={e => setTitle(e.target.value)} /></label><label>{t('admin.templateLanguage')}<select value={language} onChange={e => { setLanguage(e.target.value as Locale); setBase('') }}>{(['bg', 'en', 'ru'] as const).map(lang => <option key={lang} value={lang}>{t(`language.${lang}`)}</option>)}</select></label><label>{t('editor.starter')}<select aria-label={t('editor.starter')} value={design} onChange={e => setDesign(e.target.value)}><option value="professional">{t('editor.professional')}</option><option value="blank">{t('editor.blank')}</option></select></label><label>{t('studio.base')}<select value={base} onChange={e => setBase(e.target.value)}><option value="">{t('studio.blank')}</option>{template.versions.filter(v => v.language === language).map(v => <option key={v.id} value={v.id}>{t('studio.version', { number: v.version })}</option>)}</select></label></fieldset><p className="muted">{t('studio.baseHint')}</p><button className="secondary" disabled={busy || !title.trim()}>{t('studio.create')}</button></> : <p className="muted">{t('studio.unsupported')}</p>}
       </form>
       <details><summary>{t('studio.import')}</summary><p className="muted">{t('studio.importHint')}</p><form className="studio-inline-form" onSubmit={importFile}><fieldset className="studio-fields" disabled={busy}><label>{t('studio.file')}<input type="file" required accept=".docx" onChange={e => setFile(e.target.files?.[0] || null)} /></label><label>{t('admin.templateLanguage')}<select value={language} onChange={e => { setLanguage(e.target.value as Locale); setBase('') }}>{(['bg', 'en', 'ru'] as const).map(lang => <option key={lang} value={lang}>{t(`language.${lang}`)}</option>)}</select></label><label>{t('studio.note')}<textarea required maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label></fieldset><button className="secondary" disabled={busy || !file || !note.trim()}>{t('studio.import')}</button></form></details>
     </>}
@@ -131,6 +117,7 @@ export function TemplateLibrary({ onDirty }: { onDirty: (d: boolean) => void }) 
     } catch (e) { setError(studioError(e)) } finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [])
+
   async function create(event: FormEvent) {
     event.preventDefault(); setBusy(true)
     try {

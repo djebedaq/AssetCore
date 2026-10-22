@@ -1,0 +1,110 @@
+[
+  {
+    "name": "transfer_issue-bg-1",
+    "pages": 1,
+    "docx_sha256": "703de99223d0047cdc30e9b5a246b4e4324728a07082104673f3a97b354c34b5",
+    "pdf_sha256": "f1c43b1ec8fca2f5754f5dcc9fc72118bd936c511838d6f710215ba356226097"
+  },
+  {
+    "name": "transfer_issue-bg-5",
+    "pages": 1,
+    "docx_sha256": "703de99223d0047cdc30e9b5a246b4e4324728a07082104673f3a97b354c34b5",
+    "pdf_sha256": "8005be9a1a8bc4cf8f7aa03437f20e19c4b3808ef27c3a8a0d30640bb8a5ac01"
+  },
+  {
+    "name": "transfer_issue-bg-30",
+    "pages": 1,
+    "docx_sha256": "703de99223d0047cdc30e9b5a246b4e4324728a07082104673f3a97b354c34b5",
+    "pdf_sha256": "15cc12ccc322c5200e9f725052162c1397c9553dbe7a2c5a6fc93762258735f5"
+  },
+  {
+    "name": "transfer_return-bg-1",
+    "pages": 1,
+    "docx_sha256": "b7f4fcac62fe6494c00b155b5678d043c76a6f0c51cbaeb0e4de0c48e633dbbb",
+    "pdf_sha256": "48e3da575a49d8eb87e6696587b98c028d6fe2dfd8b3f5be2c094c110c801768"
+  },
+  {
+    "name": "transfer_return-bg-5",
+    "pages": 1,
+    "docx_sha256": "b7f4fcac62fe6494c00b155b5678d043c76a6f0c51cbaeb0e4de0c48e633dbbb",
+    "pdf_sha256": "c840102fa4aef4deca8445f61eb9dc899fa51ed3bae02e8d3038fe24a50fa17d"
+  },
+  {
+    "name": "transfer_return-bg-30",
+    "pages": 1,
+    "docx_sha256": "b7f4fcac62fe6494c00b155b5678d043c76a6f0c51cbaeb0e4de0c48e633dbbb",
+    "pdf_sha256": "81e5e7e8c5863951f534dd61c86956b09a8e638eb556894725675a8ecc9d4993"
+  },
+  {
+    "name": "repair_protocol-bg-1",
+    "pages": 2,
+    "docx_sha256": "bb8553470a48e5e1a54794d5ad8f50473d6951ca737d9032e0afc924361d6d75",
+    "pdf_sha256": "d51bda014b61d39a31e29ec5d627f41b3f8f79be007ae1a6dbac175e775ff9f3"
+  },
+  {
+    "name": "repair_protocol-bg-5",
+    "pages": 2,
+    "docx_sha256": "e7940bb29f4dcf9f9ed1865cd63eda17c62dfb67f7f23c582cc0e98baf01ec9f",
+    "pdf_sha256": "f2d706326fd5dfaf31485ada06db2fa634186ff159f5e6150c5416c6c266063d"
+  },
+  {
+    "name": "repair_protocol-bg-30",
+    "pages": 4,
+    "docx_sha256": "4396e92583a1ff385453c480a8e143ab2bd0518e9a2bc3a823b7ffd2f3d83ad5",
+    "pdf_sha256": "35dad05535d8914b882ae8d151780d69dcbc10d346580d79b904bf8107c706bb"
+  },
+  {
+    "name": "part_request-bg-1",
+    "pages": 1,
+    "docx_sha256": "55770a5125630baa22f8472818c7d7eed08d828cab5362c79a7ab868a22ef986",
+    "pdf_sha256": "8fbd1f2129713a18d166e2824acc3a9227c4235d21e06a812c3550bed7a66ac0"
+  },
+  {
+    "name": "part_request-bg-5",
+    "pages": 1,
+    "docx_sha256": "7573afef8976753b243af94c5c9922f2e06ff7baf7982dd7a93b80910bc381d3",
+    "pdf_sha256": "657ce59aa3b65cdde282fac6d7a6b09192b2afdc140aa64e90b64b6ec60ea50c"
+  },
+  {
+    "name": "part_request-bg-30",
+    "pages": 2,
+    "docx_sha256": "ba593e66f3d5ff7073384210a18530219ae9a4c803ad6ab6d829f0be330c3974",
+    "pdf_sha256": "2bbd0abb1152e9589d13a7b656ee5e4b85654b0b9c8a070927d0e52789e98047"
+  },
+  {
+    "name": "part_request-en-1",
+    "pages": 1,
+    "docx_sha256": "b3fcde1f7ab11c785b171938a1c8d13040c50383617cfe4b927a02349738c074",
+    "pdf_sha256": "018c64cbd42d1ce4b6a9b3c3c3e1367cb6ae050e03b0695536ba67e80d0e7fb0"
+  },
+  {
+    "name": "part_request-en-5",
+    "pages": 1,
+    "docx_sha256": "ac080f8d51115654839732e194c57e7253d470b9e2c2f534056f324ea668371f",
+    "pdf_sha256": "4d9cc2b988f3d52bdc228fbf1c0441302911fee10f1e752a0b977d5fdc3afa77"
+  },
+  {
+    "name": "part_request-en-30",
+    "pages": 2,
+    "docx_sha256": "1cb3abf92411eb1a42faeddc9d24820a47015224055816b1cfbb614551a45105",
+    "pdf_sha256": "22745279c7bb019cffc3068a1bb1a4ba9414477352c8eaf9988c547654ffb899"
+  },
+  {
+    "name": "part_request-ru-1",
+    "pages": 1,
+    "docx_sha256": "3957bf0370695f96271b89962f162a878feee3fbd51928fc29ec441b72cd20a3",
+    "pdf_sha256": "0762a8d29dbfad19fab76e5c6c5c0fa2a8d226ad617da8e415d51e0b75150c49"
+  },
+  {
+    "name": "part_request-ru-5",
+    "pages": 1,
+    "docx_sha256": "e6131b6e0572b4ae87efd129cb11cdc62901ef809e9dc4d66bf028a2d4d76e9b",
+    "pdf_sha256": "ce3dbf38a70f8c9d2a5bf16f8f173fae2ece4b417275e51609ec4c9d1a65d9ad"
+  },
+  {
+    "name": "part_request-ru-30",
+    "pages": 3,
+    "docx_sha256": "464926e5b85d15bc6ff8993a6bbc45004d1d05668da16ef6d61271747f845b5f",
+    "pdf_sha256": "4f1a43ea4b0c8cf217e201c86549c66e20995e43e382734752dae29ff7ec9d78"
+  }
+]

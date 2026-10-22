@@ -198,6 +198,12 @@ def issue_number(db, request):
     try:
         template = _template_version(db, DocumentType.PART_REQUEST.value, request.language)
         content = source_bytes(template)
+        if template.layout_contract.get("studio"):
+            data["studio_machine_context"] = {
+                "manufacturer": (getattr(request.machine, "manufacturer", None) or request.machine.brand) if request.machine else "",
+                "category": request.machine.category if request.machine else "",
+                "location": request.machine.location.name if request.machine and request.machine.location else "",
+            }
     except (ConfirmedTemplateUnavailableError, ValueError, OSError):
         template, content = None, None
     data["template_sha256"] = hashlib.sha256(content).hexdigest() if content else None

@@ -1,0 +1,73 @@
+{
+  "passed": true,
+  "cases": [
+    {
+      "workflow": "TRANSFER_ISSUE",
+      "docx_sha256": "e5584990fc90357e659cddfd16b73aa9228d9fdebb0f7576acb0bc59ad9aa770",
+      "pdf_sha256": "3fada7447bb4a006d21cb1ff3cd5495b39c2a03648be1346adddb3becaf4861a",
+      "pages": 1,
+      "status": "SIGNED",
+      "template_version_id": 13,
+      "synthetic_equipment_and_people": true,
+      "original_inventory_ids_preserved": true,
+      "recorded_checklist_items": 10,
+      "archive_unchanged_after_profile_and_selection_change": true,
+      "signed_kk_archive_unchanged_after_followup_profile_change": null,
+      "graphic_signatures_in_original_cells": true,
+      "catalog_image_bytes_preserved_through_signing": null,
+      "studio_final_conversion_failure_rolled_back": null,
+      "approval_template_bytes_unchanged": null
+    },
+    {
+      "workflow": "TRANSFER_RETURN",
+      "docx_sha256": "a55407359a8c35a0ab3593facb3375576678c02ec3317cf12886909537262e94",
+      "pdf_sha256": "d24e99114ea768a7654fff68c06b1c8809195791f75a8662f9cca379274f0733",
+      "pages": 1,
+      "status": "SIGNED",
+      "template_version_id": 14,
+      "synthetic_equipment_and_people": true,
+      "original_inventory_ids_preserved": true,
+      "recorded_checklist_items": 10,
+      "archive_unchanged_after_profile_and_selection_change": true,
+      "signed_kk_archive_unchanged_after_followup_profile_change": null,
+      "graphic_signatures_in_original_cells": true,
+      "catalog_image_bytes_preserved_through_signing": null,
+      "studio_final_conversion_failure_rolled_back": null,
+      "approval_template_bytes_unchanged": null
+    },
+    {
+      "workflow": "REPAIR_PROTOCOL",
+      "docx_sha256": "55b3ff0d47cbd857bdeab5a084c7c347c0dfdb5cf3e4603c59655ff6cea7087c",
+      "pdf_sha256": "26d1d5b2b7a340738b5997ebb34aab771f7ccd5e9bc660f1016e513ab7268b0d",
+      "pages": 2,
+      "status": "FINALIZED",
+      "template_version_id": 15,
+      "synthetic_equipment_and_people": true,
+      "original_inventory_ids_preserved": true,
+      "recorded_checklist_items": null,
+      "archive_unchanged_after_profile_and_selection_change": true,
+      "signed_kk_archive_unchanged_after_followup_profile_change": null,
+      "graphic_signatures_in_original_cells": null,
+      "catalog_image_bytes_preserved_through_signing": null,
+      "studio_final_conversion_failure_rolled_back": null,
+      "approval_template_bytes_unchanged": null
+    },
+    {
+      "workflow": "PART_REQUEST",
+      "docx_sha256": "d18f1dcb3d476a2da54554ec078ea475c68242b6beac961255ae7fe645c070ec",
+      "pdf_sha256": "71b833c8f6e05e16d5695fbb26f937007cc64463791675017e88b90b3eb60b8a",
+      "pages": 3,
+      "status": "SIGNED",
+      "template_version_id": 16,
+      "synthetic_equipment_and_people": true,
+      "original_inventory_ids_preserved": true,
+      "recorded_checklist_items": null,
+      "archive_unchanged_after_profile_and_selection_change": true,
+      "signed_kk_archive_unchanged_after_followup_profile_change": true,
+      "graphic_signatures_in_original_cells": true,
+      "catalog_image_bytes_preserved_through_signing": true,
+      "studio_final_conversion_failure_rolled_back": true,
+      "approval_template_bytes_unchanged": true
+    }
+  ]
+}
