@@ -1,0 +1,11 @@
+{
+  "run_id": 39726594621,
+  "run_url": "https://github.com/djebedaq/AssetCore/actions/runs/39726594621",
+  "source_head_sha": "d3be572f7ecda52fcd9268eee8e7332a335cba24",
+  "artifact_id": 12403596326,
+  "artifact_sha256": "323fd68abcbfbd0b752893bec0a304036a5d57dd519c68cb10ee8a63237e5bad",
+  "passed_scenario": "COMMERCIAL-DOCS-01B final professional cells, signatures, real PDFs and legacy restoration",
+  "canvas_overlap_geometry_guard_passed": true,
+  "screenshots": 22,
+  "scope_note": "The source of these images includes the final canvas zoom correction. A subsequent patch-only Vite/Vitest security update is separately tested on the delivery head."
+}

@@ -101,6 +101,26 @@
     {
       "command": "PYTHONPATH=backend DATABASE_URL=sqlite:///:memory: python tests/verify_studio_fidelity_evidence.py --root docs/qa/commercial-docs-01b/final-fidelity",
       "result": "passed; 20 saved artifact hashes, native business fields, real PDF identities/dynamic rows and page PNGs"
+    },
+    {
+      "command": "pnpm --dir frontend test src/features/documentStudio --reporter=dot --maxWorkers=1",
+      "result": "3 files, 18 passed",
+      "seconds": 32.06,
+      "scope_note": "Final canvas zoom measurement and flow-root correction, before patch-only dependency refresh"
+    },
+    {
+      "command": "pnpm --dir frontend build",
+      "result": "passed with Vite 6.4.4; TypeScript and production build"
+    },
+    {
+      "command": "python scripts/audit_dependencies.py frontend --output dependency-audit.json",
+      "result": "passed; 342 audited, zero findings/exceptions"
+    },
+    {
+      "command": "pnpm --dir frontend test --reporter=dot --maxWorkers=1",
+      "result": "77 files, 698 passed",
+      "seconds": 267.6,
+      "versions": "Vite 6.4.4 / Vitest 4.1.12; includes final canvas fix"
     }
   ],
   "visual_review": "visual-review.json: 89 actual/reference/signed/restore page PNGs viewed; no editor screenshot substituted for PDF pages",
@@ -114,11 +134,26 @@
     ],
     "exact_head_results_location": "https://github.com/djebedaq/AssetCore/pull/114/checks",
     "delivery_record": "PR description records final full SHA, run URL, five conclusions and suite totals after this evidence commit is tested. This file records local evidence, not a fabricated pre-run CI success.",
-    "older_run_416": "Frontend/PostgreSQL/Docker passed; browser foundation boundary assertion and backend route/golden/export-wrapper failures corrected; superseded by final-head CI, not acceptance evidence"
+    "older_run_416": "Frontend/PostgreSQL/Docker passed; browser foundation boundary assertion and backend route/golden/export-wrapper failures corrected; superseded by final-head CI, not acceptance evidence",
+    "run_419": "Saved native artifact verifier, professional browser including canvas overlap guard, complete browser job and Docker job passed. Frontend audit blocked old Vite; corrected with patch updates and a fresh final-head run is required."
   },
   "production": {
     "database_accessed": false,
     "deployment_performed": false,
     "merged": false
-  }
+  },
+  "security_patch": {
+    "trigger": "CI run 419 identified newly published blocking GHSA-587h-7wmj-h5pm in Vite 6.4.3",
+    "changes": [
+      "Vite 6.4.4",
+      "Vitest 4.1.12 including patched @vitest/mocker"
+    ],
+    "advisories": [
+      "https://github.com/advisories/GHSA-587h-7wmj-h5pm",
+      "https://github.com/vitest-dev/vitest/security/advisories/GHSA-qxg6-89mg-rqv8"
+    ],
+    "audit": "342 dependencies; no blocking/informational findings or exceptions",
+    "policy_changed": false
+  },
+  "browser_image_provenance": "browser/professional-v3/ci-source.json: passed exact d3be572 source including nested signature groups and canvas correction; delivery head separately repeats all five jobs after security patches."
 }
