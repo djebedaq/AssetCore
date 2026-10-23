@@ -63,10 +63,10 @@ def professional_layout(document_type, language, identity=None, image_sizes=None
         if actual_width < 5 or actual_height < 5:
             # Extreme banner/portrait assets need a wider/taller administrator
             # chosen cell. Never stretch a company image to fit the starter.
-            return text(("Фирмено лого", "Company logo", "Логотип компании")[lang])
+            return block("logo", image_id=None, width_mm=width, height_mm=20, style={"spacing_mm": 0})
         return block("logo", image_id=image_id, width_mm=actual_width, height_mm=actual_height,
                      style={"align": "center", "spacing_mm": 0})
-    left = [logo(identity["primary_logo_id"], 22)] if identity.get("primary_logo_id") else [text(("Фирмено лого", "Company logo", "Логотип компании")[lang])]
+    left = [logo(identity["primary_logo_id"], 22)] if identity.get("primary_logo_id") else [block("logo", image_id=None, width_mm=22, height_mm=20, style={"spacing_mm": 0})]
     right = [logo(identity["secondary_logo_id"], 24)] if identity.get("secondary_logo_id") else [field("COMPANY_REGISTRATION"), field("COMPANY_CONTACTS")]
     header = grid([17, 63, 20], [{"cells": [cell(left), cell([field("COMPANY_NAME", style={"size_pt": 16, "bold": True, "align": "center", "color": "#000000", "spacing_mm": 1}),
         field("COMPANY_ADDRESS", style={"size_pt": 8, "align": "center", "color": "#000000", "spacing_mm": 0})]), cell(right)], "min_height_mm": 27}], region="header")

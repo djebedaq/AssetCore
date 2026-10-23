@@ -43,7 +43,7 @@ def snapshot(db, draft, document_type):
     identity = CompanyIdentity.model_validate(profile.identity if profile else {}).model_dump()
     allowed = set(identity["identity_image_ids"])
     allowed.update(v for v in (identity["primary_logo_id"], identity["secondary_logo_id"]) if v)
-    ids = {b.image_id for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"}}
+    ids = {b.image_id for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None}
     if not ids <= allowed:
         raise ValueError("studio_image_not_allowed")
     images = {}

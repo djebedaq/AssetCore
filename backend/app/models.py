@@ -1565,6 +1565,66 @@ class DocumentTemplateVersion(Base):
     published_by: Mapped[User | None] = relationship(foreign_keys=[published_by_id])
 
 
+class StudioProposal(Base):
+    __tablename__ = "studio_proposals"
+    __table_args__ = (
+        CheckConstraint("status IN ('PENDING','ACCEPTED','REJECTED')", name="ck_proposal_status"),
+        CheckConstraint("revision > 0", name="ck_proposal_revision"),
+        CheckConstraint("(status = 'PENDING' AND decided_by_id IS NULL AND decided_at IS NULL AND decision_reason IS NULL) OR "
+                        "(status != 'PENDING' AND decided_by_id IS NOT NULL AND decided_at IS NOT NULL AND decision_reason IS NOT NULL AND length(trim(decision_reason)) >= 3)", name="ck_proposal_decision"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    template_id: Mapped[int] = mapped_column(ForeignKey("document_templates.id"), index=True)
+    target_version_id: Mapped[int] = mapped_column(ForeignKey("document_template_versions.id"))
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    language: Mapped[str] = mapped_column(String(2))
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(12), default="PENDING", index=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime)
+    decided_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    decision_reason: Mapped[str | None] = mapped_column(Text)
+
+
+class StudioProposalEvent(Base):
+    __tablename__ = "studio_proposal_events"
+    __table_args__ = (UniqueConstraint("proposal_id", "revision", name="uq_proposal_event_revision"),
+        CheckConstraint("kind IN ('CREATED','COMMENT','ACCEPTED','REJECTED','DRAFT_CREATED','PUBLISHED')", name="ck_proposal_event_kind"))
+    id: Mapped[int] = mapped_column(primary_key=True)
+    proposal_id: Mapped[int] = mapped_column(ForeignKey("studio_proposals.id"), index=True)
+    revision: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(20))
+    body: Mapped[str] = mapped_column(Text)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    draft_id: Mapped[int | None] = mapped_column(ForeignKey("document_editor_drafts.id"))
+    version_id: Mapped[int | None] = mapped_column(ForeignKey("document_template_versions.id"))
+
+
+class StudioProposalAttachment(Base):
+    __tablename__ = "studio_proposal_attachments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    proposal_id: Mapped[int] = mapped_column(ForeignKey("studio_proposals.id"), index=True)
+    content: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    sha256: Mapped[str] = mapped_column(String(64))
+    width: Mapped[int] = mapped_column(Integer)
+    height: Mapped[int] = mapped_column(Integer)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class StudioProposalDraft(Base):
+    __tablename__ = "studio_proposal_drafts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    proposal_id: Mapped[int] = mapped_column(ForeignKey("studio_proposals.id"), index=True)
+    draft_id: Mapped[int] = mapped_column(ForeignKey("document_editor_drafts.id"), unique=True)
+    base_version_id: Mapped[int] = mapped_column(ForeignKey("document_template_versions.id"))
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class StudioActivation(Base):
     """Append-only explicit selection, independent of template publication."""
     __tablename__ = "studio_activations"
@@ -2455,3 +2515,7 @@ install_request_guards(Base.metadata)
 from .document_studio.guards import install as install_studio_guards  # noqa: E402
 
 install_studio_guards(Base.metadata)
+
+from .document_studio.proposal_guards import install as install_proposal_guards  # noqa: E402
+
+install_proposal_guards(Base.metadata)

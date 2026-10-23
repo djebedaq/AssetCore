@@ -176,6 +176,8 @@ def test_professional_four_workflows_signing_and_controlled_appendices(
                     page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False).save(folder / f'official-synthetic-page-{i}.png')
                 text = '\n'.join(p.get_text() for p in pdf)
                 assert 'SYNTHETIC-QA-' in text and '[[ASSETCORE_' not in text
+                assert all(label not in text for label in ('Фирмено лого', 'Company logo', 'Логотип компании'))
+                assert 'Фирмено лого' not in Document(io.BytesIO(version.docx_content)).sections[0].header._element.xml
                 if workflow == 'PART_REQUEST':
                     assert len(pdf) >= 3  # Actual approved diagram and parts-list appendices.
                 reports.append({'workflow': workflow, 'docx_sha256': digest(version.docx_content), 'pdf_sha256': digest(version.pdf_content),
@@ -189,3 +191,5 @@ def test_professional_four_workflows_signing_and_controlled_appendices(
                     'studio_final_conversion_failure_rolled_back': True if workflow == 'PART_REQUEST' else None,
                     'approval_template_bytes_unchanged': True if workflow == 'PART_REQUEST' else None})
     (output / 'official-workflow-proof.json').write_text(json.dumps({'passed': True, 'cases': reports}, indent=2) + '\n', encoding='utf-8')
+    from studio_proposal_archive_regression import verify_proposal_archive_preservation
+    verify_proposal_archive_preservation(client, auth_headers, session_factory, output)

@@ -171,6 +171,7 @@ class Style(StrictModel):
     color: str = Field(default="#183153", pattern=r"^#[0-9a-fA-F]{6}$")
     align: Literal["left", "center", "right"] = "left"
     spacing_mm: float = Field(default=2, ge=0, le=30, allow_inf_nan=False)
+    paragraph_before_mm: float = Field(default=0, ge=0, le=30, allow_inf_nan=False)
     bold: bool = False
     italic: bool = False
     background: str = Field(default="transparent", pattern=r"^(#[0-9a-fA-F]{6}|transparent)$")
@@ -203,9 +204,15 @@ class FieldBlock(BlockBase):
 
 class ImageBlock(BlockBase):
     type: Literal["image", "logo"]
-    image_id: int = Field(gt=0)
+    image_id: int | None = Field(default=None, gt=0)
     width_mm: float = Field(default=40, ge=5, le=180, allow_inf_nan=False)
     height_mm: float = Field(default=20, ge=5, le=100, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def selected_image(self):
+        if self.type == "image" and self.image_id is None:
+            raise ValueError("studio_image_missing")
+        return self
 
 
 class TableColumn(StrictModel):
@@ -222,6 +229,8 @@ class DynamicTable(BlockBase):
     repeat_header: Literal[True] = True
     flow: Literal[True] = True
     keep_rows_together: bool = False
+    cell_padding_mm: float | None = Field(default=None, ge=0, le=8, allow_inf_nan=False)
+    min_height_mm: float | None = Field(default=None, ge=0, le=60, allow_inf_nan=False)
     group_by: Literal["assembly"] | None = None
 
     @model_validator(mode="after")
@@ -240,6 +249,8 @@ class StaticTable(BlockBase):
     rows: list[list[Annotated[str, Field(max_length=2000)]]] = Field(min_length=1, max_length=50)
     widths: list[Annotated[float, Field(gt=0, le=100, allow_inf_nan=False)]] | None = Field(default=None, max_length=8)
     repeat_header: bool = True
+    cell_padding_mm: float | None = Field(default=None, ge=0, le=8, allow_inf_nan=False)
+    min_height_mm: float | None = Field(default=None, ge=0, le=60, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def widths_match(self):

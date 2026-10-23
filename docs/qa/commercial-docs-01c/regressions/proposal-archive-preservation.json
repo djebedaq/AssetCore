@@ -1,0 +1,32 @@
+{
+  "passed": true,
+  "before_sha256": {
+    "machines": "a18c7167b0540547e5d903360f25f77970a1c67010ed79d59c18c4192a2d3264",
+    "official_document_versions": "0b78725bd2981561657dcf82d45ade45ef420af207188573aeafdbce173e6b0a",
+    "generated_documents": "83669928f13215e16b413c3bae1d9da4942e0ad4b901f40dba97c16ff7aa69b1",
+    "protocol_documents": "2eddd9911e3b809ad3c1241b4dc830bb7339d07214e7e6865fca6e8c4f65d998",
+    "request_approval_snapshots": "c550d6d44ee6095a12682ed0ff6cf3866c0cceb0ddc9119970c313740418d166",
+    "request_number_counter": "f0594ddfd3560cc1dccad2d46a1e4098cf506a2ca2bd7eb304f8b018839ebd15",
+    "studio_activations": "ff1266cc93b589a00c6aaad88c0cab199a0d65953cb7a8de703b623402f2d624"
+  },
+  "after_sha256": {
+    "machines": "a18c7167b0540547e5d903360f25f77970a1c67010ed79d59c18c4192a2d3264",
+    "official_document_versions": "0b78725bd2981561657dcf82d45ade45ef420af207188573aeafdbce173e6b0a",
+    "generated_documents": "83669928f13215e16b413c3bae1d9da4942e0ad4b901f40dba97c16ff7aa69b1",
+    "protocol_documents": "2eddd9911e3b809ad3c1241b4dc830bb7339d07214e7e6865fca6e8c4f65d998",
+    "request_approval_snapshots": "c550d6d44ee6095a12682ed0ff6cf3866c0cceb0ddc9119970c313740418d166",
+    "request_number_counter": "f0594ddfd3560cc1dccad2d46a1e4098cf506a2ca2bd7eb304f8b018839ebd15",
+    "studio_activations": "ff1266cc93b589a00c6aaad88c0cab199a0d65953cb7a8de703b623402f2d624"
+  },
+  "proposal_id": 1,
+  "draft_id": 6,
+  "published_version_id": 19,
+  "actions": [
+    "submit",
+    "accept",
+    "clone exact version",
+    "real PDF preview",
+    "publish separately"
+  ],
+  "scope": "All rows and raw bytes in the disposable canonical four-workflow database; no production connection"
+}
