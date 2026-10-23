@@ -75,7 +75,8 @@ def check_layout(layout: Layout, document_type: str):
                         col += cell.colspan
             if block.type in {"dynamic_table", "table"}:
                 widths = [c.width_percent for c in block.columns] if block.type == "dynamic_table" else block.widths or [100 / len(block.rows[0])] * len(block.rows[0])
-                if min(widths) < 5 or min(widths) * actual / 100 < block.style.size_pt * 1.5 * 25.4 / 72 + 2:
+                padding = block.cell_padding_mm if block.cell_padding_mm is not None else 1
+                if min(widths) < 5 or min(widths) * actual / 100 < block.style.size_pt * 1.5 * 25.4 / 72 + 2 * padding:
                     raise ValueError("studio_table_width")
             if block.type == "signature" and (block.style.size_pt > 18 or block.style.width_percent < 40 or actual < 32):
                 raise ValueError("studio_bounds")
@@ -104,12 +105,12 @@ def _height(block, width, bindings):
                 heights.append(sum(_height(b, inner, bindings) for b in cell.blocks) + 2 * cell.padding_mm)
                 col += cell.colspan
             total += max(row.min_height_mm, *heights)
-        return total + style.spacing_mm
+        return total + style.spacing_mm + style.paragraph_before_mm
     if block.type in {"image", "logo"}:
-        return block.height_mm + style.spacing_mm
+        return block.height_mm + style.spacing_mm + style.paragraph_before_mm
     text = str(bindings.get(block.field, "")) if block.type == "field" else getattr(block, "text", "")
     lines = sum(max(1, math.ceil(len(line.expandtabs(4)) * style.size_pt * .7 / max(1, width * 72 / 25.4))) for line in text.split("\n"))
-    return lines * style.size_pt * 1.3 * 25.4 / 72 + style.spacing_mm
+    return lines * style.size_pt * 1.3 * 25.4 / 72 + style.spacing_mm + style.paragraph_before_mm
 
 
 def manifest_from_source(content: bytes) -> dict | None:
@@ -124,7 +125,7 @@ def manifest_from_source(content: bytes) -> dict | None:
         raise ValueError("studio_source_invalid")
     layout = Layout.model_validate(manifest["layout"])
     check_layout(layout, manifest["document_type"])
-    ids = {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"}}
+    ids = {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None}
     if ids != set(manifest["images"]):
         raise ValueError("studio_image_missing")
     for image in manifest["images"].values():
@@ -170,6 +171,7 @@ def _paragraph_style(paragraph, style, width):
     paragraph.alignment = {"left": WD_ALIGN_PARAGRAPH.LEFT, "center": WD_ALIGN_PARAGRAPH.CENTER,
                            "right": WD_ALIGN_PARAGRAPH.RIGHT}[style.align]
     paragraph.paragraph_format.space_after = Mm(style.spacing_mm)
+    paragraph.paragraph_format.space_before = Mm(style.paragraph_before_mm)
     paragraph.paragraph_format.widow_control = True
     unused = width * (1 - style.width_percent / 100)
     paragraph.paragraph_format.left_indent = Mm(unused if style.align == "right" else unused / 2 if style.align == "center" else 0)
@@ -223,7 +225,7 @@ def _page_number(paragraph, style):
             run._r.append(node)
 
 
-def _table(container, rows, widths, style, width, repeat, keep_rows=False, group_headers=None):
+def _table(container, rows, widths, style, width, repeat, keep_rows=False, group_headers=None, padding=None, min_height=None):
     table = _new_table(container, width, 0, len(widths))
     table.autofit = False
     table.alignment = {"left": WD_TABLE_ALIGNMENT.LEFT, "center": WD_TABLE_ALIGNMENT.CENTER,
@@ -235,6 +237,17 @@ def _table(container, rows, widths, style, width, repeat, keep_rows=False, group
         col.width = Mm(actual_width * percent / 100)
     for index, values in enumerate(rows):
         row = table.add_row()
+        if min_height is not None:
+            row.height, row.height_rule = Mm(min_height), WD_ROW_HEIGHT_RULE.AT_LEAST
+        if padding is not None:
+            for cell in row.cells:
+                margin = OxmlElement("w:tcMar")
+                for edge in ("top", "left", "bottom", "right"):
+                    node = OxmlElement("w:" + edge)
+                    node.set(qn("w:w"), str(round(padding / 25.4 * 1440)))
+                    node.set(qn("w:type"), "dxa")
+                    margin.append(node)
+                cell._tc.get_or_add_tcPr().append(margin)
         if group_headers and index in group_headers:
             cell = row.cells[0].merge(row.cells[-1]) if len(row.cells) > 1 else row.cells[0]
             paragraph = cell.paragraphs[0]
@@ -381,7 +394,7 @@ def _grid(container, block, width, emit):
 def render(manifest: dict, values: dict, tables: dict | None = None, *, source=False) -> bytes:
     layout = Layout.model_validate(manifest["layout"])
     check_layout(layout, manifest["document_type"])
-    if {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"}} != set(manifest["images"]):
+    if {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None} != set(manifest["images"]):
         raise ValueError("studio_image_missing")
     document = Document()
     if layout.schema_version >= 3:
@@ -417,6 +430,10 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
         for block_index, block in enumerate(blocks):
             style = block.style
             if block.type == "grid":
+                if style.paragraph_before_mm:
+                    before = container.add_paragraph()
+                    before.paragraph_format.line_spacing = Pt(1)
+                    before.paragraph_format.space_after = Mm(style.paragraph_before_mm)
                 _grid(container, block, width, emit)
                 continue
             if block.type in {"table", "dynamic_table"}:
@@ -450,7 +467,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
                             rows.append([group] + [""] * (len(block.columns) - 1))
                         previous_group = group
                         rows.append([record.get(c.key, "") for c in block.columns])
-                _table(container, rows, widths, style, width, block.repeat_header, getattr(block, "keep_rows_together", False), group_headers)
+                _table(container, rows, widths, style, width, block.repeat_header, getattr(block, "keep_rows_together", False), group_headers, block.cell_padding_mm, block.min_height_mm)
                 continue
             if block.type == "conditional" and bindings.get(block.when_field) in (None, "") and not source:
                 continue
@@ -473,7 +490,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
                     _text(paragraph, block.label, style)
                 paragraph.paragraph_format.keep_with_next = True
                 paragraph.paragraph_format.keep_together = True
-                paragraph.paragraph_format.space_before = Mm(max(0, block.min_height_mm - 14))
+                paragraph.paragraph_format.space_before = Mm(max(0, block.min_height_mm - 14) + style.paragraph_before_mm)
                 marker = container.add_paragraph()
                 _paragraph_style(marker, style, width)
                 value = bindings.get(block.slot, "")
@@ -486,8 +503,12 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
                 if block_index + 1 < len(blocks) and blocks[block_index + 1].type == "signature":
                     marker.paragraph_format.keep_with_next = True
             elif block.type in {"image", "logo"}:
-                image = manifest["images"][str(block.image_id)]
-                paragraph.add_run().add_picture(io.BytesIO(base64.b64decode(image["content"])), width=Mm(block.width_mm), height=Mm(block.height_mm))
+                if block.image_id is not None:
+                    image = manifest["images"][str(block.image_id)]
+                    paragraph.add_run().add_picture(io.BytesIO(base64.b64decode(image["content"])), width=Mm(block.width_mm), height=Mm(block.height_mm))
+                else:
+                    # A deliberately empty logo reserves space, never printable text.
+                    paragraph.paragraph_format.line_spacing = Mm(block.height_mm)
             elif block.type == "page_break":
                 paragraph.paragraph_format.page_break_before = True
                 paragraph.paragraph_format.space_after = Mm(0)

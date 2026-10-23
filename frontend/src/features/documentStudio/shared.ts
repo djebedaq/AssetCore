@@ -5,6 +5,7 @@ import type { Layout } from './editorModel'
 export function studioError(error: unknown): TranslationKey {
   if (!(error instanceof ApiError)) return 'studio.error'
   if (error.status === 409) return 'studio.conflict'
+  if (error.code === 'studio_proposal_reference_only') return 'proposal.referenceOnly'
   if (error.code === 'studio_image_invalid' || error.code === 'studio_image_size') return 'studio.invalidImage'
   if (error.code === 'studio_docx_unsafe') return 'studio.invalidDocx'
   if (error.code === 'studio_required_block') return 'studio.requiredBlock'

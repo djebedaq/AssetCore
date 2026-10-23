@@ -38,14 +38,16 @@ def active_selection(db, document_type, language):
 
 def snapshot(db, draft, document_type):
     layout = Layout.model_validate(draft.layout)
-    check_layout(layout, document_type)
     profile = db.get(CompanyProfile, 1)
     identity = CompanyIdentity.model_validate(profile.identity if profile else {}).model_dump()
     allowed = set(identity["identity_image_ids"])
     allowed.update(v for v in (identity["primary_logo_id"], identity["secondary_logo_id"]) if v)
-    ids = {b.image_id for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"}}
+    ids = {b.image_id for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None}
     if not ids <= allowed:
         raise ValueError("studio_image_not_allowed")
+    # Reject unauthorized cell images before inspecting their layout geometry.
+    # Both authorization and bounds remain mandatory for every snapshot.
+    check_layout(layout, document_type)
     images = {}
     total = 0
     for image_id in sorted(ids):

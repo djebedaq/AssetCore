@@ -1,3 +1,4 @@
+import { proposalBg, proposalEn, proposalRu } from './features/documentStudio/proposalTranslations'
 import { studioBg, studioEn, studioRu } from './features/documentStudio/translations'
 import { editorBg, editorEn, editorRu } from './features/documentStudio/editorTranslations'
 import { requests01Bg, requests01En, requests01Ru } from './features/partRequests/requestTranslations'
@@ -23,6 +24,7 @@ import {
 } from './locale'
 
 export const bg = {
+  ...proposalBg,
   ...studioBg,
   ...editorBg,
   ...requests01Bg,
@@ -1341,6 +1343,7 @@ export const en: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(en, {
+  ...proposalEn,
   ...studioEn,
   ...editorEn,
   ...requests01En,
@@ -2030,6 +2033,7 @@ export const ru: Catalog = Object.fromEntries(
 ) as Catalog
 
 Object.assign(ru, {
+  ...proposalRu,
   ...studioRu,
   ...editorRu,
   ...requests01Ru,

@@ -256,6 +256,12 @@ def list_drafts(template_id: int, _: User = Depends(reader), db: Session = Depen
 
 @router.post("/templates/{template_id}/drafts", status_code=201)
 def create_draft(template_id: int, payload: DraftCreate, user: User = Depends(manager), db: Session = Depends(get_db)):
+    item = build_draft(db, template_id, payload, user)
+    commit(db)
+    return draft_output(item)
+
+
+def build_draft(db, template_id, payload, user):
     template = db.get(DocumentTemplate, template_id)
     if template is None:
         fail("studio_not_found", 404)
@@ -282,8 +288,7 @@ def create_draft(template_id: int, payload: DraftCreate, user: User = Depends(ma
     db.flush()
     add_audit_log(db, user, "document_editor_draft", item.id, "studio_draft_created",
                   {"template_id": template_id, "base_version_id": payload.base_version_id})
-    commit(db)
-    return draft_output(item)
+    return item
 
 
 @router.get("/drafts/{draft_id}")
@@ -304,7 +309,7 @@ def update_draft(draft_id: int, payload: DraftUpdate, user: User = Depends(manag
         validate_workflow(payload.layout, template.document_type)
     except ValueError as exc:
         fail(str(exc))
-    check_images(db, {b.image_id for b in walk_blocks(payload.layout.blocks) if b.type in {"image", "logo"}})
+    check_images(db, {b.image_id for b in walk_blocks(payload.layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None})
     from types import SimpleNamespace
 
     from .publication import snapshot
@@ -349,6 +354,26 @@ def preview_draft(draft_id: int, payload: PreviewInput, user: User = Depends(rea
     # No ORM mutation, official number, reservation, signer or persistent file.
     return {"report": report, "receipt": receipt(draft, manifest, user.id),
             "docx": base64.b64encode(docx).decode(), "pdf": base64.b64encode(pdf).decode()}
+
+
+@router.get("/versions/{version_id}/preview")
+def preview_version(version_id: int, response: Response, _: User = Depends(reader), db: Session = Depends(get_db)):
+    from ..template_engine import source_bytes
+    from .publication import validate_render
+    from .renderer import manifest_from_source
+    version = db.get(DocumentTemplateVersion, version_id)
+    if version is None:
+        fail("studio_not_found", 404)
+    if not version.layout_contract.get("studio"):
+        fail("studio_proposal_reference_only")
+    try:
+        manifest = manifest_from_source(source_bytes(version))
+        docx, pdf, report = validate_render(manifest, 5, raster=True)
+    except ValueError as exc:
+        fail(str(exc) if str(exc).startswith("studio_") else "studio_invalid")
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return {"report": report, "docx": base64.b64encode(docx).decode(), "pdf": base64.b64encode(pdf).decode()}
 
 
 @router.post("/drafts/{draft_id}/publish", status_code=201)
@@ -402,6 +427,8 @@ def publish_draft(draft_id: int, payload: PublishInput, user: User = Depends(man
     add_audit_log(db, user, "document_template_version", version.id, "studio_version_published",
         {"draft_id": draft.id, "draft_revision": payload.expected_revision, "source_sha256": version.source_sha256,
          "company_revision": company_revision, "change_note": payload.change_note})
+    from .proposals import record_publication
+    record_publication(db, draft, version, user)
     commit(db)
     return {"id": version.id, "version": number, "source_sha256": version.source_sha256,
             "draft_revision": payload.expected_revision + 1, "active": False, "validation_report": report}

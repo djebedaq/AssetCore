@@ -1,16 +1,17 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../../api'
-import { DownloadButton, filePayload } from '../../industrialUi'
+import { DownloadButton, Modal, filePayload } from '../../industrialUi'
 import { useI18n, type TranslationKey } from '../../i18n'
 import type { Locale } from '../../locale'
 import { hasPermission } from '../../permissions'
 import { VisualEditor } from './VisualEditor'
-import { studioError, type Draft, type StudioTemplate } from './shared'
+import { studioError, type Draft, type StudioTemplate, type StudioVersion } from './shared'
+import { ProposalDialog } from './ProposalDialog'
 
 const workflows = ['TRANSFER_ISSUE', 'TRANSFER_RETURN', 'REPAIR_PROTOCOL', 'PART_REQUEST'] as const
 const typeKey = (value: string): TranslationKey => workflows.includes(value as typeof workflows[number]) ? `studio.${value}` as TranslationKey : 'studio.OTHER'
 
-function TemplateDetails({ template, reload, onDirty }: { template: StudioTemplate; reload: () => Promise<void>; onDirty: (d: boolean) => void }) {
+function TemplateDetails({ template, reload, onDirty, initialDraft, proposed }: { template: StudioTemplate; reload: () => Promise<void>; onDirty: (d: boolean) => void; initialDraft?: Draft | null; proposed?: (id: number) => void }) {
   const { t, locale } = useI18n()
   const editable = hasPermission('templates.manage')
   const [language, setLanguage] = useState<Locale>(locale)
@@ -19,7 +20,9 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
   const [design, setDesign] = useState('professional')
   const [selections, setSelections] = useState<{ revision: number; selection_kind: string; version_id: number; created_at: string; reason: string }[]>([])
   const [drafts, setDrafts] = useState<Draft[]>([])
-  const [opened, setOpened] = useState<Draft | null>(null)
+  const [opened, setOpened] = useState<Draft | null>(initialDraft || null)
+  const [proposal, setProposal] = useState<StudioVersion | null>(null)
+  const [preview, setPreview] = useState<{ report: { pages: { png: string }[] } } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<TranslationKey | null>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -61,6 +64,8 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
   return <section className="panel studio-template-details">
     <div className="panel-title"><div><h3>{template[`name_${locale}`] || template.name_bg}</h3><small>{template.code} · {t(typeKey(template.document_type))}</small></div></div>
     {error && <p className="error" role="alert">{t(error)}</p>}
+    {proposal && <ProposalDialog template={template} version={proposal} close={() => setProposal(null)} submitted={id => { setProposal(null); proposed?.(id) }} />}
+    {preview && <Modal title={t('editor.actualPdf')} onClose={() => setPreview(null)} wide><p>{t('editor.synthetic')}</p>{preview.report.pages.map((page, i) => <img className="studio-version-preview" key={i} src={`data:image/png;base64,${page.png}`} alt={`${t('editor.page')} ${i + 1}`} />)}</Modal>}
     <h4>{t('studio.versions')}</h4>
     {editable && template.versions.some(v => v.studio) && <label>{t('editor.activationReason')}<textarea maxLength={2000} value={activationNote} onChange={e => setActivationNote(e.target.value)} /></label>}
     {!template.versions.length && <p className="muted">{t('studio.noVersions')}</p>}
@@ -81,6 +86,7 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
         catch (e) { setError(studioError(e)) } finally { setBusy(false) }
       }}>{t('editor.activate')}</button></div>}
       <DownloadButton path={version.download_endpoint} filename={version.source_filename || `${template.code}.docx`} label={t('studio.source')} />
+      <div className="studio-proposal-actions">{version.studio && <button className="secondary" disabled={busy} onClick={async () => { setBusy(true); setError(null); try { setPreview(await api(`/studio/versions/${version.id}/preview`)) } catch (e) { setError(studioError(e)) } finally { setBusy(false) } }}>{t('editor.preview')}</button>}{hasPermission('studio.propose') && <button className="secondary" disabled={busy} onClick={() => setProposal(version)}>{t('proposal.propose')}</button>}</div>
     </article>)}
     <details><summary>{t('editor.selectionHistory')} · {t(`language.${language}`)}</summary>{selections.map(s => <article key={s.revision}><strong>{t('studio.revision', { number: s.revision })} · {t(s.selection_kind === 'STUDIO' ? 'editor.active' : 'editor.legacyActive')}</strong><p>{date(s.created_at)} · {s.reason}</p></article>)}</details>
     <p className="muted">{t('studio.numberingHint')}</p>
@@ -96,10 +102,10 @@ function TemplateDetails({ template, reload, onDirty }: { template: StudioTempla
   </section>
 }
 
-export function TemplateLibrary({ onDirty }: { onDirty: (d: boolean) => void }) {
+export function TemplateLibrary({ onDirty, requested, proposed }: { onDirty: (d: boolean) => void; requested?: { templateId: number; draft: Draft | null } | null; proposed?: (id: number) => void }) {
   const { t, locale } = useI18n()
   const [templates, setTemplates] = useState<StudioTemplate[]>([])
-  const [chosen, setChosen] = useState<number | null>(null)
+  const [chosen, setChosen] = useState<number | null>(requested?.templateId || null)
   const [search, setSearch] = useState('')
   const [language, setLanguage] = useState('')
   const [error, setError] = useState<TranslationKey | null>(null)
@@ -133,6 +139,6 @@ export function TemplateLibrary({ onDirty }: { onDirty: (d: boolean) => void }) 
       <div className="studio-fields"><label>{t('studio.search')}<input type="search" value={search} onChange={e => setSearch(e.target.value)} /></label><label>{t('admin.templateLanguage')}<select value={language} onChange={e => setLanguage(e.target.value)}><option value="">{t('studio.all')}</option>{(['bg', 'en', 'ru'] as const).map(lang => <option key={lang} value={lang}>{t(`language.${lang}`)}</option>)}</select></label></div>
       {creating && <form onSubmit={create}><fieldset disabled={busy} className="studio-fields"><label>{t('studio.code')}<input required maxLength={80} pattern="[A-Z0-9_-]+" value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} /></label><label>{t('studio.type')}<select value={form.document_type} onChange={e => setForm({ ...form, document_type: e.target.value })}>{workflows.map(type => <option key={type} value={type}>{t(typeKey(type))}</option>)}</select></label>{(['bg', 'en', 'ru'] as const).map(lang => <label key={lang}>{t('studio.name')} · {t(`language.${lang}`)}<input required maxLength={255} value={form[`name_${lang}`]} onChange={e => setForm({ ...form, [`name_${lang}`]: e.target.value })} /></label>)}</fieldset><button className="primary" disabled={busy}>{t('studio.create')}</button></form>}
     </div>
-    {loading ? <p role="status">{t('studio.loading')}</p> : <div className="studio-library-grid"><nav className="studio-template-list" aria-label={t('studio.library')}>{filtered.map(row => <button key={row.id} aria-current={chosen === row.id ? 'page' : undefined} onClick={() => { if (!dirty || window.confirm(t('studio.leave'))) setChosen(row.id) }}><b>{row[`name_${locale}`] || row.name_bg}</b><small>{t(typeKey(row.document_type))} · {row.code}</small></button>)}{!filtered.length && <p>{t('studio.empty')}</p>}</nav>{selected && <TemplateDetails key={selected.id} template={selected} reload={load} onDirty={setDirty} />}</div>}
+    {loading ? <p role="status">{t('studio.loading')}</p> : <div className="studio-library-grid"><nav className="studio-template-list" aria-label={t('studio.library')}>{filtered.map(row => <button key={row.id} aria-current={chosen === row.id ? 'page' : undefined} onClick={() => { if (!dirty || window.confirm(t('studio.leave'))) setChosen(row.id) }}><b>{row[`name_${locale}`] || row.name_bg}</b><small>{t(typeKey(row.document_type))} · {row.code}</small></button>)}{!filtered.length && <p>{t('studio.empty')}</p>}</nav>{selected && <TemplateDetails key={selected.id} template={selected} reload={load} onDirty={setDirty} proposed={proposed} initialDraft={requested?.templateId === selected.id ? requested.draft : null} />}</div>}
   </>
 }
