@@ -136,11 +136,23 @@ def proposals(status: Literal['PENDING', 'ACCEPTED', 'REJECTED'] | None = None,
     if template_id:
         filters.append(StudioProposal.template_id == template_id)
     if q.strip():
-        search = '%' + q.strip() + '%'
-        filters.append(or_(StudioProposal.title.ilike(search), StudioProposal.description.ilike(search),
-            StudioProposal.author_id.in_(select(User.id).where(User.full_name.ilike(search))),
+        search = q.strip()
+        if db.bind.dialect.name == 'sqlite':
+            # SQLite's built-in lower()/NOCASE only fold ASCII. Keep the same
+            # BG/EN/RU search behaviour in local installations without changing
+            # global SQL functions or persisting a second proposal registry.
+            db.connection().connection.driver_connection.create_function(
+                'studio_casefold', 1, lambda value: (value or '').casefold(), deterministic=True)
+
+            def matches(column):
+                return func.studio_casefold(column).contains(search.casefold(), autoescape=True)
+        else:
+            def matches(column):
+                return column.icontains(search, autoescape=True)
+        filters.append(or_(matches(StudioProposal.title), matches(StudioProposal.description),
+            StudioProposal.author_id.in_(select(User.id).where(matches(User.full_name))),
             StudioProposal.template_id.in_(select(DocumentTemplate.id).where(or_(
-                DocumentTemplate.name_bg.ilike(search), DocumentTemplate.name_en.ilike(search), DocumentTemplate.name_ru.ilike(search))))))
+                matches(DocumentTemplate.code), matches(DocumentTemplate.name_bg), matches(DocumentTemplate.name_en), matches(DocumentTemplate.name_ru))))))
     total = db.scalar(select(func.count(StudioProposal.id)).where(*filters))
     rows = db.scalars(select(StudioProposal).where(*filters).order_by(StudioProposal.created_at.desc(), StudioProposal.id.desc()).limit(limit).offset(offset))
     return {'items': [output(db, p) for p in rows], 'total': total, 'pending_count': pending}

@@ -1,0 +1,9 @@
+{
+  "accepted_exceptions": [],
+  "audited_dependency_count": 81,
+  "blocking": [],
+  "ecosystem": "python",
+  "informational": [],
+  "policy": "block_high_critical_and_unknown; exact_expiring_exceptions_only",
+  "valid": true
+}

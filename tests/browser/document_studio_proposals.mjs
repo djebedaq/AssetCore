@@ -30,6 +30,7 @@ async function login(page, email) {
 }
 async function studio(page, locale = 'bg', section = 'center') {
   const w = words[locale]
+  if (await page.locator('.mobile-toggle').isVisible() && !await page.locator('.sidebar').evaluate(el => el.classList.contains('open'))) await page.locator('.mobile-toggle').click()
   await page.locator('.sidebar-navigation').getByRole('button', { name: w[0], exact: true }).click()
   await page.locator('.studio-settings-tabs').getByRole('button', { name: /Document Studio/ }).click()
   await expect(page.locator('.document-studio')).toBeVisible()
@@ -64,6 +65,7 @@ async function propose(title, attach = false) {
   await dialog.getByRole('button', { name: 'Изпрати предложение', exact: true }).click()
   await expect(director.locator('.document-studio > [role=status]')).toContainText('е записано успешно')
   await expect(director.locator('.studio-proposal-detail h3')).toContainText(title)
+  await expect(director.locator('.studio-proposal-card').filter({ hasText: title })).toBeVisible()
   return (await directorApi('/studio/proposals')).items.find(p => p.title === title).id
 }
 try {
@@ -98,6 +100,11 @@ try {
   const rejectedTitle = 'SYNTHETIC QA — предложение за отхвърляне'
   const rejectedId = await propose(rejectedTitle)
   await studio(admin)
+  await expect(admin.locator('.studio-proposal-card')).toHaveCount(2)
+  await admin.locator('.studio-proposal-filters summary').click()
+  await admin.getByLabel('Търси предложение, шаблон или автор').fill('КОМПАКТНА')
+  await expect(admin.locator('.studio-proposal-card')).toHaveCount(1)
+  await admin.getByLabel('Търси предложение, шаблон или автор').fill('')
   await expect(admin.locator('.studio-proposal-card')).toHaveCount(2)
   await shot(admin, '06-admin-pending-proposals')
   await selectProposal(admin, acceptedTitle)

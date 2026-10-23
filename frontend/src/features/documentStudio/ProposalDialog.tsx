@@ -15,6 +15,11 @@ export function ProposalDialog({ template, version, close, submitted }: {
     const urls = files.map(file => URL.createObjectURL(file)); setPreviews(urls)
     return () => urls.forEach(url => URL.revokeObjectURL(url))
   }, [files])
+  useEffect(() => {
+    const before = (event: BeforeUnloadEvent) => { if (title || description || files.length || busy) event.preventDefault() }
+    window.addEventListener('beforeunload', before)
+    return () => window.removeEventListener('beforeunload', before)
+  }, [title, description, files.length, busy])
   const finish = () => { if (!busy && (!(title || description || files.length) || window.confirm(t('studio.leave')))) close() }
   async function send(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(null)

@@ -124,12 +124,47 @@ def test_own_scope_idor_and_safe_attachment_never_becomes_brand_image(client, au
     assert result.status_code == 200 and result.headers['content-type'] == 'image/png'
     assert b'<script>' not in result.content and 'no-store' in result.headers['cache-control']
     assert hashlib.sha256(result.content).hexdigest() == p['attachments'][0]['sha256']
+    second = create(client, other, payload)
+    assert client.get(f"/api/studio/proposals/{second['id']}/attachments/{p['attachments'][0]['id']}", headers=other).status_code == 404
     assert client.get(image_path.replace('/attachments/', '/attachments/999'), headers=first).status_code == 404
     with session_factory() as db:
         assert db.scalar(select(func.count(CompanyBrandImage.id))) == 0
     comment = client.post(path + '/comments', headers=first, json={'expected_revision': 1, 'body': '<script>alert("escaped by UI")</script>'})
     assert comment.status_code == 201 and comment.json()['revision'] == 2
     assert client.post(path + '/comments', headers=first, json={'expected_revision': 1, 'body': 'Stale comment'}).status_code == 409
+
+
+def test_history_pagination_is_bounded_scoped_and_append_only(client, auth_headers, session_factory):
+    from app.document_studio import proposals
+    director = actor_headers(session_factory)
+    p = create(client, director, studio_version(session_factory))
+    with session_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        item = db.get(StudioProposal, p['id'])
+        for revision in range(1, 106):
+            proposals.advance(db, item, revision)
+            proposals.event(db, item, actor, 'COMMENT', f'Synthetic bounded history {revision}')
+        db.commit()
+    path = f"/api/studio/proposals/{p['id']}"
+    latest = client.get(path, headers=director).json()
+    assert len(latest['events']) == 100 and latest['revision'] == 106 and latest['events_before'] == 7
+    older = client.get(path + '?before_revision=7', headers=director).json()
+    assert [e['revision'] for e in older['events']] == list(range(1, 7)) and older['events_before'] is None
+    assert len({e['id'] for e in latest['events'] + older['events']}) == 106
+    assert client.get(path + '?before_revision=7', headers=actor_headers(session_factory, suffix='other')).status_code == 404
+
+
+def test_proposal_search_cyrillic_filters_and_literal_metacharacters(client, auth_headers, session_factory):
+    payload = studio_version(session_factory)
+    director = actor_headers(session_factory)
+    create(client, director, payload | {'title': 'ПРОМЯНА НА ШАПКАТА — ИЗМЕНЕНИЕ 50%'})
+    for query in ('промяна', 'изменение', '50%'):
+        result = client.get('/api/studio/proposals', headers=director, params={'q': query, 'status': 'PENDING', 'language': 'bg'})
+        assert result.status_code == 200 and result.json()['total'] == 1, result.text
+    assert client.get('/api/studio/proposals', headers=director, params={'q': "' OR 1=1 --"}).json()['total'] == 0
+    assert client.get('/api/studio/proposals', headers=director, params={'q': '_'}).json()['total'] == 0
+    assert client.get('/api/studio/proposals', headers=director, params={'status': 'REJECTED'}).json()['total'] == 0
+    assert client.get('/api/studio/proposals', headers=actor_headers(session_factory, suffix='search-other'), params={'q': 'промяна'}).json()['total'] == 0
 
 
 @pytest.mark.parametrize('change', [

@@ -1,5 +1,8 @@
 export const proposalBg = {
   'proposal.center': 'Предложения за промени',
+  'proposal.search': 'Търси предложение, шаблон или автор',
+  'proposal.filters': 'Търсене и филтри',
+  'proposal.all': 'Всички',
   'proposal.propose': 'Предложи промяна',
   'proposal.title': 'Заглавие на предложението',
   'proposal.description': 'Подробно описание',
@@ -59,6 +62,8 @@ export const proposalBg = {
 } as const
 export const proposalEn: Record<keyof typeof proposalBg, string> = {
   'proposal.center': 'Template change proposals', 'proposal.propose': 'Propose a change',
+  'proposal.search': 'Search proposals, templates or authors',
+  'proposal.filters': 'Search and filters', 'proposal.all': 'All',
   'proposal.title': 'Proposal title', 'proposal.description': 'Detailed description',
   'proposal.images': 'Explanatory images', 'proposal.imageHint': 'Up to 3 PNG/JPEG images, 2 MB each. Attachments do not become authorized company logos.',
   'proposal.submit': 'Submit proposal', 'proposal.sent': 'Proposal #{{id}} was saved successfully.',
@@ -84,6 +89,8 @@ export const proposalEn: Record<keyof typeof proposalBg, string> = {
 }
 export const proposalRu: Record<keyof typeof proposalBg, string> = {
   'proposal.center': 'Предложения об изменениях', 'proposal.propose': 'Предложить изменение',
+  'proposal.search': 'Поиск предложений, шаблонов или авторов',
+  'proposal.filters': 'Поиск и фильтры', 'proposal.all': 'Все',
   'proposal.title': 'Заголовок предложения', 'proposal.description': 'Подробное описание',
   'proposal.images': 'Поясняющие изображения', 'proposal.imageHint': 'До 3 изображений PNG/JPEG, до 2 МБ каждое. Приложения не становятся разрешёнными логотипами компании.',
   'proposal.submit': 'Отправить предложение', 'proposal.sent': 'Предложение №{{id}} успешно сохранено.',

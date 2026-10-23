@@ -35,6 +35,7 @@ def test_accepted_proposal_publishes_separately_with_exact_trace(converter, clie
     # Directors preview that specific immutable version without editing a draft.
     rendered = client.get(f"/api/studio/versions/{version['id']}/preview", headers=director)
     assert rendered.status_code == 200 and rendered.json()['report']['docx_sha256'] == preview['report']['docx_sha256']
+    assert rendered.headers['cache-control'] == 'private, no-store'
 
 
 def test_published_starter_missing_logo_actual_pdf(converter, client, auth_headers, session_factory):

@@ -357,7 +357,7 @@ def preview_draft(draft_id: int, payload: PreviewInput, user: User = Depends(rea
 
 
 @router.get("/versions/{version_id}/preview")
-def preview_version(version_id: int, _: User = Depends(reader), db: Session = Depends(get_db)):
+def preview_version(version_id: int, response: Response, _: User = Depends(reader), db: Session = Depends(get_db)):
     from ..template_engine import source_bytes
     from .publication import validate_render
     from .renderer import manifest_from_source
@@ -371,6 +371,8 @@ def preview_version(version_id: int, _: User = Depends(reader), db: Session = De
         docx, pdf, report = validate_render(manifest, 5, raster=True)
     except ValueError as exc:
         fail(str(exc) if str(exc).startswith("studio_") else "studio_invalid")
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
     return {"report": report, "docx": base64.b64encode(docx).decode(), "pdf": base64.b64encode(pdf).decode()}
 
 

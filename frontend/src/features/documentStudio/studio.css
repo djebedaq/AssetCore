@@ -62,3 +62,5 @@
 @media(max-width: 1000px) { .studio-proposals-grid { grid-template-columns: 1fr; } .studio-proposal-list { max-height: 400px; overflow-y: auto; } }
 @media(max-width: 900px) { .studio-library-grid { grid-template-columns: 1fr; } .studio-template-list { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media(max-width: 560px) { .studio-fields, .studio-template-list { grid-template-columns: 1fr; } .studio-heading { align-items: start; flex-direction: column; gap: 10px; } .studio-navigation button, .studio-settings-tabs button { flex: 1; justify-content: center; } .studio-savebar button { width: 100%; } .studio-savebar [role=status] { width: 100%; } }
+
+.studio-proposal-filters summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600}.studio-proposal-pager{margin-bottom:0}@media(max-width:768px){.studio-proposals-grid.has-selection .studio-proposal-list{max-height:240px}}
