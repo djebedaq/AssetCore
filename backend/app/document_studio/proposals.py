@@ -84,8 +84,10 @@ def event(db, item, user, kind, body, *, draft_id=None, version_id=None):
 
 def advance(db, item, expected, **values):
     from .routes import fail
+    if item.revision != expected:
+        fail('studio_conflict', 409)
     result = db.execute(update(StudioProposal).where(StudioProposal.id == item.id,
-        StudioProposal.revision == expected).values(revision=StudioProposal.revision + 1, **values))
+        StudioProposal.revision == expected, StudioProposal.status == item.status).values(revision=StudioProposal.revision + 1, **values))
     if result.rowcount != 1:
         db.rollback()
         fail('studio_conflict', 409)

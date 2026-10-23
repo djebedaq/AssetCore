@@ -1,22 +1,22 @@
 {
   "passed": true,
   "before_sha256": {
-    "machines": "a18c7167b0540547e5d903360f25f77970a1c67010ed79d59c18c4192a2d3264",
-    "official_document_versions": "0b78725bd2981561657dcf82d45ade45ef420af207188573aeafdbce173e6b0a",
-    "generated_documents": "83669928f13215e16b413c3bae1d9da4942e0ad4b901f40dba97c16ff7aa69b1",
-    "protocol_documents": "2eddd9911e3b809ad3c1241b4dc830bb7339d07214e7e6865fca6e8c4f65d998",
-    "request_approval_snapshots": "c550d6d44ee6095a12682ed0ff6cf3866c0cceb0ddc9119970c313740418d166",
+    "machines": "16b10145b5a24afd2c4411b4897fd488b5625034224e68b156b10588d4103606",
+    "official_document_versions": "a11be615d15db09c63ab17bad032671e7561527cc375f593afb5f95412426fc0",
+    "generated_documents": "90355f7517be2a326fc9b7896f38c5f6f9022684e56a55a94163dfd8b40ccb5a",
+    "protocol_documents": "3e1e3a752e7572b875710bc561df9847f4d53855810a75ae3e98f9d5f6914ea6",
+    "request_approval_snapshots": "24fdf1365f82f41bd0d31cea4693306b290e94cdbdabc96a9684f820168e2987",
     "request_number_counter": "f0594ddfd3560cc1dccad2d46a1e4098cf506a2ca2bd7eb304f8b018839ebd15",
-    "studio_activations": "ff1266cc93b589a00c6aaad88c0cab199a0d65953cb7a8de703b623402f2d624"
+    "studio_activations": "48fcdbdb3f4228311c94adff17747423ff1a5d24bb669ff87c2c1d8549bed753"
   },
   "after_sha256": {
-    "machines": "a18c7167b0540547e5d903360f25f77970a1c67010ed79d59c18c4192a2d3264",
-    "official_document_versions": "0b78725bd2981561657dcf82d45ade45ef420af207188573aeafdbce173e6b0a",
-    "generated_documents": "83669928f13215e16b413c3bae1d9da4942e0ad4b901f40dba97c16ff7aa69b1",
-    "protocol_documents": "2eddd9911e3b809ad3c1241b4dc830bb7339d07214e7e6865fca6e8c4f65d998",
-    "request_approval_snapshots": "c550d6d44ee6095a12682ed0ff6cf3866c0cceb0ddc9119970c313740418d166",
+    "machines": "16b10145b5a24afd2c4411b4897fd488b5625034224e68b156b10588d4103606",
+    "official_document_versions": "a11be615d15db09c63ab17bad032671e7561527cc375f593afb5f95412426fc0",
+    "generated_documents": "90355f7517be2a326fc9b7896f38c5f6f9022684e56a55a94163dfd8b40ccb5a",
+    "protocol_documents": "3e1e3a752e7572b875710bc561df9847f4d53855810a75ae3e98f9d5f6914ea6",
+    "request_approval_snapshots": "24fdf1365f82f41bd0d31cea4693306b290e94cdbdabc96a9684f820168e2987",
     "request_number_counter": "f0594ddfd3560cc1dccad2d46a1e4098cf506a2ca2bd7eb304f8b018839ebd15",
-    "studio_activations": "ff1266cc93b589a00c6aaad88c0cab199a0d65953cb7a8de703b623402f2d624"
+    "studio_activations": "48fcdbdb3f4228311c94adff17747423ff1a5d24bb669ff87c2c1d8549bed753"
   },
   "proposal_id": 1,
   "draft_id": 6,

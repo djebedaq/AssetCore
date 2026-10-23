@@ -14,6 +14,28 @@ from test_studio_proposals import studio_version
 pytestmark = pytest.mark.postgres
 
 
+def test_guessed_future_revision_cannot_override_concurrent_decision(pg_factory):
+    payload = studio_version(pg_factory)
+    with pg_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        p = proposals.create_proposal(proposals.ProposalInput(**payload), actor, db)
+    with pg_factory() as stale_db:
+        actor = stale_db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        stale = stale_db.get(StudioProposal, p['id'])
+        with pg_factory() as winner_db:
+            winner = winner_db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            proposals.decide(p['id'], proposals.DecisionInput(expected_revision=1, status='ACCEPTED',
+                reason='Synthetic concurrent winning review'), winner, winner_db)
+        assert stale.revision == 1 and stale.status == 'PENDING'
+        with pytest.raises(HTTPException) as conflict:
+            proposals.decide(p['id'], proposals.DecisionInput(expected_revision=2, status='REJECTED',
+                reason='Guessed future revision must not override'), actor, stale_db)
+        assert conflict.value.status_code == 409
+    with pg_factory() as db:
+        assert db.get(StudioProposal, p['id']).status == 'ACCEPTED'
+        assert db.get(StudioProposal, p['id']).revision == 2
+
+
 @pytest.mark.parametrize('competing', ['decision', 'comment'])
 def test_overlapping_proposal_decisions_and_comments_cas(pg_factory, monkeypatch, competing):
     payload = studio_version(pg_factory)

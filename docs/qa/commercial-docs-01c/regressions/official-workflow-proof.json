@@ -3,8 +3,8 @@
   "cases": [
     {
       "workflow": "TRANSFER_ISSUE",
-      "docx_sha256": "d4104f291f45f4e21ab9002e1c9fb7d27f4203895f84a2e747abfca961480fa2",
-      "pdf_sha256": "ef6b163e165442c197d90fd53ff3759830573b90260435ecc9619a4fa801e80d",
+      "docx_sha256": "c1b1f2422eba4f53c22d463a8f6941e28cf79a53ae3630800b3f41f51baacfb8",
+      "pdf_sha256": "8c8e80fd5d9bb5440f1fc57fe008027009fe2d2a3f777712666a50662f3bd1ac",
       "pages": 1,
       "status": "SIGNED",
       "template_version_id": 13,
@@ -20,8 +20,8 @@
     },
     {
       "workflow": "TRANSFER_RETURN",
-      "docx_sha256": "a12970d45f94d49fb64b1c38baccc3cd07c749c309029699e7af418ad6fd589f",
-      "pdf_sha256": "8a949c557f0c5344b96fb850346ea7720ecbd76f49e4c3e66fa1c01ac7e3d1c2",
+      "docx_sha256": "42a2cb9edb669892b79fb22dc883765dd819927b4e85b95353fc820b69abc887",
+      "pdf_sha256": "1b5043f3b39ee39260f79483c19541390401e34ebcf0c33e6181e2bb179e4509",
       "pages": 1,
       "status": "SIGNED",
       "template_version_id": 14,
@@ -37,8 +37,8 @@
     },
     {
       "workflow": "REPAIR_PROTOCOL",
-      "docx_sha256": "396d5501ac9ec1d1506cd82d24d064d1102b730dfcc0aeace5eb09b83918cb5b",
-      "pdf_sha256": "7239ab99078afe95cf9987b436b8bbe4b3003474e396c3f7dbc49717e0dd62f0",
+      "docx_sha256": "dcc4ee95a2c6c89b895a07250148394b7e343bece3ebe83d15a5bad5eed3c748",
+      "pdf_sha256": "a0c3c9be53334cd49743c0be0355a178cb2df87bd92a0d22268b35b8e264baa7",
       "pages": 2,
       "status": "FINALIZED",
       "template_version_id": 15,
@@ -54,8 +54,8 @@
     },
     {
       "workflow": "PART_REQUEST",
-      "docx_sha256": "416cb487e52a13a03213207cc41ee2b42cb7b1e76e826375e18d166b129c1489",
-      "pdf_sha256": "dfffd75430528c9878d6d5d00f1be70e85dedf38e20a92b77761e3ac10f4b4a8",
+      "docx_sha256": "1517e6d5756bbd91036160f8cc450c8455a0bb759c62ae32c7f694f293da2c8a",
+      "pdf_sha256": "7313895a2fba424686772a1401d88162695dff4d51cc3bce276299250616efa6",
       "pages": 3,
       "status": "SIGNED",
       "template_version_id": 16,

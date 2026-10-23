@@ -1,0 +1,269 @@
+{
+  "qa_only": true,
+  "docx_count": 5,
+  "pdf_count": 5,
+  "pdf_page_png_count": 8,
+  "ui_screenshot_count": 34,
+  "files": [
+    {
+      "path": "browser/01-director-template-version-1440.png",
+      "bytes": 296465,
+      "sha256": "f06a99adb6dd8c7aac4ddba106f1b7b4111d536de1bb79d6cf0670cd17197e44"
+    },
+    {
+      "path": "browser/01b-director-exact-version-pdf-1440.png",
+      "bytes": 282823,
+      "sha256": "a265718ba73267de6d0134782576cdd5705bd9380dd1c9cfe0dcdbcc8034a2df"
+    },
+    {
+      "path": "browser/02-director-proposal-dialog-1440.png",
+      "bytes": 254971,
+      "sha256": "87102b7c2fca12430b0902ca27761c05997ab85a92e956cb88e7d91e74272bb6"
+    },
+    {
+      "path": "browser/03-director-filled-proposal-1440.png",
+      "bytes": 269606,
+      "sha256": "cb150098a94d7390749c819cbae519cf954a0da4db151480d06eed2ff9acd8c8"
+    },
+    {
+      "path": "browser/04-director-image-proposal-1440.png",
+      "bytes": 264878,
+      "sha256": "1b4e5ede01429ddd87df4a4492ee666037052add77cd09af6ac0a58fb425ab65"
+    },
+    {
+      "path": "browser/05-director-submitted-1440.png",
+      "bytes": 250737,
+      "sha256": "b056e0e438a579ba55eff101f8ff14349ba15876d76108bd0ecc4af9137a7bf4"
+    },
+    {
+      "path": "browser/06-admin-pending-proposals-1440.png",
+      "bytes": 213068,
+      "sha256": "36c8519d858d95271e365c8c1ee1a54af858d90d2fbf30185a40ca73a5f6f98d"
+    },
+    {
+      "path": "browser/07-admin-target-version-history-1440.png",
+      "bytes": 312101,
+      "sha256": "7b5bdc6a3fd5d2e365fe5a8d774c52948d4ba04874ea938cc0088c83a1b1bbe6"
+    },
+    {
+      "path": "browser/07b-authorized-attachment-1440.png",
+      "bytes": 281010,
+      "sha256": "1527af4f771d028eea3cc53a6d8f82076dae2c36310e3d296bbe83b0b2a614f3"
+    },
+    {
+      "path": "browser/08-admin-accepted-390.png",
+      "bytes": 226638,
+      "sha256": "a8e9745fcd16e991ab3f4692a290f45a991d65c3e6e63471607d77b301a2d010"
+    },
+    {
+      "path": "browser/09-admin-rejected-with-reason-390.png",
+      "bytes": 170594,
+      "sha256": "121960028562612c90422dc33e4c4916aaf288dc83177a3b7e103d857de6be06"
+    },
+    {
+      "path": "browser/10-admin-comment-390.png",
+      "bytes": 205788,
+      "sha256": "79bb14222ca67fe0de7acda7757466666706bb7509a60de6e7595b4ecae2dc78"
+    },
+    {
+      "path": "browser/11-proposal-editor-draft-1440.png",
+      "bytes": 134920,
+      "sha256": "c74743707b776a57ffc13da02fd055735f8e6dcdeb879c18aed27f1ec8b437d1"
+    },
+    {
+      "path": "browser/12-proposal-published-version-link-1440.png",
+      "bytes": 370324,
+      "sha256": "4004fbd6abc23143a4b74465943b513f52530d3d600f36bdfa5d19b8d3b92ea8"
+    },
+    {
+      "path": "browser/13-actual-pdf-empty-logo-1440.png",
+      "bytes": 145490,
+      "sha256": "becd8aaf4d1905de9a6817c7b75022615c089c69fc1076116b3939fbe93bba24"
+    },
+    {
+      "path": "browser/14-compact-draft-1440.png",
+      "bytes": 145940,
+      "sha256": "821798306c42ad95e773936171e86cd037c1e408e81ec47387ad5a5e786d4b62"
+    },
+    {
+      "path": "browser/15-admin-bg-proposal-status-1440.png",
+      "bytes": 370843,
+      "sha256": "d07b297396bf7fe2215a6a476aef7dcfc30ddec4cd59191a628c010bcd151602"
+    },
+    {
+      "path": "browser/15-admin-bg-proposal-status-390.png",
+      "bytes": 247804,
+      "sha256": "77e402f68f691c9c967d3e30c1b9d3c6372c8b506fc7918fb451c5933d01307e"
+    },
+    {
+      "path": "browser/15-admin-bg-proposal-status-768.png",
+      "bytes": 334599,
+      "sha256": "a32156c98caee8d535b0cc290aec6d934a99a5a3ccc90158867baff113b98871"
+    },
+    {
+      "path": "browser/15-admin-en-proposal-status-1440.png",
+      "bytes": 364577,
+      "sha256": "8387dfbca623e8fe3e9343e8017e972ece6d93fdc12598ea9765f1b8fc9672f5"
+    },
+    {
+      "path": "browser/15-admin-en-proposal-status-390.png",
+      "bytes": 244320,
+      "sha256": "6e06d6c5586f8b61442a45fde7a507a71fc9abca2f6d701a6cf2ffe391014d84"
+    },
+    {
+      "path": "browser/15-admin-en-proposal-status-768.png",
+      "bytes": 329212,
+      "sha256": "48358b0561c1725935ecb69e26a65b4ce797fc692e615b684d035a6b8a2323bf"
+    },
+    {
+      "path": "browser/15-admin-ru-proposal-status-1440.png",
+      "bytes": 381124,
+      "sha256": "35623666fc21a86b144e0d87ed51d8c8363dac355f7f3694d6bf1bdba4b0532d"
+    },
+    {
+      "path": "browser/15-admin-ru-proposal-status-390.png",
+      "bytes": 249517,
+      "sha256": "daca2b63ef45ddd92a4bd7fa2a4cd703526f075a48960ffa1534cf7f0850d7b1"
+    },
+    {
+      "path": "browser/15-admin-ru-proposal-status-768.png",
+      "bytes": 341023,
+      "sha256": "725a6fa4d77db27c6a8d79dc3a297ad7cf8db2070449f11514f4f636e688e2d9"
+    },
+    {
+      "path": "browser/15-director-bg-proposal-status-1440.png",
+      "bytes": 349608,
+      "sha256": "a2bca4aee0ea986f9e7b0cfd3afac9278139d0faf07edc45c72997776163912b"
+    },
+    {
+      "path": "browser/15-director-bg-proposal-status-390.png",
+      "bytes": 232734,
+      "sha256": "9aa69e8026898c5176d4eb10d9cfc55ccd3601a6ec5493223af621a200e8e7c4"
+    },
+    {
+      "path": "browser/15-director-bg-proposal-status-768.png",
+      "bytes": 315284,
+      "sha256": "e815dad334f794ac32379eb6d6ab5aae77856b72ad69ba82ebb6ae35561c788f"
+    },
+    {
+      "path": "browser/15-director-en-proposal-status-1440.png",
+      "bytes": 345262,
+      "sha256": "8abcb33cce62b42da4ae939517b6dc434814b266b079b619bccf67adac4c9b92"
+    },
+    {
+      "path": "browser/15-director-en-proposal-status-390.png",
+      "bytes": 232193,
+      "sha256": "f7052c696681d922db84b02ef48e400221720cee01b5f1403f799a5b81a63569"
+    },
+    {
+      "path": "browser/15-director-en-proposal-status-768.png",
+      "bytes": 313774,
+      "sha256": "bfa3f93bf19080a4eda73fdca165c3a06fddd2e211329bff55eabb38c460c076"
+    },
+    {
+      "path": "browser/15-director-ru-proposal-status-1440.png",
+      "bytes": 359602,
+      "sha256": "72473df9804ee33aba7e8f0c8cbca6486f6fc8ad4556d9231f17e8e42aefbe9e"
+    },
+    {
+      "path": "browser/15-director-ru-proposal-status-390.png",
+      "bytes": 236266,
+      "sha256": "abedee97f8cf0346cd2b518390d59c3ba69ba42a4568112121e7669c80505e58"
+    },
+    {
+      "path": "browser/15-director-ru-proposal-status-768.png",
+      "bytes": 324316,
+      "sha256": "2f46ea981c7d061b564c0c1d113d6ca5c70f33ad153dc0d1a2da50358400e4e0"
+    },
+    {
+      "path": "browser/compact-missing-logo-page-1.png",
+      "bytes": 73189,
+      "sha256": "8a602735626a53a98818878cacf33ae1f524897300a9b33e89f87853917d3c90"
+    },
+    {
+      "path": "browser/compact-missing-logo.docx",
+      "bytes": 43050,
+      "sha256": "d5b7c675d1f0ce55827d24eb45fc725a3b469a3417d3ea89b3dcbe6ab1b2c33e"
+    },
+    {
+      "path": "browser/compact-missing-logo.pdf",
+      "bytes": 67398,
+      "sha256": "62ee7c4a13385ec3d9ed6f1bc75a8b1c4b10644e30b5b359394859a03d6faa4c"
+    },
+    {
+      "path": "regressions/parts-request/official-synthetic-page-1.png",
+      "bytes": 102266,
+      "sha256": "c26a55b80819da69b9412a2bdaf3235c42143caed4024806684d412aaedd1f06"
+    },
+    {
+      "path": "regressions/parts-request/official-synthetic-page-2.png",
+      "bytes": 205849,
+      "sha256": "dced5d3dda03dc4bfbbd31b95d7debc23fb4a05d73c1941dcb9de2e20ed952e3"
+    },
+    {
+      "path": "regressions/parts-request/official-synthetic-page-3.png",
+      "bytes": 133976,
+      "sha256": "43d856f493eb22aaf46898b2f935e897265e21d74b4c05e4f6b3280c3c5c1008"
+    },
+    {
+      "path": "regressions/parts-request/official-synthetic.docx",
+      "bytes": 1265978,
+      "sha256": "1517e6d5756bbd91036160f8cc450c8455a0bb759c62ae32c7f694f293da2c8a"
+    },
+    {
+      "path": "regressions/parts-request/official-synthetic.pdf",
+      "bytes": 732638,
+      "sha256": "7313895a2fba424686772a1401d88162695dff4d51cc3bce276299250616efa6"
+    },
+    {
+      "path": "regressions/repair-protocol/official-synthetic-page-1.png",
+      "bytes": 105438,
+      "sha256": "091794f68e77459cf859edbafb94f1538f282d21dd5f1a891c49d1148a5e2fc2"
+    },
+    {
+      "path": "regressions/repair-protocol/official-synthetic-page-2.png",
+      "bytes": 104833,
+      "sha256": "3d511695e590d8da5997c0fffca0dbbd0c24c84b5bb9594017383d68f6530390"
+    },
+    {
+      "path": "regressions/repair-protocol/official-synthetic.docx",
+      "bytes": 45532,
+      "sha256": "dcc4ee95a2c6c89b895a07250148394b7e343bece3ebe83d15a5bad5eed3c748"
+    },
+    {
+      "path": "regressions/repair-protocol/official-synthetic.pdf",
+      "bytes": 93638,
+      "sha256": "a0c3c9be53334cd49743c0be0355a178cb2df87bd92a0d22268b35b8e264baa7"
+    },
+    {
+      "path": "regressions/transfer-issue/official-synthetic-page-1.png",
+      "bytes": 100849,
+      "sha256": "f0639826551e4ed2ba8a0f5db7f0c11cdd5ae29660a4ee17b2887a87e8c47b77"
+    },
+    {
+      "path": "regressions/transfer-issue/official-synthetic.docx",
+      "bytes": 43720,
+      "sha256": "c1b1f2422eba4f53c22d463a8f6941e28cf79a53ae3630800b3f41f51baacfb8"
+    },
+    {
+      "path": "regressions/transfer-issue/official-synthetic.pdf",
+      "bytes": 67597,
+      "sha256": "8c8e80fd5d9bb5440f1fc57fe008027009fe2d2a3f777712666a50662f3bd1ac"
+    },
+    {
+      "path": "regressions/transfer-return/official-synthetic-page-1.png",
+      "bytes": 105273,
+      "sha256": "641e1597d8cbb0d307f49aea8f04623421ce7860d5a58142ea8ca222c24f3fd5"
+    },
+    {
+      "path": "regressions/transfer-return/official-synthetic.docx",
+      "bytes": 43828,
+      "sha256": "42a2cb9edb669892b79fb22dc883765dd819927b4e85b95353fc820b69abc887"
+    },
+    {
+      "path": "regressions/transfer-return/official-synthetic.pdf",
+      "bytes": 67975,
+      "sha256": "1b5043f3b39ee39260f79483c19541390401e34ebcf0c33e6181e2bb179e4509"
+    }
+  ]
+}

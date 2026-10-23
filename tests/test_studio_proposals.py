@@ -162,7 +162,7 @@ def test_proposal_search_cyrillic_filters_and_literal_metacharacters(client, aut
         result = client.get('/api/studio/proposals', headers=director, params={'q': query, 'status': 'PENDING', 'language': 'bg'})
         assert result.status_code == 200 and result.json()['total'] == 1, result.text
     assert client.get('/api/studio/proposals', headers=director, params={'q': "' OR 1=1 --"}).json()['total'] == 0
-    assert client.get('/api/studio/proposals', headers=director, params={'q': '_'}).json()['total'] == 0
+    assert client.get('/api/studio/proposals', headers=director, params={'q': '_%_'}).json()['total'] == 0
     assert client.get('/api/studio/proposals', headers=director, params={'status': 'REJECTED'}).json()['total'] == 0
     assert client.get('/api/studio/proposals', headers=actor_headers(session_factory, suffix='search-other'), params={'q': 'промяна'}).json()['total'] == 0
 
