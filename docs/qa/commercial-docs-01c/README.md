@@ -34,7 +34,7 @@
 
 ## Chromium и компактност
 
-`python tests/browser/run_document_studio_proposals_qa.py`: passed, 5 групи проверки, 34 реални screenshots, 0 browser runtime errors. [Галерията](browser/README.md) съдържа всички сценарии и BG/EN/RU при 390/768/1440 px. Приемане, отказ и коментар са изпълнени с touch на 390 px; кирилско търсене, разрешено изображение, dialog focus, labels и липса на document-level horizontal overflow са проверени с assertions.
+`python tests/browser/run_document_studio_proposals_qa.py`: passed, 5 групи проверки, 34 реални screenshots, 0 browser runtime errors. [Галерията](browser/README.md) съдържа всички сценарии и BG/EN/RU при 390/768/1440 px. Администраторът в сценария е отделен акаунт без owner статус (проверен чрез /auth/me). Приемане, отказ и коментар са изпълнени с touch на 390 px; кирилско търсене, разрешено изображение, dialog focus, labels и липса на document-level horizontal overflow са проверени с assertions.
 
 [Компактен DOCX](browser/compact-missing-logo.docx), [actual PDF](browser/compact-missing-logo.pdf), [PNG страница](browser/compact-missing-logo-page-1.png): текущата чернова е променена чрез UI preset, записана чрез CAS и публикувана отделно. Не е активирана. [browser-proof.json](browser/browser-proof.json) пази exact target/draft/published IDs и потвърдени source hashes. [artifact-manifest.json](artifact-manifest.json) изброява SHA-256 на 5 DOCX/PDF двойки, 8 действителни PDF страници и 34 UI screenshots.
 

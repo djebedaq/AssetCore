@@ -43,6 +43,14 @@ def test_overlapping_proposal_decisions_and_comments_cas(pg_factory, monkeypatch
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
         p = proposals.create_proposal(proposals.ProposalInput(**payload), actor, db)
         proposal_id = p['id']
+        other = User(email='studio-other-admin@qa.invalid', full_name='Synthetic QA other administrator',
+            first_name='Synthetic', middle_name='QA', last_name='Administrator', job_title='QA reviewer',
+            password_hash=actor.password_hash, role='administrator', is_active=True, is_system_owner=False,
+            profile_status='PROFILE_COMPLETE')
+        db.add(other)
+        db.commit()
+        administrators = [actor.id, other.id]
+        assert administrators[0] != administrators[1]
     barrier = Barrier(2)
     original = proposals.advance
 
@@ -54,7 +62,7 @@ def test_overlapping_proposal_decisions_and_comments_cas(pg_factory, monkeypatch
 
     def perform(index):
         with pg_factory() as db:
-            actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+            actor = db.get(User, administrators[index])
             try:
                 if competing == 'comment' and index:
                     proposals.comment(proposal_id, proposals.CommentInput(expected_revision=1, body='Overlapping QA comment'), actor, db)

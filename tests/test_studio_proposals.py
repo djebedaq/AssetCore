@@ -31,7 +31,7 @@ def actor_headers(factory, role='director', suffix='one'):
         owner = db.scalar(select(User).where(User.is_system_owner.is_(True)))
         user = User(email=f'{role}-{suffix}@qa.invalid', full_name=f'Synthetic {role} {suffix}',
             password_hash=owner.password_hash, role=role, is_active=True, is_system_owner=False,
-            first_name='QA', last_name='Actor', job_title='QA reviewer', profile_status='PROFILE_COMPLETE')
+            first_name='QA', middle_name='Synthetic', last_name='Actor', job_title='QA reviewer', profile_status='PROFILE_COMPLETE')
         db.add(user)
         db.commit()
         return {'Authorization': 'Bearer ' + create_access_token(user)}
@@ -67,6 +67,24 @@ def test_proposal_role_matrix(client, auth_headers, session_factory, role, allow
     response = client.post('/api/studio/proposals', headers=headers, json=payload)
     assert response.status_code == (201 if allowed else 403), response.text
     assert client.get('/api/studio/proposals', headers=headers).status_code == (200 if allowed else 403)
+    if role == 'administrator':
+        own = response.json()
+        decision = client.post(f"/api/studio/proposals/{own['id']}/decision", headers=headers,
+            json={'expected_revision': 1, 'status': 'ACCEPTED', 'reason': 'Non-owner administrator review'})
+        assert decision.status_code == 200
+        draft = client.post(f"/api/studio/proposals/{own['id']}/drafts", headers=headers,
+            json={'expected_revision': 2, 'title': 'Non-owner administrator exact draft'})
+        assert draft.status_code == 201 and draft.json()['base_version_id'] == payload['target_version_id']
+        image = {k: v for k, v in image_payload().items() if k != 'purpose'}
+        delegated = create(client, actor_headers(session_factory, suffix='delegated'), payload | {'attachments': [image]})
+        path = f"/api/studio/proposals/{delegated['id']}"
+        assert client.get(path, headers=headers).status_code == 200
+        assert client.get('/api' + delegated['attachments'][0]['download_endpoint'], headers=headers).status_code == 200
+        assert client.post(path + '/comments', headers=headers,
+            json={'expected_revision': 1, 'body': 'Non-owner administrator comment'}).status_code == 201
+        rejected = client.post(path + '/decision', headers=headers,
+            json={'expected_revision': 2, 'status': 'REJECTED', 'reason': 'Non-owner administrator rejection'})
+        assert rejected.status_code == 200 and rejected.json()['status'] == 'REJECTED'
     if role != 'administrator':
         # Protected template mutations are separate endpoints and permissions.
         for path, body in [('templates/1/drafts', {'title': 'Forbidden'}),

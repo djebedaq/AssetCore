@@ -30,6 +30,9 @@ async function login(page, email) {
 }
 async function studio(page, locale = 'bg', section = 'center') {
   const w = words[locale]
+  // Wait for session bootstrap before deciding whether the mobile menu is
+  // needed. Checking visibility while the loading screen is mounted races.
+  await page.locator('.mobile-toggle').waitFor({ state: 'attached' })
   if (await page.locator('.mobile-toggle').isVisible() && !await page.locator('.sidebar').evaluate(el => el.classList.contains('open'))) await page.locator('.mobile-toggle').click()
   await page.locator('.sidebar-navigation').getByRole('button', { name: w[0], exact: true }).click()
   await page.locator('.studio-settings-tabs').getByRole('button', { name: /Document Studio/ }).click()
@@ -81,6 +84,11 @@ try {
     const preview = await ownerApi(`/studio/drafts/${draft.id}/preview`, { expected_revision: draft.revision, rows: 5 })
     initialVersions.push(await ownerApi(`/studio/drafts/${draft.id}/publish`, { expected_revision: draft.revision, receipt: preview.receipt, change_note: 'SYNTHETIC QA initial version' }, 'POST', 201))
   }
+  await b(admin, 'Изход').click()
+  await expect(admin.locator('input[type=email]')).toBeVisible()
+  await login(admin, 'studio-admin@qa.invalid')
+  const administrativeActor = await ownerApi('/auth/me')
+  if (administrativeActor.role !== 'administrator' || administrativeActor.is_system_owner) throw new Error('QA review requires a non-owner administrator')
   await login(director, 'studio-director@qa.invalid'); await studio(director, 'bg', 'library')
   await director.locator('.studio-template-list button').filter({ hasText: 'SYNTHETIC QA Studio C' }).click()
   await expect(director.getByRole('button', { name: 'Нов шаблон', exact: true })).toHaveCount(0)
@@ -183,7 +191,7 @@ try {
   await writeFile(`${out}/browser-proof.json`, JSON.stringify({ passed: true, stage: 'COMMERCIAL-DOCS-01C', checks, screenshots, errors,
     accepted_proposal_id: acceptedId, rejected_proposal_id: rejectedId, exact_target_version_id: initialVersions[0].id,
     linked_draft_id: draftId, linked_published_version_id: final.events.at(-1).version_id, actual_pdf_pages: actual.report.page_count,
-    no_activation: true, original_source_hashes_unchanged: true }, null, 2))
+    no_activation: true, original_source_hashes_unchanged: true, administrative_actor_is_owner: false }, null, 2))
   console.log(JSON.stringify({ passed: true, checks: checks.length, screenshots: screenshots.length }))
 } catch (error) {
   for (const [name, page] of [['admin', admin], ['director', director]]) await page.screenshot({ path: `${out}/failure-${name}.png`, fullPage: true }).catch(() => {})
