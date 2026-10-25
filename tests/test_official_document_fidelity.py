@@ -147,6 +147,22 @@ def test_native_request_long_row_can_flow_across_pages(variant_name):
     assert table.rows[1]._tr.xpath("./w:trPr/w:cantSplit")[0].get(qn("w:val")) == "0"
 
 
+@pytest.mark.parametrize("workflow", ["TRANSFER_ISSUE", "TRANSFER_RETURN"])
+@pytest.mark.parametrize("language", ["bg", "en", "ru"])
+def test_native_custom_category_preserves_snapshot_labels_and_length(workflow, language):
+    values, tables = synthetic_values(language, 1)
+    tables["EQUIPMENT_CHECKLIST"] = [
+        {"component": "SYNTHETIC QA COMPONENT A", "condition": "SYNTHETIC QA ISSUE", "measurement": "0", "note": "SYNTHETIC QA NOTE"},
+        {"component": "SYNTHETIC QA COMPONENT B", "condition": "SYNTHETIC QA RETURN"},
+    ]
+    doc = Document(io.BytesIO(render(manifest(workflow, language), values, tables)))
+    table = next(t for t in doc.tables if any("SYNTHETIC QA COMPONENT A" in c.text for row in t.rows for c in row.cells))
+    assert len(table.rows) == 3
+    assert [row.cells[1].text for row in table.rows[1:]] == [r["component"] for r in tables["EQUIPMENT_CHECKLIST"]]
+    assert table.rows[1].cells[2].text == "SYNTHETIC QA ISSUE · 0 · SYNTHETIC QA NOTE"
+    assert table.rows[2].cells[2].text == "SYNTHETIC QA RETURN"
+
+
 @pytest.mark.parametrize("location", ["value", "table", "label"])
 def test_user_content_cannot_inject_a_signature_marker(location):
     m = manifest("TRANSFER_ISSUE", "bg")
@@ -286,14 +302,13 @@ def test_native_official_kk_variants_share_sequence_and_keep_frozen_bytes(client
     from app.models import (
         GeneratedDocument,
         Machine,
-        PartRequest,
-        PartRequestLine,
         RequestApprovalSnapshot,
         User,
     )
     from sqlalchemy import select
     from test_document_studio_publication import activate, publish
     from test_requests01 import approve, create
+    from visual_snapshot_cases import future_catalog, request_payload
     with session_factory() as db:
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
         actor.first_name, actor.middle_name, actor.last_name = "SYNTHETIC", "QA", "ONLY"
@@ -310,16 +325,10 @@ def test_native_official_kk_variants_share_sequence_and_keep_frozen_bytes(client
     free = approve(client, auth_headers, create(client, auth_headers, submit_for_approval=True,
         lines=[{"description": "SYNTHETIC QA DECIMAL", "quantity": "0.75", "unit": "kg"}]))
     assert free["generation_status"] == "READY"
-    with session_factory() as db:
-        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
-        machine = Machine(inventory_number="SYNTHETIC-NATIVE-QA", name="SYNTHETIC QA ONLY", category="SYNTHETIC QA", brand="SYNTHETIC QA", model="SYNTHETIC QA", serial_number="SYNTHETIC-QA", status="READY")
-        request = PartRequest(part_name="SYNTHETIC QA ONLY", request_kind="CATALOG", machine=machine,
-            requested_by_id=actor.id, department="SYNTHETIC QA", status="WAITING_APPROVAL")
-        request.lines.append(PartRequestLine(description="SYNTHETIC QA ONLY", part_number="SYNTHETIC-QA", quantity=1, unit="pcs"))
-        db.add(request)
-        db.commit()
-        request_id, machine_id = request.id, machine.id
-    machine_request = approve(client, auth_headers, {"id": request_id})
+    catalog = future_catalog(session_factory)
+    created = client.post("/api/part-requests/multi", headers=auth_headers, json=request_payload(catalog))
+    assert created.status_code == 201
+    machine_request = approve(client, auth_headers, created.json())
     assert machine_request["generation_status"] == "READY"
     with session_factory() as db:
         evidence = {d.id: (d.content, d.sha256) for d in db.scalars(select(GeneratedDocument))}
@@ -328,7 +337,14 @@ def test_native_official_kk_variants_share_sequence_and_keep_frozen_bytes(client
         free_parsed = Document(io.BytesIO(free_doc.content))
         assert len(free_parsed.tables[0].columns) == 3 and len(free_parsed.tables) == 2
         assert "0,75 кг" in "\n".join(n.text or "" for n in free_parsed.element.iter(qn("w:t")))
-        db.get(Machine, machine_id).name = "SYNTHETIC QA LATER VALUE"
+        machine_doc = db.scalar(select(GeneratedDocument).where(GeneratedDocument.part_request_id == machine_request["id"], GeneratedDocument.format == "docx"))
+        assert machine_doc.snapshot["visual_appendix"]["lines"][0]["blocks"]
+        assert len(Document(io.BytesIO(machine_doc.content)).inline_shapes) >= 2
+        import fitz
+        machine_pdf = db.scalar(select(GeneratedDocument).where(GeneratedDocument.part_request_id == machine_request["id"], GeneratedDocument.format == "pdf"))
+        with fitz.open(stream=machine_pdf.content, filetype="pdf") as pdf:
+            assert len(pdf) >= 3
+        db.get(Machine, catalog["machine_id"]).name = "SYNTHETIC QA LATER VALUE"
         db.commit()
     profile = client.get("/api/studio/company", headers=auth_headers).json()
     assert client.put("/api/studio/company", headers=auth_headers, json={"expected_revision": profile["revision"],

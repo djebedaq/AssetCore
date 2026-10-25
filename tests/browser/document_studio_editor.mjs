@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 const require = createRequire(import.meta.url), modulePath = process.env.PLAYWRIGHT_MODULE || 'playwright'
 const { chromium } = require(modulePath), expect = require(modulePath + '/test').expect.configure({ timeout: 45000 })
 const browser = await chromium.launch({ headless: true, ...(process.env.QA_BROWSER_CHANNEL ? { channel: process.env.QA_BROWSER_CHANNEL } : {}) })
@@ -216,9 +216,14 @@ try {
   await expect(page.getByText('Активна Studio версия', { exact: true })).toBeVisible()
   await shot('immutable-version-history-active-bg')
   checks.push('Actual DOCX-derived multipage PDF, downloaded editable DOCX/PDF, immutable publication and separate activation')
-  // The real KK approval path now selects that same published source.
-  const request = await api('/part-requests/free-form', { department: 'Synthetic QA', reason: 'Synthetic QA document proof', language: 'bg', lines: [{ description: 'Синтетична проверка на документ', quantity: '1', unit: 'pcs' }] }, 'POST', 201)
-  await api(`/part-requests/${request.id}/submit`, {})
+  // This explicit older schema-2 source supports machine requests only.
+  // Prove the new free-form guard, then retain the original official archive proof.
+  const free = await api('/part-requests/free-form', { department: 'Synthetic QA', reason: 'Synthetic QA document proof', language: 'bg', lines: [{ description: 'Синтетична проверка на документ', quantity: '1', unit: 'pcs' }] }, 'POST', 201)
+  await api(`/part-requests/${free.id}/submit`, {})
+  const rejected = await api(`/part-requests/${free.id}/decision`, { decision: 'APPROVED', note: 'Synthetic QA unsupported variant' }, 'POST', 409)
+  if (rejected.detail?.code !== 'approval_template_unavailable') throw new Error('Older source did not fail closed for FREE_FORM')
+  const catalog = JSON.parse(await readFile(`${out}/synthetic-catalog.json`, 'utf8'))
+  const request = await api('/part-requests/multi', { machine_id: catalog.machine_id, submit_for_approval: true, language: 'bg', lines: [{ catalog_part_id: catalog.part_id, quantity: 1 }] }, 'POST', 201)
   const approved = await api(`/part-requests/${request.id}/decision`, { decision: 'APPROVED', note: 'Synthetic QA only' })
   if (approved.generation_status !== 'READY') throw new Error('Official KK generation failed')
   for (const doc of approved.documents) {
