@@ -147,7 +147,14 @@ def build_docx(data, template_content, appendix=None, *, header_content=None, re
     if manifest:
         if manifest["document_type"] != "PART_REQUEST" or manifest["language"] != data["language"]:
             raise ValueError("studio_source_invalid")
-        rendered = render_source(template_content, _studio_values(data), {"REQUEST_LINES": _studio_rows(data)})
+        from ..document_studio.native_contract import variant
+        selected_variant = variant(data)
+        if manifest["layout"].get("native") is None:
+            # Existing Studio sources have no verified free/machine contract.
+            # Preserve their history but refuse an incompatible free request.
+            if selected_variant == "FREE_FORM":
+                raise ValueError("studio_request_variant_mismatch")
+        rendered = render_source(template_content, {**_studio_values(data), "REQUEST_VARIANT": selected_variant}, {"REQUEST_LINES": _studio_rows(data)})
         return append_docx(rendered, appendix, data["language"]) if appendix else rendered
     if data.get("document_layout_version") not in (None, 1, 2, 3):
         raise ValueError("unsupported_request_document_layout_version")
@@ -338,7 +345,12 @@ def _appendix(db, request, data):
 def preview_pdf(db, request):
     data = capture_data(request)
     data.update(official_number=None, approved_at=None, approved_by_name=None)
-    return build_pdf(data, _appendix(db, request, data), preview=True)
+    template = _template_version(db, DocumentType.PART_REQUEST.value, request.language)
+    content = source_bytes(template)
+    appendix = _appendix(db, request, data)
+    docx = build_docx(data, content, appendix)
+    # One native print layout; the draft watermark is the only PDF overlay.
+    return request_layout_v2.build_pdf(data, docx, preview=True, watermark=LABELS[data["language"]][3])
 
 
 def archive(db, request, actor):
@@ -367,13 +379,10 @@ def archive(db, request, actor):
         ):
             raise ValueError("request_archive_integrity_failed")
         return existing
-    template = (
-        _template_version(db, DocumentType.PART_REQUEST.value, snapshot.data["language"])
-        if not snapshot.template_version_id
-        else None
-    )
-    template_id = snapshot.template_version_id or template.id
-    content = snapshot.template_content or source_bytes(template)
+    if not snapshot.template_version_id or not snapshot.template_content or not snapshot.data.get("template_sha256"):
+        raise ValueError("approval_template_evidence_missing")
+    template_id = snapshot.template_version_id
+    content = snapshot.template_content
     if (
         snapshot.data["template_sha256"]
         and hashlib.sha256(content).hexdigest() != snapshot.data["template_sha256"]
@@ -471,6 +480,7 @@ def _studio_values(data):
         "RIGHT_SIGNER_NAME": data.get("approved_by_name") or "", "RIGHT_SIGNER_JOB_TITLE": data.get("approved_by_job_title") or "",
         "REQUESTER_NAME": data.get("requested_by_name") or "", "APPROVER_NAME": data.get("approved_by_name") or "",
         "DEPARTMENT": data.get("department") or "", "APPROVAL_DATE": _date(data),
+        "REPAIR_REFERENCE": data.get("repair_reference") or "",
         "REMARKS": data.get("reason") or "", "DECISION": data.get("decision_note") or status_label(data.get("status") or "APPROVED", data["language"])}
 
 

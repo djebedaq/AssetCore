@@ -130,9 +130,21 @@ def capture_data(request):
 
 
 def issue_number(db, request):
-    from ..documents.common import ConfirmedTemplateUnavailableError
     from ..documents.templates import _template_version
 
+    # Freeze and verify source before reserving a number. A failed selection
+    # cannot create approval evidence that later uses mutable current settings.
+    template = _template_version(db, DocumentType.PART_REQUEST.value, request.language)
+    content = source_bytes(template)
+    if not template.source_sha256 or hashlib.sha256(content).hexdigest() != template.source_sha256:
+        raise ValueError("approval_template_integrity_failed")
+    if template.layout_contract.get("studio"):
+        from ..document_studio.renderer import manifest_from_source
+        manifest = manifest_from_source(content)
+        if not manifest or manifest["document_type"] != "PART_REQUEST" or manifest["language"] != request.language:
+            raise ValueError("studio_source_invalid")
+        if kind(request) == "FREE_FORM" and not manifest["layout"].get("native"):
+            raise ValueError("studio_request_variant_mismatch")
     insert = pg_insert if db.bind.dialect.name == "postgresql" else sqlite_insert
     db.execute(insert(RequestNumberCounter).values(id=1, next_value=1000).on_conflict_do_nothing())
     number = db.scalar(
@@ -195,17 +207,12 @@ def issue_number(db, request):
             "approved_by_id": request.decided_by_id,
         }
     )
-    try:
-        template = _template_version(db, DocumentType.PART_REQUEST.value, request.language)
-        content = source_bytes(template)
-        if template.layout_contract.get("studio"):
-            data["studio_machine_context"] = {
-                "manufacturer": (getattr(request.machine, "manufacturer", None) or request.machine.brand) if request.machine else "",
-                "category": request.machine.category if request.machine else "",
-                "location": request.machine.location.name if request.machine and request.machine.location else "",
-            }
-    except (ConfirmedTemplateUnavailableError, ValueError, OSError):
-        template, content = None, None
+    if template.layout_contract.get("studio"):
+        data["studio_machine_context"] = {
+            "manufacturer": (getattr(request.machine, "manufacturer", None) or request.machine.brand) if request.machine else "",
+            "category": request.machine.category if request.machine else "",
+            "location": request.machine.location.name if request.machine and request.machine.location else "",
+        }
     data["template_sha256"] = hashlib.sha256(content).hexdigest() if content else None
     snapshot = RequestApprovalSnapshot(
         request_id=request.id,

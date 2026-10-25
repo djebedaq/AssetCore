@@ -7,6 +7,8 @@ export function studioError(error: unknown): TranslationKey {
   if (error.status === 409) return 'studio.conflict'
   if (error.code === 'studio_proposal_reference_only') return 'proposal.referenceOnly'
   if (error.code === 'studio_image_invalid' || error.code === 'studio_image_size') return 'studio.invalidImage'
+  if (error.code === 'studio_native_incompatible') return 'editor.nativeIncompatible'
+  if (error.code === 'studio_request_variant_mismatch') return 'editor.variantMismatch'
   if (error.code === 'studio_docx_unsafe') return 'studio.invalidDocx'
   if (error.code === 'studio_required_block') return 'studio.requiredBlock'
   if (error.code === 'studio_renderer_busy') return 'editor.rendererBusy'
@@ -37,4 +39,5 @@ export type Draft = {
   id: number; template_id: number; base_version_id: number | null; language: string; title: string;
   revision: number; updated_at: string; status: 'DRAFT';
   layout: Layout;
+  native_images?: { id: string; download_endpoint: string }[];
 }

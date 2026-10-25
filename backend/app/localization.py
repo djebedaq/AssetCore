@@ -62,6 +62,11 @@ def normalize_language(value: str | None) -> str:
 
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "studio.approval_template_unavailable": {
+        "bg": "Няма проверен съвместим шаблон за одобрението.",
+        "en": "No verified compatible template is available for approval.",
+        "ru": "Для утверждения нет проверенного совместимого шаблона.",
+    },
     "studio.signature_identity_mismatch": {
         "bg": "Подписващият и длъжността трябва да съответстват на одобрителния snapshot на КК. Историческите имена не се подменят.",
         "en": "The signer and job title must match the KK approval snapshot. Historical identities are not replaced.",

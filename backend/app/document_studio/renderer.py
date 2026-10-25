@@ -49,6 +49,8 @@ def digest(content: bytes) -> str:
 
 def check_layout(layout: Layout, document_type: str):
     validate_workflow(layout, document_type)
+    if layout.native is not None:
+        return
     width, height = (210, 297) if layout.page.orientation == "portrait" else (297, 210)
     usable = width - 2 * layout.page.margin_mm
     def check(blocks, available, region="body", nested=False):
@@ -106,7 +108,7 @@ def _height(block, width, bindings):
                 col += cell.colspan
             total += max(row.min_height_mm, *heights)
         return total + style.spacing_mm + style.paragraph_before_mm
-    if block.type in {"image", "logo"}:
+    if block.type in {"image", "logo", "native_image"}:
         return block.height_mm + style.spacing_mm + style.paragraph_before_mm
     text = str(bindings.get(block.field, "")) if block.type == "field" else getattr(block, "text", "")
     lines = sum(max(1, math.ceil(len(line.expandtabs(4)) * style.size_pt * .7 / max(1, width * 72 / 25.4))) for line in text.split("\n"))
@@ -125,7 +127,7 @@ def manifest_from_source(content: bytes) -> dict | None:
         raise ValueError("studio_source_invalid")
     layout = Layout.model_validate(manifest["layout"])
     check_layout(layout, manifest["document_type"])
-    ids = {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None}
+    ids = {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo", "native_image"} and b.image_id is not None}
     if ids != set(manifest["images"]):
         raise ValueError("studio_image_missing")
     for image in manifest["images"].values():
@@ -393,8 +395,11 @@ def _grid(container, block, width, emit):
 
 def render(manifest: dict, values: dict, tables: dict | None = None, *, source=False) -> bytes:
     layout = Layout.model_validate(manifest["layout"])
+    if layout.native is not None:
+        from .native_contract import render as render_native
+        return render_native(manifest, values, tables, source=source)
     check_layout(layout, manifest["document_type"])
-    if {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None} != set(manifest["images"]):
+    if {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo", "native_image"} and b.image_id is not None} != set(manifest["images"]):
         raise ValueError("studio_image_missing")
     document = Document()
     if layout.schema_version >= 3:
@@ -502,7 +507,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
                 marker.paragraph_format.keep_together = True
                 if block_index + 1 < len(blocks) and blocks[block_index + 1].type == "signature":
                     marker.paragraph_format.keep_with_next = True
-            elif block.type in {"image", "logo"}:
+            elif block.type in {"image", "logo", "native_image"}:
                 if block.image_id is not None:
                     image = manifest["images"][str(block.image_id)]
                     paragraph.add_run().add_picture(io.BytesIO(base64.b64decode(image["content"])), width=Mm(block.width_mm), height=Mm(block.height_mm))
@@ -575,6 +580,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
 def build_source(manifest: dict) -> bytes:
     values = {key: "{{" + key + "}}" for key in FIELD_CATALOG}
     values.update({key: "{{" + key + "}}" for key in ("LEFT_SIGNATURE", "RIGHT_SIGNATURE")})
+    values["REQUEST_VARIANT"] = "MACHINE"
     return render(manifest, values, source=True)
 
 

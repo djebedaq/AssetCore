@@ -42,7 +42,7 @@ def snapshot(db, draft, document_type):
     identity = CompanyIdentity.model_validate(profile.identity if profile else {}).model_dump()
     allowed = set(identity["identity_image_ids"])
     allowed.update(v for v in (identity["primary_logo_id"], identity["secondary_logo_id"]) if v)
-    ids = {b.image_id for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None}
+    ids = {b.image_id for b in walk_blocks(layout.blocks) if b.type in {"image", "logo", "native_image"} and b.image_id is not None}
     if not ids <= allowed:
         raise ValueError("studio_image_not_allowed")
     # Reject unauthorized cell images before inspecting their layout geometry.
@@ -63,9 +63,12 @@ def snapshot(db, draft, document_type):
             "identity": identity}, "images": images}
 
 
-def validate_render(manifest, count=5, *, raster=False):
+def validate_render(manifest, count=5, *, raster=False, request_variant="MACHINE"):
+    if manifest["document_type"] == "PART_REQUEST" and request_variant == "FREE_FORM" and not manifest["layout"].get("native"):
+        raise ValueError("studio_request_variant_mismatch")
     validate_publication_fields(Layout.model_validate(manifest["layout"]), manifest["document_type"])
     values, tables = synthetic_values(manifest["language"], count)
+    values["REQUEST_VARIANT"] = request_variant
     docx = render(manifest, values, tables)
     pdf = pdf_required(docx)
     report = inspect_pdf(pdf, raster=raster)
@@ -96,7 +99,9 @@ def verify_receipt(token, draft, manifest, user_id):
 
 def publication_source(manifest):
     source = build_source(manifest)
-    reports = [validate_render(manifest, count)[2] for count in (1, 5, 30)]
+    variants = ("MACHINE", "FREE_FORM") if manifest["document_type"] == "PART_REQUEST" and manifest["layout"].get("native") else ("MACHINE",)
+    reports = [{**validate_render(manifest, count, request_variant=variant)[2], "request_variant": variant}
+               for variant in variants for count in (1, 5, 30)]
     return source, {"valid": True, "renderer": 1, "cases": reports,
                     "source_sha256": digest(source), "manifest_sha256": digest(canonical(manifest)),
                     "company_revision": manifest["company"]["revision"],

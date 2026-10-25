@@ -23,6 +23,7 @@ function TemplateDetails({ template, reload, onDirty, initialDraft, proposed }: 
   const [opened, setOpened] = useState<Draft | null>(initialDraft || null)
   const [proposal, setProposal] = useState<StudioVersion | null>(null)
   const [preview, setPreview] = useState<{ report: { pages: { png: string }[] } } | null>(null)
+  const [configuration, setConfiguration] = useState<{ selection_kind: string; selected_version_id: number; source_version: number; source_sha256: string; activation_revision: number; valid: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<TranslationKey | null>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -66,6 +67,9 @@ function TemplateDetails({ template, reload, onDirty, initialDraft, proposed }: 
     {error && <p className="error" role="alert">{t(error)}</p>}
     {proposal && <ProposalDialog template={template} version={proposal} close={() => setProposal(null)} submitted={id => { setProposal(null); proposed?.(id) }} />}
     {preview && <Modal title={t('editor.actualPdf')} onClose={() => setPreview(null)} wide><p>{t('editor.synthetic')}</p>{preview.report.pages.map((page, i) => <img className="studio-version-preview" key={i} src={`data:image/png;base64,${page.png}`} alt={`${t('editor.page')} ${i + 1}`} />)}</Modal>}
+    <p className="muted">{t('editor.sourceHint')}</p>
+    <button className="secondary" disabled={busy} onClick={async () => { setBusy(true); setError(null); try { setConfiguration(await api(`/studio/configuration/${template.document_type}/${language}`)) } catch (e) { setError(studioError(e)) } finally { setBusy(false) } }}>{t('editor.actualConfiguration')}</button>
+    {configuration && <dl><dt>{t('studio.type')}</dt><dd>{t(configuration.selection_kind === 'STUDIO' ? 'editor.active' : 'editor.legacyActive')}</dd><dt>{t('studio.version', { number: configuration.source_version })}</dt><dd>{configuration.selected_version_id}</dd><dt>{t('studio.revision', { number: configuration.activation_revision })}</dt><dd>{t(configuration.valid ? 'studio.PASSED' : 'studio.FAILED')}</dd><dt>SHA-256</dt><dd><code>{configuration.source_sha256}</code></dd></dl>}
     <h4>{t('studio.versions')}</h4>
     {editable && template.versions.some(v => v.studio) && <label>{t('editor.activationReason')}<textarea maxLength={2000} value={activationNote} onChange={e => setActivationNote(e.target.value)} /></label>}
     {!template.versions.length && <p className="muted">{t('studio.noVersions')}</p>}
@@ -86,7 +90,8 @@ function TemplateDetails({ template, reload, onDirty, initialDraft, proposed }: 
         catch (e) { setError(studioError(e)) } finally { setBusy(false) }
       }}>{t('editor.activate')}</button></div>}
       <DownloadButton path={version.download_endpoint} filename={version.source_filename || `${template.code}.docx`} label={t('studio.source')} />
-      <div className="studio-proposal-actions">{version.studio && <button className="secondary" disabled={busy} onClick={async () => { setBusy(true); setError(null); try { setPreview(await api(`/studio/versions/${version.id}/preview`)) } catch (e) { setError(studioError(e)) } finally { setBusy(false) } }}>{t('editor.preview')}</button>}{hasPermission('studio.propose') && <button className="secondary" disabled={busy} onClick={() => setProposal(version)}>{t('proposal.propose')}</button>}</div>
+      <div className="studio-proposal-actions">{(template.document_type === 'PART_REQUEST' ? ['MACHINE', 'FREE_FORM'] : ['MACHINE']).map(variant => <button key={variant} className="secondary" disabled={busy} onClick={async () => { setBusy(true); setError(null); try { setPreview(await api(`/studio/versions/${version.id}/preview?request_variant=${variant}`)) } catch (e) { setError(studioError(e)) } finally { setBusy(false) } }}>{t('editor.preview')}{template.document_type === 'PART_REQUEST' && ` · ${t(variant === 'MACHINE' ? 'editor.machineRequest' : 'editor.freeRequest')}`}</button>)}
+      {editable && <button className="secondary" disabled={busy} onClick={async () => { setBusy(true); setError(null); try { const item = await api<Draft>(`/studio/templates/${template.id}/drafts`, { method: 'POST', body: JSON.stringify({ title: `${template[`name_${locale}`] || template.name_bg} · ${t('studio.version', { number: version.version })}`, language: version.language, base_version_id: version.id }) }); setOpened(item); setDrafts(rows => [item, ...rows]) } catch (e) { setError(studioError(e)) } finally { setBusy(false) } }}>{t('editor.editableCopy')}</button>}{hasPermission('studio.propose') && <button className="secondary" disabled={busy} onClick={() => setProposal(version)}>{t('proposal.propose')}</button>}</div>
     </article>)}
     <details><summary>{t('editor.selectionHistory')} · {t(`language.${language}`)}</summary>{selections.map(s => <article key={s.revision}><strong>{t('studio.revision', { number: s.revision })} · {t(s.selection_kind === 'STUDIO' ? 'editor.active' : 'editor.legacyActive')}</strong><p>{date(s.created_at)} · {s.reason}</p></article>)}</details>
     <p className="muted">{t('studio.numberingHint')}</p>
