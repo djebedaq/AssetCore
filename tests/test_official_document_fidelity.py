@@ -117,6 +117,36 @@ def test_variant_comes_from_canonical_snapshot_and_rejects_contradiction():
             variant(data)
 
 
+def test_native_text_edit_preserves_original_run_and_paragraph_format():
+    m = manifest("PART_REQUEST", "bg")
+    title = next(b for b in m["layout"]["blocks"] if b["type"] == "native_paragraph" and b["id"].startswith("machine_") and "TECHNICAL SPECIFICATION" in b["text"])
+    values, tables = synthetic_values("bg", 1)
+    values["REQUEST_VARIANT"] = "MACHINE"
+    before = Document(io.BytesIO(render(m, values, tables)))
+    original = next(p for p in before.paragraphs if "TECHNICAL SPECIFICATION" in p.text)
+    title["text"] = "SYNTHETIC EDITED TITLE"
+    after = Document(io.BytesIO(render(m, values, tables)))
+    edited = next(p for p in after.paragraphs if p.text == "SYNTHETIC EDITED TITLE")
+    assert edited.runs[0]._r.rPr.xml == original.runs[0]._r.rPr.xml
+    assert edited._p.pPr.xml == original._p.pPr.xml
+    title["style"]["bold"] = not title["style"]["bold"]
+    changed = next(p for p in Document(io.BytesIO(render(m, values, tables))).paragraphs if p.text == "SYNTHETIC EDITED TITLE")
+    assert changed.runs[0].font.name == edited.runs[0].font.name
+    assert changed.runs[0].font.size == edited.runs[0].font.size
+    assert changed.runs[0].bold != edited.runs[0].bold
+
+
+@pytest.mark.parametrize("variant_name", ["MACHINE", "FREE_FORM"])
+def test_native_request_long_row_can_flow_across_pages(variant_name):
+    m = manifest("PART_REQUEST", "bg")
+    values, tables = synthetic_values("bg", 1)
+    values["REQUEST_VARIANT"] = variant_name
+    tables["REQUEST_LINES"][1][2] = "SYNTHETIC LONG DESCRIPTION " * 100
+    doc = Document(io.BytesIO(render(m, values, tables)))
+    table = doc.tables[1 if variant_name == "MACHINE" else 0]
+    assert table.rows[1]._tr.xpath("./w:trPr/w:cantSplit")[0].get(qn("w:val")) == "0"
+
+
 @pytest.mark.parametrize("location", ["value", "table", "label"])
 def test_user_content_cannot_inject_a_signature_marker(location):
     m = manifest("TRANSFER_ISSUE", "bg")
@@ -178,3 +208,140 @@ def test_legacy_base_creates_native_draft_and_cannot_change_its_provenance(clien
     result = client.put(f"/api/studio/drafts/{draft['id']}", headers=auth_headers,
         json={"expected_revision": draft["revision"], "title": draft["title"], "layout": draft["layout"]})
     assert result.status_code == 422 and result.json()["detail"]["code"] == "studio_native_incompatible"
+
+
+@pytest.mark.parametrize("language", ["bg", "en", "ru"])
+def test_professional_request_starter_also_has_two_server_validated_variants(language):
+    from app.document_studio.schemas import validate_publication_fields
+    from app.document_studio.starter_layouts import professional_layout
+    layout = professional_layout("PART_REQUEST", language)
+    validate_publication_fields(layout, "PART_REQUEST")
+    m = {"renderer": 1, "layout": layout.model_dump(), "document_type": "PART_REQUEST", "language": language,
+        "company": {"revision": 0, "identity": CompanyIdentity().model_dump()}, "images": {}}
+    values, tables = synthetic_values(language, 5)
+    values["REQUEST_VARIANT"] = "FREE_FORM"
+    doc = Document(io.BytesIO(render(m, values, tables)))
+    text = "\n".join(n.text or "" for n in doc.element.iter(qn("w:t")))
+    assert values["MACHINE_NUMBER"] not in text and values["SERIAL_NUMBER"] not in text
+    assert any(len(t.columns) == 3 and len(t.rows) == 6 for t in doc.tables)
+    bad = layout.model_copy(deep=True)
+    next(b for b in bad.blocks if b.type == "grid" and b.request_variant == "MACHINE").request_variant = None
+    with pytest.raises(ValueError, match="studio_request_variant_mismatch"):
+        render({**m, "layout": bad.model_dump()}, values, tables)
+
+
+def test_missing_template_refuses_approval_before_any_number_is_reserved(client, auth_headers, session_factory, monkeypatch):
+    from app.documents.common import ConfirmedTemplateUnavailableError
+    from app.models import PartRequest, RequestApprovalSnapshot, RequestNumberCounter
+    from sqlalchemy import func, select
+    from test_requests01 import create
+    item = create(client, auth_headers, submit_for_approval=True)
+    def unavailable(*_args):
+        raise ConfirmedTemplateUnavailableError("PART_REQUEST", "bg")
+    monkeypatch.setattr("app.documents.templates._template_version", unavailable)
+    result = client.post(f"/api/part-requests/{item['id']}/decision", headers=auth_headers, json={"decision": "APPROVED"})
+    assert result.status_code == 409 and result.json()["detail"]["code"] == "approval_template_unavailable"
+    with session_factory() as db:
+        assert db.get(PartRequest, item["id"]).status == "WAITING_APPROVAL"
+        assert db.scalar(select(func.count()).select_from(RequestApprovalSnapshot)) == 0
+        counter = db.get(RequestNumberCounter, 1)
+        assert counter is None or counter.next_value == 1000
+
+
+def test_native_transfer_markers_remain_in_the_correct_cells():
+    from app.signature_rendering import _embed_signature_image
+    from PIL import Image
+    m = manifest("TRANSFER_ISSUE", "bg")
+    values, tables = synthetic_values("bg", 1)
+    values.update(LEFT_SIGNATURE="[[ASSETCORE_LEFT_SIGNATURE]]", RIGHT_SIGNATURE="[[ASSETCORE_RIGHT_SIGNATURE]]")
+    doc = Document(io.BytesIO(render(m, values, tables)))
+    signature_table = next(t for t in doc.tables if len(t.rows) == 2 and len(t.columns) == 3)
+    out = io.BytesIO()
+    Image.new("RGB", (160, 60), "black").save(out, "PNG")
+    for index, side in enumerate(("LEFT", "RIGHT")):
+        assert _embed_signature_image(doc, f"[[ASSETCORE_{side}_SIGNATURE]]", out.getvalue())
+        assert len(signature_table.rows[index].cells[2]._tc.xpath(".//w:drawing")) == 1
+        assert not signature_table.rows[index].cells[1]._tc.xpath(".//w:drawing")
+
+
+def test_native_kk_without_graphic_cells_refuses_signers_before_sessions_exist():
+    from app.document_studio.diagnostics import request_sample
+    from app.signature_rendering import validate_studio_request_signer
+    from fastapi import HTTPException
+    m = manifest("PART_REQUEST", "bg")
+    _, values, tables = request_sample("bg", 1, "MACHINE")
+    data = {"approval_snapshot_sha256": "SYNTHETIC", "requested_by_id": 1,
+            "requested_by_name": "SYNTHETIC QA", "requested_by_job_title": "SYNTHETIC QA"}
+    version = SimpleNamespace(snapshot=data, language="bg", docx_content=render(m, values, tables))
+    with pytest.raises(HTTPException) as error:
+        validate_studio_request_signer(version, "REQUESTED_BY", {"user_id": 1, "display_name": "SYNTHETIC QA", "job_title": "SYNTHETIC QA"}, m)
+    assert error.value.status_code == 409 and error.value.detail["code"] == "studio_signature_markers_missing"
+
+
+def test_native_official_kk_variants_share_sequence_and_keep_frozen_bytes(client, auth_headers, session_factory):
+    import os
+    import shutil
+    if os.name == "nt" or not shutil.which("libreoffice"):
+        pytest.skip("Real bounded native publication/archive runs on Linux/Docker and CI")
+    from app.models import (
+        GeneratedDocument,
+        Machine,
+        PartRequest,
+        PartRequestLine,
+        RequestApprovalSnapshot,
+        User,
+    )
+    from sqlalchemy import select
+    from test_document_studio_publication import activate, publish
+    from test_requests01 import approve, create
+    with session_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        actor.first_name, actor.middle_name, actor.last_name = "SYNTHETIC", "QA", "ONLY"
+        actor.full_name, actor.job_title = "SYNTHETIC QA ONLY", "SYNTHETIC QA ROLE"
+        db.commit()
+    templates = client.get("/api/studio/templates", headers=auth_headers).json()
+    t = next(t for t in templates if t["document_type"] == "PART_REQUEST")
+    base = next(v for v in t["versions"] if v["language"] == "bg" and not v["studio"])
+    draft = client.post(f"/api/studio/templates/{t['id']}/drafts", headers=auth_headers,
+        json={"title": "SYNTHETIC NATIVE OFFICIAL QA", "language": "bg", "base_version_id": base["id"]}).json()
+    published, _ = publish(client, auth_headers, draft)
+    assert len(published["validation_report"]["cases"]) == 6
+    activate(client, auth_headers, published["id"])
+    free = approve(client, auth_headers, create(client, auth_headers, submit_for_approval=True,
+        lines=[{"description": "SYNTHETIC QA DECIMAL", "quantity": "0.75", "unit": "kg"}]))
+    assert free["generation_status"] == "READY"
+    with session_factory() as db:
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        machine = Machine(inventory_number="SYNTHETIC-NATIVE-QA", name="SYNTHETIC QA ONLY", category="SYNTHETIC QA", brand="SYNTHETIC QA", model="SYNTHETIC QA", serial_number="SYNTHETIC-QA", status="READY")
+        request = PartRequest(part_name="SYNTHETIC QA ONLY", request_kind="CATALOG", machine=machine,
+            requested_by_id=actor.id, department="SYNTHETIC QA", status="WAITING_APPROVAL")
+        request.lines.append(PartRequestLine(description="SYNTHETIC QA ONLY", part_number="SYNTHETIC-QA", quantity=1, unit="pcs"))
+        db.add(request)
+        db.commit()
+        request_id, machine_id = request.id, machine.id
+    machine_request = approve(client, auth_headers, {"id": request_id})
+    assert machine_request["generation_status"] == "READY"
+    with session_factory() as db:
+        evidence = {d.id: (d.content, d.sha256) for d in db.scalars(select(GeneratedDocument))}
+        snapshots = {s.request_id: (s.sha256, s.template_content) for s in db.scalars(select(RequestApprovalSnapshot))}
+        free_doc = db.scalar(select(GeneratedDocument).where(GeneratedDocument.part_request_id == free["id"], GeneratedDocument.format == "docx"))
+        free_parsed = Document(io.BytesIO(free_doc.content))
+        assert len(free_parsed.tables[0].columns) == 3 and len(free_parsed.tables) == 2
+        assert "0,75 кг" in "\n".join(n.text or "" for n in free_parsed.element.iter(qn("w:t")))
+        db.get(Machine, machine_id).name = "SYNTHETIC QA LATER VALUE"
+        db.commit()
+    profile = client.get("/api/studio/company", headers=auth_headers).json()
+    assert client.put("/api/studio/company", headers=auth_headers, json={"expected_revision": profile["revision"],
+        "identity": {**profile["identity"], "legal_name": "SYNTHETIC QA LATER COMPANY"}}).status_code == 200
+    restored = client.post("/api/studio/selections/PART_REQUEST/bg/restore-legacy", headers=auth_headers,
+        json={"expected_version_id": published["id"], "expected_revision": 1, "reason": "SYNTHETIC QA RESTORE", "confirmed": True})
+    assert restored.status_code == 201
+    next_free = approve(client, auth_headers, create(client, auth_headers, submit_for_approval=True))
+    assert [free["official_number"], machine_request["official_number"], next_free["official_number"]] == ["KK1000", "KK1001", "KK1002"]
+    with session_factory() as db:
+        for identifier, saved in evidence.items():
+            row = db.get(GeneratedDocument, identifier)
+            assert (row.content, row.sha256) == saved
+        for identifier, saved in snapshots.items():
+            row = db.get(RequestApprovalSnapshot, identifier)
+            assert (row.sha256, row.template_content) == saved

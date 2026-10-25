@@ -13,3 +13,5 @@
 
 .editor-cell-select{z-index:3}
 .editor-density{padding:8px 12px;background:#f5f8fc;font-size:.85rem}.editor-density summary{cursor:pointer;min-height:32px;display:flex;align-items:center}.editor-density p{margin:8px 0}.editor-density .editor-toolbar{padding:8px 0;background:transparent}
+
+.visual-editor [hidden]{display:none!important}

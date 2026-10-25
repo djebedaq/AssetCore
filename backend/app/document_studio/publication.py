@@ -21,7 +21,13 @@ from .renderer import (
     render,
     synthetic_values,
 )
-from .schemas import CompanyIdentity, Layout, validate_publication_fields, walk_blocks
+from .schemas import (
+    CompanyIdentity,
+    Layout,
+    supports_request_variants,
+    validate_publication_fields,
+    walk_blocks,
+)
 
 
 def lock_company(db):
@@ -64,10 +70,13 @@ def snapshot(db, draft, document_type):
 
 
 def validate_render(manifest, count=5, *, raster=False, request_variant="MACHINE"):
-    if manifest["document_type"] == "PART_REQUEST" and request_variant == "FREE_FORM" and not manifest["layout"].get("native"):
+    if manifest["document_type"] == "PART_REQUEST" and request_variant == "FREE_FORM" and not supports_request_variants(manifest["layout"]):
         raise ValueError("studio_request_variant_mismatch")
     validate_publication_fields(Layout.model_validate(manifest["layout"]), manifest["document_type"])
     values, tables = synthetic_values(manifest["language"], count)
+    if manifest["document_type"] == "PART_REQUEST" and supports_request_variants(manifest["layout"]):
+        from .diagnostics import request_sample
+        _, values, tables = request_sample(manifest["language"], count, request_variant)
     values["REQUEST_VARIANT"] = request_variant
     docx = render(manifest, values, tables)
     pdf = pdf_required(docx)
@@ -99,7 +108,7 @@ def verify_receipt(token, draft, manifest, user_id):
 
 def publication_source(manifest):
     source = build_source(manifest)
-    variants = ("MACHINE", "FREE_FORM") if manifest["document_type"] == "PART_REQUEST" and manifest["layout"].get("native") else ("MACHINE",)
+    variants = ("MACHINE", "FREE_FORM") if manifest["document_type"] == "PART_REQUEST" and supports_request_variants(manifest["layout"]) else ("MACHINE",)
     reports = [{**validate_render(manifest, count, request_variant=variant)[2], "request_variant": variant}
                for variant in variants for count in (1, 5, 30)]
     return source, {"valid": True, "renderer": 1, "cases": reports,

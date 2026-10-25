@@ -24,7 +24,7 @@ export function GridInspector({ block, target, select, update, nested = false, l
     </div>)}
     <button type="button" disabled={lockedStructure || rows.length >= 50} onClick={() => update({ grid_rows: [...rows, { cells: widths.map(emptyCell), min_height_mm: 6, keep_together: false, page_break_before: false }] })}>{t('editor.addRow')}</button>
     {cell && <div className="editor-grid-cell-properties"><strong>{t('editor.cell', { row: active.row + 1, column: active.cell + 1 })}</strong><p>{t('editor.addToCell')}</p>
-      <label>{t('editor.padding')}<input type="number" min={0} max={8} step={.5} value={cell.padding_mm} onChange={e => changeCell({ padding_mm: Number(e.target.value) })} /></label>
+      <label>{t('editor.padding')}<input type="number" min={0} max={8} step={.5} value={cell.padding_mm ?? ''} placeholder={lockedStructure ? t('editor.inherited') : undefined} onChange={e => changeCell({ padding_mm: lockedStructure && !e.target.value ? null : Number(e.target.value) })} /></label>
       <label>{t('editor.verticalAlign')}<select value={cell.vertical_align} onChange={e => changeCell({ vertical_align: e.target.value as GridCell['vertical_align'] })}>{(['top', 'center', 'bottom'] as const).map(v => <option value={v} key={v}>{t(`editor.${v}`)}</option>)}</select></label>
       <label>{t('editor.border')}<input type="number" min={0} max={3} step={.25} value={cell.style?.border_pt || 0} onChange={e => changeCell({ style: { ...cell.style, border_pt: Number(e.target.value) } })} /></label>
       <label>{t('editor.borderColor')}<input type="color" value={cell.style?.color || '#000000'} onChange={e => changeCell({ style: { ...cell.style, color: e.target.value } })} /></label>

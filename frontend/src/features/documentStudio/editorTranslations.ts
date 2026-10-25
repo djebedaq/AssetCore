@@ -1,4 +1,12 @@
 const text = {
+  'editor.originalImage': ['Запази оригиналното изображение', 'Keep original image', 'Сохранить исходное изображение'],
+  'editor.inherited': ['От оригинала', 'Inherited from original', 'Из оригинала'],
+  'editor.openStudio': ['Отвори Document Studio', 'Open Document Studio', 'Открыть Document Studio'],
+  'editor.programmaticVersion': ['Програмно оформление', 'Programmatic layout', 'Программный макет'],
+  'editor.sourceVersion': ['Версия на изходния DOCX', 'Source DOCX version', 'Версия исходного DOCX'],
+  'editor.selectedTemplate': ['Избран шаблон (ID)', 'Selected template (ID)', 'Выбранный шаблон (ID)'],
+  'editor.selectedVersion': ['Избрана версия (ID)', 'Selected version (ID)', 'Выбранная версия (ID)'],
+  'editor.emptyTableLabel': ['Текст при празна таблица', 'Text for an empty table', 'Текст для пустой таблицы'],
   'editor.top_mm': ['Горно поле в mm', 'Top margin in mm', 'Верхнее поле в mm'],
   'editor.bottom_mm': ['Долно поле в mm', 'Bottom margin in mm', 'Нижнее поле в mm'],
   'editor.left_mm': ['Ляво поле в mm', 'Left margin in mm', 'Левое поле в mm'],

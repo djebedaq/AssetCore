@@ -30,7 +30,7 @@ export default function SettingsPage() {
         </div>
       </div>
       {manageSettings && session && <GovernancePanel session={session} />}
-      {manageSettings && <AdministrationPanel />}
+      {manageSettings && <AdministrationPanel openStudio={() => setStudio(true)} />}
       </>}
     </>
   )

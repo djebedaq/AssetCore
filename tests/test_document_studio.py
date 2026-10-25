@@ -203,6 +203,8 @@ def test_typed_flow_table_and_unknown_versions():
     layout['schema_version'] = 3
     assert Layout.model_validate(layout).schema_version == 3
     layout['schema_version'] = 4
+    assert Layout.model_validate(layout).schema_version == 4
+    layout['schema_version'] = 5
     with pytest.raises(ValidationError):
         Layout.model_validate(layout)
 

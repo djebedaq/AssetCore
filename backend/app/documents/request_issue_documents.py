@@ -148,8 +148,9 @@ def build_docx(data, template_content, appendix=None, *, header_content=None, re
         if manifest["document_type"] != "PART_REQUEST" or manifest["language"] != data["language"]:
             raise ValueError("studio_source_invalid")
         from ..document_studio.native_contract import variant
+        from ..document_studio.schemas import supports_request_variants
         selected_variant = variant(data)
-        if manifest["layout"].get("native") is None:
+        if not supports_request_variants(manifest["layout"]):
             # Existing Studio sources have no verified free/machine contract.
             # Preserve their history but refuse an incompatible free request.
             if selected_variant == "FREE_FORM":

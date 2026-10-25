@@ -55,6 +55,12 @@ def validate_studio_request_signer(version, slot_code, identity, manifest=None):
     prefix = {"REQUESTED_BY": "requested_by", "APPROVED_BY": "approved_by"}.get(slot_code)
     if prefix is None:
         return
+    marker = _SIGNATURE_MARKER_BY_SLOT[slot_code]
+    document = Document(io.BytesIO(version.docx_content))
+    if sum(p.text.count(marker) for p in _all_paragraphs(document)) != 1:
+        from .localization import translate
+        from .workflow import business_conflict
+        raise business_conflict("studio_signature_markers_missing", translate("studio.signature_markers_missing", version.language))
     expected = (data.get(prefix + "_id"), data.get(prefix + "_name") or "", data.get(prefix + "_job_title") or "")
     actual = (identity.get("user_id"), identity.get("display_name") or "", identity.get("job_title") or "")
     if expected != actual:

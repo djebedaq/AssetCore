@@ -21,7 +21,7 @@ from docx.text.paragraph import Paragraph
 
 from .files import validate_docx
 from .renderer import _stable_zip, digest
-from .schemas import FIELD_CATALOG, Layout, Style, walk_blocks
+from .schemas import FIELD_CATALOG, Layout, NativeStyle, Style, walk_blocks
 
 TOKEN = re.compile(r"\{\{([A-Z0-9_:.-]+)\}\}", re.I)
 SPECIAL = {"CONDITION_LABEL", "PRESSURE_DISPLAY", "LEFT_SIGNATURE", "RIGHT_SIGNATURE"}
@@ -42,22 +42,39 @@ def incompatible():
     raise ValueError("studio_native_incompatible")
 
 
-def _style(paragraph):
+def _style(paragraph, *, native_paragraph=False):
     # Presentation defaults are merely editable controls. Native inherited
     # formatting stays untouched unless a control is changed explicitly.
     run = next((r for r in paragraph.runs if r.text), None)
     f = run.font if run else paragraph.style.font
     font = f.name or paragraph.style.font.name or "Arial"
     if font not in {"Arial", "Liberation Sans", "DejaVu Sans", "DejaVu Serif", "Times New Roman", "Calibri"}:
-        font = "Arial"
-    return Style(font=font, size_pt=max(6, min(48, f.size.pt if f.size else 10)),
-                 color="#000000", spacing_mm=0,
+        incompatible()
+    def spacing(name):
+        value = getattr(paragraph.paragraph_format, name)
+        if value is None:
+            value = getattr(paragraph.style.paragraph_format, name)
+        return max(0, min(30, value.mm if value is not None else 0))
+    size = f.size or paragraph.style.font.size
+    model = NativeStyle if native_paragraph else Style
+    return model(font=font, size_pt=max(1 if native_paragraph else 6, min(48, size.pt if size else 10)),
+                 color="#000000", spacing_mm=spacing("space_after"), paragraph_before_mm=spacing("space_before"),
                  align={1: "center", 2: "right"}.get(paragraph.alignment, "left"),
                  bold=bool(run.bold) if run else False,
                  italic=bool(run.italic) if run else False).model_dump()
 
 
-def _project(document, prefix):
+def _frame_style(properties, tag, fallback=None):
+    borders = properties.find(qn("w:" + tag)) if properties is not None else None
+    edge = next(iter(borders), None) if borders is not None else None
+    if edge is None:
+        return fallback or {"border_pt": 0, "color": "#000000"}
+    width = int(edge.get(qn("w:sz"), "4")) / 8 if edge.get(qn("w:val")) not in {"nil", "none"} else 0
+    color = edge.get(qn("w:color"), "000000")
+    return {"border_pt": min(width, 3), "color": "#" + (color if re.fullmatch(r"[a-fA-F0-9]{6}", color) else "000000")}
+
+
+def _project(document, prefix, language="bg"):
     blocks, targets, index = [], {}, 0
 
     def project(container, region):
@@ -91,12 +108,17 @@ def _project(document, prefix):
                     code = match[1]
                     if code not in HEADERS:
                         incompatible()
-                    keys, labels = KEYS[code], HEADERS[code]
-                    result.append({"id": ident, "type": "dynamic_table", "source": code,
+                    from ..documents.repair_table_contract import empty_label, headers
+                    keys, labels = KEYS[code], headers(code, language)
+                    table_style = _style(p)
+                    table_style.update(border_pt=.5, color="#000000", width_percent=100)
+                    result.append({"id": ident, "type": "dynamic_table", "source": code, "style": table_style,
+                        "native_properties": True, "repeat_header": False,
+                        "empty_label": empty_label(code, language),
                         "columns": [{"key": k, "label": v, "width_percent": 100 / len(keys)} for k, v in zip(keys, labels, strict=True)]})
                 else:
                     result.append({"id": ident, "type": "native_paragraph", "text": p.text,
-                                   "region": region, "style": _style(p)})
+                                   "region": region, "style": _style(p, native_paragraph=True)})
             else:
                 table = Table(element, container)
                 all_text = "\n".join(p.text for row in table.rows for c in row.cells for p in c.paragraphs)
@@ -105,10 +127,14 @@ def _project(document, prefix):
                     labels = [c.text for c in table.rows[0].cells]
                     keys = KEYS[code] if len(labels) == 4 or code != "REQUEST_LINES" else ("position", "description", "quantity")
                     widths = [c.width or 1 for c in table.columns]
-                    result.append({"id": ident, "type": "dynamic_table", "source": code,
+                    table_style = _style(table.rows[1].cells[0].paragraphs[0])
+                    table_style.update(border_pt=.5, color="#000000", width_percent=100)
+                    result.append({"id": ident, "type": "dynamic_table", "source": code, "style": table_style,
+                        "native_properties": True, "repeat_header": bool(table.rows[0]._tr.xpath("./w:trPr/w:tblHeader")),
                         "columns": [{"key": k, "label": label, "width_percent": float(w / sum(widths) * 100)} for k, label, w in zip(keys, labels, widths, strict=True)]})
                     continue
                 widths = [float(c.width or 1) for c in table.columns]
+                frame = _frame_style(table._tbl.tblPr, "tblBorders", {"border_pt": .5 if table.style and table.style.style_id == "TableGrid" else 0, "color": "#000000"})
                 rows = []
                 for row in table.rows:
                     cells = []
@@ -117,10 +143,14 @@ def _project(document, prefix):
                             incompatible()
                         from docx.table import _Cell
                         cell = _Cell(tc, table)
-                        cells.append({"colspan": tc.grid_span, "blocks": project(cell, "body")})
-                    rows.append({"cells": cells})
+                        cells.append({"colspan": tc.grid_span, "blocks": project(cell, "body"),
+                            "padding_mm": None, "vertical_align": {0: "top", 1: "center", 3: "bottom"}.get(cell.vertical_alignment, "top"),
+                            "style": _frame_style(tc.tcPr, "tcBorders", frame)})
+                    rows.append({"cells": cells, "min_height_mm": min(60, row.height.mm if row.height else 0),
+                        "keep_together": bool(row._tr.xpath("./w:trPr/w:cantSplit"))})
                 result.append({"id": ident, "type": "grid", "region": region,
-                    "widths": [w / sum(widths) * 100 for w in widths], "grid_rows": rows})
+                    "widths": [w / sum(widths) * 100 for w in widths], "grid_rows": rows,
+                    "style": {**frame, "spacing_mm": 0, "align": {1: "center", 2: "right"}.get(table.alignment, "left")}})
         return result
 
     blocks.extend(project(document, "body"))
@@ -173,7 +203,7 @@ def convert(version):
         "FREE_FORM": _request_source(source, language, True)}
     blocks = []
     for name, raw in sorted(variants.items()):
-        projected, _ = _project(Document(io.BytesIO(raw)), name.lower())
+        projected, _ = _project(Document(io.BytesIO(raw)), name.lower(), language)
         blocks.extend(projected)
     native = {"adapter": 1, "document_type": typ, "language": language,
         "source_version_id": version.id, "source_version": version.version,
@@ -207,13 +237,13 @@ def validate(layout, document_type):
         if digest(raw) != native["source_hashes"].get(name):
             incompatible()
         validate_docx(raw)
-        projected, _ = _project(Document(io.BytesIO(raw)), name.lower())
+        projected, _ = _project(Document(io.BytesIO(raw)), name.lower(), native["language"])
         expected.update({b.id: b for b in walk_blocks(Layout.model_validate({"blocks": projected}).blocks)})
     if actual.keys() != expected.keys():
         incompatible()
     for ident, block in actual.items():
         original = expected[ident]
-        if block.type != original.type or block.region != original.region:
+        if block.type != original.type or block.region != original.region or block.request_variant != original.request_variant:
             incompatible()
         if block.type == "native_paragraph":
             # Typed tokens only; slots and canonical fields cannot be deleted,
@@ -239,11 +269,15 @@ def validate(layout, document_type):
                     if cell.colspan != before.colspan or [b.id for b in cell.blocks] != [b.id for b in before.blocks]:
                         incompatible()
         elif block.type == "dynamic_table":
+            if not block.native_properties:
+                incompatible()
             if block.source != original.source or [c.key for c in block.columns] != [c.key for c in original.columns]:
                 incompatible()
             if block.group_by is not None:
                 incompatible()
             if any("[[ASSETCORE_" in c.label or "{{" in c.label for c in block.columns):
+                raise ValueError("studio_reserved_marker")
+            if "[[ASSETCORE_" in block.empty_label or "{{" in block.empty_label:
                 raise ValueError("studio_reserved_marker")
     if [b.id for b in layout.blocks] != [b.id for b in _expected_roots(native)]:
         incompatible()
@@ -251,7 +285,7 @@ def validate(layout, document_type):
 
 def _expected_roots(native):
     for name, raw in sorted(native["sources"].items()):
-        blocks, _ = _project(Document(io.BytesIO(base64.b64decode(raw))), name.lower())
+        blocks, _ = _project(Document(io.BytesIO(base64.b64decode(raw))), name.lower(), native["language"])
         yield from Layout.model_validate({"blocks": blocks}).blocks
 
 
@@ -259,6 +293,8 @@ def variant(data):
     free = data.get("request_kind") == "FREE_FORM"
     machine = data.get("machine")
     if free and machine is not None or not free and not machine:
+        raise ValueError("studio_request_variant_mismatch")
+    if data.get("document_layout_version") not in (None, 2 if free else 3):
         raise ValueError("studio_request_variant_mismatch")
     return "FREE_FORM" if free else "MACHINE"
 
@@ -268,7 +304,7 @@ def image_bytes(layout, block_id):
         incompatible()
     for name, encoded in layout.native["sources"].items():
         document = Document(io.BytesIO(base64.b64decode(encoded, validate=True)))
-        blocks, targets = _project(document, name.lower())
+        blocks, targets = _project(document, name.lower(), layout.native["language"])
         found = next((b for b in walk_blocks(Layout.model_validate({"blocks": blocks}).blocks)
                       if b.id == block_id and b.type == "native_image"), None)
         if found is None:
@@ -296,9 +332,47 @@ def _property(parent, tag, attributes):
     return node
 
 
+def _replace_text(paragraph, text):
+    if paragraph.runs:
+        paragraph.runs[0].text = text
+        for run in paragraph.runs[1:]:
+            run.text = ""
+    else:
+        paragraph.add_run(text)
+
+
+def _paragraph_delta(paragraph, current, old, width=188):
+    if current.align != old.align:
+        paragraph.alignment = {"left": 0, "center": 1, "right": 2}[current.align]
+    for name, attr in (("spacing_mm", "space_after"), ("paragraph_before_mm", "space_before")):
+        if getattr(current, name) != getattr(old, name):
+            setattr(paragraph.paragraph_format, attr, Mm(getattr(current, name)))
+    for run in paragraph.runs:
+        if current.font != old.font:
+            run.font.name = current.font
+        if current.size_pt != old.size_pt:
+            run.font.size = Pt(current.size_pt)
+        if current.color != old.color:
+            run.font.color.rgb = RGBColor.from_string(current.color[1:])
+        if current.bold != old.bold:
+            run.bold = current.bold
+        if current.italic != old.italic:
+            run.italic = current.italic
+    if current.background != old.background:
+        _property(paragraph._p.get_or_add_pPr(), "shd", {"fill": current.background.lstrip("#") if current.background != "transparent" else "auto"})
+    if current.border_pt != old.border_pt:
+        borders = _property(paragraph._p.get_or_add_pPr(), "pBdr", {})
+        for edge in ("top", "left", "bottom", "right"):
+            _property(borders, edge, {"val": "single" if current.border_pt else "nil", "sz": max(1, round(current.border_pt * 8)), "color": current.color[1:]})
+    if current.width_percent != old.width_percent:
+        unused = width * (1 - current.width_percent / 100)
+        paragraph.paragraph_format.left_indent = Mm(unused if current.align == "right" else unused / 2 if current.align == "center" else 0)
+        paragraph.paragraph_format.right_indent = Mm(unused if current.align == "left" else unused / 2 if current.align == "center" else 0)
+
+
 def _cell_properties(cell, current, previous):
     props = cell._tc.get_or_add_tcPr()
-    if current.padding_mm != previous.padding_mm:
+    if current.padding_mm is not None and current.padding_mm != previous.padding_mm:
         margin = _property(props, "tcMar", {})
         for edge in ("top", "left", "bottom", "right"):
             _property(margin, edge, {"w": round(current.padding_mm / 25.4 * 1440), "type": "dxa"})
@@ -314,7 +388,7 @@ def _cell_properties(cell, current, previous):
 
 
 def _table_properties(element, block, old, document):
-    from .renderer import _paragraph_style, _table_borders
+    from .renderer import _table_borders
     table = Table(element, document)
     # Missing native tblGrid is legal in the legacy paragraph-table renderer.
     grid = element.find(qn("w:tblGrid"))
@@ -340,16 +414,14 @@ def _table_properties(element, block, old, document):
                 cell.width = Mm(actual * sum(widths[column_index:column_index + tc.grid_span]) / 100 * 25.4 / 1440)
                 column_index += tc.grid_span
     if block.style != old.style:
-        _property(table._tbl.tblPr, "jc", {"val": block.style.align})
-        _table_borders(table, block.style)
+        if block.style.align != old.style.align:
+            _property(table._tbl.tblPr, "jc", {"val": block.style.align})
+        if block.style.border_pt != old.style.border_pt or block.style.color != old.style.color:
+            _table_borders(table, block.style)
         if block.type == "dynamic_table":
             for node in element.iter(qn("w:p")):
                 paragraph = Paragraph(node, document)
-                _paragraph_style(paragraph, block.style, 188)
-                for run in paragraph.runs:
-                    run.font.name, run.font.size = block.style.font, Pt(block.style.size_pt)
-                    run.font.color.rgb = RGBColor.from_string(block.style.color[1:])
-                    run.bold, run.italic = block.style.bold, block.style.italic
+                _paragraph_delta(paragraph, block.style, old.style)
         if block.style.spacing_mm != old.style.spacing_mm or block.style.paragraph_before_mm != old.style.paragraph_before_mm:
             gap = OxmlElement("w:p")
             element.addnext(gap)
@@ -369,7 +441,9 @@ def _table_properties(element, block, old, document):
             for tc, cell, before_cell in zip(row._tr.tc_lst, current.cells, previous.cells, strict=True):
                 _cell_properties(_Cell(tc, table), cell, before_cell)
     else:
-        for tr in element.findall(qn("w:tr")):
+        for index, tr in enumerate(element.findall(qn("w:tr"))):
+            if index == 0 and block.repeat_header != old.repeat_header:
+                _property(tr.get_or_add_trPr(), "tblHeader", {"val": "1" if block.repeat_header else "0"})
             if block.keep_rows_together != old.keep_rows_together:
                 _property(tr.get_or_add_trPr(), "cantSplit", {"val": "1" if block.keep_rows_together else "0"})
             if block.min_height_mm is not None and block.min_height_mm != old.min_height_mm:
@@ -383,7 +457,6 @@ def _table_properties(element, block, old, document):
 
 def render(manifest, values, tables, *, source=False):
     from ..template_engine import _insert_table_after, _replace_paragraph
-    from .renderer import _paragraph_style
     layout = Layout.model_validate(manifest["layout"])
     validate(layout, manifest["document_type"])
     native = layout.native
@@ -404,7 +477,7 @@ def render(manifest, values, tables, *, source=False):
         value = getattr(layout.page, region + "_distance_mm")
         if value is not None:
             setattr(section, region + "_distance", Mm(value))
-    projected, targets = _project(document, name.lower())
+    projected, targets = _project(document, name.lower(), manifest["language"])
     original = {b.id: b for b in walk_blocks(Layout.model_validate({"blocks": projected}).blocks)}
     actual = {b.id: b for b in walk_blocks(layout.blocks)}
     bindings = {**values, "PRESSURE_DISPLAY": f"{values['PRESSURE_BAR']:g} bar" if isinstance(values.get("PRESSURE_BAR"), (int, float)) else str(values.get("PRESSURE_BAR") or "")}
@@ -418,13 +491,9 @@ def render(manifest, values, tables, *, source=False):
         if block.type in {"native_paragraph", "page_number"}:
             paragraph = Paragraph(element, document)
             if block.type == "native_paragraph" and block.text != old.text:
-                paragraph.text = block.text
+                _replace_text(paragraph, block.text)
             if block.style != old.style:
-                _paragraph_style(paragraph, block.style, 188)
-                for run in paragraph.runs:
-                    run.font.name, run.font.size = block.style.font, Pt(block.style.size_pt)
-                    run.font.color.rgb = RGBColor.from_string(block.style.color[1:])
-                    run.bold, run.italic = block.style.bold, block.style.italic
+                _paragraph_delta(paragraph, block.style, old.style)
             if not source and block.type == "native_paragraph":
                 optional = next((f for f in ("REMARKS", "REPAIR_REFERENCE") if "{{" + f + "}}" in block.text), None)
                 if name != "DEFAULT" and optional and not bindings.get(optional):
@@ -446,7 +515,7 @@ def render(manifest, values, tables, *, source=False):
                     extent.set("cx", str(round(block.width_mm * 36000)))
                     extent.set("cy", str(round(block.height_mm * 36000)))
             if block.style != old.style:
-                _paragraph_style(paragraph, block.style, 188)
+                _paragraph_delta(paragraph, block.style, old.style)
         elif block.type == "grid":
             _table_properties(element, block, old, document)
         elif block.type == "dynamic_table" and not source:
@@ -455,6 +524,8 @@ def render(manifest, values, tables, *, source=False):
                 incompatible()
             keys = KEYS[block.source]
             records = raw_rows if not raw_rows or isinstance(raw_rows[0], dict) else [dict(zip(keys, row, strict=True)) for row in raw_rows[1:]]
+            if not records and block.empty_label:
+                records = [{block.columns[0].key: block.empty_label}]
             native_components = None
             if block.source == "EQUIPMENT_CHECKLIST":
                 from ..documents.transfer_documents import CHECKLIST
@@ -488,9 +559,11 @@ def render(manifest, values, tables, *, source=False):
                     incompatible()
                 for cell, label in zip(table.rows[0].cells, rows[0], strict=True):
                     if cell.text != label:
-                        cell.text = label
+                        _replace_text(cell.paragraphs[0], label)
                 for i, row_data in enumerate(rows[1:]):
                     copied = deepcopy(originals[min(i, len(originals) - 1)]._tr)
+                    if block.source == "REQUEST_LINES":
+                        _property(copied.get_or_add_trPr(), "cantSplit", {"val": "1" if all(len(v) < 1500 and v.count("\n") < 30 for v in row_data) else "0"})
                     table._tbl.append(copied)
                     row = _Row(copied, table)
                     for cell, value in zip(row.cells, row_data, strict=True):
@@ -504,6 +577,10 @@ def render(manifest, values, tables, *, source=False):
                 for row in originals:
                     table._tbl.remove(row._tr)
             _table_properties(element, block, old, document)
+            if block.source == "REQUEST_LINES":
+                for tr, row_data in zip(element.findall(qn("w:tr"))[1:], rows[1:], strict=True):
+                    if any(len(v) >= 1500 or v.count("\n") >= 30 for v in row_data):
+                        _property(tr.get_or_add_trPr(), "cantSplit", {"val": "0"})
     out = io.BytesIO()
     document.save(out)
     result = _stable_zip(out.getvalue(), manifest)

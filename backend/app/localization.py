@@ -62,6 +62,11 @@ def normalize_language(value: str | None) -> str:
 
 
 MESSAGES: dict[str, dict[str, str]] = {
+    "studio.signature_markers_missing": {
+        "bg": "Оформлението няма защитена клетка за този графичен подпис. Сесия за подписване не може да бъде създадена.",
+        "en": "The layout has no protected cell for this graphic signature. A signing session cannot be created.",
+        "ru": "В макете нет защищённой ячейки для этой графической подписи. Сеанс подписания создать нельзя.",
+    },
     "studio.approval_template_unavailable": {
         "bg": "Няма проверен съвместим шаблон за одобрението.",
         "en": "No verified compatible template is available for approval.",

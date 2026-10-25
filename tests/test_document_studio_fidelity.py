@@ -312,6 +312,10 @@ def test_studio_kk_signer_uses_approved_identity_without_live_substitution(langu
     version = SimpleNamespace(snapshot=data, language=language)
     manifest = fidelity_manifest('PART_REQUEST', language)
     identity = {'user_id': 123, 'display_name': 'SYNTHETIC REQUESTER', 'job_title': 'SYNTHETIC ROLE'}
+    values, tables = renderer.synthetic_values(language, 1)
+    values.update(LEFT_SIGNATURE='[[ASSETCORE_LEFT_SIGNATURE]]', RIGHT_SIGNATURE='[[ASSETCORE_RIGHT_SIGNATURE]]',
+        LEFT_SIGNER_NAME=identity['display_name'], LEFT_SIGNER_JOB_TITLE=identity['job_title'])
+    version.docx_content = renderer.render(manifest, values, tables)
     validate_studio_request_signer(version, 'REQUESTED_BY', identity, manifest)
     for change in ({'user_id': 124}, {'display_name': 'SYNTHETIC LATER NAME'}, {'job_title': 'SYNTHETIC LATER ROLE'}):
         with pytest.raises(HTTPException) as result:

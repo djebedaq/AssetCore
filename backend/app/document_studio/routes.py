@@ -157,6 +157,16 @@ def templates(_: User = Depends(reader), db: Session = Depends(get_db)):
         selected.setdefault((item.document_type, item.language), item)
     rows = db.scalars(select(DocumentTemplate).options(selectinload(DocumentTemplate.versions).defer(DocumentTemplateVersion.source_content))
                       .order_by(DocumentTemplate.document_type, DocumentTemplate.code))
+    from ..documents.common import ConfirmedTemplateUnavailableError
+    from ..documents.templates import legacy_template_version
+    defaults = {}
+    for typ in SUPPORTED_TYPES:
+        for lang in ("bg", "en", "ru"):
+            if (typ, lang) not in selected:
+                try:
+                    defaults[(typ, lang)] = legacy_template_version(db, typ, lang).id
+                except ConfirmedTemplateUnavailableError:
+                    pass
     return [{"id": t.id, "code": t.code, "document_type": t.document_type,
         "name_bg": t.name_bg, "name_en": t.name_en, "name_ru": t.name_ru,
         "is_active": t.is_active, "authoring_supported": t.document_type in SUPPORTED_TYPES,
@@ -167,7 +177,7 @@ def templates(_: User = Depends(reader), db: Session = Depends(get_db)):
             "created_by_id": v.created_by_id, "published_at": v.published_at,
             "source_filename": v.source_filename, "numbering_rule": v.numbering_rule,
             "studio": bool(v.layout_contract.get("studio")),
-            "active": bool((selection := selected.get((t.document_type, v.language))) and selection.version_id == v.id),
+            "active": bool((selection := selected.get((t.document_type, v.language))) and selection.version_id == v.id) or defaults.get((t.document_type, v.language)) == v.id,
             "active_version_id": selection.version_id if selection and selection.selection_kind == "STUDIO" else None,
             "selection_revision": selection.revision if selection else 0,
             "selection_kind": selection.selection_kind if selection else "LEGACY",

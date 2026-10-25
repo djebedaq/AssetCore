@@ -143,8 +143,11 @@ def issue_number(db, request):
         manifest = manifest_from_source(content)
         if not manifest or manifest["document_type"] != "PART_REQUEST" or manifest["language"] != request.language:
             raise ValueError("studio_source_invalid")
-        if kind(request) == "FREE_FORM" and not manifest["layout"].get("native"):
+        from ..document_studio.schemas import supports_request_variants
+        if kind(request) == "FREE_FORM" and not supports_request_variants(manifest["layout"]):
             raise ValueError("studio_request_variant_mismatch")
+        from ..document_studio.native_contract import variant
+        variant({"request_kind": kind(request), "machine": request.machine})
     insert = pg_insert if db.bind.dialect.name == "postgresql" else sqlite_insert
     db.execute(insert(RequestNumberCounter).values(id=1, next_value=1000).on_conflict_do_nothing())
     number = db.scalar(

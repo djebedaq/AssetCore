@@ -20,12 +20,23 @@ def configuration(db, document_type, language):
         "programmatic_layout_versions": {"MACHINE": 3, "FREE_FORM": 2} if document_type == "PART_REQUEST" else None}
     try:
         version = _template_version(db, document_type, language)
+        content = source_bytes(version)
         result.update(selected_version_id=version.id, template_id=version.template_id,
             source_version=version.version, source_sha256=version.source_sha256,
-            actual_source_sha256=digest(source_bytes(version)), published_at=version.published_at,
+            actual_source_sha256=digest(content), published_at=version.published_at,
             effective_from=version.effective_from, effective_to=version.effective_to,
             studio=bool(version.layout_contract.get("studio")),
-            valid=version.source_sha256 == digest(source_bytes(version)))
+            valid=version.source_sha256 == digest(content))
+        if version.layout_contract.get("studio"):
+            from .renderer import manifest_from_source
+            from .schemas import supports_request_variants
+            manifest = manifest_from_source(content)
+            if manifest is None:
+                raise ValueError("studio_source_invalid")
+            result["request_variants"] = ["MACHINE", "FREE_FORM"] if document_type == "PART_REQUEST" and supports_request_variants(manifest["layout"]) else ["MACHINE"] if document_type == "PART_REQUEST" else []
+            result["programmatic_layout_versions"] = ({"MACHINE": 3, "FREE_FORM": 2} if manifest["layout"].get("native") else None)
+        else:
+            result["request_variants"] = ["MACHINE", "FREE_FORM"] if document_type == "PART_REQUEST" else []
     except (ConfirmedTemplateUnavailableError, ValueError, OSError):
         result.update(valid=False, error_code="studio_activation_invalid")
     candidates = db.scalars(select(DocumentTemplateVersion).join(DocumentTemplate).where(
@@ -72,13 +83,17 @@ def legacy_preview(version, count=5, request_variant="MACHINE", *, raster=True):
         values["CONDITION_LABEL"] = TEXT[language]["overall_condition"]
         for i, row in enumerate(tables["EQUIPMENT_CHECKLIST"], 1):
             values[f"CHECK_{i}"] = row["condition"]
+        from ..documents.repair_table_contract import empty_label, headers
         from .native_contract import HEADERS
-        for code, labels in HEADERS.items():
+        for code in HEADERS:
+            labels = headers(code, language)
             if tables[code] and isinstance(tables[code][0], dict):
                 from .native_contract import KEYS
                 tables[code] = [list(labels)] + [[r.get(k, "") for k in KEYS[code]] for r in tables[code]]
             else:
                 tables[code] = [list(labels)] + tables[code][1:] if tables[code] else [list(labels)]
+            if len(tables[code]) == 1 and empty_label(code, language):
+                tables[code].append([empty_label(code, language)] + [""] * (len(labels) - 1))
         docx = render_docx(version, values, tables)
     pdf = pdf_required(docx)
     return docx, pdf, {**inspect_pdf(pdf, raster=raster), "docx_sha256": digest(docx),
