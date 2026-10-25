@@ -1,0 +1,21 @@
+{
+  "valid": true,
+  "route_count": 330,
+  "mutating_route_count": 168,
+  "by_kind": {
+    "authenticated": 7,
+    "authenticated_special": 9,
+    "permission": 296,
+    "public_exempt": 15,
+    "static_public": 3
+  },
+  "by_method": {
+    "DELETE": 12,
+    "GET": 157,
+    "HEAD": 5,
+    "PATCH": 22,
+    "POST": 127,
+    "PUT": 7
+  },
+  "errors": []
+}

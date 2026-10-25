@@ -15,3 +15,4 @@
 .editor-density{padding:8px 12px;background:#f5f8fc;font-size:.85rem}.editor-density summary{cursor:pointer;min-height:32px;display:flex;align-items:center}.editor-density p{margin:8px 0}.editor-density .editor-toolbar{padding:8px 0;background:transparent}
 
 .visual-editor [hidden]{display:none!important}
+.editor-page-settings{padding:8px 12px;flex-shrink:0}.editor-page-settings summary{cursor:pointer;min-height:38px;display:flex;align-items:center;font-size:13px;font-weight:600}.editor-page-settings .studio-fields{padding:12px 0}

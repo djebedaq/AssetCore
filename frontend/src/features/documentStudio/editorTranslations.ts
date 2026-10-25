@@ -1,4 +1,6 @@
 const text = {
+  'editor.controlledOrigin': ['Контролиран първоизточник', 'Original controlled source', 'Исходный контролируемый источник'],
+  'editor.pageSettings': ['Полета и разстояния на страницата', 'Page margins and distances', 'Поля и расстояния страницы'],
   'editor.originalImage': ['Запази оригиналното изображение', 'Keep original image', 'Сохранить исходное изображение'],
   'editor.inherited': ['От оригинала', 'Inherited from original', 'Из оригинала'],
   'editor.openStudio': ['Отвори Document Studio', 'Open Document Studio', 'Открыть Document Studio'],

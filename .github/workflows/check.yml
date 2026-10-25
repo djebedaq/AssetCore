@@ -67,6 +67,11 @@ jobs:
           PYTHONPATH: backend
           DATABASE_URL: "sqlite:///:memory:"
         run: python tests/verify_studio_fidelity_evidence.py --root docs/qa/commercial-docs-01b/final-fidelity
+      - name: Verify actual legacy to Studio fidelity and protected baseline
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: "sqlite:///:memory:"
+        run: python tests/verify_official_fidelity_evidence.py
       - run: python backend/scripts/validate_migration_history.py --require-all-protected
       - run: python backend/scripts/validate_authorization_inventory.py
       - run: PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py

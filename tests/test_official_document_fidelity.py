@@ -76,6 +76,55 @@ def test_unrecognized_source_does_not_create_a_generic_starter():
         convert(base)
 
 
+def test_ambiguous_default_legacy_selection_refuses_arbitrary_registry(session_factory):
+    from app.documents.common import ConfirmedTemplateUnavailableError
+    from app.documents.templates import _template_version
+    from app.models import DocumentTemplate, DocumentTemplateVersion, User
+    from sqlalchemy import select
+    with session_factory() as db:
+        original = _template_version(db, "TRANSFER_ISSUE", "bg")
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        duplicate = DocumentTemplate(code="QA_AMBIGUOUS_NATIVE", document_type="TRANSFER_ISSUE",
+            name_bg="SYNTHETIC QA", name_en="SYNTHETIC QA", name_ru="SYNTHETIC QA")
+        db.add(duplicate)
+        db.flush()
+        db.add(DocumentTemplateVersion(template_id=duplicate.id, version=original.version, language="bg",
+            source_content=original.source_content, source_path=original.source_path,
+            source_sha256=original.source_sha256, source_filename="synthetic-qa.docx",
+            layout_contract={"controlled": True}, validation_status="PASSED", is_published=True,
+            created_by_id=actor.id))
+        db.flush()
+        with pytest.raises(ConfirmedTemplateUnavailableError):
+            _template_version(db, "TRANSFER_ISSUE", "bg")
+
+
+@pytest.mark.parametrize("window", ["future", "expired"])
+def test_explicit_legacy_selection_honors_effective_window(session_factory, window):
+    from datetime import UTC, datetime, timedelta
+
+    from app.documents.common import ConfirmedTemplateUnavailableError
+    from app.documents.templates import _template_version
+    from app.models import DocumentTemplateVersion, StudioActivation, User
+    from sqlalchemy import select
+    with session_factory() as db:
+        original = _template_version(db, "TRANSFER_ISSUE", "bg")
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        now = datetime.now(UTC).replace(tzinfo=None)
+        version = DocumentTemplateVersion(template_id=original.template_id, version=400, language="bg",
+            source_content=original.source_content, source_path=original.source_path,
+            source_sha256=original.source_sha256, source_filename="synthetic-qa.docx",
+            layout_contract={"controlled": True}, validation_status="PASSED", is_published=True,
+            effective_from=now + timedelta(days=1) if window == "future" else now - timedelta(days=2),
+            effective_to=None if window == "future" else now - timedelta(days=1), created_by_id=actor.id)
+        db.add(version)
+        db.flush()
+        db.add(StudioActivation(document_type="TRANSFER_ISSUE", language="bg", version_id=version.id,
+            selection_kind="LEGACY", revision=1, created_by_id=actor.id, reason="SYNTHETIC QA INVALID WINDOW"))
+        db.flush()
+        with pytest.raises(ConfirmedTemplateUnavailableError):
+            _template_version(db, "TRANSFER_ISSUE", "bg")
+
+
 def test_slots_cannot_be_moved_or_deleted_and_static_text_is_editable():
     m = manifest("TRANSFER_ISSUE", "bg")
     blocks = list(walk_blocks(Layout.model_validate(m["layout"]).blocks))
@@ -134,6 +183,35 @@ def test_native_text_edit_preserves_original_run_and_paragraph_format():
     assert changed.runs[0].font.name == edited.runs[0].font.name
     assert changed.runs[0].font.size == edited.runs[0].font.size
     assert changed.runs[0].bold != edited.runs[0].bold
+
+
+def test_native_image_replacement_uses_frozen_bytes_without_changing_origin():
+    import base64
+    import zipfile
+
+    from PIL import Image
+    m = manifest("TRANSFER_ISSUE", "bg")
+    origin = copy.deepcopy(m["layout"]["native"])
+    image_block = next(b for b in walk_blocks(Layout.model_validate(m["layout"]).blocks) if b.type == "native_image")
+    def replace(items):
+        for block in items:
+            if block["id"] == image_block.id:
+                block["image_id"] = 1
+            for row in block.get("grid_rows", []):
+                for cell in row["cells"]:
+                    replace(cell["blocks"])
+    replace(m["layout"]["blocks"])
+    output = io.BytesIO()
+    Image.new("RGB", (180, 120), "#184c72").save(output, "PNG")
+    content = output.getvalue()
+    m["images"]["1"] = {"sha256": hashlib.sha256(content).hexdigest(), "content": base64.b64encode(content).decode()}
+    values, tables = synthetic_values("bg", 1)
+    rendered = render(m, values, tables)
+    with zipfile.ZipFile(io.BytesIO(rendered)) as archive:
+        hashes = {hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist() if name.startswith("word/media/")}
+    assert m["images"]["1"]["sha256"] in hashes
+    assert m["layout"]["native"] == origin
+    assert manifest_from_source(rendered) == m
 
 
 @pytest.mark.parametrize("variant_name", ["MACHINE", "FREE_FORM"])
@@ -202,6 +280,31 @@ def test_actual_selection_diagnostics_are_read_only_and_role_protected(client, a
     assert client.get("/api/studio/configuration/PART_REQUEST/bg").status_code == 401
     assert client.get("/api/studio/configuration/PART_REQUEST/bg", headers=viewer_headers).status_code == 403
     assert counts() == before
+
+
+def test_native_transfer_diagnostics_distinguish_origin_without_kk_layout_numbers(session_factory):
+    from app.document_studio.diagnostics import configuration
+    from app.documents.templates import _template_version
+    from app.models import DocumentTemplateVersion, StudioActivation, User
+    from sqlalchemy import select
+    with session_factory() as db:
+        original = _template_version(db, "TRANSFER_ISSUE", "bg")
+        actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
+        source = build_source(manifest("TRANSFER_ISSUE", "bg"))
+        version = DocumentTemplateVersion(template_id=original.template_id, version=400, language="bg",
+            source_content=source, source_sha256=hashlib.sha256(source).hexdigest(),
+            source_filename="synthetic-qa.docx", layout_contract={"studio": 1},
+            validation_status="PASSED", is_published=True, created_by_id=actor.id)
+        db.add(version)
+        db.flush()
+        db.add(StudioActivation(document_type="TRANSFER_ISSUE", language="bg", version_id=version.id,
+            selection_kind="STUDIO", revision=1, created_by_id=actor.id, reason="SYNTHETIC QA DIAGNOSTICS"))
+        db.flush()
+        report = configuration(db, "TRANSFER_ISSUE", "bg")
+        assert report["valid"] and report["source_version"] == 400
+        assert report["native_origin"]["source_version"] == 3
+        assert report["native_origin"]["source_sha256"] == template("TRANSFER_ISSUE", "bg").source_sha256
+        assert report["programmatic_layout_versions"] is None and report["request_variants"] == []
 
 
 def test_legacy_base_creates_native_draft_and_cannot_change_its_provenance(client, auth_headers, session_factory):

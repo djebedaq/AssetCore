@@ -34,7 +34,10 @@ def configuration(db, document_type, language):
             if manifest is None:
                 raise ValueError("studio_source_invalid")
             result["request_variants"] = ["MACHINE", "FREE_FORM"] if document_type == "PART_REQUEST" and supports_request_variants(manifest["layout"]) else ["MACHINE"] if document_type == "PART_REQUEST" else []
-            result["programmatic_layout_versions"] = ({"MACHINE": 3, "FREE_FORM": 2} if manifest["layout"].get("native") else None)
+            native = manifest["layout"].get("native")
+            result["programmatic_layout_versions"] = ({"MACHINE": 3, "FREE_FORM": 2} if document_type == "PART_REQUEST" and native else None)
+            if native:
+                result["native_origin"] = {key: native[key] for key in ("adapter", "source_version_id", "source_version", "source_sha256")}
         else:
             result["request_variants"] = ["MACHINE", "FREE_FORM"] if document_type == "PART_REQUEST" else []
     except (ConfirmedTemplateUnavailableError, ValueError, OSError):

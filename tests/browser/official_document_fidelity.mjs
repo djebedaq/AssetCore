@@ -48,6 +48,12 @@ try {
       await button(language.copy, row).click()
       const editor = page.locator('.visual-editor')
       await expect(editor).toBeVisible()
+      const margins = editor.locator('.editor-page-settings')
+      await margins.locator('summary').click()
+      await expect(margins.locator('input[type=number]')).toHaveCount(6)
+      await margins.locator('summary').click()
+      await expect.poll(() => editor.locator('.editor-paper-stack .editor-image img').count()).toBeGreaterThan(0)
+      await expect.poll(() => editor.locator('.editor-paper-stack .editor-image img').evaluateAll(images => images.every(img => img.complete && img.naturalWidth > 0))).toBe(true)
       for (const width of [390, 768, 1440]) {
         await page.setViewportSize({ width, height: 1000 })
         await shot(`native-${type.toLowerCase()}-${language.code}-${width}`)

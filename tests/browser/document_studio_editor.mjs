@@ -223,7 +223,7 @@ try {
   const rejected = await api(`/part-requests/${free.id}/decision`, { decision: 'APPROVED', note: 'Synthetic QA unsupported variant' }, 'POST', 409)
   if (rejected.detail?.code !== 'approval_template_unavailable') throw new Error('Older source did not fail closed for FREE_FORM')
   const catalog = JSON.parse(await readFile(`${out}/synthetic-catalog.json`, 'utf8'))
-  const request = await api('/part-requests/multi', { machine_id: catalog.machine_id, submit_for_approval: true, language: 'bg', lines: [{ catalog_part_id: catalog.part_id, quantity: 1 }] }, 'POST', 201)
+  const request = await api('/part-requests/multi', { machine_id: catalog.machine_id, submit_for_approval: true, language: 'bg', lines: [{ is_unknown_part: true, assembly: 'SYNTHETIC QA ASSEMBLY', description: 'Synthetic QA document proof', quantity: 1 }] }, 'POST', 201)
   const approved = await api(`/part-requests/${request.id}/decision`, { decision: 'APPROVED', note: 'Synthetic QA only' })
   if (approved.generation_status !== 'READY') throw new Error('Official KK generation failed')
   for (const doc of approved.documents) {
