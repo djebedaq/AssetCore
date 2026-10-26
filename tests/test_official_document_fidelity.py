@@ -447,6 +447,7 @@ def test_native_official_kk_variants_share_sequence_and_keep_frozen_bytes(client
         machine_pdf = db.scalar(select(GeneratedDocument).where(GeneratedDocument.part_request_id == machine_request["id"], GeneratedDocument.format == "pdf"))
         with fitz.open(stream=machine_pdf.content, filetype="pdf") as pdf:
             assert len(pdf) >= 3
+        _export_catalog_comparison(db, machine_request["id"], machine_doc, machine_pdf)
         db.get(Machine, catalog["machine_id"]).name = "SYNTHETIC QA LATER VALUE"
         db.commit()
     profile = client.get("/api/studio/company", headers=auth_headers).json()
@@ -464,3 +465,41 @@ def test_native_official_kk_variants_share_sequence_and_keep_frozen_bytes(client
         for identifier, saved in snapshots.items():
             row = db.get(RequestApprovalSnapshot, identifier)
             assert (row.sha256, row.template_content) == saved
+
+
+def _export_catalog_comparison(db, request_id, studio_doc, studio_pdf):
+    """Optional CI evidence from the same real synthetic approval; no new issue."""
+    import json
+    import os
+    from pathlib import Path
+
+    from app.document_studio.renderer import pdf_required
+    from app.documents.request_issue_documents import _appendix, build_docx
+    from app.models import PartRequest, PartVisualArtifact
+    from app.template_engine import source_bytes
+    from generate_official_fidelity_evidence import save_comparison
+    destination = os.environ.get("ASSETCORE_OFFICIAL_CATALOG_OUTPUT")
+    if not destination:
+        return
+    root = Path(__file__).resolve().parents[1]
+    target = (root / destination).resolve()
+    assert target.is_relative_to(root / ".tmp")
+    request = db.get(PartRequest, request_id)
+    snapshot = request.approval_snapshot
+    data = copy.deepcopy(snapshot.data)
+    appendix = _appendix(db, request, data)
+    header = db.get(PartVisualArtifact, data["header_image_sha256"])
+    resources = {name: db.get(PartVisualArtifact, item["sha256"]).content
+        for name, item in data["company_header"]["parts"].items()}
+    legacy_doc = build_docx(data, source_bytes(template("PART_REQUEST", data["language"])),
+        appendix, header_content=header.content, resources=resources)
+    report = save_comparison(target, legacy_doc, pdf_required(legacy_doc), studio_doc.content,
+        studio_pdf.content, case="kk-machine-catalog", language=data["language"], count=len(data["lines"]))
+    roles = [page["visual_role"] for page in studio_doc.snapshot["visual_appendix"]["pages"]]
+    assert roles == ["EXPLODED_SCHEME", "SPARE_PARTS_LIST"]
+    assert report["native_text_equal"] and report["pdf_text_equal"]
+    assert report["legacy_pages"] == report["studio_pages"] >= 3
+    assert all(page["changed_pixel_fraction"] == 0 for page in report["pages"])
+    report.update(synthetic_only=True, approval_snapshot_sha256=snapshot.sha256,
+        appendix_page_roles=roles)
+    (target / "comparison.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

@@ -82,6 +82,8 @@ jobs:
       - name: Production configuration regression gate
         run: python -m pytest -q --tb=short tests/test_runtime_deployment_hardening.py
       - name: Full backend suite (real PostgreSQL cases run in postgres job)
+        env:
+          ASSETCORE_OFFICIAL_CATALOG_OUTPUT: .tmp/native-catalog-evidence
         run: python -m pytest -q -n 2 --dist loadfile -m "not postgres" --tb=short --durations=10
       - run: python scripts/verify_release.py --output release-verification
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -92,6 +94,18 @@ jobs:
             release-verification
             security-reports
           if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: native-approved-catalog-comparison
+          include-hidden-files: true
+          path: |
+            .tmp/native-catalog-evidence/*.docx
+            .tmp/native-catalog-evidence/*.pdf
+            .tmp/native-catalog-evidence/*.png
+            .tmp/native-catalog-evidence/comparison.json
+          if-no-files-found: error
 
   browser:
     runs-on: ubuntu-latest
