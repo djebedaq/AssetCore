@@ -411,7 +411,7 @@ def test_native_official_kk_variants_share_sequence_and_keep_frozen_bytes(client
     from sqlalchemy import select
     from test_document_studio_publication import activate, publish
     from test_requests01 import approve, create
-    from visual_snapshot_cases import future_catalog, request_payload
+    from visual_snapshot_cases import declared_catalog, request_payload
     with session_factory() as db:
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
         actor.first_name, actor.middle_name, actor.last_name = "SYNTHETIC", "QA", "ONLY"
@@ -428,7 +428,7 @@ def test_native_official_kk_variants_share_sequence_and_keep_frozen_bytes(client
     free = approve(client, auth_headers, create(client, auth_headers, submit_for_approval=True,
         lines=[{"description": "SYNTHETIC QA DECIMAL", "quantity": "0.75", "unit": "kg"}]))
     assert free["generation_status"] == "READY"
-    catalog = future_catalog(session_factory)
+    catalog = declared_catalog(session_factory)
     created = client.post("/api/part-requests/multi", headers=auth_headers, json=request_payload(catalog))
     assert created.status_code == 201
     machine_request = approve(client, auth_headers, created.json())
