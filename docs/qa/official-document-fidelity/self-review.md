@@ -17,3 +17,10 @@ Approval source се проверява преди number reservation в caller 
 Password/session/owner/role/licence/QR/repair-history механизми не са преработвани. Production manager scripts са част от preservation проверката и regression suite. Новата диагностична API не връща filesystem paths, тайни или бизнес записи.
 
 Точните изпълнени проверки и евентуални блокери се поддържат в release-readiness.md; неприключил или прекъснат suite не е успешен резултат.
+
+
+## Втори прочит след пълния CI
+
+Пълният suite установи test-contract drift при два нови authorized routes, очакваните EN/RU repair label промени и browser имената за двата KK preview варианта. Проверени са точните причини; не е променян старият golden или production код, за да се прикрият откази. Новото historical XML сравнение допуска само изрично проверените translated text nodes и запазва останалия byte-level договор.
+
+Отчетните откази са възпроизведени при UTC/Sofia midnight около смяната на часовото време. Production изчислението е правилно; фиксираният test clock и новите DST гранични случаи премахват зависимостта от текущия час, без промяна на threshold или очакваната календарна семантика.

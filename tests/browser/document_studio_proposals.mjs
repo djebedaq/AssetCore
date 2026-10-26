@@ -93,10 +93,12 @@ try {
   await director.locator('.studio-template-list button').filter({ hasText: 'SYNTHETIC QA Studio C' }).click()
   await expect(director.getByRole('button', { name: 'Нов шаблон', exact: true })).toHaveCount(0)
   await shot(director, '01-director-template-version')
-  await director.locator('.studio-version').last().getByRole('button', { name: 'Провери и виж PDF', exact: true }).click()
-  await expect(director.getByRole('dialog').locator('img').first()).toBeVisible()
-  await shot(director, '01b-director-exact-version-pdf')
-  await director.getByRole('dialog').getByRole('button', { name: 'Затвори', exact: true }).click()
+  for (const [variant, title] of [['machine', 'Заявка към машина'], ['free', 'Свободна заявка']]) {
+    await director.locator('.studio-version').last().getByRole('button', { name: `Провери и виж PDF · ${title}`, exact: true }).click()
+    await expect(director.getByRole('dialog').locator('img').first()).toBeVisible()
+    await shot(director, `01b-director-exact-version-${variant}-pdf`)
+    await director.getByRole('dialog').getByRole('button', { name: 'Затвори', exact: true }).click()
+  }
   const acceptedTitle = 'SYNTHETIC QA — компактна фирмена шапка'
   const acceptedId = await propose(acceptedTitle, true)
   await shot(director, '05-director-submitted')

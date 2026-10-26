@@ -151,6 +151,7 @@ jobs:
         if: always()
         with:
           name: official-document-fidelity-browser
+          include-hidden-files: true
           path: |
             .tmp/catalog03-official-fidelity-browser-*/browser-proof.json
             .tmp/catalog03-official-fidelity-browser-*/*.png

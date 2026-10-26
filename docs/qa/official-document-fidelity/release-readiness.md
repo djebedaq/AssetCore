@@ -40,3 +40,17 @@ Native структурни операции извън поддържания �
 ## Финални блокиращи gates
 
 Петте jobs — frontend, backend, postgres, browser, docker — трябва да са success за един и същ окончателен PR head. До приключването им release становището е NOT READY. Локалният успех не замества PostgreSQL concurrency, backup/restore и цялата CI регресия. Публикуване или активация в Production не е част от тази задача.
+
+
+## Преглед на пълния CI и целеви корекции
+
+CI за `5a1585d7770f789dcd40a5be5eb566ae4fe378ce`: Frontend и Docker са успешни; Backend — 1738 passed / 6 failed / 2 skipped; PostgreSQL — 201 passed / 3 failed; Browser отказва в стария proposal selector преди native сценария. Тези резултати не се представят като успех на окончателния head.
+
+Причините и поправките са само в проверките и artifact packaging:
+
+- Inventory очакването се увеличава точно с двата нови GET endpoint-а; за двата изрично се проверява `studio.view`, mutating count остава 168.
+- Старият DOCX golden остава непроменен. Преди historical comparison новите преведени labels/empty messages се проверяват по точния table contract и се нормализират само тези text nodes. Цялото останало XML и всички package members продължават да съвпадат по SHA-256 с оригиналния baseline. Реалните current archive/signing bytes се проверяват отделно без нормализация.
+- Reports тестовете вече използват един и същ фиксиран часовник за fixture и HTTP defaults. Production календарната логика не се променя. Два нови случая проверяват 14/15 местни календарни дни при 15 UTC денонощия около Sofia DST midnight и се изпълняват и на PostgreSQL.
+- Proposal browser regression проверява отделно двата реални preview бутона вместо вече несъществуващото общо име. Новият artifact upload изрично допуска единствено указаните synthetic файлове от `.tmp`.
+
+Целеви резултати след поправките: `pytest -q tests/test_reports01.py --tb=short` — 55 passed; `pytest -q tests/test_document_generation_modules.py -k pre_extraction --tb=short` — 3 passed / 6 deselected. Ruff е успешен. Повторният локален proposal browser опит не достига приложението, защото Docker daemon е недостъпен след възобновяването на сесията; не се отчита като успешен. Окончателният browser и PostgreSQL резултат трябва да дойде от пълния нов CI.
