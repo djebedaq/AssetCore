@@ -11,6 +11,7 @@ from test_reports01 import (  # noqa: F401
     test_reports_current_categories_and_active_relationship,
     test_reports_current_details_identify_the_read_snapshot,
     test_reports_delay_is_strictly_more_than_fourteen_calendar_days,
+    test_reports_delay_uses_sofia_calendar_dates_across_dst_midnight,
     test_reports_detail_dates_and_unique_contract_over_http,
     test_reports_detail_dates_normalize_aware_utc_and_preserve_missing,
     test_reports_details_order_by_the_metric_event,

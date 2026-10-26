@@ -2,7 +2,7 @@ import io
 import json
 import os
 import zipfile
-from datetime import date, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -28,9 +28,23 @@ from sqlalchemy import func, select
 
 
 @pytest.fixture()
-def report_qa(session_factory):
+def report_qa(session_factory, monkeypatch):
+    # Calendar assertions and HTTP defaults must use the same deterministic
+    # instant. A live UTC clock crossing Sofia midnight/DST changes the dates
+    # represented by "now - N days", even though the business rule is correct.
+    import app.reports.filters as filters
+    import app.reports.routes as routes
+    fixed = datetime(2026, 8, 15, 12)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.replace(tzinfo=UTC).astimezone(tz) if tz else fixed
+
+    for module in (filters, routes):
+        monkeypatch.setattr(module, "datetime", Clock)
     with session_factory() as db:
-        return reports_fixture(db)
+        return reports_fixture(db, now=fixed)
 
 
 def service(session_factory, qa, **changes):
@@ -524,6 +538,22 @@ def test_reports_delay_is_strictly_more_than_fourteen_calendar_days(
         request.ordered_at = report_qa["now"] - timedelta(days=days)
         db.commit()
         assert values(reports.build("requests"))["delayed"] == expected
+
+
+@pytest.mark.parametrize("hour,elapsed,delayed", [(21, 14, 0), (22, 15, 1)])
+def test_reports_delay_uses_sofia_calendar_dates_across_dst_midnight(
+    session_factory, hour, elapsed, delayed
+):
+    now = datetime(2026, 10, 25, hour, 30)
+    with session_factory() as db:
+        qa = reports_fixture(db, now=now)
+        db.get(PartRequest, qa["request_id"]).ordered_at = now - timedelta(days=15)
+        db.commit()
+    db, reports = service(session_factory, qa)
+    with db:
+        row = next(r for r in reports.load("requests") if r["id"] == qa["request_id"])
+        assert row["elapsed_days"] == elapsed
+        assert values(reports.build("requests"))["delayed"] == delayed
 
 
 def test_reports_zero_baseline_and_incomplete_history_are_explicit(session_factory, report_qa):

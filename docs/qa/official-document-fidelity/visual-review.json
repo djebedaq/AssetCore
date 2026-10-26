@@ -1,0 +1,220 @@
+{
+  "method": "All 51 unique final raster hashes visually inspected at original resolution; 75 Studio pages and their 75 raster-identical legacy pages covered by hash identity. Private reference pages reviewed separately and excluded.",
+  "case_count": 45,
+  "page_pairs": 75,
+  "unique_rasters": 51,
+  "private_reference_pages_reviewed": 4,
+  "private_reference_content_included": false,
+  "reviewed_pages": [
+    {
+      "sha256": "dfe3d19d8cf1a8a1f86249a5fb5b7b336773e8dd66f61538a2363aa5a74ef91e",
+      "path": "kk-free/bg-1/studio-page-1.png"
+    },
+    {
+      "sha256": "8229980b896958fde80f1761c32b85e316857ce84cd3417e5f5324a1272de106",
+      "path": "kk-free/bg-30/studio-page-1.png"
+    },
+    {
+      "sha256": "d21bd3d235c2ddb5a6faae0be6f94d84a44986509782f7af4d3bb47afc1ffffb",
+      "path": "kk-free/bg-30/studio-page-2.png"
+    },
+    {
+      "sha256": "9ded2d54cc8a0cc05c985d3185738c4e4c84ea68d2e985a709322b6faf6b436b",
+      "path": "kk-free/bg-5/studio-page-1.png"
+    },
+    {
+      "sha256": "00c4ddf0204d069f45932c98652361e508576af3fedcc9b43a032c4d009800da",
+      "path": "kk-free/en-1/studio-page-1.png"
+    },
+    {
+      "sha256": "53cd05789c8d2498f729ebc5342b51aeba6afd8383587a84da44cffb00e2f18a",
+      "path": "kk-free/en-30/studio-page-1.png"
+    },
+    {
+      "sha256": "0d82fa2aff784509ffb9f017d279f6ceac454b19b995ca776888031737df1a66",
+      "path": "kk-free/en-30/studio-page-2.png"
+    },
+    {
+      "sha256": "c207462dce5b50bbee9f79edaf49d4541d9e169deca5063f1540f29757f0c66d",
+      "path": "kk-free/en-5/studio-page-1.png"
+    },
+    {
+      "sha256": "0a8a4265a8677ca501ec5b72a8947ee9edb2ccacf7cd30180a3c9fcf6676af94",
+      "path": "kk-free/ru-1/studio-page-1.png"
+    },
+    {
+      "sha256": "b239762514a75a677106a9ccb217bce3076ec220dd5608eddbc8ef56350c51aa",
+      "path": "kk-free/ru-30/studio-page-1.png"
+    },
+    {
+      "sha256": "463b0c3d65117bd0c15190d0d5db7782b402ea60dda774cad0e1882865d64572",
+      "path": "kk-free/ru-30/studio-page-2.png"
+    },
+    {
+      "sha256": "8323da7bd9b8094550cd017a2fc9a0b78c391db51a71adc4e5aeccdb67be8c6d",
+      "path": "kk-free/ru-5/studio-page-1.png"
+    },
+    {
+      "sha256": "a353feb0e1cd106cd884950e23903e5951af7c608ecc0ba45604da8be1f9f113",
+      "path": "kk-machine/bg-1/studio-page-1.png"
+    },
+    {
+      "sha256": "baf39ee674c36c6e60c3161150ec95da9bacca455bc5e3c9b812e2d2db81166b",
+      "path": "kk-machine/bg-30/studio-page-1.png"
+    },
+    {
+      "sha256": "f7c0c3b7e0242a1a6318b9f20bd927a62e117983960e14d3fdb9b9379103d2ab",
+      "path": "kk-machine/bg-30/studio-page-2.png"
+    },
+    {
+      "sha256": "4c8bacd8cd91e1a68485eb4ae831558b5cd6caf4879f1939ff9d6581d249c37e",
+      "path": "kk-machine/bg-5/studio-page-1.png"
+    },
+    {
+      "sha256": "92eed108597778b46b59dde2ba32e0d4b3400688df2e1a897e91c1061a423fe9",
+      "path": "kk-machine/en-1/studio-page-1.png"
+    },
+    {
+      "sha256": "427d023d6bbbf4b9afd166fb5a3c43903c3bace8502e5542b9f0c3aeb23748b2",
+      "path": "kk-machine/en-30/studio-page-1.png"
+    },
+    {
+      "sha256": "57b9b90d3c1879ce0eaa690edc5fb8e6fd2e61451fd015b4db3d2c18792a28c4",
+      "path": "kk-machine/en-30/studio-page-2.png"
+    },
+    {
+      "sha256": "3f0fbaabb1cc27416a460dad2b14307f46545dd29418d7f3c30ff0993c8b7ba0",
+      "path": "kk-machine/en-5/studio-page-1.png"
+    },
+    {
+      "sha256": "982beec84e17e0c5a4cf05063114d743af536c471dc4a819690d95a9dbe9976c",
+      "path": "kk-machine/ru-1/studio-page-1.png"
+    },
+    {
+      "sha256": "c750f6510d2198a9f613a77bfa64d64ed4b341043af4c8318156ffadf3e84e4a",
+      "path": "kk-machine/ru-30/studio-page-1.png"
+    },
+    {
+      "sha256": "60d2a763b6710db572ff5ae193db93c2252d328e6984b50d46da0a128b91fb6e",
+      "path": "kk-machine/ru-30/studio-page-2.png"
+    },
+    {
+      "sha256": "77e9961d3b63a5cbffb00cd3c7daee1aaa2eae98f3beea9687985f14f95793e2",
+      "path": "kk-machine/ru-5/studio-page-1.png"
+    },
+    {
+      "sha256": "8be0f93a01c2dd56374df879bba4d36291a83274226a05436ffcae51a368be26",
+      "path": "repair-protocol/bg-1/studio-page-1.png"
+    },
+    {
+      "sha256": "c43b1797c0c61c614811f06a143640dc735f6565445bf4af07f928d9a7b5f005",
+      "path": "repair-protocol/bg-1/studio-page-2.png"
+    },
+    {
+      "sha256": "f9fe67655649292b974b4d845c6eefa10feae3b45d50993bd79834b49cfa762a",
+      "path": "repair-protocol/bg-1/studio-page-3.png"
+    },
+    {
+      "sha256": "12ae204f2825066298852e586bb68ed7d9dd95f733d157ee6500203be0a38d98",
+      "path": "repair-protocol/bg-30/studio-page-2.png"
+    },
+    {
+      "sha256": "42dd7c4e2711555aaeb996cca685e04df710e63bffe3c75743ed841e362dea7d",
+      "path": "repair-protocol/bg-30/studio-page-3.png"
+    },
+    {
+      "sha256": "ed8a994b18b9139a3c0c41110dd756f153cb07edcb0415b4c1b5b6a0724078c4",
+      "path": "repair-protocol/bg-30/studio-page-4.png"
+    },
+    {
+      "sha256": "ec60b20f544a7a16a9e3421c310e51efc9e9ef539850d1f22915c27146a1a99f",
+      "path": "repair-protocol/bg-5/studio-page-2.png"
+    },
+    {
+      "sha256": "2983e3bd14d8ecfd1b8d5bceeeb20205702d97f2f3cf895638f5a3ecb9de4398",
+      "path": "repair-protocol/en-1/studio-page-1.png"
+    },
+    {
+      "sha256": "1eebf53d68da30893f05782fa46577bf03c6172c2dc5a2906304ae9666e9f228",
+      "path": "repair-protocol/en-1/studio-page-2.png"
+    },
+    {
+      "sha256": "be9fde1961fa3f5249f39f3e518b3c4af31714ed75532737e8c6d873c91ff891",
+      "path": "repair-protocol/en-1/studio-page-3.png"
+    },
+    {
+      "sha256": "7e29a4ba5fc30c72cbf60145cfecbdd1ad73cbb789fa8f1a583d8e8cf0728956",
+      "path": "repair-protocol/en-30/studio-page-2.png"
+    },
+    {
+      "sha256": "286f6451b177395c83d894479b6ca7e83b0e64d4138c199bef51671167378b30",
+      "path": "repair-protocol/en-30/studio-page-3.png"
+    },
+    {
+      "sha256": "3e6aab2c69968634b08e8c8aea41a0a63c5df482c73d93dbaee4f6b3b9cb27da",
+      "path": "repair-protocol/en-30/studio-page-4.png"
+    },
+    {
+      "sha256": "6ee75cc86bf3e5fd77de61f5fc84727172814a8331e4b5fb79c4e85a58408238",
+      "path": "repair-protocol/en-5/studio-page-2.png"
+    },
+    {
+      "sha256": "5b576a15dcb4dbf7315b5a2ac8d0a7b451f670b0f0beab067329d3131ac26711",
+      "path": "repair-protocol/ru-1/studio-page-1.png"
+    },
+    {
+      "sha256": "e3bcf3bee1e7c7592d1bb00127695a39030b8c3f4a857953d18a1a21cfe7e7c3",
+      "path": "repair-protocol/ru-1/studio-page-2.png"
+    },
+    {
+      "sha256": "e153138df9072f935208a68940b51edbb490952b99ba4ae86d53e759f5b45e5d",
+      "path": "repair-protocol/ru-1/studio-page-3.png"
+    },
+    {
+      "sha256": "b00bd4fa1455be935258653b5aa5e70e04745f2ad64c5a9d951a24da1d8b5d6e",
+      "path": "repair-protocol/ru-30/studio-page-2.png"
+    },
+    {
+      "sha256": "19b9e81c7ecbb3b3bdedea78fb953f23d5641a26fe71abe454508ba2dfe6b471",
+      "path": "repair-protocol/ru-30/studio-page-3.png"
+    },
+    {
+      "sha256": "2ea6091e135835e5e71b5da9ab3fe0fc46ac2527f133b975eaf7154aabc4ab25",
+      "path": "repair-protocol/ru-30/studio-page-4.png"
+    },
+    {
+      "sha256": "6072c36a751fe8f316269d8d1f958a7893c3ac0e6c03a8de83af22dbbe803eb9",
+      "path": "repair-protocol/ru-5/studio-page-2.png"
+    },
+    {
+      "sha256": "e5f4811f16876b67fb9913703f960434104ef918f1d4736ea216a986540cac34",
+      "path": "transfer-issue/bg-1/studio-page-1.png"
+    },
+    {
+      "sha256": "9d1e505b22213812056d5bb193292fdd18997f3e769daf5bece613b988bdaf7e",
+      "path": "transfer-issue/en-1/studio-page-1.png"
+    },
+    {
+      "sha256": "f7d38045479638d885a0cdaf842c9256c30514d899f3d71359a18831fd3f44b2",
+      "path": "transfer-issue/ru-1/studio-page-1.png"
+    },
+    {
+      "sha256": "6bc8e11f90a77eb335bef43d133d74485476167fef381dbb98de973cbd17dd6f",
+      "path": "transfer-return/bg-1/studio-page-1.png"
+    },
+    {
+      "sha256": "155f5c4396019e5df1f09535a2a6c0d35ea353d2cd0c758ed5688831a493031e",
+      "path": "transfer-return/en-1/studio-page-1.png"
+    },
+    {
+      "sha256": "66ff8f009c27c2dbf209c5db87dcf018437f7bb4358fd936abc6e249caf7d0f9",
+      "path": "transfer-return/ru-1/studio-page-1.png"
+    }
+  ],
+  "observations": [
+    "No raster difference between actual legacy and native Studio in the matrix.",
+    "Repair v6 inherited table continuation can split rows and does not repeat headers by default; retained rather than silently redesigned.",
+    "All source headers, signature cells, machine/free column layouts and final sections checked.",
+    "Browser screenshots additionally reviewed for representative BG/EN/RU and 390/768/1440 layouts; full browser assertions and 52 screenshots retained."
+  ]
+}

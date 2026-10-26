@@ -7,6 +7,8 @@ from app.models import (
     AssetCategory,
     CatalogDiagram,
     CatalogPositionHotspot,
+    CatalogVisualPartMap,
+    CatalogVisualSource,
     Machine,
     PartCatalog,
     PartHotspot,
@@ -18,11 +20,14 @@ from app.models import (
 from sqlalchemy import select
 
 
-def future_catalog(factory, *, visuals=True):
-    with fitz.open() as pdf:
-        for number in range(2):
-            pdf.new_page().insert_text((70, 90), f"Synthetic QA diagram {number + 1}")
-        content = pdf.tobytes()
+def future_catalog(factory, *, visuals=True, source_content=None):
+    if source_content is None:
+        with fitz.open() as pdf:
+            for number in range(2):
+                pdf.new_page().insert_text((70, 90), f"Synthetic QA diagram {number + 1}")
+            content = pdf.tobytes()
+    else:
+        content = source_content
     digest = hashlib.sha256(content).hexdigest()
     with factory() as db:
         actor = db.scalar(select(User).where(User.is_system_owner.is_(True)))
@@ -178,3 +183,48 @@ def request_payload(data):
             }
         ],
     }
+
+
+def declared_catalog(factory):
+    """Synthetic, explicitly classified scheme/list pages; no inferred roles."""
+    with fitz.open() as pdf:
+        scheme = pdf.new_page()
+        scheme.insert_text((50, 55), "SYNTHETIC QA ONLY - EXPLODED SCHEME", fontsize=14)
+        scheme.insert_text((50, 80), "Not a real industrial catalog or business record")
+        for x, label in ((70, "QA-A"), (180, "QA-P7"), (300, "QA-B")):
+            scheme.draw_rect(fitz.Rect(x, 270, x + 90, 340))
+            scheme.insert_text((x + 10, 305), label)
+        scheme.draw_line((160, 305), (180, 305))
+        scheme.draw_line((270, 305), (300, 305))
+        listing = pdf.new_page()
+        listing.insert_text((50, 55), "SYNTHETIC QA ONLY - SPARE PARTS LIST", fontsize=14)
+        listing.insert_text((50, 80), "Not a real industrial catalog or business record")
+        columns = (50, 130, 240, 450, 545)
+        for y, values in ((145, ("Position", "Part No.", "Description", "Unit")),
+                          (180, ("QA-P7", "QA-991122", "Synthetic QA rotor", "pcs"))):
+            for x, right, value in zip(columns[:-1], columns[1:], values, strict=True):
+                listing.draw_rect(fitz.Rect(x, y - 20, right, y + 15))
+                listing.insert_text((x + 5, y), value, fontsize=9)
+        content = pdf.tobytes()
+    data = future_catalog(factory, visuals=False, source_content=content)
+    with factory() as db:
+        part = db.get(PartCatalog, data["part_id"])
+        for page, role in ((1, "EXPLODED_SCHEME"), (2, "SPARE_PARTS_LIST")):
+            source = CatalogVisualSource(source_id=part.source_id, catalog_revision=part.source_version,
+                technical_document_id=data["document_id"], page_number=page, role=role,
+                source_sha256=data["sha256"])
+            db.add(source)
+            db.flush()
+            if role == "SPARE_PARTS_LIST":
+                db.add(CatalogVisualPartMap(visual_source_id=source.id, part_id=part.id))
+        diagram = CatalogDiagram(source_id=part.source_id, family=part.family, assembly=part.assembly,
+            technical_document_id=data["document_id"], page_number=1,
+            title="SYNTHETIC QA declared scheme", source_pdf_sha256=data["sha256"])
+        db.add(diagram)
+        db.flush()
+        db.add(CatalogPositionHotspot(hotspot_key="QA-declared-catalog-position", diagram_id=diagram.id,
+            position=part.position, x=.3, y=.35, width=.08, height=.03, is_verified=True,
+            provenance="SYNTHETIC QA explicit role and position confirmation", confidence=.99,
+            verified_by_id=data["actor_id"], verified_at=utcnow()))
+        db.commit()
+    return data

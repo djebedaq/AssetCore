@@ -1,0 +1,15 @@
+{
+  "case": "transfer-issue",
+  "language": "ru",
+  "rows": 30,
+  "legacy_pages": 1,
+  "studio_pages": 1,
+  "pdf_text_equal": true,
+  "native_text_equal": true,
+  "pages": [
+    {
+      "page": 1,
+      "changed_pixel_fraction": 0.0
+    }
+  ]
+}

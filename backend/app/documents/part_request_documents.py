@@ -117,7 +117,7 @@ def _request_snapshot(request: PartRequest, appendix: VisualPlan | None = None) 
                 **({"visual_snapshot": snapshot_document_reference(line)}
                    if line.visual_snapshot is not None else {}),
             }
-            for line in request.lines
+            for line in sorted(request.lines, key=lambda line: (line.id is None, line.id or 0))
         ],
     }
     if appendix is not None:

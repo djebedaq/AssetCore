@@ -203,7 +203,8 @@ def test_preview_has_no_official_side_effects_publication_is_immutable_and_activ
         assert _template_version(db, 'PART_REQUEST', 'bg').id == old
         published = db.get(DocumentTemplateVersion, version['id'])
         original = published.source_content
-        assert published.validation_report['valid'] and len(published.validation_report['cases']) == 3
+        assert published.validation_report['valid'] and len(published.validation_report['cases']) == 6
+        assert {(case['request_variant'], case['rows']) for case in published.validation_report['cases']} == {(variant, rows) for variant in ('MACHINE', 'FREE_FORM') for rows in (1, 5, 30)}
     activate(client, auth_headers, version['id'])
     with session_factory() as db:
         assert _template_version(db, 'PART_REQUEST', 'bg').id == version['id']

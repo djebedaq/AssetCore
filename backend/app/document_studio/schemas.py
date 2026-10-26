@@ -58,6 +58,22 @@ def publication_fields(document_type: str):
 
 
 def validate_publication_fields(layout, document_type):
+    if layout.native is not None:
+        from .native_contract import validate
+        validate(layout, document_type)
+        return
+    if document_type == "PART_REQUEST" and any(b.request_variant for b in walk_blocks(layout.blocks)):
+        if not supports_request_variants(layout):
+            raise ValueError("studio_request_variant_mismatch")
+        for variant in ("MACHINE", "FREE_FORM"):
+            selected = layout.model_copy(update={"blocks": variant_blocks(layout.blocks, variant)})
+            validate_publication_fields(selected, document_type)
+            blocks = list(walk_blocks(selected.blocks))
+            columns = next(b.columns for b in blocks if b.type == "dynamic_table" and b.source == "REQUEST_LINES")
+            required = ["position", "description", "quantity"] if variant == "FREE_FORM" else ["position", "part_number", "description", "quantity"]
+            if [c.key for c in columns] != required:
+                raise ValueError("studio_request_variant_mismatch")
+        return
     blocks = list(walk_blocks(layout.blocks))
     actual = {b.field for b in blocks if b.type == "field" and b.region == "body"}
     if not set(publication_fields(document_type)) <= actual:
@@ -163,10 +179,16 @@ class Page(StrictModel):
     margin_mm: float = Field(default=15, ge=5, le=40, allow_inf_nan=False)
     header_mm: float = Field(default=0, ge=0, le=40, allow_inf_nan=False)
     footer_mm: float = Field(default=0, ge=0, le=20, allow_inf_nan=False)
+    top_mm: float | None = Field(default=None, ge=0, le=90, allow_inf_nan=False)
+    bottom_mm: float | None = Field(default=None, ge=0, le=90, allow_inf_nan=False)
+    left_mm: float | None = Field(default=None, ge=0, le=40, allow_inf_nan=False)
+    right_mm: float | None = Field(default=None, ge=0, le=40, allow_inf_nan=False)
+    header_distance_mm: float | None = Field(default=None, ge=0, le=40, allow_inf_nan=False)
+    footer_distance_mm: float | None = Field(default=None, ge=0, le=40, allow_inf_nan=False)
 
 
 class Style(StrictModel):
-    font: Literal["Arial", "Liberation Sans", "DejaVu Sans"] = "Arial"
+    font: Literal["Arial", "Liberation Sans", "DejaVu Sans", "DejaVu Serif", "Times New Roman", "Calibri"] = "Arial"
     size_pt: float = Field(default=11, ge=6, le=48, allow_inf_nan=False)
     color: str = Field(default="#183153", pattern=r"^#[0-9a-fA-F]{6}$")
     align: Literal["left", "center", "right"] = "left"
@@ -183,6 +205,17 @@ class BlockBase(StrictModel):
     id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")
     region: Literal["body", "header", "footer"] = "body"
     style: Style = Field(default_factory=Style)
+    request_variant: Literal["MACHINE", "FREE_FORM"] | None = None
+
+
+class NativeStyle(Style):
+    size_pt: float = Field(default=11, ge=1, le=48, allow_inf_nan=False)
+
+
+class NativeParagraph(BlockBase):
+    type: Literal["native_paragraph"]
+    text: str = Field(max_length=10_000)
+    style: NativeStyle = Field(default_factory=NativeStyle)
 
 
 class TextBlock(BlockBase):
@@ -203,7 +236,7 @@ class FieldBlock(BlockBase):
 
 
 class ImageBlock(BlockBase):
-    type: Literal["image", "logo"]
+    type: Literal["image", "logo", "native_image"]
     image_id: int | None = Field(default=None, gt=0)
     width_mm: float = Field(default=40, ge=5, le=180, allow_inf_nan=False)
     height_mm: float = Field(default=20, ge=5, le=100, allow_inf_nan=False)
@@ -226,7 +259,9 @@ class DynamicTable(BlockBase):
     type: Literal["dynamic_table"]
     source: Literal["PARTS_USED", "REPAIR_EVENTS", "REQUEST_LINES", "EQUIPMENT_CHECKLIST", "REPAIR_PARTICIPANTS", "REPAIR_ATTACHMENTS"]
     columns: list[TableColumn] = Field(min_length=1, max_length=6)
-    repeat_header: Literal[True] = True
+    repeat_header: bool = True
+    native_properties: bool = False
+    empty_label: str = Field(default="", max_length=255)
     flow: Literal[True] = True
     keep_rows_together: bool = False
     cell_padding_mm: float | None = Field(default=None, ge=0, le=8, allow_inf_nan=False)
@@ -235,6 +270,8 @@ class DynamicTable(BlockBase):
 
     @model_validator(mode="after")
     def column_widths(self):
+        if not self.repeat_header and not self.native_properties:
+            raise ValueError("studio_required_block")
         if self.group_by and self.source != "REQUEST_LINES":
             raise ValueError("studio_incompatible_column")
         if abs(sum(c.width_percent for c in self.columns) - 100) > 0.01:
@@ -295,7 +332,7 @@ class ConditionalBlock(BlockBase):
 
 class GridCell(StrictModel):
     colspan: int = Field(default=1, ge=1, le=8)
-    padding_mm: float = Field(default=1.5, ge=0, le=8, allow_inf_nan=False)
+    padding_mm: float | None = Field(default=1.5, ge=0, le=8, allow_inf_nan=False)
     vertical_align: Literal["top", "center", "bottom"] = "top"
     style: Style = Field(default_factory=Style)
     blocks: list["Block"] = Field(default_factory=list, max_length=50)
@@ -328,7 +365,7 @@ class GridBlock(BlockBase):
         return self
 
 
-Block = Annotated[TextBlock | FieldBlock | ImageBlock | DynamicTable | StaticTable
+Block = Annotated[NativeParagraph | TextBlock | FieldBlock | ImageBlock | DynamicTable | StaticTable
                   | SignatureBlock | SystemBlock | ConditionalBlock | GridBlock, Field(discriminator="type")]
 GridCell.model_rebuild()
 GridRow.model_rebuild()
@@ -344,13 +381,53 @@ def walk_blocks(blocks):
                     yield from walk_blocks(cell.blocks)
 
 
+def variant_blocks(blocks, variant):
+    selected = []
+    for block in blocks:
+        if block.request_variant not in (None, variant):
+            continue
+        updates = {"request_variant": None}
+        if block.type == "grid":
+            updates["grid_rows"] = [row.model_copy(update={"cells": [cell.model_copy(update={
+                "blocks": variant_blocks(cell.blocks, variant)}) for cell in row.cells]}) for row in block.grid_rows]
+        selected.append(block.model_copy(update=updates))
+    return selected
+
+
+def supports_request_variants(layout):
+    if isinstance(layout, dict):
+        layout = Layout.model_validate(layout)
+    return layout.native is not None or {b.request_variant for b in walk_blocks(layout.blocks) if b.request_variant} == {"MACHINE", "FREE_FORM"}
+
+
 class Layout(StrictModel):
-    schema_version: Literal[1, 2, 3] = 1
+    schema_version: Literal[1, 2, 3, 4] = 1
     page: Page = Field(default_factory=Page)
     # Flow is authoritative in v1. Fixed placement is intentionally not yet
     # supported: long text/tables cannot overlap signature areas.
     positioning: Literal["flow"] = "flow"
     blocks: list[Block] = Field(max_length=200)
+    # Controlled native sources are frozen with the layout, never fetched by a
+    # renderer. Only the conversion endpoint can establish this provenance.
+    native: dict | None = None
+
+    @field_validator("native")
+    @classmethod
+    def bounded_native(cls, value):
+        if value is None:
+            return value
+        if (set(value) != {"adapter", "document_type", "language", "source_version_id", "source_version",
+                "source_sha256", "sources", "source_hashes"}
+                or type(value["adapter"]) is not int or value["adapter"] != 1
+                or value["document_type"] not in SUPPORTED_TYPES or value["language"] not in {"bg", "en", "ru"}
+                or any(type(value[k]) is not int or value[k] < 1 for k in ("source_version_id", "source_version"))
+                or not isinstance(value["source_sha256"], str) or not re.fullmatch(r"[a-f0-9]{64}", value["source_sha256"])
+                or not isinstance(value["sources"], dict) or not 1 <= len(value["sources"]) <= 2
+                or not isinstance(value["source_hashes"], dict) or set(value["sources"]) != set(value["source_hashes"])
+                or any(k not in {"DEFAULT", "MACHINE", "FREE_FORM"} or not isinstance(v, str) or not 1 <= len(v) <= 4_000_000 for k, v in value["sources"].items())
+                or any(not isinstance(v, str) or not re.fullmatch(r"[a-f0-9]{64}", v) for v in value["source_hashes"].values())):
+            raise ValueError("studio_native_incompatible")
+        return value
 
     @model_validator(mode="before")
     @classmethod
@@ -413,6 +490,7 @@ class DraftUpdate(StrictModel):
 class PreviewInput(StrictModel):
     expected_revision: int = Field(ge=1)
     rows: Literal[1, 5, 30] = 5
+    request_variant: Literal["MACHINE", "FREE_FORM"] = "MACHINE"
 
 
 class PublishInput(PreviewInput):
@@ -450,6 +528,21 @@ def initial_layout(document_type: str) -> Layout:
 
 
 def validate_workflow(layout: Layout, document_type: str) -> None:
+    if layout.native is not None:
+        from .native_contract import validate
+        validate(layout, document_type)
+        return
+    if any(b.type in {"native_paragraph", "native_image"} or b.type == "dynamic_table" and b.native_properties for b in walk_blocks(layout.blocks)):
+        raise ValueError("studio_native_incompatible")
+    if any(b.request_variant for b in walk_blocks(layout.blocks)):
+        if document_type != "PART_REQUEST" or not supports_request_variants(layout):
+            raise ValueError("studio_request_variant_mismatch")
+        for variant in ("MACHINE", "FREE_FORM"):
+            selected = layout.model_copy(update={"blocks": variant_blocks(layout.blocks, variant)})
+            validate_workflow(selected, document_type)
+            if variant == "FREE_FORM" and any(b.type == "field" and (FIELD_CATALOG[b.field] == "machine" or b.field in {"BATCH_REFERENCE", "CATALOG_REFERENCES"}) for b in walk_blocks(selected.blocks)):
+                raise ValueError("studio_request_variant_mismatch")
+        return
     required = initial_layout(document_type)
     blocks = list(walk_blocks(layout.blocks))
     for block in required.blocks:

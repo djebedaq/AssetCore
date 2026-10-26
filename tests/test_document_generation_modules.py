@@ -56,6 +56,52 @@ def _docx_members(content: bytes) -> dict[str, str]:
         return {name: _sha(archive.read(name)) for name in sorted(archive.namelist())}
 
 
+def _historical_repair_members(content: bytes, language: str) -> dict[str, str]:
+    """Check the deliberate label translation, then retain the original golden.
+
+    Only text nodes in the three generated table contracts are normalized for
+    this historical comparison. Every other XML byte, image, relationship and
+    snapshot must still match the unmodified pre-extraction baseline exactly.
+    Actual current archive/signing hashes are checked independently above.
+    """
+    from app.documents.repair_table_contract import empty_label, headers
+    from lxml import etree
+    members = _docx_members(content)
+    if language == "bg":
+        return members
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        root = etree.fromstring(archive.read("word/document.xml"))
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    found = {code: 0 for code in ("PARTS_USED", "REPAIR_PARTICIPANTS", "REPAIR_ATTACHMENTS")}
+    for table in root.findall(".//w:tbl", ns):
+        rows = table.findall("w:tr", ns)
+        cells = rows[0].findall("w:tc", ns)
+        # Only actual Word text nodes define visible table labels.
+        labels = ["".join(cell.xpath(".//w:t/text()", namespaces=ns)) for cell in cells]
+        code = next((code for code in found if labels == list(headers(code, language))), None)
+        if code is None:
+            continue
+        found[code] += 1
+        for cell, label in zip(cells, headers(code, "bg"), strict=True):
+            nodes = cell.findall(".//w:t", ns)
+            assert len(nodes) == 1
+            nodes[0].text = label
+        current_empty = empty_label(code, language)
+        if current_empty:
+            for row in rows[1:]:
+                for node in row.findall(".//w:t", ns):
+                    if node.text == current_empty:
+                        node.text = empty_label(code, "bg")
+    assert found == {"PARTS_USED": 1, "REPAIR_PARTICIPANTS": 2, "REPAIR_ATTACHMENTS": 1}
+    # The original builder writes empty text as <w:t></w:t>; preserve those
+    # exact bytes rather than lxml's equivalent <w:t/> shorthand after parsing.
+    for node in root.findall(".//w:t", ns):
+        if node.text is None:
+            node.text = ""
+    members["word/document.xml"] = _sha(etree.tostring(root, encoding="UTF-8", xml_declaration=True, standalone=True))
+    return members
+
+
 def _generate_isolated_qa(monkeypatch, output: Path) -> dict:
     # The standalone QA script fills missing bootstrap settings for its own
     # process. Embedded in pytest, those defaults must not leak to later tests.
@@ -161,7 +207,7 @@ def collect_generation_evidence(monkeypatch, output: Path, language: str) -> dic
                 "record_snapshot_sha256": _json_sha(historical_snapshot(records[0].snapshot)),
                 "filenames": {record.format: record.filename for record in records},
                 "media_types": {record.format: record.media_type for record in records},
-                "docx_members": _docx_members(version.docx_content),
+                "docx_members": _historical_repair_members(version.docx_content, language) if _kind == "repair" else _docx_members(version.docx_content),
             }
             return records
 

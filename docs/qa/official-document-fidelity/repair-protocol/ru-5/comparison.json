@@ -1,0 +1,23 @@
+{
+  "case": "repair-protocol",
+  "language": "ru",
+  "rows": 5,
+  "legacy_pages": 3,
+  "studio_pages": 3,
+  "pdf_text_equal": true,
+  "native_text_equal": true,
+  "pages": [
+    {
+      "page": 1,
+      "changed_pixel_fraction": 0.0
+    },
+    {
+      "page": 2,
+      "changed_pixel_fraction": 0.0
+    },
+    {
+      "page": 3,
+      "changed_pixel_fraction": 0.0
+    }
+  ]
+}

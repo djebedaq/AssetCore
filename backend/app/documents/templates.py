@@ -27,10 +27,13 @@ def _template_version(
     selected = active_selection(db, document_type, _language(language))
     if selected:
         version = db.get(DocumentTemplateVersion, selected.version_id)
+        now = datetime.now(UTC).replace(tzinfo=None)
         if (selected.selection_kind not in {"STUDIO", "LEGACY"} or version is None or not version.is_published or version.validation_status != "PASSED"
                 or bool(version.layout_contract.get("studio")) != (selected.selection_kind == "STUDIO")
                 or version.template.document_type != document_type or version.language != _language(language)
-                or not version.template.is_active):
+                or not version.template.is_active
+                or version.effective_from is not None and version.effective_from > now
+                or version.effective_to is not None and version.effective_to <= now):
             raise ConfirmedTemplateUnavailableError(document_type, language)
         return version
     return legacy_template_version(db, document_type, language)
@@ -39,7 +42,7 @@ def _template_version(
 def legacy_template_version(db: Session, document_type: str, language: str) -> DocumentTemplateVersion:
     """Approved legacy selection, independent of the append-only Studio choice."""
     now = datetime.now(UTC).replace(tzinfo=None)
-    version = db.scalar(
+    candidates = list(db.scalars(
         select(DocumentTemplateVersion)
         .join(DocumentTemplate)
         .where(
@@ -59,10 +62,11 @@ def legacy_template_version(db: Session, document_type: str, language: str) -> D
             ),
         )
         .order_by(DocumentTemplateVersion.version.desc())
-    )
-    if version is None:
+        .limit(2)
+    ))
+    if not candidates or len(candidates) == 2 and candidates[0].version == candidates[1].version:
         raise ConfirmedTemplateUnavailableError(document_type, language)
-    return version
+    return candidates[0]
 
 
 def _preparer_values(db: Session, created_by_id: int) -> dict[str, str]:

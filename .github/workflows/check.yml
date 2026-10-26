@@ -67,6 +67,11 @@ jobs:
           PYTHONPATH: backend
           DATABASE_URL: "sqlite:///:memory:"
         run: python tests/verify_studio_fidelity_evidence.py --root docs/qa/commercial-docs-01b/final-fidelity
+      - name: Verify actual legacy to Studio fidelity and protected baseline
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: "sqlite:///:memory:"
+        run: python tests/verify_official_fidelity_evidence.py
       - run: python backend/scripts/validate_migration_history.py --require-all-protected
       - run: python backend/scripts/validate_authorization_inventory.py
       - run: PYTHONPATH=backend python backend/scripts/catalog_v2_validation.py
@@ -77,6 +82,8 @@ jobs:
       - name: Production configuration regression gate
         run: python -m pytest -q --tb=short tests/test_runtime_deployment_hardening.py
       - name: Full backend suite (real PostgreSQL cases run in postgres job)
+        env:
+          ASSETCORE_OFFICIAL_CATALOG_OUTPUT: .tmp/native-catalog-evidence
         run: python -m pytest -q -n 2 --dist loadfile -m "not postgres" --tb=short --durations=10
       - run: python scripts/verify_release.py --output release-verification
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -87,6 +94,18 @@ jobs:
             release-verification
             security-reports
           if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: native-approved-catalog-comparison
+          include-hidden-files: true
+          path: |
+            .tmp/native-catalog-evidence/*.docx
+            .tmp/native-catalog-evidence/*.pdf
+            .tmp/native-catalog-evidence/*.png
+            .tmp/native-catalog-evidence/comparison.json
+          if-no-files-found: error
 
   browser:
     runs-on: ubuntu-latest
@@ -140,6 +159,19 @@ jobs:
         run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_document_studio_fidelity_qa.py
       - name: COMMERCIAL-DOCS-01C exact-version proposals, decisions, publication trace and responsive UX
         run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_document_studio_proposals_qa.py
+      - name: Official native document copies and both KK variants in BG/EN/RU
+        run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/assetcore-browser/node_modules/playwright" python tests/browser/run_official_document_fidelity_qa.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: official-document-fidelity-browser
+          include-hidden-files: true
+          path: |
+            .tmp/catalog03-official-fidelity-browser-*/browser-proof.json
+            .tmp/catalog03-official-fidelity-browser-*/*.png
+            .tmp/catalog03-official-fidelity-browser-*/*.docx
+            .tmp/catalog03-official-fidelity-browser-*/*.pdf
+          if-no-files-found: error
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

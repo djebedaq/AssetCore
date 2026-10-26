@@ -24,7 +24,7 @@ from docx.shared import Mm, Pt, RGBColor
 from lxml import etree as ElementTree
 
 from .files import validate_docx
-from .schemas import FIELD_CATALOG, Layout, validate_workflow, walk_blocks
+from .schemas import FIELD_CATALOG, Layout, validate_workflow, variant_blocks, walk_blocks
 
 MANIFEST = "assetcore/studio.json"
 MAX_PAGES = 40
@@ -49,6 +49,12 @@ def digest(content: bytes) -> str:
 
 def check_layout(layout: Layout, document_type: str):
     validate_workflow(layout, document_type)
+    if layout.native is not None:
+        return
+    if document_type == "PART_REQUEST" and any(b.request_variant for b in walk_blocks(layout.blocks)):
+        for variant in ("MACHINE", "FREE_FORM"):
+            check_layout(layout.model_copy(update={"blocks": variant_blocks(layout.blocks, variant)}), document_type)
+        return
     width, height = (210, 297) if layout.page.orientation == "portrait" else (297, 210)
     usable = width - 2 * layout.page.margin_mm
     def check(blocks, available, region="body", nested=False):
@@ -68,6 +74,8 @@ def check_layout(layout: Layout, document_type: str):
                     if row_index < block.repeat_rows and any(b.type == "signature" for cell in row.cells for b in walk_blocks(cell.blocks)):
                         raise ValueError("studio_required_block")
                     for cell in row.cells:
+                        if cell.padding_mm is None:
+                            raise ValueError("studio_native_incompatible")
                         inner = actual * sum(block.widths[col:col + cell.colspan]) / 100 - 2 * cell.padding_mm
                         if inner < 8:
                             raise ValueError("studio_table_width")
@@ -106,7 +114,7 @@ def _height(block, width, bindings):
                 col += cell.colspan
             total += max(row.min_height_mm, *heights)
         return total + style.spacing_mm + style.paragraph_before_mm
-    if block.type in {"image", "logo"}:
+    if block.type in {"image", "logo", "native_image"}:
         return block.height_mm + style.spacing_mm + style.paragraph_before_mm
     text = str(bindings.get(block.field, "")) if block.type == "field" else getattr(block, "text", "")
     lines = sum(max(1, math.ceil(len(line.expandtabs(4)) * style.size_pt * .7 / max(1, width * 72 / 25.4))) for line in text.split("\n"))
@@ -125,7 +133,7 @@ def manifest_from_source(content: bytes) -> dict | None:
         raise ValueError("studio_source_invalid")
     layout = Layout.model_validate(manifest["layout"])
     check_layout(layout, manifest["document_type"])
-    ids = {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None}
+    ids = {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo", "native_image"} and b.image_id is not None}
     if ids != set(manifest["images"]):
         raise ValueError("studio_image_missing")
     for image in manifest["images"].values():
@@ -393,9 +401,17 @@ def _grid(container, block, width, emit):
 
 def render(manifest: dict, values: dict, tables: dict | None = None, *, source=False) -> bytes:
     layout = Layout.model_validate(manifest["layout"])
+    if layout.native is not None:
+        from .native_contract import render as render_native
+        return render_native(manifest, values, tables, source=source)
     check_layout(layout, manifest["document_type"])
-    if {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None} != set(manifest["images"]):
+    if {str(b.image_id) for b in walk_blocks(layout.blocks) if b.type in {"image", "logo", "native_image"} and b.image_id is not None} != set(manifest["images"]):
         raise ValueError("studio_image_missing")
+    if manifest["document_type"] == "PART_REQUEST" and any(b.request_variant for b in walk_blocks(layout.blocks)):
+        variant = values.get("REQUEST_VARIANT", "MACHINE")
+        if variant not in {"MACHINE", "FREE_FORM"}:
+            raise ValueError("studio_request_variant_mismatch")
+        layout = layout.model_copy(update={"blocks": variant_blocks(layout.blocks, variant)})
     document = Document()
     if layout.schema_version >= 3:
         normal = document.styles["Normal"]
@@ -447,6 +463,8 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
                         raise ValueError("studio_table_size")
                     keys = TABLE_KEYS[block.source]
                     records = [dict(row) for row in raw] if raw and isinstance(raw[0], dict) else [dict(zip(keys, row, strict=True)) for row in raw[1:]] if raw else []
+                    if not records and block.empty_label:
+                        records = [{block.columns[0].key: block.empty_label}]
                     for record in records:
                         if block.source == "EQUIPMENT_CHECKLIST":
                             displayed = {c.key for c in block.columns}
@@ -502,7 +520,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
                 marker.paragraph_format.keep_together = True
                 if block_index + 1 < len(blocks) and blocks[block_index + 1].type == "signature":
                     marker.paragraph_format.keep_with_next = True
-            elif block.type in {"image", "logo"}:
+            elif block.type in {"image", "logo", "native_image"}:
                 if block.image_id is not None:
                     image = manifest["images"][str(block.image_id)]
                     paragraph.add_run().add_picture(io.BytesIO(base64.b64decode(image["content"])), width=Mm(block.width_mm), height=Mm(block.height_mm))
@@ -575,6 +593,7 @@ def render(manifest: dict, values: dict, tables: dict | None = None, *, source=F
 def build_source(manifest: dict) -> bytes:
     values = {key: "{{" + key + "}}" for key in FIELD_CATALOG}
     values.update({key: "{{" + key + "}}" for key in ("LEFT_SIGNATURE", "RIGHT_SIGNATURE")})
+    values["REQUEST_VARIANT"] = "MACHINE"
     return render(manifest, values, source=True)
 
 
@@ -627,6 +646,8 @@ def synthetic_values(language: str, count: int):
     word = {"bg": "Синтетична проверка", "en": "Synthetic check", "ru": "Синтетическая проверка"}[language]
     values = {code: f"{word} · {code}" for code in FIELD_CATALOG}
     values.update(DOCUMENT_NUMBER="PREVIEW", LEFT_SIGNATURE="________________", RIGHT_SIGNATURE="________________")
+    from ..documents.common import TEXT
+    values["CONDITION_LABEL"] = TEXT[language]["overall_condition"]
     rows = [[str(i), "QA", (word + " дълго описание проверка / long description / описание " ) * (8 if i == count else 1), "1"] for i in range(1, count + 1)]
     return values, {"REQUEST_LINES": [["", "", "", ""]] + rows, "PARTS_USED": [["", "", "", ""]] + rows,
                     "REPAIR_EVENTS": [["", "", ""]] + [[r[0], r[1], r[2]] for r in rows],

@@ -252,8 +252,15 @@ def decide_request(
     # Flush the approved fields before the immutable snapshot installs their DB lock.
     db.flush()
     if decision == ApprovalDecision.APPROVED:
+        from ..documents.common import ConfirmedTemplateUnavailableError
         from .official import issue_number
-        issue_number(db, request)
+        try:
+            issue_number(db, request)
+        except (ConfirmedTemplateUnavailableError, ValueError, OSError) as exc:
+            # Never expose converter paths/source bytes or approve with a
+            # source that can only be selected later from mutable settings.
+            from ..localization import translate
+            raise business_conflict("approval_template_unavailable", translate("studio.approval_template_unavailable", request.language)) from exc
     db.add(
         PartRequestApproval(
             request_id=request.id,

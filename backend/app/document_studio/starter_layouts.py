@@ -87,8 +87,13 @@ def professional_layout(document_type, language, identity=None, image_sizes=None
         blocks += [dynamic("REPAIR_EVENTS", [("date", 23), ("event_type", 22), ("description", 55)]), dynamic("REPAIR_ATTACHMENTS", [("filename", 35), ("stage", 20), ("description", 45)]),
             identity_table(["APPROVED_BY_NAME", "APPROVED_BY_JOB_TITLE", "COMPLETION_DATE", "CREATION_DATE"])]
     else:
-        blocks += [identity_table(["DOCUMENT_NUMBER", "CREATION_DATE", "MACHINE_NAME", "EQUIPMENT_TYPE", "MANUFACTURER", "MODEL", "SERIAL_NUMBER", "MACHINE_NUMBER", "PRESSURE_BAR", "BATCH_REFERENCE", "CATALOG_REFERENCES"]),
-            dynamic("REQUEST_LINES", [("position", 7), ("part_number", 23), ("description", 50), ("quantity", 20)])]
+        machine = identity_table(["MACHINE_NAME", "EQUIPMENT_TYPE", "BRAND", "MANUFACTURER", "MODEL", "SERIAL_NUMBER", "MACHINE_NUMBER", "PRESSURE_BAR", "BATCH_REFERENCE", "CATALOG_REFERENCES"])
+        machine["request_variant"] = "MACHINE"
+        machine_lines = dynamic("REQUEST_LINES", [("position", 7), ("part_number", 23), ("description", 50), ("quantity", 20)])
+        machine_lines["request_variant"] = "MACHINE"
+        free_lines = dynamic("REQUEST_LINES", [("position", 7), ("description", 73), ("quantity", 20)])
+        free_lines["request_variant"] = "FREE_FORM"
+        blocks += [identity_table(["DOCUMENT_NUMBER", "CREATION_DATE"]), machine, machine_lines, free_lines]
         blocks += [section(code) for code in ("REMARKS", "DECISION")]
         blocks += [identity_table(["REQUESTER_NAME", "DEPARTMENT", "APPROVER_NAME", "APPROVAL_DATE"])]
     sign_rows = []
@@ -109,4 +114,4 @@ def professional_layout(document_type, language, identity=None, image_sizes=None
         padding_mm=0, style={"border_pt": 0})], "keep_together": True}], keep_together=True)
     blocks += [signatures_and_metadata,
         block("page_number", region="footer", style={"size_pt": 8, "align": "right", "color": "#000000", "spacing_mm": 0})]
-    return Layout.model_validate({"schema_version": 3, "page": {"margin_mm": 11, "header_mm": 30, "footer_mm": 5}, "blocks": blocks})
+    return Layout.model_validate({"schema_version": 4 if document_type == "PART_REQUEST" else 3, "page": {"margin_mm": 11, "header_mm": 30, "footer_mm": 5}, "blocks": blocks})

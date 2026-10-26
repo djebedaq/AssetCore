@@ -1,0 +1,41 @@
+{
+  "passed": true,
+  "stage": "COMMERCIAL-DOCS-01B",
+  "platform": "win32",
+  "browser": "156.0.4314.42",
+  "checks": [
+    "Real logo dimensions, field picker, native drag reorder, text styling, static table rows/columns and undo/redo persist",
+    "Autosave confirms server revision and recovers from a real aborted network request without losing edits",
+    "Reload recovery restores unsaved work from session storage and saves it against the original revision",
+    "CAS conflict blocks overwrite, retains local work, and explicit reload clears revision history",
+    "Actual DOCX-derived multipage PDF, downloaded editable DOCX/PDF, immutable publication and separate activation",
+    "Canonical KK approval generates the actual published Studio DOCX/PDF and archives both formats",
+    "BG/EN/RU editor is usable at 1440, 768 and 390 with compact mobile panels and no document-level overflow",
+    "Touch-enabled 390px context adds text, edits properties, reorders with touch buttons and confirms autosave"
+  ],
+  "screenshots": [
+    "a4-starter-bg-1440.png",
+    "logo-inspector-bg-1440.png",
+    "field-picker-bg-1440.png",
+    "table-editing-bg-1440.png",
+    "session-recovery-bg-1440.png",
+    "conflict-retained-bg-1440.png",
+    "bounds-validation-bg-1440.png",
+    "actual-pdf-page1-bg-1440.png",
+    "actual-pdf-multipage-bg-1440.png",
+    "publish-review-bg-1440.png",
+    "immutable-version-history-active-bg-1440.png",
+    "editor-bg-1440.png",
+    "editor-bg-768.png",
+    "editor-bg-390.png",
+    "editor-en-1440.png",
+    "editor-en-768.png",
+    "editor-en-390.png",
+    "touch-blocks-en-390.png",
+    "touch-inspector-en-390.png",
+    "editor-ru-1440.png",
+    "editor-ru-768.png",
+    "editor-ru-390.png"
+  ],
+  "errors": []
+}

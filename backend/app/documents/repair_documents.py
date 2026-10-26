@@ -270,11 +270,12 @@ def make_repair_documents(
         ]
         for event in repair.events
     ]
-    part_rows = [["Поз.", "Номер", "Описание", "Количество"]] + [
+    from .repair_table_contract import empty_label, headers
+    part_rows = [list(headers("PARTS_USED", language))] + [
         [str(index), part.part_number or "", part.description, f"{part.quantity:g} {part.unit or ''}".strip()]
         for index, part in enumerate(repair.parts_used, start=1)
     ]
-    participant_rows = [["Три имена", "Длъжност", "Участие", "Време"]] + (
+    participant_rows = [list(headers("REPAIR_PARTICIPANTS", language))] + (
         [
             [
                 participant.full_name_snapshot,
@@ -284,14 +285,14 @@ def make_repair_documents(
             ]
             for participant in repair.participants
         ]
-        or [["Няма допълнителни участници", "", "", ""]]
+        or [[empty_label("REPAIR_PARTICIPANTS", language), "", "", ""]]
     )
-    attachment_rows = [["Файл", "Етап", "Описание"]] + (
+    attachment_rows = [list(headers("REPAIR_ATTACHMENTS", language))] + (
         [
             [attachment.filename, attachment.stage, attachment.caption or ""]
             for attachment in repair.attachments
         ]
-        or [["Няма приложения", "", ""]]
+        or [[empty_label("REPAIR_ATTACHMENTS", language), "", ""]]
     )
     docx = render_docx(
         template,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import Field
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -145,7 +145,7 @@ def image_content(image_id: int, _: User = Depends(reader), db: Session = Depend
 
 @router.get("/schema")
 def layout_schema(_: User = Depends(reader)):
-    return {"schema_version": 3, "schema": Layout.model_json_schema(),
+    return {"schema_version": 4, "schema": Layout.model_json_schema(),
             "fields": [{"code": code, "group": group} for code, group in FIELD_CATALOG.items()],
             "supported_document_types": SUPPORTED_TYPES, "renderer_enabled": True}
 
@@ -157,6 +157,16 @@ def templates(_: User = Depends(reader), db: Session = Depends(get_db)):
         selected.setdefault((item.document_type, item.language), item)
     rows = db.scalars(select(DocumentTemplate).options(selectinload(DocumentTemplate.versions).defer(DocumentTemplateVersion.source_content))
                       .order_by(DocumentTemplate.document_type, DocumentTemplate.code))
+    from ..documents.common import ConfirmedTemplateUnavailableError
+    from ..documents.templates import legacy_template_version
+    defaults = {}
+    for typ in SUPPORTED_TYPES:
+        for lang in ("bg", "en", "ru"):
+            if (typ, lang) not in selected:
+                try:
+                    defaults[(typ, lang)] = legacy_template_version(db, typ, lang).id
+                except ConfirmedTemplateUnavailableError:
+                    pass
     return [{"id": t.id, "code": t.code, "document_type": t.document_type,
         "name_bg": t.name_bg, "name_en": t.name_en, "name_ru": t.name_ru,
         "is_active": t.is_active, "authoring_supported": t.document_type in SUPPORTED_TYPES,
@@ -167,7 +177,7 @@ def templates(_: User = Depends(reader), db: Session = Depends(get_db)):
             "created_by_id": v.created_by_id, "published_at": v.published_at,
             "source_filename": v.source_filename, "numbering_rule": v.numbering_rule,
             "studio": bool(v.layout_contract.get("studio")),
-            "active": bool((selection := selected.get((t.document_type, v.language))) and selection.version_id == v.id),
+            "active": bool((selection := selected.get((t.document_type, v.language))) and selection.version_id == v.id) or defaults.get((t.document_type, v.language)) == v.id,
             "active_version_id": selection.version_id if selection and selection.selection_kind == "STUDIO" else None,
             "selection_revision": selection.revision if selection else 0,
             "selection_kind": selection.selection_kind if selection else "LEGACY",
@@ -245,7 +255,23 @@ def import_docx(template_id: int, payload: DocxImport, user: User = Depends(mana
 def draft_output(d: DocumentEditorDraft):
     return {key: getattr(d, key) for key in ("id", "template_id", "base_version_id", "title",
         "language", "schema_version", "layout", "revision", "created_by_id", "updated_by_id",
-        "created_at", "updated_at")} | {"status": "DRAFT", "renderer_enabled": True}
+        "created_at", "updated_at")} | {"status": "DRAFT", "renderer_enabled": True,
+        "native_images": [{"id": b.id, "download_endpoint": f"/studio/drafts/{d.id}/native-images/{b.id}"}
+            for b in walk_blocks(Layout.model_validate(d.layout).blocks) if b.type == "native_image"]}
+
+
+@router.get("/drafts/{draft_id}/native-images/{block_id}")
+def native_image(draft_id: int, block_id: str, _: User = Depends(reader), db: Session = Depends(get_db)):
+    draft = db.get(DocumentEditorDraft, draft_id)
+    if draft is None:
+        fail("studio_not_found", 404)
+    from .native_contract import image_bytes
+    try:
+        content, media_type = image_bytes(Layout.model_validate(draft.layout), block_id)
+    except ValueError:
+        fail("studio_not_found", 404)
+    return Response(content, media_type=media_type, headers={"Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox"})
 
 
 @router.get("/templates/{template_id}/drafts")
@@ -282,6 +308,12 @@ def build_draft(db, template_id, payload, user):
             from ..template_engine import source_bytes
             from .renderer import manifest_from_source
             layout = manifest_from_source(source_bytes(base))["layout"]
+        else:
+            from .native_contract import convert
+            try:
+                layout = convert(base).model_dump()
+            except ValueError:
+                fail("studio_native_incompatible")
     item = DocumentEditorDraft(template_id=template_id, **payload.model_dump(exclude={"design"}),
         layout=layout, schema_version=layout["schema_version"], created_by_id=user.id, updated_by_id=user.id)
     db.add(item)
@@ -305,11 +337,13 @@ def update_draft(draft_id: int, payload: DraftUpdate, user: User = Depends(manag
     if item is None:
         fail("studio_not_found", 404)
     template = db.get(DocumentTemplate, item.template_id)
+    if payload.layout.native != item.layout.get("native"):
+        fail("studio_native_incompatible")
     try:
         validate_workflow(payload.layout, template.document_type)
     except ValueError as exc:
         fail(str(exc))
-    check_images(db, {b.image_id for b in walk_blocks(payload.layout.blocks) if b.type in {"image", "logo"} and b.image_id is not None})
+    check_images(db, {b.image_id for b in walk_blocks(payload.layout.blocks) if b.type in {"image", "logo", "native_image"} and b.image_id is not None})
     from types import SimpleNamespace
 
     from .publication import snapshot
@@ -348,7 +382,7 @@ def preview_draft(draft_id: int, payload: PreviewInput, user: User = Depends(rea
     template = db.get(DocumentTemplate, draft.template_id)
     try:
         manifest = snapshot(db, draft, template.document_type)
-        docx, pdf, report = validate_render(manifest, payload.rows, raster=True)
+        docx, pdf, report = validate_render(manifest, payload.rows, raster=True, request_variant=payload.request_variant)
     except ValueError as exc:
         fail(str(exc) if str(exc).startswith("studio_") else "studio_invalid")
     # No ORM mutation, official number, reservation, signer or persistent file.
@@ -357,23 +391,35 @@ def preview_draft(draft_id: int, payload: PreviewInput, user: User = Depends(rea
 
 
 @router.get("/versions/{version_id}/preview")
-def preview_version(version_id: int, response: Response, _: User = Depends(reader), db: Session = Depends(get_db)):
+def preview_version(version_id: int, response: Response, request_variant: str = Query(default="MACHINE", pattern="^(MACHINE|FREE_FORM)$"), _: User = Depends(reader), db: Session = Depends(get_db)):
     from ..template_engine import source_bytes
     from .publication import validate_render
     from .renderer import manifest_from_source
     version = db.get(DocumentTemplateVersion, version_id)
     if version is None:
         fail("studio_not_found", 404)
-    if not version.layout_contract.get("studio"):
-        fail("studio_proposal_reference_only")
     try:
-        manifest = manifest_from_source(source_bytes(version))
-        docx, pdf, report = validate_render(manifest, 5, raster=True)
+        if version.layout_contract.get("studio"):
+            manifest = manifest_from_source(source_bytes(version))
+            docx, pdf, report = validate_render(manifest, 5, raster=True, request_variant=request_variant)
+        else:
+            from .diagnostics import legacy_preview
+            docx, pdf, report = legacy_preview(version, request_variant=request_variant)
     except ValueError as exc:
         fail(str(exc) if str(exc).startswith("studio_") else "studio_invalid")
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return {"report": report, "docx": base64.b64encode(docx).decode(), "pdf": base64.b64encode(pdf).decode()}
+
+
+@router.get("/configuration/{document_type}/{language}")
+def active_configuration(document_type: str, language: str, response: Response,
+                         _: User = Depends(reader), db: Session = Depends(get_db)):
+    if document_type not in SUPPORTED_TYPES or language not in {"bg", "en", "ru"}:
+        fail("studio_not_found", 404)
+    from .diagnostics import configuration
+    response.headers["Cache-Control"] = "private, no-store"
+    return configuration(db, document_type, language)
 
 
 @router.post("/drafts/{draft_id}/publish", status_code=201)

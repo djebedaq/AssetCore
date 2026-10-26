@@ -1,0 +1,70 @@
+{
+  "accepted_exceptions": [],
+  "audited_dependency_count": 80,
+  "blocking": [],
+  "ecosystem": "python",
+  "informational": [
+    {
+      "advisory": "GHSA-4xh5-x5gv-qwph",
+      "ecosystem": "python",
+      "fix_versions": [
+        "25.3"
+      ],
+      "package": "pip",
+      "severity": "MODERATE",
+      "version": "25.0.1"
+    },
+    {
+      "advisory": "GHSA-58qw-9mgm-455v",
+      "ecosystem": "python",
+      "fix_versions": [
+        "26.1"
+      ],
+      "package": "pip",
+      "severity": "MODERATE",
+      "version": "25.0.1"
+    },
+    {
+      "advisory": "GHSA-6vgw-5pg2-w6jp",
+      "ecosystem": "python",
+      "fix_versions": [
+        "26.0"
+      ],
+      "package": "pip",
+      "severity": "LOW",
+      "version": "25.0.1"
+    },
+    {
+      "advisory": "GHSA-jp4c-xjxw-mgf9",
+      "ecosystem": "python",
+      "fix_versions": [
+        "26.1"
+      ],
+      "package": "pip",
+      "severity": "MODERATE",
+      "version": "25.0.1"
+    },
+    {
+      "advisory": "GHSA-qwm4-qh6w-59xr",
+      "ecosystem": "python",
+      "fix_versions": [
+        "26.2.0"
+      ],
+      "package": "pip",
+      "severity": "MODERATE",
+      "version": "25.0.1"
+    },
+    {
+      "advisory": "GHSA-wf93-45jw-7689",
+      "ecosystem": "python",
+      "fix_versions": [
+        "26.1.2"
+      ],
+      "package": "pip",
+      "severity": "MODERATE",
+      "version": "25.0.1"
+    }
+  ],
+  "policy": "block_high_critical_and_unknown; exact_expiring_exceptions_only",
+  "valid": true
+}
